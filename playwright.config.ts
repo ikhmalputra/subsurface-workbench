@@ -6,7 +6,10 @@ import { defineConfig, devices } from "@playwright/test";
 const softwareRendering = Boolean(process.env.CI) || process.env.WEBGPU_TEST === "1";
 const args = [
   ...(softwareRendering ? ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"] : []),
-  ...(process.env.WEBGPU_TEST === "1" ? ["--enable-unsafe-webgpu"] : []),
+  // On a GPU-less Linux runner Chrome will hand out a WebGPU adapter that never presents a frame:
+  // the canvas reports ready with the right backend but the pixels never change. Point Dawn at
+  // SwiftShader explicitly so the adapter it returns is one that actually renders.
+  ...(process.env.WEBGPU_TEST === "1" ? ["--enable-unsafe-webgpu", "--use-webgpu-adapter=swiftshader"] : []),
 ];
 
 export default defineConfig({
