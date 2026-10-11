@@ -1,0 +1,89 @@
+{
+  "name": "@ikhmalputra/subsurface-core",
+  "version": "0.0.1",
+  "type": "module",
+  "license": "MIT",
+  "author": "Ikhmal Putra Manan",
+  "sideEffects": false,
+  "dependencies": {
+    "geotiff": "3.0.5",
+    "proj4": "2.22.0"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "exports": {
+    "./gis": {
+      "types": "./dist/gis.d.ts",
+      "import": "./dist/gis.js"
+    },
+    "./sandbox": {
+      "types": "./dist/sandbox.d.ts",
+      "import": "./dist/sandbox.js"
+    },
+    "./state": {
+      "types": "./dist/state.d.ts",
+      "import": "./dist/state.js"
+    },
+    "./state-url": {
+      "types": "./dist/state-url.d.ts",
+      "import": "./dist/state-url.js"
+    },
+    "./crs": {
+      "types": "./dist/crs.d.ts",
+      "import": "./dist/crs.js"
+    },
+    "./units": {
+      "types": "./dist/units.d.ts",
+      "import": "./dist/units.js"
+    },
+    "./frames": {
+      "types": "./dist/frames.d.ts",
+      "import": "./dist/frames.js"
+    },
+    "./contracts": {
+      "types": "./dist/contracts.d.ts",
+      "import": "./dist/contracts.js"
+    },
+    "./dataset": {
+      "types": "./dist/dataset.d.ts",
+      "import": "./dist/dataset.js"
+    },
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./assembly": {
+      "types": "./dist/assembly.d.ts",
+      "import": "./dist/assembly.js"
+    },
+    "./trajectory": {
+      "types": "./dist/trajectory.d.ts",
+      "import": "./dist/trajectory.js"
+    },
+    "./well-design": {
+      "types": "./dist/well-design.d.ts",
+      "import": "./dist/well-design.js"
+    },
+    "./offset-wells": {
+      "types": "./dist/offset-wells.d.ts",
+      "import": "./dist/offset-wells.js"
+    },
+    "./records": {
+      "types": "./dist/records.d.ts",
+      "import": "./dist/records.js"
+    },
+    "./seismic": {
+      "types": "./dist/seismic.d.ts",
+      "import": "./dist/seismic.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && cp ../../LICENSE LICENSE"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

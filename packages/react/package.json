@@ -1,0 +1,121 @@
+{
+  "name": "@ikhmalputra/subsurface-react",
+  "version": "0.0.1",
+  "type": "module",
+  "license": "MIT",
+  "author": "Ikhmal Putra Manan",
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "files": [
+    "dist",
+    "assets",
+    "LICENSE",
+    "README.md"
+  ],
+  "exports": {
+    "./ui": {
+      "types": "./dist/ui.d.ts",
+      "import": "./dist/ui.js"
+    },
+    "./gis": {
+      "types": "./dist/gis-map.d.ts",
+      "import": "./dist/gis-map.js"
+    },
+    "./gis.css": "./dist/gis.css",
+    "./webgpu": {
+      "types": "./dist/webgpu.d.ts",
+      "import": "./dist/webgpu.js"
+    },
+    "./state": {
+      "types": "./dist/state.d.ts",
+      "import": "./dist/state.js"
+    },
+    "./2d": {
+      "types": "./dist/2d.d.ts",
+      "import": "./dist/2d.js"
+    },
+    "./3d": {
+      "types": "./dist/3d.d.ts",
+      "import": "./dist/3d.js"
+    },
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./schematic": {
+      "types": "./dist/curved-schematic.d.ts",
+      "import": "./dist/curved-schematic.js"
+    },
+    "./viewport": {
+      "types": "./dist/viewport.d.ts",
+      "import": "./dist/viewport.js"
+    },
+    "./assembly": {
+      "types": "./dist/assembly.d.ts",
+      "import": "./dist/assembly.js"
+    },
+    "./production": {
+      "types": "./dist/production-surveillance.d.ts",
+      "import": "./dist/production-surveillance.js"
+    },
+    "./examples": {
+      "types": "./dist/examples.d.ts",
+      "import": "./dist/examples.js"
+    },
+    "./styles.css": "./dist/styles.css",
+    "./three": {
+      "types": "./dist/well-scene.d.ts",
+      "import": "./dist/well-scene.js"
+    },
+    "./assembly-three": {
+      "types": "./dist/assembly-scene.d.ts",
+      "import": "./dist/assembly-scene.js"
+    },
+    "./trajectory": {
+      "types": "./dist/trajectory.d.ts",
+      "import": "./dist/trajectory.js"
+    },
+    "./well-design": {
+      "types": "./dist/well-design.d.ts",
+      "import": "./dist/well-design.js"
+    },
+    "./offset-wells": {
+      "types": "./dist/offset-wells.d.ts",
+      "import": "./dist/offset-wells.js"
+    },
+    "./records": {
+      "types": "./dist/records.d.ts",
+      "import": "./dist/records.js"
+    },
+    "./seismic": {
+      "types": "./dist/seismic.d.ts",
+      "import": "./dist/seismic.js"
+    },
+    "./assets/*": "./assets/*"
+  },
+  "dependencies": {
+    "@types/geojson": "7946.0.16",
+    "maplibre-gl": "5.10.0",
+    "@ikhmalputra/subsurface-core": "workspace:*",
+    "d3-scale": "4.0.2",
+    "lucide-react": "1.52.0",
+    "react-zoom-pan-pinch": "4.2.0"
+  },
+  "peerDependencies": {
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "three": "^0.186.1"
+  },
+  "peerDependenciesMeta": {
+    "three": {
+      "optional": true
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && cp src/styles.css dist/styles.css && cp node_modules/maplibre-gl/dist/maplibre-gl.css dist/gis.css && cp ../../LICENSE LICENSE"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

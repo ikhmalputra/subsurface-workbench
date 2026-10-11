@@ -1,0 +1,659 @@
+{
+  "id": "well-component-catalog-v1",
+  "provenance": "synthetic",
+  "license": "MIT",
+  "author": "Ikhmal Putra Manan",
+  "blenderVersion": "5.2.0 LTS",
+  "renderer": "Cycles",
+  "thumbnailSize": 360,
+  "modelConvention": "glTF Y-up; top of component at origin extending to -Y; body outside radius normalised to 1.0.",
+  "compatibility": "Illustrative component renders for assembly UIs. Not manufacturer CAD, not to engineering scale.",
+  "components": [
+    {
+      "id": "wellhead",
+      "thumbnail": "wellhead.png",
+      "thumbnailSha256": "3f173eeaf4ea7ca66fc918477c43e0d9601105febf3916d38fd7c26f365ec829",
+      "bounds": {
+        "radius": 2.12,
+        "top": 2.09,
+        "bottom": -3.2
+      },
+      "model": "wellhead.glb",
+      "modelSha256": "1dd9f7d7c56cd882c7c9b29bf51e6b625df30150a62834b1eb340f3c04c5fb74"
+    },
+    {
+      "id": "casing-spool",
+      "thumbnail": "casing-spool.png",
+      "thumbnailSha256": "e572773f3f6bdd4ced6e75d4cf64b344d7ec330a5e1af690087760fa0e08dd04",
+      "bounds": {
+        "radius": 2.0052,
+        "top": 0.04,
+        "bottom": -2.22
+      },
+      "model": "casing-spool.glb",
+      "modelSha256": "115e42556666a190619ed2497be022218e4fe7844acb038f8e29a0520749656e"
+    },
+    {
+      "id": "tubing-head",
+      "thumbnail": "tubing-head.png",
+      "thumbnailSha256": "02270228aed3b0b5a993ad20a8c164a273a6a4ef0c114d7200ece3ded463e055",
+      "bounds": {
+        "radius": 1.9052,
+        "top": 0.04,
+        "bottom": -2.38
+      },
+      "model": "tubing-head.glb",
+      "modelSha256": "9f5c6d61e8cf6606ddeb4c2290b12defae831e1fb67dfb0dbf151da779e2cd63"
+    },
+    {
+      "id": "tubing-hanger",
+      "thumbnail": "tubing-hanger.png",
+      "thumbnailSha256": "c5030ca1761020a75204c0020b5e88ea914b94212a8526480788f39f2375442b",
+      "bounds": {
+        "radius": 1.07,
+        "top": 0.32,
+        "bottom": -3.1
+      },
+      "model": "tubing-hanger.glb",
+      "modelSha256": "9957c62663c310737aeeef810b751a5c80b8744eebd003dae68cd7f52cc72870"
+    },
+    {
+      "id": "christmas-tree",
+      "thumbnail": "christmas-tree.png",
+      "thumbnailSha256": "02711a92295c987a05630c6d36b4b4ed150078c3570fcd0a7a1ba5379a3bc07e",
+      "bounds": {
+        "radius": 3.45,
+        "top": 5.97,
+        "bottom": 0
+      },
+      "model": "christmas-tree.glb",
+      "modelSha256": "0b1fa7f533f077036626d1d757a29d1baba7ef44a6c7ee3a3518a874705fb282"
+    },
+    {
+      "id": "horizontal-tree",
+      "thumbnail": "horizontal-tree.png",
+      "thumbnailSha256": "cc147712b714100c440e3a083be7ad9478b47f4f847958ffdb579ce8dfe63755",
+      "bounds": {
+        "radius": 3.85,
+        "top": 0.25,
+        "bottom": -2.25
+      },
+      "model": "horizontal-tree.glb",
+      "modelSha256": "eb1e3952e5f27cda2590eec902566a39022aa7bbb2abd139c56a03df6781b5a1"
+    },
+    {
+      "id": "bop-stack",
+      "thumbnail": "bop-stack.png",
+      "thumbnailSha256": "5708d7a1b9dc3028de596f7422184618700a4a737a6ab7504df23119014af074",
+      "bounds": {
+        "radius": 1.72,
+        "top": 0.08,
+        "bottom": -4
+      },
+      "model": "bop-stack.glb",
+      "modelSha256": "079191d3b5cda92af590d8aadd7d37bdaf1893df02c64a626299423070a45074"
+    },
+    {
+      "id": "conductor",
+      "thumbnail": "conductor.png",
+      "thumbnailSha256": "cbf7ec078c3c17c887ec3c082b79cc0cfaf62be9d0447a186badafa46ea9d0fd",
+      "bounds": {
+        "radius": 1.12,
+        "top": 0,
+        "bottom": -5.2
+      }
+    },
+    {
+      "id": "surface-casing",
+      "thumbnail": "surface-casing.png",
+      "thumbnailSha256": "292aa7aeaee2ffba974457309b2dd9a6f82e0536f4495dd25913539fffa9c25d",
+      "bounds": {
+        "radius": 1.12,
+        "top": 0,
+        "bottom": -5.2
+      }
+    },
+    {
+      "id": "intermediate-casing",
+      "thumbnail": "intermediate-casing.png",
+      "thumbnailSha256": "c95118c0f6ae8a655a60f5eaa2584f15f725cc10a6d4fa0256eb25820d64f381",
+      "bounds": {
+        "radius": 1.12,
+        "top": 0,
+        "bottom": -5.2
+      }
+    },
+    {
+      "id": "production-casing",
+      "thumbnail": "production-casing.png",
+      "thumbnailSha256": "9646853d43421eff4c3f147c766a891e55d8a0cd0770b46bcaec366961ec0d5a",
+      "bounds": {
+        "radius": 1.12,
+        "top": 0,
+        "bottom": -5.2
+      }
+    },
+    {
+      "id": "tieback-casing",
+      "thumbnail": "tieback-casing.png",
+      "thumbnailSha256": "2764eca8a5ee0f14030070eb4634bb0d82ec29a5353fab857e39c8e0374476d5",
+      "bounds": {
+        "radius": 1.12,
+        "top": 0,
+        "bottom": -5.95
+      }
+    },
+    {
+      "id": "liner",
+      "thumbnail": "liner.png",
+      "thumbnailSha256": "f07f621b65ee2eed11cce45b3ce969ec6dbb345ea3d5d0f7e036bbc27a56983f",
+      "bounds": {
+        "radius": 1.2896,
+        "top": 0,
+        "bottom": -5
+      },
+      "model": "liner.glb",
+      "modelSha256": "450757deaa156132ceacfbc9ba2c4a31b8fd36b82ab66fce172438b6bc1203a3"
+    },
+    {
+      "id": "drilling-liner",
+      "thumbnail": "drilling-liner.png",
+      "thumbnailSha256": "cfbd82dad78da34c6131be86147306479eb66c4ded39a7f44ee8804ce7dd2762",
+      "bounds": {
+        "radius": 1.2451,
+        "top": 0,
+        "bottom": -5
+      },
+      "model": "drilling-liner.glb",
+      "modelSha256": "8af62970af3ec62cf07068fd13455e71cc4116e8e6f599b7e884320afef34597"
+    },
+    {
+      "id": "float-shoe",
+      "thumbnail": "float-shoe.png",
+      "thumbnailSha256": "3daf0b6d7e3e690f68656eec48dc69ec69959e9e78d37a5ef6c755b51ead32a0",
+      "bounds": {
+        "radius": 1.04,
+        "top": 0,
+        "bottom": -3.2906
+      },
+      "model": "float-shoe.glb",
+      "modelSha256": "c514c9d6dc51c40ce33760e58a1540821d7a68326dc3ec8b0ce612425e62d34c"
+    },
+    {
+      "id": "guide-shoe",
+      "thumbnail": "guide-shoe.png",
+      "thumbnailSha256": "7bf9a40d5a29290ac3ea2a736fe8674ea7391ba77458bbbb044235f4f42204b0",
+      "bounds": {
+        "radius": 1.04,
+        "top": 0,
+        "bottom": -2.9772
+      },
+      "model": "guide-shoe.glb",
+      "modelSha256": "33baa67b2a63d03e354da27c4438e4c104d8f1f60dca5156ca5e43f16ee453a3"
+    },
+    {
+      "id": "float-collar",
+      "thumbnail": "float-collar.png",
+      "thumbnailSha256": "65c0cc4146bef1d3f6f4ac891dd18ccb9bd917cf640a3bac5f227ac78e26c941",
+      "bounds": {
+        "radius": 1,
+        "top": 0,
+        "bottom": -2.4
+      },
+      "model": "float-collar.glb",
+      "modelSha256": "7c8c3baf68da63133e07e1930d11a435e81feb767443d88ef121200625841543"
+    },
+    {
+      "id": "landing-collar",
+      "thumbnail": "landing-collar.png",
+      "thumbnailSha256": "07a0c31c273bcee44c6d0288236cf5d5ca5d2f8c4e99427969283152ab81f7c7",
+      "bounds": {
+        "radius": 1,
+        "top": 0,
+        "bottom": -2.35
+      },
+      "model": "landing-collar.glb",
+      "modelSha256": "eede35577e76dd004eb0db408836c6d7786137fc5ced39f963a85069673ac249"
+    },
+    {
+      "id": "centralizer",
+      "thumbnail": "centralizer.png",
+      "thumbnailSha256": "3980514b5dda1f3b04ec56187ec1f10fb5cff4e6bc987e9a208f6f71814f07c4",
+      "bounds": {
+        "radius": 1.035,
+        "top": 0.6,
+        "bottom": -5.6
+      },
+      "model": "centralizer.glb",
+      "modelSha256": "9a9bcdea7b8197528d5aa06b8136d93a3b43327c8cdebb1b9d2d1e7f75cb52d6"
+    },
+    {
+      "id": "rigid-centralizer",
+      "thumbnail": "rigid-centralizer.png",
+      "thumbnailSha256": "cac74f0b3000be8a6370adcf3ef5be7f679c6072e4f7940afe89c6343b4cd719",
+      "bounds": {
+        "radius": 1.4003,
+        "top": 0.4,
+        "bottom": -5.2
+      },
+      "model": "rigid-centralizer.glb",
+      "modelSha256": "e06f242ef5536ec905a6574dff466e70c933e7bc94525eb10a03db51edc844ae"
+    },
+    {
+      "id": "stage-tool",
+      "thumbnail": "stage-tool.png",
+      "thumbnailSha256": "600574712b44d451d653ff78ce6ba3bae113a67218274f27cc33771a8728bc36",
+      "bounds": {
+        "radius": 1,
+        "top": 0,
+        "bottom": -3.4
+      },
+      "model": "stage-tool.glb",
+      "modelSha256": "8b2c1d22ef4b615fc2e28b7dcb830a7ce4ef010743992305851964e5c8717cbc"
+    },
+    {
+      "id": "cement-basket",
+      "thumbnail": "cement-basket.png",
+      "thumbnailSha256": "cc6b5f985b12a9d9415b5244727f77289834c36e9e5e6ea14e06d3c2b58ba7a7",
+      "bounds": {
+        "radius": 1.0313,
+        "top": 0.35,
+        "bottom": -3.5
+      },
+      "model": "cement-basket.glb",
+      "modelSha256": "93272ab9b329e050364d7b39adcd93dbc5dd126da07007b712a34e4777f9693a"
+    },
+    {
+      "id": "liner-top-packer",
+      "thumbnail": "liner-top-packer.png",
+      "thumbnailSha256": "044b678d49a4f4596e97660e74863e3423fdad2a8c8697e29f74550ff6e3668f",
+      "bounds": {
+        "radius": 1.0673,
+        "top": 0.25,
+        "bottom": -4.2
+      },
+      "model": "liner-top-packer.glb",
+      "modelSha256": "6b934e949d0e5485d3f5fec9b73830ad30873f99902ec3e8fd7ebcfa0dea9b65"
+    },
+    {
+      "id": "cement",
+      "thumbnail": "cement.png",
+      "thumbnailSha256": "bf770ea8cd85b99228b12e90197228b6cf7d8918e8309b91fd0c9cfe39cf4175",
+      "bounds": {
+        "radius": 1,
+        "top": 0.25,
+        "bottom": -4.5
+      }
+    },
+    {
+      "id": "tubing",
+      "thumbnail": "tubing.png",
+      "thumbnailSha256": "f79e5de3435b85b9b50a8ce8c396d59c673998ff2710823477340700c8a4f69a",
+      "bounds": {
+        "radius": 1.28,
+        "top": 0,
+        "bottom": -6
+      }
+    },
+    {
+      "id": "safety-valve",
+      "thumbnail": "safety-valve.png",
+      "thumbnailSha256": "4d52f82e855ed05dece064088c73ff9fb797bd8fd7dbd5d9177f3cb23332c07c",
+      "bounds": {
+        "radius": 1.21,
+        "top": 2,
+        "bottom": -4.9
+      },
+      "model": "safety-valve.glb",
+      "modelSha256": "183bc8701a95a4f8f4859fb45b7588fe487a924383d78e2d7eeede74e50f2f59"
+    },
+    {
+      "id": "landing-nipple",
+      "thumbnail": "landing-nipple.png",
+      "thumbnailSha256": "add6a2c5c4c4fca682c57d0cea5a302f9cf9b60763671e68edd3d129b455f372",
+      "bounds": {
+        "radius": 1,
+        "top": 0,
+        "bottom": -2.5
+      },
+      "model": "landing-nipple.glb",
+      "modelSha256": "996cb679aa3618d18ca782fa89d34a94cd6c28ec639806baeca512af4cf90992"
+    },
+    {
+      "id": "no-go-nipple",
+      "thumbnail": "no-go-nipple.png",
+      "thumbnailSha256": "1f2a5befdde6bb87d3c217ddcca1fbcdfe2a973bd9f3a7e0aa9a85d1618709f9",
+      "bounds": {
+        "radius": 1,
+        "top": 0,
+        "bottom": -2.5
+      },
+      "model": "no-go-nipple.glb",
+      "modelSha256": "7d99c76499475329ef88fec47f85f5b0126c763ffa11a9f3850ee50f5ef97ef5"
+    },
+    {
+      "id": "chemical-injection-mandrel",
+      "thumbnail": "chemical-injection-mandrel.png",
+      "thumbnailSha256": "6f4635f3bd7986200f2b0c72a9e399bcd3e704a0e956558af35b9f59d9439985",
+      "bounds": {
+        "radius": 1.085,
+        "top": 0.3,
+        "bottom": -5.2
+      },
+      "model": "chemical-injection-mandrel.glb",
+      "modelSha256": "217fca799f0dcb80c8b6adcf91c0ac4db07bab3700ea0ef39a286d77bb2597b2"
+    },
+    {
+      "id": "gauge",
+      "thumbnail": "gauge.png",
+      "thumbnailSha256": "778188c7e34ba3e5bd515296eeac4b9a33b4f0d777df8604480a73d878943993",
+      "bounds": {
+        "radius": 1.2,
+        "top": 1.6,
+        "bottom": -4.4
+      },
+      "model": "gauge.glb",
+      "modelSha256": "180b1f1a5fd2525948c039aa5e5ab2997dc33b5c29d66bae87596b72392301c9"
+    },
+    {
+      "id": "sliding-sleeve",
+      "thumbnail": "sliding-sleeve.png",
+      "thumbnailSha256": "4bad8d1562553fa8519ae2cee6294990816698888753ea226eace71adefc4eac",
+      "bounds": {
+        "radius": 0.88,
+        "top": 0,
+        "bottom": -3.6
+      },
+      "model": "sliding-sleeve.glb",
+      "modelSha256": "2e5e65a53212a18fadef0df1595fa5081d930af2d278ff81001213d67eef11ed"
+    },
+    {
+      "id": "flow-coupling",
+      "thumbnail": "flow-coupling.png",
+      "thumbnailSha256": "4bac6ab94679f099de8df75dfa767509c81441144330e95a23d52c990a764c2b",
+      "bounds": {
+        "radius": 1,
+        "top": 0,
+        "bottom": -2.4
+      },
+      "model": "flow-coupling.glb",
+      "modelSha256": "4bdfda6f658ef68de4708205b53c99ebfd1ea98650cbac2936f41ebf8170d132"
+    },
+    {
+      "id": "blast-joint",
+      "thumbnail": "blast-joint.png",
+      "thumbnailSha256": "fdd9c8a18b5be275544cbc58071bbbaccb7706695f6480c382624d2a9b110c9d",
+      "bounds": {
+        "radius": 0.96,
+        "top": 0.25,
+        "bottom": -4.3
+      },
+      "model": "blast-joint.glb",
+      "modelSha256": "6cbbe41af593bd58756b79edd60c748271c0898cf11134559ec188fcd50799eb"
+    },
+    {
+      "id": "expansion-joint",
+      "thumbnail": "expansion-joint.png",
+      "thumbnailSha256": "b2f369a00e986d623fae34da684891c0716781bbbded51625d0bcf8c0fcbaca9",
+      "bounds": {
+        "radius": 0.92,
+        "top": 0,
+        "bottom": -5
+      },
+      "model": "expansion-joint.glb",
+      "modelSha256": "1e21128348082345be4afe167b9f574c39d32cd078660321033e585fc49cfae0"
+    },
+    {
+      "id": "seal-assembly",
+      "thumbnail": "seal-assembly.png",
+      "thumbnailSha256": "80b6d9518d6476d9edc352c9d1c71536d63140454ccd14f4ba5eb21f08d3c6e4",
+      "bounds": {
+        "radius": 0.82,
+        "top": 0.2,
+        "bottom": -3.7
+      },
+      "model": "seal-assembly.glb",
+      "modelSha256": "c3dc2bd6acc74e770ea22786910143f794c91ed81db69e8f75dce81acc33db5a"
+    },
+    {
+      "id": "packer",
+      "thumbnail": "packer.png",
+      "thumbnailSha256": "cc450ce48c4ca0f2a285ec5eaa28749aeebeabe13d22190df3a87d98e8af0478",
+      "bounds": {
+        "radius": 1,
+        "top": 0.4,
+        "bottom": -5.4
+      },
+      "model": "packer.glb",
+      "modelSha256": "5903ab3cd0b5555cc73a9df6987e257a79e8dc3a71b75ac45d51dfe930af107f"
+    },
+    {
+      "id": "permanent-packer",
+      "thumbnail": "permanent-packer.png",
+      "thumbnailSha256": "e754af445c1f7c9c6f2852b6fb741979a77b043c9ed04d92b1711afec5c1a35b",
+      "bounds": {
+        "radius": 1.0831,
+        "top": 0.25,
+        "bottom": -5
+      },
+      "model": "permanent-packer.glb",
+      "modelSha256": "7cad5393bac585e4c17a074031f3d699640cad70afebe8ba86cc4c3c8e5da95a"
+    },
+    {
+      "id": "wireline-entry-guide",
+      "thumbnail": "wireline-entry-guide.png",
+      "thumbnailSha256": "12ace51154eb079c81118def209e8e8670c1de0a908699e1daa6a2dd76c51c0f",
+      "bounds": {
+        "radius": 0.9582,
+        "top": 0,
+        "bottom": -3.6456
+      },
+      "model": "wireline-entry-guide.glb",
+      "modelSha256": "3ae476f30fbbfa6617d4506e44357e3fe47af26cac265cf0c577c189b06becee"
+    },
+    {
+      "id": "gas-lift-mandrel",
+      "thumbnail": "gas-lift-mandrel.png",
+      "thumbnailSha256": "e736516d35bff5eefb53390a7a75ddbd0cc7c836752e55697ed0ffdf99a7986b",
+      "bounds": {
+        "radius": 1.23,
+        "top": 0.4,
+        "bottom": -6
+      },
+      "model": "gas-lift-mandrel.glb",
+      "modelSha256": "3a3562528496d0f0f5a0a5dd8da337127ee87292ee27cb924c625cc9816b80e4"
+    },
+    {
+      "id": "esp",
+      "thumbnail": "esp.png",
+      "thumbnailSha256": "3f0e6f674b28c6a302ce07705d78a0f432ad10f493cec5a180cc8ef915e35aad",
+      "bounds": {
+        "radius": 0.64,
+        "top": 0,
+        "bottom": -7.2
+      },
+      "model": "esp.glb",
+      "modelSha256": "5bcca4eee09e5f4744d1670452c1f92ff402fc72efedaba2ef9d4c2bbd0d3514"
+    },
+    {
+      "id": "rod-pump",
+      "thumbnail": "rod-pump.png",
+      "thumbnailSha256": "14de153838bad477a973d923d0dcd837bc9af1cdac0d562e4c40689ecf700b97",
+      "bounds": {
+        "radius": 0.72,
+        "top": 0.85,
+        "bottom": -5
+      },
+      "model": "rod-pump.glb",
+      "modelSha256": "9fe3198eeabf7e1b5680d74869f13d66f62c5b0588388f237b5b38b7d93372d7"
+    },
+    {
+      "id": "pcp",
+      "thumbnail": "pcp.png",
+      "thumbnailSha256": "5444f58e99a9bbc285ef186d431acf70f8407f23cf66dfcd95155fe15904cb4f",
+      "bounds": {
+        "radius": 0.82,
+        "top": 0,
+        "bottom": -5.2
+      },
+      "model": "pcp.glb",
+      "modelSha256": "86725d118aaeed50c54a523d9cee00e174d406f450ac69098fe1aab73fef9261"
+    },
+    {
+      "id": "jet-pump",
+      "thumbnail": "jet-pump.png",
+      "thumbnailSha256": "baee54ca0b6c035ab9dae1882003a7761b5654119f16a7170982483cad55ee40",
+      "bounds": {
+        "radius": 0.82,
+        "top": 0,
+        "bottom": -3.7
+      },
+      "model": "jet-pump.glb",
+      "modelSha256": "e329b9d83c3ce00021523f59eab86ee91b9fdf8248b07038e5098ef95e465255"
+    },
+    {
+      "id": "perforations",
+      "thumbnail": "perforations.png",
+      "thumbnailSha256": "515e0c4711a131a63e7a3f407bd148e698299c78ff61e5d69a5af2501223aba2",
+      "bounds": {
+        "radius": 1.42,
+        "top": 0.15,
+        "bottom": -4.95
+      },
+      "model": "perforations.glb",
+      "modelSha256": "e46cdafcb2d6e04b18ff1f371eb730114d198fe02abf0d437642dedda12b04ba"
+    },
+    {
+      "id": "wire-wrap-screen",
+      "thumbnail": "wire-wrap-screen.png",
+      "thumbnailSha256": "59168eb36f493716c5a3d18d3dd84c8a2e00f9250a993007acbedefac1131eaa",
+      "bounds": {
+        "radius": 0.76,
+        "top": 0.2,
+        "bottom": -4.7
+      },
+      "model": "wire-wrap-screen.glb",
+      "modelSha256": "ddcd407a61900234bd4ed0e0c954acbdbe3a803a753ed4cc237f7524096e442d"
+    },
+    {
+      "id": "premium-screen",
+      "thumbnail": "premium-screen.png",
+      "thumbnailSha256": "07b8aee0a6fcda23de0cf8ad29e793d7093811a8208acce2a94a6af409253cf4",
+      "bounds": {
+        "radius": 0.7809,
+        "top": 0.15,
+        "bottom": -4.6
+      },
+      "model": "premium-screen.glb",
+      "modelSha256": "79929974a8a7596176725dad7ae8e695dfcd24dd2e7bb87f68501845465cee4b"
+    },
+    {
+      "id": "gravel-pack",
+      "thumbnail": "gravel-pack.png",
+      "thumbnailSha256": "c3456e710fe6554ea022533f82a75fa204161708069bde3d2d8a3cbd12e366f9",
+      "bounds": {
+        "radius": 1,
+        "top": 0.2,
+        "bottom": -4.8
+      },
+      "model": "gravel-pack.glb",
+      "modelSha256": "5a8efc2c97b7017b8ba76d11b620b5f33e4ae3d627da34d81d16a87e7f909e85"
+    },
+    {
+      "id": "icd-screen",
+      "thumbnail": "icd-screen.png",
+      "thumbnailSha256": "1113984a712f0ae20041dc8fb60eed8e001aae34b98b67057c51790ddca0eec9",
+      "bounds": {
+        "radius": 0.9,
+        "top": 0.2,
+        "bottom": -4.7
+      },
+      "model": "icd-screen.glb",
+      "modelSha256": "8ca106cc813649d412d9330b8df4f75f5f6cb4713682af4dca545f86b8b069a3"
+    },
+    {
+      "id": "swell-packer",
+      "thumbnail": "swell-packer.png",
+      "thumbnailSha256": "9d5d52653ec12994c4f04839f27d1f243fded009c5b2f0028e240fad6264808b",
+      "bounds": {
+        "radius": 1,
+        "top": 0.2,
+        "bottom": -4.7
+      },
+      "model": "swell-packer.glb",
+      "modelSha256": "b738236e7f266d9749ece0a83bd631b6fd1653e0bf605df50737e22d8139b605"
+    },
+    {
+      "id": "frac-sleeve",
+      "thumbnail": "frac-sleeve.png",
+      "thumbnailSha256": "8a8bb24a7994bc51f7deff331c91326fddd7eaba7f6c3987e13e996f371cfb35",
+      "bounds": {
+        "radius": 0.9,
+        "top": 0,
+        "bottom": -3.6
+      },
+      "model": "frac-sleeve.glb",
+      "modelSha256": "4ebae0ae80413bc9781594f160d627e08ee8b83934b46f7c7ffa612a9e28473b"
+    },
+    {
+      "id": "slotted-liner",
+      "thumbnail": "slotted-liner.png",
+      "thumbnailSha256": "fbfd5117410008830f7f82d3f70e7b1a98b2b0695b7b0d0091302fa3f058df4b",
+      "bounds": {
+        "radius": 0.82,
+        "top": 0,
+        "bottom": -4.8
+      },
+      "model": "slotted-liner.glb",
+      "modelSha256": "77241247621e8c71e2b9bb97852f73009c00d07a0e8200fd74932c1307d5dd3b"
+    },
+    {
+      "id": "icv",
+      "thumbnail": "icv.png",
+      "thumbnailSha256": "de7b4755f8e25b02dbd1e73d69531adf69b0fb87a8cdcc4f94e637d30725f841",
+      "bounds": {
+        "radius": 1.055,
+        "top": 0.2,
+        "bottom": -4.2
+      },
+      "model": "icv.glb",
+      "modelSha256": "6b1c82bdf040c9e02feebf64e2d92800cbb22f1104ecaa7f1461be618d91cb06"
+    },
+    {
+      "id": "bridge-plug",
+      "thumbnail": "bridge-plug.png",
+      "thumbnailSha256": "07b7462f966af076c757e74ba67bbce2f16f63480c475483455b288cfc3e6b20",
+      "bounds": {
+        "radius": 1.0673,
+        "top": 0.15,
+        "bottom": -3.72
+      },
+      "model": "bridge-plug.glb",
+      "modelSha256": "227e211bdf929c9ef6f9dbcdd0a025527abb6e11d61c6ac84c25c8ef23ab995f"
+    },
+    {
+      "id": "cement-plug",
+      "thumbnail": "cement-plug.png",
+      "thumbnailSha256": "45997e4c9e28121eaef50bf039667117784a00917a8c464bb1fa339f0908f494",
+      "bounds": {
+        "radius": 0.92,
+        "top": 0.2,
+        "bottom": -4.4
+      },
+      "model": "cement-plug.glb",
+      "modelSha256": "3fe67a8cf9b4055b78d34fea3d58f30ccffdf25c73f4aadf3d4f44755c600d9c"
+    },
+    {
+      "id": "cement-retainer",
+      "thumbnail": "cement-retainer.png",
+      "thumbnailSha256": "394d79e18d70fef393a4e0778cb9ec73810d342b17be63c3796e5f56d7a5b966",
+      "bounds": {
+        "radius": 1.0673,
+        "top": 0.15,
+        "bottom": -3.8
+      },
+      "model": "cement-retainer.glb",
+      "modelSha256": "d7fde2ee98692e0ac7f7c4527a947ffe1e24bd490c4ac8e5fce5baa9edfd2e47"
+    }
+  ]
+}

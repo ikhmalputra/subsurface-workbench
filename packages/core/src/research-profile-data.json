@@ -1,0 +1,1161 @@
+{
+  "provenance": "Reproduced open design example; not measured field data",
+  "method": "minimum curvature",
+  "engine": "welleng 0.29.1",
+  "shape": "Published curved design example",
+  "source": "https://github.com/jonnymaserati/welleng/blob/main/examples/build_a_well_from_sections.py",
+  "stations": [
+    {
+      "mdM": 0.0,
+      "tvdM": 0.0,
+      "eastingM": 0.0,
+      "northingM": 0.0,
+      "inclinationDeg": 0.0,
+      "azimuthDeg": 0.0
+    },
+    {
+      "mdM": 25.0,
+      "tvdM": 25.0,
+      "eastingM": 0.0,
+      "northingM": 0.0,
+      "inclinationDeg": 0.0,
+      "azimuthDeg": 0.0
+    },
+    {
+      "mdM": 50.0,
+      "tvdM": 50.0,
+      "eastingM": 0.0,
+      "northingM": 0.0,
+      "inclinationDeg": 0.0,
+      "azimuthDeg": 0.0
+    },
+    {
+      "mdM": 75.0,
+      "tvdM": 75.0,
+      "eastingM": 0.0,
+      "northingM": 0.0,
+      "inclinationDeg": 0.0,
+      "azimuthDeg": 0.0
+    },
+    {
+      "mdM": 100.0,
+      "tvdM": 100.0,
+      "eastingM": 0.0,
+      "northingM": 0.0,
+      "inclinationDeg": 0.0,
+      "azimuthDeg": 0.0
+    },
+    {
+      "mdM": 125.0,
+      "tvdM": 125.0,
+      "eastingM": 0.0,
+      "northingM": 0.0,
+      "inclinationDeg": 0.0,
+      "azimuthDeg": 0.0
+    },
+    {
+      "mdM": 150.0,
+      "tvdM": 150.0,
+      "eastingM": 0.0,
+      "northingM": 0.0,
+      "inclinationDeg": 0.0,
+      "azimuthDeg": 0.0
+    },
+    {
+      "mdM": 175.0,
+      "tvdM": 175.0,
+      "eastingM": 0.0,
+      "northingM": 0.0,
+      "inclinationDeg": 0.0,
+      "azimuthDeg": 0.0
+    },
+    {
+      "mdM": 200.0,
+      "tvdM": 200.0,
+      "eastingM": 0.0,
+      "northingM": 0.0,
+      "inclinationDeg": 0.0,
+      "azimuthDeg": 0.0
+    },
+    {
+      "mdM": 225.0,
+      "tvdM": 225.0,
+      "eastingM": 0.0,
+      "northingM": 0.0,
+      "inclinationDeg": 0.0,
+      "azimuthDeg": 0.0
+    },
+    {
+      "mdM": 250.0,
+      "tvdM": 250.0,
+      "eastingM": 0.0,
+      "northingM": 0.0,
+      "inclinationDeg": 0.0,
+      "azimuthDeg": 0.0
+    },
+    {
+      "mdM": 275.0,
+      "tvdM": 275.0,
+      "eastingM": 0.0,
+      "northingM": 0.0,
+      "inclinationDeg": 0.0,
+      "azimuthDeg": 0.0
+    },
+    {
+      "mdM": 300.0,
+      "tvdM": 300.0,
+      "eastingM": 0.0,
+      "northingM": 0.0,
+      "inclinationDeg": 0.0,
+      "azimuthDeg": 0.0
+    },
+    {
+      "mdM": 325.0,
+      "tvdM": 325.0,
+      "eastingM": 0.0,
+      "northingM": 0.0,
+      "inclinationDeg": 0.0,
+      "azimuthDeg": 0.0
+    },
+    {
+      "mdM": 350.0,
+      "tvdM": 350.0,
+      "eastingM": 0.0,
+      "northingM": 0.0,
+      "inclinationDeg": 0.0,
+      "azimuthDeg": 0.0
+    },
+    {
+      "mdM": 375.0,
+      "tvdM": 375.0,
+      "eastingM": 0.0,
+      "northingM": 0.0,
+      "inclinationDeg": 0.0,
+      "azimuthDeg": 0.0
+    },
+    {
+      "mdM": 400.0,
+      "tvdM": 400.0,
+      "eastingM": 0.0,
+      "northingM": 0.0,
+      "inclinationDeg": 0.0,
+      "azimuthDeg": 0.0
+    },
+    {
+      "mdM": 425.0,
+      "tvdM": 425.0,
+      "eastingM": 0.0,
+      "northingM": 0.0,
+      "inclinationDeg": 0.0,
+      "azimuthDeg": 0.0
+    },
+    {
+      "mdM": 450.0,
+      "tvdM": 450.0,
+      "eastingM": 0.0,
+      "northingM": 0.0,
+      "inclinationDeg": 0.0,
+      "azimuthDeg": 0.0
+    },
+    {
+      "mdM": 475.0,
+      "tvdM": 475.0,
+      "eastingM": 0.0,
+      "northingM": 0.0,
+      "inclinationDeg": 0.0,
+      "azimuthDeg": 0.0
+    },
+    {
+      "mdM": 500.0,
+      "tvdM": 500.0,
+      "eastingM": 0.0,
+      "northingM": 0.0,
+      "inclinationDeg": 0.0,
+      "azimuthDeg": 0.0
+    },
+    {
+      "mdM": 525.0,
+      "tvdM": 524.992068,
+      "eastingM": 0.545329,
+      "northingM": 0.0,
+      "inclinationDeg": 2.5,
+      "azimuthDeg": 90.0
+    },
+    {
+      "mdM": 550.0,
+      "tvdM": 549.936562,
+      "eastingM": 2.180277,
+      "northingM": 0.0,
+      "inclinationDeg": 5.0,
+      "azimuthDeg": 90.0
+    },
+    {
+      "mdM": 575.0,
+      "tvdM": 574.785999,
+      "eastingM": 4.901733,
+      "northingM": 0.0,
+      "inclinationDeg": 7.5,
+      "azimuthDeg": 90.0
+    },
+    {
+      "mdM": 600.0,
+      "tvdM": 599.493077,
+      "eastingM": 8.704516,
+      "northingM": 0.0,
+      "inclinationDeg": 10.0,
+      "azimuthDeg": 90.0
+    },
+    {
+      "mdM": 625.0,
+      "tvdM": 624.010764,
+      "eastingM": 13.581387,
+      "northingM": 0.0,
+      "inclinationDeg": 12.5,
+      "azimuthDeg": 90.0
+    },
+    {
+      "mdM": 650.0,
+      "tvdM": 648.292389,
+      "eastingM": 19.523063,
+      "northingM": 0.0,
+      "inclinationDeg": 15.0,
+      "azimuthDeg": 90.0
+    },
+    {
+      "mdM": 675.0,
+      "tvdM": 672.291732,
+      "eastingM": 26.518234,
+      "northingM": 0.0,
+      "inclinationDeg": 17.5,
+      "azimuthDeg": 90.0
+    },
+    {
+      "mdM": 700.0,
+      "tvdM": 695.963107,
+      "eastingM": 34.553583,
+      "northingM": 0.0,
+      "inclinationDeg": 20.0,
+      "azimuthDeg": 90.0
+    },
+    {
+      "mdM": 725.0,
+      "tvdM": 719.261456,
+      "eastingM": 43.613815,
+      "northingM": 0.0,
+      "inclinationDeg": 22.5,
+      "azimuthDeg": 90.0
+    },
+    {
+      "mdM": 750.0,
+      "tvdM": 742.142427,
+      "eastingM": 53.681684,
+      "northingM": 0.0,
+      "inclinationDeg": 25.0,
+      "azimuthDeg": 90.0
+    },
+    {
+      "mdM": 775.0,
+      "tvdM": 764.562467,
+      "eastingM": 64.738024,
+      "northingM": 0.0,
+      "inclinationDeg": 27.5,
+      "azimuthDeg": 90.0
+    },
+    {
+      "mdM": 800.0,
+      "tvdM": 786.478898,
+      "eastingM": 76.761789,
+      "northingM": 0.0,
+      "inclinationDeg": 30.0,
+      "azimuthDeg": 90.0
+    },
+    {
+      "mdM": 825.0,
+      "tvdM": 807.907091,
+      "eastingM": 89.618869,
+      "northingM": -0.593097,
+      "inclinationDeg": 32.032593,
+      "azimuthDeg": 95.130874
+    },
+    {
+      "mdM": 850.0,
+      "tvdM": 828.842316,
+      "eastingM": 103.160706,
+      "northingM": -2.37038,
+      "inclinationDeg": 34.249047,
+      "azimuthDeg": 99.688004
+    },
+    {
+      "mdM": 875.0,
+      "tvdM": 849.213736,
+      "eastingM": 117.341477,
+      "northingM": -5.325835,
+      "inclinationDeg": 36.615633,
+      "azimuthDeg": 103.739643
+    },
+    {
+      "mdM": 900.0,
+      "tvdM": 868.952419,
+      "eastingM": 132.113201,
+      "northingM": -9.449463,
+      "inclinationDeg": 39.104716,
+      "azimuthDeg": 107.35419
+    },
+    {
+      "mdM": 925.0,
+      "tvdM": 887.991577,
+      "eastingM": 147.425893,
+      "northingM": -14.727311,
+      "inclinationDeg": 41.693944,
+      "azimuthDeg": 110.594947
+    },
+    {
+      "mdM": 950.0,
+      "tvdM": 906.266786,
+      "eastingM": 163.22774,
+      "northingM": -21.141519,
+      "inclinationDeg": 44.365334,
+      "azimuthDeg": 113.517974
+    },
+    {
+      "mdM": 975.0,
+      "tvdM": 923.71621,
+      "eastingM": 179.465275,
+      "northingM": -28.670384,
+      "inclinationDeg": 47.104427,
+      "azimuthDeg": 116.171699
+    },
+    {
+      "mdM": 1000.0,
+      "tvdM": 940.280805,
+      "eastingM": 196.083555,
+      "northingM": -37.28843,
+      "inclinationDeg": 49.899559,
+      "azimuthDeg": 118.597399
+    },
+    {
+      "mdM": 1025.0,
+      "tvdM": 955.904521,
+      "eastingM": 213.026348,
+      "northingM": -46.966498,
+      "inclinationDeg": 52.741273,
+      "azimuthDeg": 120.830034
+    },
+    {
+      "mdM": 1050.0,
+      "tvdM": 970.534493,
+      "eastingM": 230.236325,
+      "northingM": -57.671839,
+      "inclinationDeg": 55.621843,
+      "azimuthDeg": 122.89917
+    },
+    {
+      "mdM": 1075.0,
+      "tvdM": 984.121218,
+      "eastingM": 247.655254,
+      "northingM": -69.368231,
+      "inclinationDeg": 58.534908,
+      "azimuthDeg": 124.829862
+    },
+    {
+      "mdM": 1100.0,
+      "tvdM": 996.618722,
+      "eastingM": 265.224194,
+      "northingM": -82.016095,
+      "inclinationDeg": 61.475184,
+      "azimuthDeg": 126.64343
+    },
+    {
+      "mdM": 1125.0,
+      "tvdM": 1007.984718,
+      "eastingM": 282.883697,
+      "northingM": -95.572636,
+      "inclinationDeg": 64.438233,
+      "azimuthDeg": 128.358135
+    },
+    {
+      "mdM": 1150.0,
+      "tvdM": 1018.180748,
+      "eastingM": 300.57401,
+      "northingM": -109.991983,
+      "inclinationDeg": 67.420289,
+      "azimuthDeg": 129.98974
+    },
+    {
+      "mdM": 1175.0,
+      "tvdM": 1027.17231,
+      "eastingM": 318.235273,
+      "northingM": -125.225345,
+      "inclinationDeg": 70.418117,
+      "azimuthDeg": 131.551983
+    },
+    {
+      "mdM": 1200.0,
+      "tvdM": 1034.92898,
+      "eastingM": 335.807728,
+      "northingM": -141.221177,
+      "inclinationDeg": 73.428902,
+      "azimuthDeg": 133.056968
+    },
+    {
+      "mdM": 1225.0,
+      "tvdM": 1041.424512,
+      "eastingM": 353.231913,
+      "northingM": -157.925355,
+      "inclinationDeg": 76.450161,
+      "azimuthDeg": 134.515497
+    },
+    {
+      "mdM": 1250.0,
+      "tvdM": 1046.636928,
+      "eastingM": 370.448872,
+      "northingM": -175.281357,
+      "inclinationDeg": 79.479662,
+      "azimuthDeg": 135.937341
+    },
+    {
+      "mdM": 1275.0,
+      "tvdM": 1050.54859,
+      "eastingM": 387.400347,
+      "northingM": -193.230455,
+      "inclinationDeg": 82.515375,
+      "azimuthDeg": 137.331483
+    },
+    {
+      "mdM": 1300.0,
+      "tvdM": 1053.146262,
+      "eastingM": 404.02898,
+      "northingM": -211.711916,
+      "inclinationDeg": 85.555407,
+      "azimuthDeg": 138.70632
+    },
+    {
+      "mdM": 1303.426225,
+      "tvdM": 1053.399348,
+      "eastingM": 406.279625,
+      "northingM": -214.28281,
+      "inclinationDeg": 85.972277,
+      "azimuthDeg": 138.893684
+    },
+    {
+      "mdM": 1325.0,
+      "tvdM": 1054.914672,
+      "eastingM": 420.428452,
+      "northingM": -230.498306,
+      "inclinationDeg": 85.972277,
+      "azimuthDeg": 138.893684
+    },
+    {
+      "mdM": 1350.0,
+      "tvdM": 1056.670651,
+      "eastingM": 436.824314,
+      "northingM": -249.289054,
+      "inclinationDeg": 85.972277,
+      "azimuthDeg": 138.893684
+    },
+    {
+      "mdM": 1375.0,
+      "tvdM": 1058.426629,
+      "eastingM": 453.220177,
+      "northingM": -268.079802,
+      "inclinationDeg": 85.972277,
+      "azimuthDeg": 138.893684
+    },
+    {
+      "mdM": 1400.0,
+      "tvdM": 1060.182608,
+      "eastingM": 469.61604,
+      "northingM": -286.87055,
+      "inclinationDeg": 85.972277,
+      "azimuthDeg": 138.893684
+    },
+    {
+      "mdM": 1425.0,
+      "tvdM": 1061.938587,
+      "eastingM": 486.011903,
+      "northingM": -305.661299,
+      "inclinationDeg": 85.972277,
+      "azimuthDeg": 138.893684
+    },
+    {
+      "mdM": 1450.0,
+      "tvdM": 1063.694566,
+      "eastingM": 502.407766,
+      "northingM": -324.452047,
+      "inclinationDeg": 85.972277,
+      "azimuthDeg": 138.893684
+    },
+    {
+      "mdM": 1475.0,
+      "tvdM": 1065.450544,
+      "eastingM": 518.803629,
+      "northingM": -343.242795,
+      "inclinationDeg": 85.972277,
+      "azimuthDeg": 138.893684
+    },
+    {
+      "mdM": 1500.0,
+      "tvdM": 1067.206523,
+      "eastingM": 535.199492,
+      "northingM": -362.033543,
+      "inclinationDeg": 85.972277,
+      "azimuthDeg": 138.893684
+    },
+    {
+      "mdM": 1525.0,
+      "tvdM": 1068.962502,
+      "eastingM": 551.595354,
+      "northingM": -380.824292,
+      "inclinationDeg": 85.972277,
+      "azimuthDeg": 138.893684
+    },
+    {
+      "mdM": 1550.0,
+      "tvdM": 1070.718481,
+      "eastingM": 567.991217,
+      "northingM": -399.61504,
+      "inclinationDeg": 85.972277,
+      "azimuthDeg": 138.893684
+    },
+    {
+      "mdM": 1575.0,
+      "tvdM": 1072.474459,
+      "eastingM": 584.38708,
+      "northingM": -418.405788,
+      "inclinationDeg": 85.972277,
+      "azimuthDeg": 138.893684
+    },
+    {
+      "mdM": 1600.0,
+      "tvdM": 1074.230438,
+      "eastingM": 600.782943,
+      "northingM": -437.196536,
+      "inclinationDeg": 85.972277,
+      "azimuthDeg": 138.893684
+    },
+    {
+      "mdM": 1625.0,
+      "tvdM": 1075.986417,
+      "eastingM": 617.178806,
+      "northingM": -455.987285,
+      "inclinationDeg": 85.972277,
+      "azimuthDeg": 138.893684
+    },
+    {
+      "mdM": 1650.0,
+      "tvdM": 1077.742396,
+      "eastingM": 633.574669,
+      "northingM": -474.778033,
+      "inclinationDeg": 85.972277,
+      "azimuthDeg": 138.893684
+    },
+    {
+      "mdM": 1672.738251,
+      "tvdM": 1079.339511,
+      "eastingM": 648.487198,
+      "northingM": -491.868783,
+      "inclinationDeg": 85.972277,
+      "azimuthDeg": 138.893684
+    },
+    {
+      "mdM": 1675.0,
+      "tvdM": 1079.503358,
+      "eastingM": 649.967857,
+      "northingM": -493.570635,
+      "inclinationDeg": 85.719131,
+      "azimuthDeg": 139.058004
+    },
+    {
+      "mdM": 1700.0,
+      "tvdM": 1081.976989,
+      "eastingM": 665.966956,
+      "northingM": -512.616205,
+      "inclinationDeg": 82.923822,
+      "azimuthDeg": 140.88301
+    },
+    {
+      "mdM": 1725.0,
+      "tvdM": 1085.659328,
+      "eastingM": 681.255223,
+      "northingM": -532.046413,
+      "inclinationDeg": 80.135706,
+      "azimuthDeg": 142.73024
+    },
+    {
+      "mdM": 1750.0,
+      "tvdM": 1090.537916,
+      "eastingM": 695.780927,
+      "northingM": -551.795516,
+      "inclinationDeg": 77.357812,
+      "azimuthDeg": 144.60896
+    },
+    {
+      "mdM": 1775.0,
+      "tvdM": 1096.596244,
+      "eastingM": 709.494918,
+      "northingM": -571.796687,
+      "inclinationDeg": 74.593362,
+      "azimuthDeg": 146.528913
+    },
+    {
+      "mdM": 1800.0,
+      "tvdM": 1103.813815,
+      "eastingM": 722.350792,
+      "northingM": -591.982249,
+      "inclinationDeg": 71.845832,
+      "azimuthDeg": 148.50048
+    },
+    {
+      "mdM": 1825.0,
+      "tvdM": 1112.166204,
+      "eastingM": 734.305048,
+      "northingM": -612.283901,
+      "inclinationDeg": 69.119026,
+      "azimuthDeg": 150.534833
+    },
+    {
+      "mdM": 1850.0,
+      "tvdM": 1121.625151,
+      "eastingM": 745.317238,
+      "northingM": -632.632949,
+      "inclinationDeg": 66.41716,
+      "azimuthDeg": 152.64411
+    },
+    {
+      "mdM": 1875.0,
+      "tvdM": 1132.15865,
+      "eastingM": 755.350099,
+      "northingM": -652.960537,
+      "inclinationDeg": 63.744956,
+      "azimuthDeg": 154.841602
+    },
+    {
+      "mdM": 1900.0,
+      "tvdM": 1143.731058,
+      "eastingM": 764.369684,
+      "northingM": -673.197883,
+      "inclinationDeg": 61.107755,
+      "azimuthDeg": 157.141934
+    },
+    {
+      "mdM": 1925.0,
+      "tvdM": 1156.303218,
+      "eastingM": 772.345473,
+      "northingM": -693.276512,
+      "inclinationDeg": 58.511646,
+      "azimuthDeg": 159.561263
+    },
+    {
+      "mdM": 1950.0,
+      "tvdM": 1169.832591,
+      "eastingM": 779.250478,
+      "northingM": -713.128482,
+      "inclinationDeg": 55.963617,
+      "azimuthDeg": 162.117452
+    },
+    {
+      "mdM": 1975.0,
+      "tvdM": 1184.273396,
+      "eastingM": 785.061336,
+      "northingM": -732.686621,
+      "inclinationDeg": 53.471732,
+      "azimuthDeg": 164.83021
+    },
+    {
+      "mdM": 2000.0,
+      "tvdM": 1199.576771,
+      "eastingM": 789.758384,
+      "northingM": -751.884751,
+      "inclinationDeg": 51.04533,
+      "azimuthDeg": 167.721159
+    },
+    {
+      "mdM": 2025.0,
+      "tvdM": 1215.690933,
+      "eastingM": 793.325728,
+      "northingM": -770.657912,
+      "inclinationDeg": 48.695242,
+      "azimuthDeg": 170.813776
+    },
+    {
+      "mdM": 2050.0,
+      "tvdM": 1232.561359,
+      "eastingM": 795.751299,
+      "northingM": -788.94258,
+      "inclinationDeg": 46.434031,
+      "azimuthDeg": 174.133116
+    },
+    {
+      "mdM": 2075.0,
+      "tvdM": 1250.130963,
+      "eastingM": 797.026888,
+      "northingM": -806.676886,
+      "inclinationDeg": 44.276219,
+      "azimuthDeg": 177.705203
+    },
+    {
+      "mdM": 2100.0,
+      "tvdM": 1268.340295,
+      "eastingM": 797.14818,
+      "northingM": -823.800823,
+      "inclinationDeg": 42.238493,
+      "azimuthDeg": 181.555948
+    },
+    {
+      "mdM": 2125.0,
+      "tvdM": 1287.127742,
+      "eastingM": 796.114763,
+      "northingM": -840.25645,
+      "inclinationDeg": 40.339821,
+      "azimuthDeg": 185.709391
+    },
+    {
+      "mdM": 2150.0,
+      "tvdM": 1306.429732,
+      "eastingM": 793.930136,
+      "northingM": -855.988085,
+      "inclinationDeg": 38.601422,
+      "azimuthDeg": 190.185137
+    },
+    {
+      "mdM": 2175.0,
+      "tvdM": 1326.180953,
+      "eastingM": 790.601689,
+      "northingM": -870.942497,
+      "inclinationDeg": 37.046484,
+      "azimuthDeg": 194.994888
+    },
+    {
+      "mdM": 2200.0,
+      "tvdM": 1346.314573,
+      "eastingM": 786.140686,
+      "northingM": -885.069086,
+      "inclinationDeg": 35.69953,
+      "azimuthDeg": 200.138207
+    },
+    {
+      "mdM": 2225.0,
+      "tvdM": 1366.762467,
+      "eastingM": 780.562221,
+      "northingM": -898.320052,
+      "inclinationDeg": 34.585324,
+      "azimuthDeg": 205.598051
+    },
+    {
+      "mdM": 2250.0,
+      "tvdM": 1387.455446,
+      "eastingM": 773.885169,
+      "northingM": -910.650557,
+      "inclinationDeg": 33.727312,
+      "azimuthDeg": 211.337025
+    },
+    {
+      "mdM": 2275.0,
+      "tvdM": 1408.32349,
+      "eastingM": 766.132124,
+      "northingM": -922.018879,
+      "inclinationDeg": 33.145674,
+      "azimuthDeg": 217.295761
+    },
+    {
+      "mdM": 2300.0,
+      "tvdM": 1429.29599,
+      "eastingM": 757.32932,
+      "northingM": -932.386551,
+      "inclinationDeg": 32.855276,
+      "azimuthDeg": 223.394754
+    },
+    {
+      "mdM": 2325.0,
+      "tvdM": 1450.30198,
+      "eastingM": 747.506542,
+      "northingM": -941.718493,
+      "inclinationDeg": 32.863932,
+      "azimuthDeg": 229.540273
+    },
+    {
+      "mdM": 2350.0,
+      "tvdM": 1471.270384,
+      "eastingM": 736.697027,
+      "northingM": -949.983127,
+      "inclinationDeg": 33.171403,
+      "azimuthDeg": 235.633629
+    },
+    {
+      "mdM": 2375.0,
+      "tvdM": 1492.13025,
+      "eastingM": 724.937352,
+      "northingM": -957.15249,
+      "inclinationDeg": 33.769436,
+      "azimuthDeg": 241.581684
+    },
+    {
+      "mdM": 2400.0,
+      "tvdM": 1512.810996,
+      "eastingM": 712.267308,
+      "northingM": -963.202322,
+      "inclinationDeg": 34.642805,
+      "azimuthDeg": 247.30597
+    },
+    {
+      "mdM": 2425.0,
+      "tvdM": 1533.242645,
+      "eastingM": 698.729766,
+      "northingM": -968.112152,
+      "inclinationDeg": 35.771085,
+      "azimuthDeg": 252.748376
+    },
+    {
+      "mdM": 2450.0,
+      "tvdM": 1553.356062,
+      "eastingM": 684.370533,
+      "northingM": -971.865367,
+      "inclinationDeg": 37.130706,
+      "azimuthDeg": 257.872752
+    },
+    {
+      "mdM": 2475.0,
+      "tvdM": 1573.083189,
+      "eastingM": 669.238196,
+      "northingM": -974.449268,
+      "inclinationDeg": 38.696876,
+      "azimuthDeg": 262.663124
+    },
+    {
+      "mdM": 2500.0,
+      "tvdM": 1592.357277,
+      "eastingM": 653.383957,
+      "northingM": -975.855111,
+      "inclinationDeg": 40.445127,
+      "azimuthDeg": 267.11988
+    },
+    {
+      "mdM": 2525.0,
+      "tvdM": 1611.113108,
+      "eastingM": 636.861464,
+      "northingM": -976.07814,
+      "inclinationDeg": 42.35237,
+      "azimuthDeg": 271.255285
+    },
+    {
+      "mdM": 2550.0,
+      "tvdM": 1629.287218,
+      "eastingM": 619.726621,
+      "northingM": -975.1176,
+      "inclinationDeg": 44.397511,
+      "azimuthDeg": 275.089285
+    },
+    {
+      "mdM": 2575.0,
+      "tvdM": 1646.818112,
+      "eastingM": 602.03741,
+      "northingM": -972.97674,
+      "inclinationDeg": 46.561715,
+      "azimuthDeg": 278.646093
+    },
+    {
+      "mdM": 2600.0,
+      "tvdM": 1663.646471,
+      "eastingM": 583.853683,
+      "northingM": -969.662806,
+      "inclinationDeg": 48.828424,
+      "azimuthDeg": 281.951662
+    },
+    {
+      "mdM": 2625.0,
+      "tvdM": 1679.715353,
+      "eastingM": 565.236969,
+      "northingM": -965.187009,
+      "inclinationDeg": 51.183234,
+      "azimuthDeg": 285.031987
+    },
+    {
+      "mdM": 2650.0,
+      "tvdM": 1694.970386,
+      "eastingM": 546.250262,
+      "northingM": -959.564496,
+      "inclinationDeg": 53.61369,
+      "azimuthDeg": 287.912043
+    },
+    {
+      "mdM": 2675.0,
+      "tvdM": 1709.359951,
+      "eastingM": 526.957806,
+      "northingM": -952.81429,
+      "inclinationDeg": 56.109051,
+      "azimuthDeg": 290.615207
+    },
+    {
+      "mdM": 2700.0,
+      "tvdM": 1722.83536,
+      "eastingM": 507.424881,
+      "northingM": -944.959233,
+      "inclinationDeg": 58.66006,
+      "azimuthDeg": 293.16299
+    },
+    {
+      "mdM": 2725.0,
+      "tvdM": 1735.351015,
+      "eastingM": 487.717579,
+      "northingM": -936.025903,
+      "inclinationDeg": 61.258718,
+      "azimuthDeg": 295.574992
+    },
+    {
+      "mdM": 2750.0,
+      "tvdM": 1746.864567,
+      "eastingM": 467.902585,
+      "northingM": -926.044528,
+      "inclinationDeg": 63.898095,
+      "azimuthDeg": 297.868973
+    },
+    {
+      "mdM": 2775.0,
+      "tvdM": 1757.337059,
+      "eastingM": 448.046946,
+      "northingM": -915.048881,
+      "inclinationDeg": 66.572147,
+      "azimuthDeg": 300.060995
+    },
+    {
+      "mdM": 2800.0,
+      "tvdM": 1766.733054,
+      "eastingM": 428.217846,
+      "northingM": -903.076169,
+      "inclinationDeg": 69.275573,
+      "azimuthDeg": 302.165605
+    },
+    {
+      "mdM": 2825.0,
+      "tvdM": 1775.02076,
+      "eastingM": 408.482383,
+      "northingM": -890.166904,
+      "inclinationDeg": 72.003684,
+      "azimuthDeg": 304.196019
+    },
+    {
+      "mdM": 2850.0,
+      "tvdM": 1782.172134,
+      "eastingM": 388.907333,
+      "northingM": -876.364765,
+      "inclinationDeg": 74.752289,
+      "azimuthDeg": 306.164315
+    },
+    {
+      "mdM": 2875.0,
+      "tvdM": 1788.162977,
+      "eastingM": 369.558933,
+      "northingM": -861.716456,
+      "inclinationDeg": 77.517606,
+      "azimuthDeg": 308.081617
+    },
+    {
+      "mdM": 2900.0,
+      "tvdM": 1792.973019,
+      "eastingM": 350.502652,
+      "northingM": -846.271542,
+      "inclinationDeg": 80.296174,
+      "azimuthDeg": 309.958262
+    },
+    {
+      "mdM": 2925.0,
+      "tvdM": 1796.585984,
+      "eastingM": 331.802971,
+      "northingM": -830.082282,
+      "inclinationDeg": 83.084786,
+      "azimuthDeg": 311.803964
+    },
+    {
+      "mdM": 2950.0,
+      "tvdM": 1798.989646,
+      "eastingM": 313.523162,
+      "northingM": -813.203457,
+      "inclinationDeg": 85.88042,
+      "azimuthDeg": 313.627963
+    },
+    {
+      "mdM": 2968.928442,
+      "tvdM": 1800.0,
+      "eastingM": 300.0,
+      "northingM": -800.0,
+      "inclinationDeg": 88.0,
+      "azimuthDeg": 315.0
+    },
+    {
+      "mdM": 2975.0,
+      "tvdM": 1800.17974,
+      "eastingM": 295.708662,
+      "northingM": -795.708662,
+      "inclinationDeg": 88.607156,
+      "azimuthDeg": 315.0
+    },
+    {
+      "mdM": 2988.928442,
+      "tvdM": 1800.34903,
+      "eastingM": 285.860736,
+      "northingM": -785.860736,
+      "inclinationDeg": 90.0,
+      "azimuthDeg": 315.0
+    },
+    {
+      "mdM": 3000.0,
+      "tvdM": 1800.34903,
+      "eastingM": 278.031963,
+      "northingM": -778.031963,
+      "inclinationDeg": 90.0,
+      "azimuthDeg": 315.0
+    },
+    {
+      "mdM": 3025.0,
+      "tvdM": 1800.34903,
+      "eastingM": 260.354293,
+      "northingM": -760.354293,
+      "inclinationDeg": 90.0,
+      "azimuthDeg": 315.0
+    },
+    {
+      "mdM": 3050.0,
+      "tvdM": 1800.34903,
+      "eastingM": 242.676624,
+      "northingM": -742.676624,
+      "inclinationDeg": 90.0,
+      "azimuthDeg": 315.0
+    },
+    {
+      "mdM": 3075.0,
+      "tvdM": 1800.34903,
+      "eastingM": 224.998954,
+      "northingM": -724.998954,
+      "inclinationDeg": 90.0,
+      "azimuthDeg": 315.0
+    },
+    {
+      "mdM": 3100.0,
+      "tvdM": 1800.34903,
+      "eastingM": 207.321284,
+      "northingM": -707.321284,
+      "inclinationDeg": 90.0,
+      "azimuthDeg": 315.0
+    },
+    {
+      "mdM": 3125.0,
+      "tvdM": 1800.34903,
+      "eastingM": 189.643615,
+      "northingM": -689.643615,
+      "inclinationDeg": 90.0,
+      "azimuthDeg": 315.0
+    },
+    {
+      "mdM": 3150.0,
+      "tvdM": 1800.34903,
+      "eastingM": 171.965945,
+      "northingM": -671.965945,
+      "inclinationDeg": 90.0,
+      "azimuthDeg": 315.0
+    },
+    {
+      "mdM": 3175.0,
+      "tvdM": 1800.34903,
+      "eastingM": 154.288276,
+      "northingM": -654.288276,
+      "inclinationDeg": 90.0,
+      "azimuthDeg": 315.0
+    },
+    {
+      "mdM": 3200.0,
+      "tvdM": 1800.34903,
+      "eastingM": 136.610606,
+      "northingM": -636.610606,
+      "inclinationDeg": 90.0,
+      "azimuthDeg": 315.0
+    },
+    {
+      "mdM": 3225.0,
+      "tvdM": 1800.34903,
+      "eastingM": 118.932937,
+      "northingM": -618.932937,
+      "inclinationDeg": 90.0,
+      "azimuthDeg": 315.0
+    },
+    {
+      "mdM": 3250.0,
+      "tvdM": 1800.34903,
+      "eastingM": 101.255267,
+      "northingM": -601.255267,
+      "inclinationDeg": 90.0,
+      "azimuthDeg": 315.0
+    },
+    {
+      "mdM": 3275.0,
+      "tvdM": 1800.34903,
+      "eastingM": 83.577598,
+      "northingM": -583.577598,
+      "inclinationDeg": 90.0,
+      "azimuthDeg": 315.0
+    },
+    {
+      "mdM": 3300.0,
+      "tvdM": 1800.34903,
+      "eastingM": 65.899928,
+      "northingM": -565.899928,
+      "inclinationDeg": 90.0,
+      "azimuthDeg": 315.0
+    },
+    {
+      "mdM": 3325.0,
+      "tvdM": 1800.34903,
+      "eastingM": 48.222259,
+      "northingM": -548.222259,
+      "inclinationDeg": 90.0,
+      "azimuthDeg": 315.0
+    },
+    {
+      "mdM": 3350.0,
+      "tvdM": 1800.34903,
+      "eastingM": 30.544589,
+      "northingM": -530.544589,
+      "inclinationDeg": 90.0,
+      "azimuthDeg": 315.0
+    },
+    {
+      "mdM": 3375.0,
+      "tvdM": 1800.34903,
+      "eastingM": 12.86692,
+      "northingM": -512.86692,
+      "inclinationDeg": 90.0,
+      "azimuthDeg": 315.0
+    },
+    {
+      "mdM": 3400.0,
+      "tvdM": 1800.34903,
+      "eastingM": -4.81075,
+      "northingM": -495.18925,
+      "inclinationDeg": 90.0,
+      "azimuthDeg": 315.0
+    },
+    {
+      "mdM": 3425.0,
+      "tvdM": 1800.34903,
+      "eastingM": -22.488419,
+      "northingM": -477.511581,
+      "inclinationDeg": 90.0,
+      "azimuthDeg": 315.0
+    },
+    {
+      "mdM": 3450.0,
+      "tvdM": 1800.34903,
+      "eastingM": -40.166089,
+      "northingM": -459.833911,
+      "inclinationDeg": 90.0,
+      "azimuthDeg": 315.0
+    },
+    {
+      "mdM": 3468.928442,
+      "tvdM": 1800.34903,
+      "eastingM": -53.550519,
+      "northingM": -446.449481,
+      "inclinationDeg": 90.0,
+      "azimuthDeg": 315.0
+    }
+  ]
+}

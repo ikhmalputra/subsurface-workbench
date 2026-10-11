@@ -1,0 +1,22 @@
+{
+  "extends": "../../tsconfig.sdk.json",
+  "compilerOptions": {
+    "resolveJsonModule": true,
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": [
+    "src/sandbox.ts",
+    "src/index.ts",
+    "src/contracts.ts",
+    "src/production-surveillance.ts",
+    "src/assembly.ts",
+    "src/trajectory.ts",
+    "src/well-design.ts",
+    "src/records.ts",
+    "src/seismic.ts",
+    "src/units.ts",
+    "src/frames.ts",
+    "src/gis.ts"
+  ]
+}

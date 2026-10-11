@@ -1,0 +1,32 @@
+name: CI
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.9.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.21.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test && pnpm test:demo-library && pnpm test:asset && pnpm lint
+      - run: pnpm audit --audit-level high
+      - run: pnpm build
+      - run: pnpm test:render-adapters
+      - run: pnpm test:packages
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+      - run: pnpm exec playwright test e2e/rendering.spec.ts --grep "native WebGPU"
+        env:
+          WEBGPU_TEST: "1"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-evidence
+          path: output/

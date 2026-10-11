@@ -1,0 +1,7 @@
+packages:
+  - apps/*
+  - packages/*
+minimumReleaseAgeExclude:
+  - lucide-react@1.52.0
+overrides:
+  "@maplibre/vt-pbf": "4.0.3"

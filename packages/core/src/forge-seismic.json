@@ -1,0 +1,140 @@
+{
+  "id": "forge-16a-psdm-section",
+  "title": "Utah FORGE 3D anisotropic PSDM (unenhanced) \u2014 section along 16A(78)-32",
+  "license": "CC-BY-4.0",
+  "attribution": "Utah FORGE seismic reflection data, GDR 1141, DOI 10.15121/1542059 (processed 2019 by Land Seismic Noise Specialists); well location from GDR 1216.",
+  "source": {
+    "url": "https://gdr.openei.org/files/1141/2018-19%20Reflection%20Processing.zip",
+    "member": "2018-19 Reflection Processing/3D Survey/Forge3d_ANI_PSDM_Stack_UnEnh.segy",
+    "sha256": "d1e07eb1c0bf27ea28ada3a5c30102cf92f3689083857f6d96031c4a1e39ad62",
+    "title": "Utah FORGE: Seismic Reflection Data (GDR 1141)",
+    "textHeader": [
+      "C 1 CLIENT: USGS/University of Utah       PROCESSOR: Land Seismic Noise Speciali",
+      "C 2 LINE Forge3d AniPSDM Stack UnEnhanced     AREA Utah",
+      "C 3 YEAR ACQUIRED: 2017    YEAR PROCESSED: 2019",
+      "C 4 SAMPLE INT: 5m       TRACE LENGTH: 5000 m",
+      "C 5",
+      "C 6 COORD SYSTEM:METRIC GEODETIC DATUM:NAD83 UTM 12 N",
+      "C 7 PROJECTION:MOLODENSKY/TM",
+      "C 8",
+      "C 9 DATE:4/12/2019",
+      "C10 DATUM: 1800 m      REPLACEMENT VELOCITY: 2500 m/s",
+      "C12 CMP Bin : 25m x 25m",
+      "C13 PRODUCT: Aniso PSDM UnEnhanced Stack",
+      "C14 IL 1,   XL 1,  (332800.5,  4260778.0 )",
+      "C15 IL 170, XL 1,  (322874.25, 4265002.25)",
+      "C16 IL 170, XL 213,(338173.44, 4264910.0 )",
+      "C17",
+      "C18",
+      "C19",
+      "C20",
+      "C21 PROCESSING FLOW:",
+      "C22 GEOMETRY ASSIGNMENT AND QC,TRACE EDITS,REFRACTION STATICS.",
+      "C23 AIRBLAST DENOISE,SPECTRAL EDIT DENOISE,LSNS DENOISE",
+      "C24 QCOMP 100, DECON (OP 180 ms PRW 0.01%)",
+      "C25 VELOCITY ANALYSIS AND RESIDUAL STATICS LOOPS (TWO ROUNDS)",
+      "C26 VELOCITY ANALYSIS AND RESIDUAL STATICS LOOPS (TWO ROUNDS)",
+      "C27 POST DECON NOISE ATTENUATION -  SPECTRAL EDIT and DESPIKE",
+      "C28 RESIDUAL STATICS, AGC, Interpolation on OFFBIN, Anisotropic PSDM",
+      "C29 Bandpass 4-8-80-120, STACK",
+      "C30",
+      "C31",
+      "C32 CMP_X: byte 189 4 byte ibm real",
+      "C33 CMP_X: byte 193 4 byte ibm real",
+      "C34 BIN_ELEV byte 53 4 byte",
+      "C35 HEADER FOR FINAL DATUM CMP_STAT: byte 201 4 byte ibm real",
+      "C36",
+      "C37",
+      "C38",
+      "C39 SEG Y REV1",
+      "C40 END EBCDIC",
+      ""
+    ]
+  },
+  "wellheadSource": {
+    "url": "https://gdr.openei.org/files/1216/Well_16A(78)-32_points_depths.csv",
+    "title": "Utah FORGE: Well 16A(78)-32 Planned Trajectory (GDR 1216)"
+  },
+  "crs": "NAD83 / UTM zone 12N (EPSG:26912)",
+  "wellhead": {
+    "eastingM": 334637.9,
+    "northingM": 4263458.9,
+    "groundElevationM": 1650.22
+  },
+  "seismicDatumElevationM": 1800.0,
+  "rkbElevationM": 1659.3345186690372,
+  "volume": {
+    "inlines": [
+      1,
+      170
+    ],
+    "crosslines": [
+      1,
+      213
+    ],
+    "binM": 25,
+    "sampleIntervalM": 5.0,
+    "samples": 1001,
+    "headerBytes": {
+      "inline": [
+        9,
+        "int16"
+      ],
+      "crossline": [
+        13,
+        "int16"
+      ],
+      "cdpX": [
+        189,
+        "ibm"
+      ],
+      "cdpY": [
+        193,
+        "ibm"
+      ]
+    },
+    "gridFitResidualM": 0.502
+  },
+  "section": {
+    "file": "forge-16a-psdm-section.sgy",
+    "sha256": "66a9d3a42d106b002f69dc39a2a6479b2582c7894234bd239231435d7512f387",
+    "azimuthDeg": 104.925,
+    "fromM": -750.0,
+    "toM": 1975.0,
+    "traceSpacingM": 25.0,
+    "traces": 110,
+    "samples": 801,
+    "maxDepthM": 4000.0,
+    "p99AbsAmplitude": 1.0446568727493286
+  },
+  "subVolume": {
+    "file": "forge-16a-psdm-volume.i8",
+    "sha256": "9a654dd80122359a0ef3b0d966894d9135c4e09d475a33ee156bf3141a99ddc0",
+    "encoding": "int8, x = along fastest, then offset (right of the section azimuth), then depth sample; amplitude = count * amplitudePerCount",
+    "azimuthDeg": 104.925,
+    "alongFromM": -750.0,
+    "alongToM": 1975.0,
+    "offsetFromM": -750.0,
+    "offsetToM": 750.0,
+    "spacingM": 25.0,
+    "alongCount": 110,
+    "offsetCount": 61,
+    "samples": 641,
+    "sampleIntervalM": 5.0,
+    "maxDepthM": 3200.0,
+    "amplitudePerCount": 0.015778924536517285,
+    "clipPercentile": 99.9,
+    "clippedFraction": 0.001
+  },
+  "checks": {
+    "planToeVsSurveyM": 1.64,
+    "surveyAzimuthReference": "assumed UTM grid; planned UTM toe and survey offsets agree within the check above"
+  },
+  "notes": [
+    "Depth is metres below the 1800 m ASL seismic datum, positive down. Well TVD below RKB converts as z = TVD + (1800 - RKB elevation).",
+    "PSDM depths come from the processor's velocity model and are not tied to well check-shots or sonic logs; expect depth misfit at the well.",
+    "Each output trace is the nearest 25 m bin to the section line; samples are unmodified and the source inline/crossline is kept in the trace header.",
+    "The published zip's enhanced PSDM member fails decompression, so the unenhanced stack is used.",
+    "The sub-volume uses the same nearest-bin rule; its offset-0 row is the section. Its int8 quantisation is for display: error is at most half a count below the 99.9th-percentile clip."
+  ]
+}

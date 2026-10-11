@@ -1,0 +1,37 @@
+{
+  "name": "subsurface-workbench",
+  "version": "0.0.1",
+  "private": true,
+  "packageManager": "pnpm@12.9.1",
+  "engines": {
+    "node": "24.21.0"
+  },
+  "scripts": {
+    "test": "node --test packages/core/src/*.test.ts",
+    "test:demo-library": "node --test apps/demo/test/*.test.ts",
+    "test:render-adapters": "node --test packages/react/test/*.test.mjs",
+    "build": "pnpm --filter @ikhmalputra/subsurface-core build && pnpm --filter @ikhmalputra/subsurface-react build && pnpm --filter demo build",
+    "typecheck": "pnpm --filter @ikhmalputra/subsurface-core build && pnpm --filter @ikhmalputra/subsurface-react build && pnpm --filter demo exec tsc --noEmit",
+    "lint": "eslint apps/demo/src packages --max-warnings 0",
+    "dev": "pnpm --filter demo dev",
+    "test:e2e": "playwright test",
+    "test:packages": "node tools/verify-packages.mjs",
+    "test:asset": "node --test tools/asset.test.mjs",
+    "render:catalog": "blender --background --python tools/blender/catalog.py"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.63.0",
+    "@types/d3-scale": "4.0.9",
+    "@types/node": "24.10.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@types/three": "0.186.0",
+    "eslint": "10.0.1",
+    "parse5": "8.0.1",
+    "three": "0.186.1",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.71.0"
+  }
+}
