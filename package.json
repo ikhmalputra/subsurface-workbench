@@ -9,8 +9,8 @@
   "scripts": {
     "test": "node --test packages/core/src/*.test.ts",
     "test:demo-library": "node --test apps/demo/test/*.test.ts",
-    "test:render-adapters": "node --test packages/react/test/*.test.mjs",
-    "build": "pnpm --filter @ikhmalputra/subsurface-core build && pnpm --filter @ikhmalputra/subsurface-react build && pnpm --filter @ikhmalputra/subsurface-shell build && pnpm --filter demo build && pnpm --filter workbench build",
+    "test:render-adapters": "node --test packages/react/test/*.test.mjs packages/shell/test/*.test.mjs",
+    "build": "pnpm --filter @ikhmalputra/subsurface-core build && pnpm --filter @ikhmalputra/subsurface-react build && pnpm --filter @ikhmalputra/subsurface-shell build && pnpm --filter demo build",
     "typecheck": "pnpm --filter @ikhmalputra/subsurface-core build && pnpm --filter @ikhmalputra/subsurface-react build && pnpm --filter demo exec tsc --noEmit",
     "lint": "eslint apps/demo/src packages --max-warnings 0",
     "dev": "pnpm --filter demo dev",

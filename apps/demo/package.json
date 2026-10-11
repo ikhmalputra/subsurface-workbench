@@ -15,6 +15,7 @@
     "@fontsource/ibm-plex-sans": "5.3.0",
     "@ikhmalputra/subsurface-core": "workspace:*",
     "@ikhmalputra/subsurface-react": "workspace:*",
+    "@ikhmalputra/subsurface-shell": "workspace:*",
     "next": "16.3.8",
     "react": "19.3.0",
     "react-dom": "19.3.0"

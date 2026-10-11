@@ -307,6 +307,7 @@ body { margin: 0; background: var(--sw-paper); color: var(--sw-ink); font-family
   .demo-theme-shell { min-height: 0; background: #fff; }
   .demo-page { max-width: none; margin: 0; padding: 0; background: #fff; }
   .demo-workbench-shell { display: block; min-height: 0; }
+  .demo-page { overflow: visible !important; height: auto; }
 }
 .demo-gis-workspace { display: grid; gap: var(--sw-space-3); }
 .demo-gis-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(300px, 1fr); gap: var(--sw-space-4); align-items: start; }
@@ -577,3 +578,6 @@ body { margin: 0; background: var(--sw-paper); color: var(--sw-ink); font-family
   .demo-page, .demo-home { padding: var(--sw-space-4) var(--sw-space-3) 24px; }
   .demo-nav button.demo-nav-toggle { display: inline-flex; }
 }
+
+/* The route is a scrolling document inside the shell's canvas host. */
+.demo-page { flex: 1 1 auto; min-width: 0; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; }

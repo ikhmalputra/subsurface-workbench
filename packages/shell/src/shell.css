@@ -18,6 +18,7 @@
   /* An implicit auto column lets a wide row stretch the whole grid past the viewport. */
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  grid-auto-rows: min-content;
   height: 100dvh;
   overflow: hidden;
   font-family: var(--sw-font-ui);
@@ -28,25 +29,27 @@
 
 /* ============================ control surfaces ============================ */
 
-/* Ghost by default: chrome recedes, content leads. Radius and size stay on contract. */
-.swb button[data-ui-kind="command"][type] {
+/* Scoped to shell-owned chrome only. `.swb button` would reach into the hosted route and the
+   host's own navigation, silently restyling an entire application's controls and breaking colour
+   pairings the host had already chosen. The canvas and sidebar are deliberately excluded. */
+:is(.swb-commandbar, .swb-tabstrip, .swb-dock-tabs, .swb-rail, .swb-segment, .swb-layers) button[data-ui-kind="command"][type] {
   border-color: transparent;
   background: transparent;
   color: var(--sw-ink);
   box-shadow: none;
   transition: background-color .12s ease, color .12s ease;
 }
-.swb button[data-ui-kind="command"][type]:hover:enabled { background: var(--swb-ghost-hover); border-color: transparent; }
-.swb button[data-ui-kind="command"][type][aria-pressed="true"] {
+:is(.swb-commandbar, .swb-tabstrip, .swb-dock-tabs, .swb-rail, .swb-segment, .swb-layers) button[data-ui-kind="command"][type]:hover:enabled { background: var(--swb-ghost-hover); border-color: transparent; }
+:is(.swb-commandbar, .swb-tabstrip, .swb-dock-tabs, .swb-rail, .swb-segment, .swb-layers) button[data-ui-kind="command"][type][aria-pressed="true"] {
   background: var(--swb-accent-wash);
   color: var(--sw-accent);
   border-color: transparent;
 }
-.swb button[data-ui-kind="command"][type]:disabled { opacity: .38; }
+:is(.swb-commandbar, .swb-tabstrip, .swb-dock-tabs, .swb-rail, .swb-segment, .swb-layers) button[data-ui-kind="command"][type]:disabled { opacity: .38; }
 
 /* Selection controls get no chrome from the SDK, so the shell owns them entirely.
    Without an explicit display they stay inline-block and any flex-direction is inert. */
-.swb button[data-ui-kind="selection"] {
+:is(.swb-commandbar, .swb-tabstrip, .swb-dock-tabs, .swb-rail, .swb-segment, .swb-layers) button[data-ui-kind="selection"] {
   display: inline-flex; align-items: center; gap: var(--sw-space-2);
   min-height: var(--sw-control-height); padding: 0 var(--sw-space-3);
   border: 0; border-radius: var(--sw-radius-control);
@@ -54,8 +57,8 @@
   font: inherit; font-size: 13px; text-align: start; cursor: pointer;
   transition: background-color .12s ease, color .12s ease;
 }
-.swb button[data-ui-kind="selection"]:hover:enabled { background: var(--swb-ghost-hover); color: var(--sw-ink); }
-.swb button[data-ui-kind="selection"]:disabled { opacity: .38; cursor: not-allowed; }
+:is(.swb-commandbar, .swb-tabstrip, .swb-dock-tabs, .swb-rail, .swb-segment, .swb-layers) button[data-ui-kind="selection"]:hover:enabled { background: var(--swb-ghost-hover); color: var(--sw-ink); }
+:is(.swb-commandbar, .swb-tabstrip, .swb-dock-tabs, .swb-rail, .swb-segment, .swb-layers) button[data-ui-kind="selection"]:disabled { opacity: .38; cursor: not-allowed; }
 
 /* ============================ command bar ============================ */
 .swb-commandbar {
@@ -92,14 +95,14 @@
   overflow-x: auto; scrollbar-width: thin;
 }
 .swb-tabstrip { display: contents; }
-.swb .swb-tabstrip button[data-ui-kind] {
+.swb-tabstrip button[data-ui-kind] {
   display: inline-flex; flex-direction: column; align-items: flex-start; justify-content: center;
   gap: 1px; padding: var(--sw-space-2) var(--sw-space-3) calc(var(--sw-space-2) + 2px);
   border-radius: 0; white-space: nowrap;
   box-shadow: inset 0 -2px 0 transparent;
 }
-.swb .swb-tabstrip button[data-ui-kind]:hover:enabled { background: var(--swb-ghost-hover); }
-.swb .swb-tabstrip button[aria-selected="true"] {
+.swb-tabstrip button[data-ui-kind]:hover:enabled { background: var(--swb-ghost-hover); }
+.swb-tabstrip button[aria-selected="true"] {
   color: var(--sw-ink); background: transparent;
   box-shadow: inset 0 -2px 0 var(--sw-accent);
 }
@@ -110,22 +113,30 @@
 /* ============================ options bar ============================ */
 .swb-options {
   display: flex; align-items: center; gap: var(--sw-space-3); flex-wrap: wrap;
-  padding: var(--sw-space-2) var(--sw-space-4);
+  padding: 0 var(--sw-space-3);
   background: var(--sw-paper);
   box-shadow: inset 0 -1px 0 var(--swb-hairline);
-  min-height: 48px;
+  min-height: 0;
 }
-/* First child of a group acts as its caption. */
-.swb-options > span:not([class]) {
+/* The options bar's content is host-owned by definition, so the shell styles the container and
+   nothing inside it. Descendant rules here silently re-layout whatever the host puts in. Opt-in
+   classes below are the exception: a host gets them only by asking for them. */
+/* Sizing flex items is the container's job, so this is the one thing the bar may say about its
+   content: a lone hosted element fills the bar as a block would, instead of shrinking to fit and
+   wrapping its own contents onto extra lines. */
+.swb-options > * { min-width: 0; }
+.swb-options > :only-child { flex: 1 1 auto; }
+
+.swb-options .swb-caption {
   font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
   color: var(--sw-muted); font-weight: 600;
 }
 /* Joined segmented control for mutually exclusive view modes. */
 .swb-options .swb-segment { display: inline-flex; padding: 2px; gap: 2px; background: var(--swb-sunken); border-radius: 7px; }
-.swb .swb-segment button[data-ui-kind="selection"] {
+.swb-segment button[data-ui-kind="selection"] {
   min-height: 32px; padding: 0 var(--sw-space-3); border-radius: 5px; font-size: 13px; font-weight: 500;
 }
-.swb .swb-segment button[aria-pressed="true"] {
+.swb-segment button[aria-pressed="true"] {
   background: var(--sw-surface); color: var(--sw-ink); box-shadow: var(--swb-shadow);
 }
 
@@ -139,9 +150,17 @@
   box-shadow: inset -1px 0 0 var(--swb-hairline);
 }
 
-.swb-canvas { flex: 1 1 auto; display: flex; min-width: 0; min-height: 0; overflow: hidden; padding: var(--sw-space-3); }
+/* Host navigation region. The shell owns placement and scroll; the host owns its contents. */
+.swb-sidebar {
+  flex: 0 0 auto; min-height: 0; overflow: auto;
+  background: var(--sw-paper);
+  box-shadow: inset -1px 0 0 var(--swb-hairline);
+}
+
+.swb-canvas { flex: 1 1 auto; display: flex; min-width: 0; min-height: 0; overflow: hidden; }
 .swb-canvas-stack {
   flex: 1 1 auto; display: grid; min-width: 0; min-height: 0;
+  margin: var(--sw-space-3);
   background: var(--sw-surface); border-radius: 10px; box-shadow: var(--swb-shadow);
   overflow: hidden;
 }
@@ -163,12 +182,12 @@
   box-shadow: inset 0 -1px 0 var(--swb-hairline);
 }
 .swb-dock-tabs::-webkit-scrollbar { display: none; }
-.swb .swb-dock-tabs button[data-ui-kind="selection"] {
+.swb-dock-tabs button[data-ui-kind="selection"] {
   min-height: 42px; padding: 0 var(--sw-space-3); border-radius: 0; white-space: nowrap;
   font-size: 12px; font-weight: 550; letter-spacing: .01em;
   box-shadow: inset 0 -2px 0 transparent;
 }
-.swb .swb-dock-tabs button[aria-selected="true"] {
+.swb-dock-tabs button[aria-selected="true"] {
   color: var(--sw-ink); background: transparent; box-shadow: inset 0 -2px 0 var(--sw-accent);
 }
 .swb-dock-body { min-height: 0; display: grid; }
@@ -203,7 +222,7 @@
 .swb-layer button[data-ui-kind="command"][type] { color: var(--sw-muted); }
 .swb-layer button[data-ui-kind="command"][type]:enabled:hover { color: var(--sw-ink); }
 
-.swb .swb-layer .swb-layer-name {
+.swb-layers .swb-layer .swb-layer-name {
   display: inline-flex; flex: 1 1 auto; min-width: 0;
   flex-direction: column; align-items: flex-start; justify-content: center; gap: 0;
   padding-inline: var(--sw-space-1); text-align: start;
@@ -241,7 +260,9 @@
     flex: 0 0 auto; flex-direction: row; justify-content: flex-start;
     overflow-x: auto; box-shadow: inset 0 -1px 0 var(--swb-hairline);
   }
-  .swb-canvas { padding: var(--sw-space-2); min-height: 44dvh; }
+  .swb-sidebar { flex: 0 0 auto; overflow: visible; box-shadow: inset 0 -1px 0 var(--swb-hairline); }
+  .swb-canvas { min-height: 44dvh; }
+  .swb-canvas-stack { margin: var(--sw-space-2); }
   .swb-dock { flex: 0 0 auto; max-height: 46dvh; box-shadow: inset 0 1px 0 var(--swb-hairline); }
   .swb-commandbar {
     flex-wrap: wrap; gap: var(--sw-space-2);
@@ -249,4 +270,17 @@
   }
   .swb-commands { margin-inline-start: 0; width: 100%; justify-content: space-between; }
   .swb-options { padding-inline: var(--sw-space-3); }
+}
+
+/* ============================ print ============================
+   The app frame is a fixed-height, clipped viewport. On paper there is no viewport: the document
+   must flow and paginate, so every constraint that makes the shell an application is unwound and
+   the chrome is dropped. Without this the whole report prints as a single clipped page. */
+@media print {
+  .swb { display: block; height: auto; min-height: 0; overflow: visible; background: #fff; }
+  .swb-commandbar, .swb-tabs, .swb-options, .swb-rail, .swb-sidebar, .swb-dock, .swb-status { display: none !important; }
+  .swb-body { display: block; min-height: 0; }
+  .swb-canvas { display: block; overflow: visible; }
+  .swb-canvas-stack { display: block; margin: 0; border-radius: 0; box-shadow: none; background: #fff; }
+  .swb-canvas-layer { overflow: visible; }
 }

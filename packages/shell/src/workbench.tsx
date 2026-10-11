@@ -29,6 +29,12 @@ export interface WorkbenchProps {
   readonly tools?: readonly WorkbenchTool[];
   readonly activeToolId?: string;
   readonly onActivateTool?: (id: string) => void;
+  /**
+   * Host-owned navigation for the left region, used instead of the icon rail when an application
+   * already has its own task navigation. Rendered once and never keyed off the route, so moving
+   * between destinations does not rebuild it.
+   */
+  readonly sidebar?: ReactNode;
   /** Contextual options for the active tool. */
   readonly options?: ReactNode;
   readonly status?: ReactNode;
@@ -44,18 +50,19 @@ export interface WorkbenchProps {
  */
 export function Workbench({
   brand, commands, documents = [], activeDocumentId, onActivateDocument,
-  tools = [], activeToolId, onActivateTool, options, status, children,
+  tools = [], activeToolId, onActivateTool, sidebar, options, status, children,
 }: WorkbenchProps) {
   const registry = usePanelHost();
   const activeDocument = documents.find((entry) => entry.id === activeDocumentId);
   return <PanelHostProvider registry={registry}>
     <div className="swb" data-active-tool={activeToolId}>
-      <header className="swb-commandbar">
-        {/* The page is about the open document; the brand is chrome, so the heading names the document. */}
-        <h1 className="sw-sr-only">{activeDocument ? `${activeDocument.title} · Subsurface Workbench` : "Subsurface Workbench"}</h1>
+      {/* Chrome is never reserved when unused: an empty command bar would push the canvas down for
+          nothing, which matters most on the drawing-first routes. */}
+      {brand || commands ? <header className="swb-commandbar">
+        {activeDocument ? <h1 className="sw-sr-only">{`${activeDocument.title} · Subsurface Workbench`}</h1> : null}
         {brand ? <div className="swb-brand">{brand}</div> : null}
         {commands ? <div className="swb-commands">{commands}</div> : null}
-      </header>
+      </header> : null}
 
       {/* A landmark wraps the strip: an element cannot be both a nav landmark and a tablist, and
           content outside landmarks fails the region check. */}
@@ -73,6 +80,7 @@ export function Workbench({
       {options ? <section className="swb-options" aria-label="Tool options" data-testid="workbench-options">{options}</section> : null}
 
       <div className="swb-body">
+        {sidebar ? <div className="swb-sidebar" data-testid="workbench-sidebar">{sidebar}</div> : null}
         {tools.length ? <nav className="swb-rail" aria-label="Tools" data-testid="workbench-rail">
           {tools.map((tool) => <CommandButton key={tool.id} kind="selection" icon={tool.icon}
             aria-pressed={tool.id === activeToolId} aria-label={tool.label} disabled={tool.disabled}

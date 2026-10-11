@@ -109,7 +109,10 @@ test("operational evidence stays compact, keyboard accessible and themed on phon
   await page.keyboard.press("PageDown");
   await expect.poll(() => register.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
   const headerBounds = await register.locator("thead").boundingBox();
-  expect(headerBounds?.y).toBeCloseTo(registerBounds.y, 0);
+  // The invariant is that the header stays pinned to the register's top while the register scrolls
+  // internally, so compare against where the register is now: focusing it can scroll the page itself.
+  const scrolledRegisterBounds = (await register.boundingBox())!;
+  expect(headerBounds?.y).toBeCloseTo(scrolledRegisterBounds.y, 0);
   await records.getByRole("button", { name: /^Runs/ }).click();
   await records.getByRole("button", { name: /^Daily reports/ }).click();
   await expect.poll(() => register.evaluate((element) => element.scrollTop)).toBe(0);

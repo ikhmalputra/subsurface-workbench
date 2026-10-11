@@ -9,7 +9,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const source = join(root, "packages/react/assets/well-components");
 const worker = join(root, "packages/react/node_modules/maplibre-gl/dist/maplibre-gl-csp-worker.js");
 
-for (const app of ["demo", "workbench"]) {
+for (const app of ["demo"]) {
   const appRoot = join(root, "apps", app);
   if (!existsSync(appRoot)) continue;
 
