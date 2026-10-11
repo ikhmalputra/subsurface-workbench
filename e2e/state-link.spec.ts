@@ -84,7 +84,6 @@ test("popstate restores a shared snapshot and legacy well links", async ({ page 
 test("well-scene camera hydrates in metre coordinates and camera input updates the shared link", async ({ page }) => {
   await page.goto("/view-well/?sw.v=1&sw.well=forge&sw.camera=1000,1000,-1000&sw.target=0,0,1300&sw.zoom=1");
   await page.getByRole("combobox", { name: "View", exact: true }).selectOption("earth");
-  await page.locator(".demo-scene-options > summary").click();
   const scene = page.getByTestId("interactive-well-scene");
   await expect(scene).toHaveAttribute("data-ready", "true", { timeout: 20_000 });
   await expect(scene).toHaveAttribute("data-camera", /^10\.000,10\.000,-10\.000,/);
@@ -92,6 +91,12 @@ test("well-scene camera hydrates in metre coordinates and camera input updates t
   await page.getByRole("button", { name: "Fit 3D well", exact: true }).first().click();
   await expect.poll(() => new URL(page.url()).searchParams.get("sw.camera")).not.toBe("1000,1000,-1000");
   await expect(scene).toHaveAttribute("data-ready", "true");
+  // The volume tools only exist once the seismic cube has loaded, which the camera assertions above
+  // do not need. Opening them here rather than straight after the view switch keeps the camera half
+  // of this test independent of a multi-megabyte asset finishing first.
+  const volumeOptions = page.locator(".demo-scene-options > summary");
+  await expect(volumeOptions).toBeVisible({ timeout: 60_000 });
+  await volumeOptions.click();
   const controls = page.getByRole("group", { name: "Cut the volume" });
   const slider = controls.locator("label", { hasText: "Across well" }).locator("input");
   await expect(slider).toBeVisible({ timeout: 20_000 });
