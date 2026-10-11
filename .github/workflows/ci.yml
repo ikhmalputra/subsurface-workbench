@@ -15,9 +15,13 @@ jobs:
           node-version: 24.21.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm test && pnpm test:demo-library && pnpm test:asset && pnpm lint
+      # Core and asset tests import source directly and lint reads source, so they run before the
+      # build for fast feedback. test:demo-library imports the packages through their export maps,
+      # which resolve into dist, so it has to wait for the build.
+      - run: pnpm test && pnpm test:asset && pnpm lint
       - run: pnpm audit --audit-level high
       - run: pnpm build
+      - run: pnpm test:demo-library
       - run: pnpm test:render-adapters
       - run: pnpm test:packages
       - run: pnpm exec playwright install --with-deps chromium
