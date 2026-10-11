@@ -75,3 +75,10 @@ jobs:
       - run: pnpm exec playwright test e2e/rendering.spec.ts --grep "native WebGPU"
         env:
           WEBGPU_TEST: "1"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: webgpu-evidence
+          path: |
+            output/
+            test-results/

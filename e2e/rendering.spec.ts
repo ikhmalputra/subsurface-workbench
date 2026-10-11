@@ -10,9 +10,36 @@ import { SCENE_READY } from "./support/timing";
  * strong — the pixels must genuinely change — and only allows the frame time to arrive.
  */
 async function expectRenderedPixelsToChange(canvas: Locator, before: Buffer, why: string) {
-  await expect
-    .poll(async () => !(await canvas.screenshot()).equals(before), { message: why, timeout: SCENE_READY })
-    .toBe(true);
+  try {
+    await expect
+      .poll(async () => !(await canvas.screenshot()).equals(before), { message: why, timeout: SCENE_READY })
+      .toBe(true);
+  } catch (failure) {
+    // "The pixels did not change" has two very different causes: a canvas that drew nothing at all,
+    // and one that drew correctly but ignored the control. Report which, so the failure is
+    // actionable instead of ambiguous.
+    throw new Error(`${why}\ncanvas content: ${JSON.stringify(await describeCanvas(canvas))}\n${String(failure)}`);
+  }
+}
+
+/** Composite the canvas into a 2D context and summarise it; a single distinct colour means blank. */
+async function describeCanvas(canvas: Locator) {
+  return canvas.evaluate((element) => {
+    const source = element as HTMLCanvasElement;
+    const copy = document.createElement("canvas");
+    copy.width = source.width;
+    copy.height = source.height;
+    const context = copy.getContext("2d");
+    if (!context) return { error: "no 2d context for readback" };
+    context.drawImage(source, 0, 0);
+    const { data } = context.getImageData(0, 0, copy.width, copy.height);
+    const colours = new Set<number>();
+    for (let index = 0; index < data.length; index += 4) {
+      colours.add((data[index]! << 24) | (data[index + 1]! << 16) | (data[index + 2]! << 8) | data[index + 3]!);
+      if (colours.size > 64) break;
+    }
+    return { width: copy.width, height: copy.height, distinctColours: colours.size, topLeft: [data[0], data[1], data[2], data[3]] };
+  });
 }
 
 test("arbitrary slices rotate and translate inside the existing scene and restore through a shared URL", async ({ page }) => {
