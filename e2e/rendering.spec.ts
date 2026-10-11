@@ -1,6 +1,19 @@
 import { expect, test } from "@playwright/test";
+import type { Locator } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { SCENE_READY } from "./support/timing";
+
+/**
+ * A GPU change is only observable once the renderer has presented a new frame. On a real GPU that
+ * is effectively immediate; under software rendering it lags, so a single screenshot taken right
+ * after moving a control can still show the previous frame. Polling keeps the assertion exactly as
+ * strong — the pixels must genuinely change — and only allows the frame time to arrive.
+ */
+async function expectRenderedPixelsToChange(canvas: Locator, before: Buffer, why: string) {
+  await expect
+    .poll(async () => !(await canvas.screenshot()).equals(before), { message: why, timeout: SCENE_READY })
+    .toBe(true);
+}
 
 test("arbitrary slices rotate and translate inside the existing scene and restore through a shared URL", async ({ page }) => {
   const errors: string[] = [];
@@ -144,7 +157,7 @@ test("native WebGPU compiles and renders the synthetic volume and oblique plane"
   const canvas = viewer.locator("canvas");
   const volume = await canvas.screenshot();
   await page.getByLabel("Opacity", { exact: true }).fill("0");
-  expect(volume.equals(await canvas.screenshot()), "volume opacity must change rendered GPU pixels").toBe(false);
+  await expectRenderedPixelsToChange(canvas, volume, "volume opacity must change rendered GPU pixels");
   await page.getByLabel("Opacity", { exact: true }).fill("20");
   await page.getByRole("button", { name: "Oblique slice" }).click();
   await page.getByLabel("Plane tilt", { exact: true }).fill("70");
@@ -154,7 +167,7 @@ test("native WebGPU compiles and renders the synthetic volume and oblique plane"
   await page.screenshot({ path: "output/playwright/webgpu-sandbox.png" });
   const slice = await canvas.screenshot();
   await page.getByLabel("Slice depth", { exact: true }).fill("1100");
-  expect(slice.equals(await canvas.screenshot()), "slice translation must change rendered GPU pixels").toBe(false);
+  await expectRenderedPixelsToChange(canvas, slice, "slice translation must change rendered GPU pixels");
   await page.getByRole("button", { name: "Regenerate seismic", exact: true }).click();
   await expect(viewer).toHaveAttribute("data-status", "ready");
   await expect(canvas).toHaveCount(1);
