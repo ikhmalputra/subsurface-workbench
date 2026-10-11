@@ -1,0 +1,142 @@
+/* Workbench shell layout. Uses the shared --sw-* token layer; the host must also load the SDK
+   stylesheet, which supplies the token definitions and the button[data-ui-kind] control chrome.
+   Everything here is screen layout only: no plot colours, no scientific geometry, no print rules. */
+
+.swb {
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  height: 100dvh;
+  font-family: var(--sw-font-ui);
+  color: var(--sw-ink);
+  background: var(--sw-paper);
+}
+
+/* The SDK stylesheet gives data-ui-kind="command" its full control chrome but leaves
+   data-ui-kind="selection" nearly unstyled, so the shell supplies the surface for its own
+   tabs and record selectors. Without an explicit display they stay inline-block buttons and
+   any flex-direction below silently does nothing. */
+.swb button[data-ui-kind="selection"] {
+  display: inline-flex; align-items: center; gap: var(--sw-space-2);
+  min-height: var(--sw-control-height); padding: 6px var(--sw-space-3);
+  border: 1px solid var(--sw-line); border-radius: var(--sw-radius-control);
+  background: var(--sw-surface); color: var(--sw-ink);
+  font: inherit; text-align: start; cursor: pointer;
+}
+.swb button[data-ui-kind="selection"]:hover:enabled { background: var(--sw-hover); border-color: var(--sw-muted); }
+.swb button[data-ui-kind="selection"][aria-selected="true"],
+.swb button[data-ui-kind="selection"][aria-pressed="true"] {
+  background: var(--sw-selected); border-color: var(--sw-accent);
+}
+.swb button[data-ui-kind="selection"]:disabled { opacity: .55; cursor: not-allowed; }
+
+/* --- command bar ------------------------------------------------------ */
+.swb-commandbar {
+  display: flex; align-items: center; gap: var(--sw-space-4);
+  padding: var(--sw-space-2) var(--sw-space-3);
+  border-bottom: 1px solid var(--sw-line);
+  background: var(--sw-surface);
+}
+.swb-brand { display: flex; align-items: center; gap: var(--sw-space-2); font-weight: 600; }
+.swb-brand small { display: block; font-size: 10px; letter-spacing: .14em; color: var(--sw-muted); font-weight: 500; }
+.swb-commands { display: flex; align-items: center; gap: var(--sw-space-2); margin-inline-start: auto; flex-wrap: wrap; }
+
+/* --- document tabs ---------------------------------------------------- */
+.swb-tabs {
+  display: flex; gap: var(--sw-space-1); align-items: stretch;
+  padding: var(--sw-space-1) var(--sw-space-3) 0;
+  border-bottom: 1px solid var(--sw-line);
+  background: var(--sw-surface);
+  overflow-x: auto;
+}
+.swb-tabstrip { display: contents; }
+.swb .swb-tabstrip button[data-ui-kind] {
+  display: inline-flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 0;
+  border-bottom-left-radius: 0; border-bottom-right-radius: 0;
+  border-bottom-color: transparent;
+}
+.swb .swb-tabstrip button[aria-selected="true"] { background: var(--sw-paper); border-bottom-color: var(--sw-paper); }
+/* Secondary text sits on a control surface, so it inherits the control's own foreground.
+   Using --sw-muted here (a panel-surface token) drops below 4.5:1 in the dark theme. */
+.swb-tabs small { color: inherit; font-size: 12px; }
+.swb-tabs em { font-style: normal; color: var(--sw-select-strong); }
+
+/* --- contextual options bar ------------------------------------------- */
+.swb-options {
+  display: flex; align-items: center; gap: var(--sw-space-2); flex-wrap: wrap;
+  padding: var(--sw-space-2) var(--sw-space-3);
+  border-bottom: 1px solid var(--sw-line);
+  background: var(--sw-surface);
+  min-height: var(--sw-control-height);
+}
+.swb-options label { display: inline-flex; align-items: center; gap: var(--sw-space-2); font-size: 13px; }
+
+/* --- body: rail | docks | canvas -------------------------------------- */
+.swb-body { display: flex; min-height: 0; min-width: 0; }
+
+.swb-rail {
+  display: flex; flex-direction: column; gap: var(--sw-space-1);
+  flex: 0 0 auto; padding: var(--sw-space-2);
+  border-inline-end: 1px solid var(--sw-line);
+  background: var(--sw-surface);
+}
+
+.swb-canvas { flex: 1 1 auto; display: flex; min-width: 0; min-height: 0; overflow: hidden; }
+.swb-canvas-stack { flex: 1 1 auto; display: grid; min-width: 0; min-height: 0; }
+/* Grid overlay keeps every mode in flow at the same cell; `hidden` chooses which one paints. */
+.swb-canvas-layer { grid-area: 1 / 1; min-width: 0; min-height: 0; overflow: auto; }
+
+/* --- dockable panel groups -------------------------------------------- */
+.swb-dock {
+  flex: 0 0 clamp(264px, 25vw, 380px);
+  display: grid; grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0; background: var(--sw-surface);
+}
+.swb-dock[data-side="right"] { border-inline-start: 1px solid var(--sw-line); }
+.swb-dock[data-side="left"] { border-inline-end: 1px solid var(--sw-line); }
+.swb-dock-tabs {
+  display: flex; gap: var(--sw-space-1); flex-wrap: wrap;
+  padding: var(--sw-space-2); border-bottom: 1px solid var(--sw-line);
+}
+.swb-dock-body { min-height: 0; display: grid; }
+.swb-panel { grid-area: 1 / 1; min-height: 0; overflow: auto; padding: var(--sw-panel-padding); }
+
+/* --- status bar ------------------------------------------------------- */
+.swb-status {
+  display: flex; align-items: center; gap: var(--sw-space-4); flex-wrap: wrap;
+  padding: var(--sw-space-2) var(--sw-space-3);
+  border-top: 1px solid var(--sw-line);
+  background: var(--sw-surface);
+  font-family: var(--sw-font-data); font-size: 12px; color: var(--sw-muted);
+}
+.swb-status strong { color: var(--sw-ink); font-weight: 500; }
+
+/* --- layer manager ---------------------------------------------------- */
+.swb-layers { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sw-space-1); }
+.swb-layer { display: flex; align-items: center; gap: var(--sw-space-1); }
+.swb-layer[data-visible="false"] .swb-layer-name { opacity: .55; }
+.swb-layer[data-locked] .swb-layer-name { font-style: italic; }
+.swb .swb-layer .swb-layer-name {
+  display: inline-flex; flex: 1 1 auto; min-width: 0;
+  flex-direction: column; align-items: flex-start; justify-content: center; gap: 0; text-align: start;
+}
+.swb-layer .swb-layer-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.swb-layer .swb-layer-name small { color: inherit; font-size: 12px; }
+
+.swb-badge {
+  flex: 0 0 auto; font-size: 10px; letter-spacing: .04em; text-transform: uppercase;
+  padding: 2px 6px; border-radius: var(--sw-radius-control); border: 1px solid var(--sw-line);
+  color: var(--sw-muted); background: var(--sw-paper); white-space: nowrap;
+}
+.swb-badge[data-provenance="documented"] { color: var(--sw-accent); border-color: var(--sw-accent); }
+.swb-badge[data-provenance="synthetic"] { color: var(--sw-warning); border-color: var(--sw-warning); }
+.swb-badge[data-provenance="user-authored"] { color: var(--sw-select-strong); border-color: var(--sw-select-strong); }
+
+.swb-empty { margin: 0; color: var(--sw-muted); font-size: 13px; }
+
+/* --- narrow viewports: docks stack under the canvas ------------------- */
+@media (max-width: 900px) {
+  .swb-body { flex-direction: column; }
+  .swb-rail { flex-direction: row; overflow-x: auto; border-inline-end: 0; border-bottom: 1px solid var(--sw-line); }
+  .swb-dock { flex: 0 0 auto; max-height: 45dvh; border-inline: 0; border-top: 1px solid var(--sw-line); }
+  .swb-canvas { min-height: 45dvh; }
+}

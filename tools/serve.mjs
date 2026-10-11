@@ -5,7 +5,10 @@ import { extname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "parse5";
 
-const root = fileURLToPath(new URL("../apps/demo/out/", import.meta.url));
+// Which exported app to serve. Lets the old demo and the new workbench run side by side during the
+// migration, so both Playwright projects can exercise their own app in one CI run.
+const app = process.env.SERVE_APP ?? "demo";
+const root = fileURLToPath(new URL(`../apps/${app}/out/`, import.meta.url));
 const types = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".png": "image/png", ".json": "application/json", ".woff2": "font/woff2", ".svg": "image/svg+xml", ".txt": "text/plain", ".ico": "image/x-icon" };
 
 function scriptHashes(html) {
@@ -49,5 +52,5 @@ createServer(async (request, response) => {
     response.writeHead(404).end("Not found");
   }
 }).listen(Number(process.env.PORT ?? 3100), "127.0.0.1", () => {
-  console.log(`Static demo: http://127.0.0.1:${process.env.PORT ?? 3100}`);
+  console.log(`Static ${app}: http://127.0.0.1:${process.env.PORT ?? 3100}`);
 });

@@ -1,0 +1,8 @@
+/* App-level glue only. Layout belongs to shell.css; data visuals belong to the SDK stylesheet. */
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+.wb-theme { display: contents; }
+
+.wb-props { display: grid; grid-template-columns: auto 1fr; gap: var(--sw-space-1) var(--sw-space-3); margin: 0; font-size: 13px; }
+.wb-props dt { color: var(--sw-muted); }
+.wb-props dd { margin: 0; font-family: var(--sw-font-data); overflow-wrap: anywhere; }
