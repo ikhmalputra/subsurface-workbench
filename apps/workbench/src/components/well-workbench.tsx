@@ -1,15 +1,17 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import {
   forgeDesign, getWellComponents, researchDesign, sProfileDesign, wellComponentsToAssembly,
 } from "@ikhmalputra/subsurface-core";
-import type { WellDesign } from "@ikhmalputra/subsurface-core";
+import type { WellComponent, WellDesign } from "@ikhmalputra/subsurface-core";
 import { getCatalogEntry } from "@ikhmalputra/subsurface-core/assembly";
 import type { AssemblySlot, WellAssembly } from "@ikhmalputra/subsurface-core/assembly";
 import { createSubsurfaceStore } from "@ikhmalputra/subsurface-core/state";
 import { useSubsurfaceSelector } from "@ikhmalputra/subsurface-react/state";
 import { AssemblySchematic, CurvedAssemblySchematic } from "@ikhmalputra/subsurface-react/assembly";
+import { ComponentInventory } from "@ikhmalputra/subsurface-react";
 import { SubsurfaceThemeProvider } from "@ikhmalputra/subsurface-react/2d";
 import type { SubsurfaceDensity, SubsurfaceThemeName } from "@ikhmalputra/subsurface-react/2d";
 import {
@@ -17,13 +19,24 @@ import {
   type WorkbenchLayer,
 } from "@ikhmalputra/subsurface-shell";
 
+// Three.js stays out of the initial payload; the 3D mode pulls it in on first use.
+const AssemblyScene = dynamic(
+  () => import("@ikhmalputra/subsurface-react/assembly-three").then((module) => module.AssemblyScene),
+  { ssr: false, loading: () => <p className="swb-empty" role="status">Loading the 3D cutaway…</p> },
+);
+
 const documents: readonly { readonly id: string; readonly title: string; readonly design: WellDesign }[] = [
   { id: "forge", title: "Utah FORGE 16A(78)-32", design: forgeDesign },
   { id: "s-profile", title: "S-profile completion", design: sProfileDesign },
   { id: "research", title: "Open research reference", design: researchDesign },
 ];
 
-type CanvasMode = "curved" | "schematic";
+const canvasModes = [
+  { id: "curved", label: "Curved" },
+  { id: "schematic", label: "Schematic" },
+  { id: "cutaway", label: "3D cutaway" },
+] as const;
+type CanvasMode = (typeof canvasModes)[number]["id"];
 
 const provenanceDetail: Readonly<Record<WellDesign["provenance"], string>> = {
   documented: "cited source records",
@@ -31,12 +44,11 @@ const provenanceDetail: Readonly<Record<WellDesign["provenance"], string>> = {
   "user-authored": "your revision",
 };
 
+const metres = (value: number) => `${value.toLocaleString("en-US", { maximumFractionDigits: 1 })} m`;
+const inches = (mm: number | null) => (mm === null ? "not reported" : `${(mm / 25.4).toFixed(3).replace(/\.?0+$/, "")} in`);
+
 function slotOf(catalogId: string): AssemblySlot | null {
-  try {
-    return getCatalogEntry(catalogId).slot;
-  } catch {
-    return null;
-  }
+  try { return getCatalogEntry(catalogId).slot; } catch { return null; }
 }
 
 function countSlots(assembly: WellAssembly, slots: readonly AssemblySlot[]) {
@@ -68,18 +80,33 @@ function buildLayers(design: WellDesign, assembly: WellAssembly, formationsVisib
     {
       id: "survey", label: "Survey path", visible: true, toggleable: false, toggleHint: notSeparable,
       count: design.survey?.length ?? null, provenance: design.provenance,
-      detail: design.survey?.length
-        ? `${design.survey.length} stations · ${design.surveyStatus ?? "unstated"}`
-        : "not reported",
+      detail: design.survey?.length ? `${design.survey.length} stations · ${design.surveyStatus ?? "unstated"}` : "not reported",
     },
   ];
 }
 
+function RecordProperties({ record }: { readonly record: WellComponent }) {
+  return <dl className="wb-props">
+    <dt>Name</dt><dd>{record.name}</dd>
+    <dt>Kind</dt><dd>{record.kind}</dd>
+    <dt>Material</dt><dd>{record.material || "not reported"}</dd>
+    {/* A record whose top was never reported must not render a confident 0 m. */}
+    <dt>Top MD</dt><dd>{record.topDepthReported === false ? "not reported" : metres(record.topDepthM)}</dd>
+    <dt>Base MD</dt><dd>{metres(record.bottomDepthM)}</dd>
+    <dt>Outside diameter</dt><dd>{inches(record.outerDiameterMm)}</dd>
+    <dt>Inside diameter</dt><dd>{inches(record.innerDiameterMm)}</dd>
+    {record.rawBottomDepthFt != null ? <><dt>Reported base</dt><dd>{record.rawBottomDepthFt.toLocaleString()} ft</dd></> : null}
+    <dt>Source</dt><dd>{record.sourcePage ? `page ${record.sourcePage}` : "not reported"}</dd>
+    <dt>Description</dt><dd>{record.description || "not reported"}</dd>
+  </dl>;
+}
+
 /** Lives inside <Workbench> so it can use the panel registry. */
 function Body({
-  design, assembly, mode, formationsVisible, onToggleFormations, selectedId, onSelect,
+  design, components, assembly, mode, formationsVisible, onToggleFormations, selectedId, onSelect,
 }: {
   readonly design: WellDesign;
+  readonly components: readonly WellComponent[];
   readonly assembly: WellAssembly;
   readonly mode: CanvasMode;
   readonly formationsVisible: boolean;
@@ -87,28 +114,36 @@ function Body({
   readonly selectedId: string | null;
   readonly onSelect: (id: string | null) => void;
 }) {
-  const registry = usePanelRegistry();
+  const { reveal } = usePanelRegistry();
   const [layerId, setLayerId] = useState<string | null>(null);
   const layers = useMemo(() => buildLayers(design, assembly, formationsVisible), [design, assembly, formationsVisible]);
-  const selected = assembly.items.find((item) => item.id === selectedId) ?? null;
   const formations = formationsVisible ? design.formations : undefined;
 
-  // Selecting in the drawing surfaces the inspector. The shell owns where that panel lives, so the
-  // view does not need a toolsContainer handed to it.
+  // Selection is held as a source-record id. Not every record becomes a drawing item (joints and
+  // couplings do not), so the drawing highlights the item itself or its parent string.
+  const record = components.find((component) => component.id === selectedId) ?? null;
+  const highlighted = !record ? null
+    : assembly.items.some((item) => item.id === record.id) ? record.id : record.parentId ?? null;
+
+  // Depends on the stable reveal only, so switching panels while a component stays selected sticks.
   useEffect(() => {
-    if (selectedId) registry.reveal("properties");
-  }, [selectedId, registry]);
+    if (selectedId) reveal("properties");
+  }, [selectedId, reveal]);
 
   return <>
     <CanvasStack active={mode}>
       <CanvasLayer id="curved">
         <CurvedAssemblySchematic assembly={assembly} survey={design.survey} formations={formations}
-          assetBaseUrl="/well-components" selectedId={selectedId} onSelect={onSelect} />
+          assetBaseUrl="/well-components" selectedId={highlighted} onSelect={onSelect} />
       </CanvasLayer>
       <CanvasLayer id="schematic">
         <AssemblySchematic assembly={assembly} survey={design.survey} formations={formations}
-          assetBaseUrl="/well-components" selectedId={selectedId} onSelect={onSelect}
+          assetBaseUrl="/well-components" selectedId={highlighted} onSelect={onSelect}
           title="Construction schematic" />
+      </CanvasLayer>
+      <CanvasLayer id="cutaway">
+        <AssemblyScene assembly={assembly} assetBaseUrl="/well-components"
+          selectedId={highlighted} onSelect={onSelect} title="Construction cutaway" />
       </CanvasLayer>
     </CanvasStack>
 
@@ -118,28 +153,28 @@ function Body({
     </Panel>
 
     <Panel id="properties" title="Properties" order={1}>
-      {selected ? <dl className="wb-props">
-        <dt>Label</dt><dd>{selected.label}</dd>
-        <dt>Top MD</dt><dd>{Number.isFinite(selected.topM) ? `${selected.topM.toLocaleString()} m` : "not reported"}</dd>
-        <dt>Base MD</dt><dd>{Number.isFinite(selected.bottomM) ? `${selected.bottomM.toLocaleString()} m` : "not reported"}</dd>
-        <dt>Outside diameter</dt><dd>{selected.odIn} in</dd>
-        <dt>Inside diameter</dt><dd>{selected.idIn === null ? "not reported" : `${selected.idIn} in`}</dd>
-      </dl> : <p className="swb-empty">Select a component in the drawing to inspect it.</p>}
+      {record ? <RecordProperties record={record} />
+        : <p className="swb-empty">Select a component in the drawing, or find one in Records.</p>}
     </Panel>
 
-    <Panel id="sources" title="Sources" order={2}>
+    <Panel id="records" title="Records" order={2}>
+      <ComponentInventory components={components} selectedId={selectedId} onSelect={onSelect} pageSize={10} />
+    </Panel>
+
+    <Panel id="sources" title="Sources" order={3}>
       <dl className="wb-props">
         <dt>Record</dt><dd>{design.wellName ?? design.id}</dd>
         <dt>Provenance</dt><dd>{design.provenance} · {provenanceDetail[design.provenance]}</dd>
         <dt>Depth datum</dt><dd>{design.depthDatum ?? "not reported"}</dd>
         <dt>Reported TD</dt><dd>{design.reportedTotalDepthFt ? `${design.reportedTotalDepthFt.toLocaleString()} ft` : "not reported"}</dd>
+        <dt>Records</dt><dd>{components.length}</dd>
         <dt>Attribution</dt><dd>{design.attribution ?? "not reported"}</dd>
         <dt>Licence</dt><dd>{design.license ?? "not reported"}</dd>
       </dl>
       <p className="swb-empty">The host owns this data. Nothing here is stored by the workbench.</p>
     </Panel>
 
-    <Panel id="history" title="History" order={3}>
+    <Panel id="history" title="History" order={4}>
       <p className="swb-empty">
         A single named command history across every panel arrives with the command stack. Until then this
         document is read-only, so there is nothing to undo.
@@ -166,14 +201,15 @@ export function WellWorkbench() {
   useEffect(() => { store.focusAsset(design.id, null, "workbench"); }, [store, design.id]);
   const selectedId = useSubsurfaceSelector(store, (state) => state.activeAsset.componentId);
 
+  const components = useMemo(() => getWellComponents(design), [design]);
   const assembly = useMemo(() => wellComponentsToAssembly({
     id: design.id, name: design.wellName ?? design.id,
-    totalDepthM: design.totalDepthM, components: getWellComponents(design),
-  }), [design]);
+    totalDepthM: design.totalDepthM, components,
+  }), [design, components]);
 
   return <SubsurfaceThemeProvider theme={theme} density={density} className="wb-theme">
     <Workbench
-      brand={<span>Subsurface<small>WORKBENCH</small></span>}
+      brand={<span>Subsurface<small>Workbench</small></span>}
       commands={<>
         <label>Theme <select value={theme} onChange={(event) => {
           const value = event.currentTarget.value;
@@ -200,17 +236,20 @@ export function WellWorkbench() {
       activeToolId="select"
       options={<>
         <span>View</span>
-        <CommandButton kind="selection" aria-pressed={mode === "curved"} onClick={() => setMode("curved")}>Curved</CommandButton>
-        <CommandButton kind="selection" aria-pressed={mode === "schematic"} onClick={() => setMode("schematic")}>Schematic</CommandButton>
+        <div className="swb-segment" role="group" aria-label="Canvas view">
+          {canvasModes.map((candidate) => <CommandButton key={candidate.id} kind="selection"
+            aria-pressed={mode === candidate.id} onClick={() => setMode(candidate.id)}>{candidate.label}</CommandButton>)}
+        </div>
       </>}
       status={<>
         <span>Well <strong>{design.wellName ?? design.id}</strong></span>
         <span>Source <strong>{design.provenance}</strong></span>
+        <span>Records <strong>{components.length}</strong></span>
         <span>Component <strong>{selectedId ?? "none selected"}</strong></span>
         <span>View <strong>{mode}</strong></span>
       </>}
     >
-      <Body design={design} assembly={assembly} mode={mode}
+      <Body design={design} components={components} assembly={assembly} mode={mode}
         formationsVisible={formationsVisible} onToggleFormations={() => setFormationsVisible((value) => !value)}
         selectedId={selectedId} onSelect={(id) => store.selectComponent(id, "workbench")} />
     </Workbench>

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { CommandButton } from "./ui.js";
 
@@ -85,22 +85,27 @@ export function usePanelHost(): PanelRegistry {
     setChosen((current) => (current[side] === id ? current : { ...current, [side]: id }));
   }, []);
 
+  // `reveal` must keep a stable identity. Callers put it in effect dependencies ("surface the
+  // inspector when selection changes"); if it changed whenever the registry did, the effect would
+  // re-fire on unrelated state and drag the dock back to that panel every time, so the user could
+  // never switch tabs while something was selected.
+  const panelsRef = useRef(panels);
+  useEffect(() => { panelsRef.current = panels; }, [panels]);
+  const reveal = useCallback((id: string) => {
+    const panel = panelsRef.current.find((entry) => entry.id === id);
+    if (panel) activate(panel.side, id);
+  }, [activate]);
+
   return useMemo<PanelRegistry>(() => {
     const activeFor = (side: PanelSide) => {
       const list = sorted(panels, side);
       const pick = chosen[side];
       return pick && list.some((panel) => panel.id === pick) ? pick : (list[0]?.id ?? null);
     };
-    return {
-      panels, slots, register, unregister, bindSlot, activate, activeFor,
-      // Canvas interactions call this to pull their panel forward, so picking a component can surface
-      // the inspector without the view knowing where the dock lives.
-      reveal: (id: string) => {
-        const panel = panels.find((entry) => entry.id === id);
-        if (panel) activate(panel.side, id);
-      },
-    };
-  }, [panels, slots, register, unregister, bindSlot, activate, chosen]);
+    // Canvas interactions call reveal() to pull their panel forward, so picking a component can
+    // surface the inspector without the view knowing where the dock lives.
+    return { panels, slots, register, unregister, bindSlot, activate, activeFor, reveal };
+  }, [panels, slots, register, unregister, bindSlot, activate, reveal, chosen]);
 }
 
 export function PanelHostProvider({ registry, children }: { readonly registry: PanelRegistry; readonly children: ReactNode }) {

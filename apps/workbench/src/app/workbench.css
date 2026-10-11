@@ -3,6 +3,10 @@
 html, body { margin: 0; padding: 0; }
 .wb-theme { display: contents; }
 
-.wb-props { display: grid; grid-template-columns: auto 1fr; gap: var(--sw-space-1) var(--sw-space-3); margin: 0; font-size: 13px; }
-.wb-props dt { color: var(--sw-muted); }
-.wb-props dd { margin: 0; font-family: var(--sw-font-data); overflow-wrap: anywhere; }
+.wb-props {
+  display: grid; grid-template-columns: minmax(96px, auto) 1fr;
+  gap: 7px var(--sw-space-3); margin: 0; font-size: 13px; align-items: baseline;
+}
+.wb-props dt { color: var(--sw-muted); font-size: 11px; letter-spacing: .02em; }
+.wb-props dd { margin: 0; font-family: var(--sw-font-data); font-size: 12px; overflow-wrap: anywhere; }
+.wb-props + .swb-empty { margin-top: var(--sw-space-4); padding-top: var(--sw-space-3); border-top: 1px solid var(--swb-hairline); }

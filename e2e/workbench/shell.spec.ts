@@ -11,6 +11,15 @@ async function readStamp(page: Page) {
   return canvas(page).evaluate((element) => (element as HTMLElement).dataset.mountCheck ?? null);
 }
 
+/**
+ * Wait for every running CSS transition to finish. Controls transition colour on hover, so sampling
+ * straight after a theme switch reads interpolated mid-transition values and reports contrast
+ * failures for colours that are never actually displayed at rest.
+ */
+async function settle(page: Page) {
+  await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => undefined))));
+}
+
 test("the shell frame renders every region once", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByTestId("workbench-tabs")).toBeVisible();
@@ -40,7 +49,7 @@ test("the canvas is never remounted by tools, panels, documents or theme", async
   expect(await readStamp(page)).toBe("same-canvas");
 
   // Panel tabs.
-  for (const name of ["Properties", "Sources", "History", "Layers"]) {
+  for (const name of ["Properties", "Records", "Sources", "History", "Layers"]) {
     await page.getByRole("tab", { name, exact: true }).click();
     expect(await readStamp(page)).toBe("same-canvas");
   }
@@ -90,6 +99,21 @@ test("selecting in the drawing surfaces the inspector and reports source values"
   await expect(page.getByTestId("workbench-status")).toContainText("production-casing");
 });
 
+test("revealing the inspector does not trap the dock on that panel", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByTestId("curved-assembly-schematic")).toBeVisible();
+  await page.locator('.swb-canvas-layer[data-active] [data-item-id="production-casing"]').press("Enter");
+  await expect(page.getByRole("tab", { name: "Properties", exact: true })).toHaveAttribute("aria-selected", "true");
+
+  // With the component still selected, the user must be able to move to another panel and stay there
+  // through unrelated state changes.
+  await page.getByRole("tab", { name: "Layers", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "Layers", exact: true })).toHaveAttribute("aria-selected", "true");
+  await page.getByLabel("Density").selectOption("compact");
+  await page.getByRole("button", { name: "Schematic", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "Layers", exact: true })).toHaveAttribute("aria-selected", "true");
+});
+
 test("layers carry per-layer provenance and do not offer toggles the renderer cannot honour", async ({ page }) => {
   await page.goto("/");
   const layers = page.locator('[data-panel-id="layers"]');
@@ -128,9 +152,44 @@ test("shell controls meet the shared control contract and have no axe violations
 
   for (const theme of ["light", "dark", "high-contrast"]) {
     await page.getByLabel("Theme").selectOption(theme);
+    await settle(page);
     const results = await new AxeBuilder({ page }).analyze();
-    expect(results.violations, `${theme} violations`).toEqual([]);
+    expect(results.violations.map((violation) => `${violation.id}: ${violation.nodes.length} node(s)`), `${theme} violations`).toEqual([]);
   }
+});
+
+test("the 3D cutaway loads on demand as a third canvas mode without remounting", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByTestId("curved-assembly-schematic")).toBeVisible();
+  await stampCanvas(page, "same-canvas");
+  // Three.js must not be in the initial payload; the mode pulls it in on first use.
+  await expect(page.locator('.swb-canvas-layer[data-layer="cutaway"] canvas')).toHaveCount(0);
+
+  await page.getByRole("button", { name: "3D cutaway", exact: true }).click();
+  await expect(page.locator('.swb-canvas-layer[data-layer="cutaway"] canvas')).toBeVisible({ timeout: 20000 });
+  expect(await readStamp(page)).toBe("same-canvas");
+
+  // Returning to a 2D mode leaves the loaded scene mounted rather than tearing it down.
+  await page.getByRole("button", { name: "Curved", exact: true }).click();
+  await expect(page.locator('.swb-canvas-layer[data-layer="cutaway"] canvas')).toHaveCount(1);
+  expect(await readStamp(page)).toBe("same-canvas");
+});
+
+test("the records register searches every source record and shares selection", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("tab", { name: /^S-profile/ }).click();
+  await page.getByRole("tab", { name: "Records", exact: true }).click();
+  const records = page.locator('[data-panel-id="records"]');
+
+  // The synthetic S-profile carries joint-level detail; the count comes from the record.
+  await expect(records.getByTestId("component-inventory-total").first()).toHaveText("746 records");
+  await records.getByLabel("Search").fill("mandrel");
+  await expect(records).toContainText("3 matching");
+
+  await records.locator("[data-component-id]").first().click();
+  // Selecting from the register reveals the inspector, exactly as selecting in the drawing does.
+  await expect(page.getByRole("tab", { name: "Properties", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator('[data-panel-id="properties"]')).toContainText("Gas lift mandrel");
 });
 
 test("the shell fits a phone viewport without horizontal overflow", async ({ page }) => {

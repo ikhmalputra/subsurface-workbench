@@ -1,142 +1,252 @@
-/* Workbench shell layout. Uses the shared --sw-* token layer; the host must also load the SDK
-   stylesheet, which supplies the token definitions and the button[data-ui-kind] control chrome.
-   Everything here is screen layout only: no plot colours, no scientific geometry, no print rules. */
+/* Workbench shell. Uses the shared --sw-* token layer; the host also loads the SDK stylesheet,
+   which supplies the token definitions and the button[data-ui-kind="command"] control contract
+   (accessible name, >=43.5px, 4px radius, 16px icon). Nothing here changes that contract — it
+   restyles surface and weight only. Screen layout only: no plot colours, no print rules. */
 
 .swb {
+  --swb-rail: 56px;
+  --swb-dock: clamp(280px, 26vw, 400px);
+  /* Chrome sits slightly above the page; panels sit on it. Depth comes from tone, not outlines. */
+  --swb-chrome: color-mix(in oklab, var(--sw-surface) 92%, var(--sw-ink));
+  --swb-sunken: color-mix(in oklab, var(--sw-paper) 94%, var(--sw-ink));
+  --swb-hairline: color-mix(in oklab, var(--sw-line) 55%, transparent);
+  --swb-ghost-hover: color-mix(in oklab, var(--sw-ink) 7%, transparent);
+  --swb-accent-wash: color-mix(in oklab, var(--sw-accent) 14%, transparent);
+  --swb-shadow: 0 1px 2px color-mix(in oklab, var(--sw-ink) 8%, transparent);
+
   display: grid;
+  /* An implicit auto column lets a wide row stretch the whole grid past the viewport. */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto auto auto minmax(0, 1fr) auto;
   height: 100dvh;
+  overflow: hidden;
   font-family: var(--sw-font-ui);
   color: var(--sw-ink);
   background: var(--sw-paper);
+  -webkit-font-smoothing: antialiased;
 }
 
-/* The SDK stylesheet gives data-ui-kind="command" its full control chrome but leaves
-   data-ui-kind="selection" nearly unstyled, so the shell supplies the surface for its own
-   tabs and record selectors. Without an explicit display they stay inline-block buttons and
-   any flex-direction below silently does nothing. */
+/* ============================ control surfaces ============================ */
+
+/* Ghost by default: chrome recedes, content leads. Radius and size stay on contract. */
+.swb button[data-ui-kind="command"][type] {
+  border-color: transparent;
+  background: transparent;
+  color: var(--sw-ink);
+  box-shadow: none;
+  transition: background-color .12s ease, color .12s ease;
+}
+.swb button[data-ui-kind="command"][type]:hover:enabled { background: var(--swb-ghost-hover); border-color: transparent; }
+.swb button[data-ui-kind="command"][type][aria-pressed="true"] {
+  background: var(--swb-accent-wash);
+  color: var(--sw-accent);
+  border-color: transparent;
+}
+.swb button[data-ui-kind="command"][type]:disabled { opacity: .38; }
+
+/* Selection controls get no chrome from the SDK, so the shell owns them entirely.
+   Without an explicit display they stay inline-block and any flex-direction is inert. */
 .swb button[data-ui-kind="selection"] {
   display: inline-flex; align-items: center; gap: var(--sw-space-2);
-  min-height: var(--sw-control-height); padding: 6px var(--sw-space-3);
-  border: 1px solid var(--sw-line); border-radius: var(--sw-radius-control);
-  background: var(--sw-surface); color: var(--sw-ink);
-  font: inherit; text-align: start; cursor: pointer;
+  min-height: var(--sw-control-height); padding: 0 var(--sw-space-3);
+  border: 0; border-radius: var(--sw-radius-control);
+  background: transparent; color: var(--sw-muted);
+  font: inherit; font-size: 13px; text-align: start; cursor: pointer;
+  transition: background-color .12s ease, color .12s ease;
 }
-.swb button[data-ui-kind="selection"]:hover:enabled { background: var(--sw-hover); border-color: var(--sw-muted); }
-.swb button[data-ui-kind="selection"][aria-selected="true"],
-.swb button[data-ui-kind="selection"][aria-pressed="true"] {
-  background: var(--sw-selected); border-color: var(--sw-accent);
-}
-.swb button[data-ui-kind="selection"]:disabled { opacity: .55; cursor: not-allowed; }
+.swb button[data-ui-kind="selection"]:hover:enabled { background: var(--swb-ghost-hover); color: var(--sw-ink); }
+.swb button[data-ui-kind="selection"]:disabled { opacity: .38; cursor: not-allowed; }
 
-/* --- command bar ------------------------------------------------------ */
+/* ============================ command bar ============================ */
 .swb-commandbar {
   display: flex; align-items: center; gap: var(--sw-space-4);
-  padding: var(--sw-space-2) var(--sw-space-3);
-  border-bottom: 1px solid var(--sw-line);
-  background: var(--sw-surface);
+  padding: 0 var(--sw-space-4); min-height: 52px;
+  background: var(--swb-chrome);
 }
-.swb-brand { display: flex; align-items: center; gap: var(--sw-space-2); font-weight: 600; }
-.swb-brand small { display: block; font-size: 10px; letter-spacing: .14em; color: var(--sw-muted); font-weight: 500; }
-.swb-commands { display: flex; align-items: center; gap: var(--sw-space-2); margin-inline-start: auto; flex-wrap: wrap; }
+.swb-brand { display: flex; align-items: baseline; gap: var(--sw-space-2); font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+.swb-brand small {
+  font-size: 10px; letter-spacing: .16em; font-weight: 650;
+  color: color-mix(in oklab, var(--sw-accent) 68%, var(--sw-ink));
+  text-transform: uppercase;
+}
+.swb-commands { display: flex; align-items: center; gap: var(--sw-space-3); margin-inline-start: auto; }
+.swb-commands label {
+  display: inline-flex; align-items: center; gap: var(--sw-space-2);
+  font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--sw-muted);
+}
+.swb-commands select {
+  font: inherit; font-size: 13px; text-transform: none; letter-spacing: 0;
+  color: var(--sw-ink); background: transparent;
+  border: 1px solid transparent; border-radius: var(--sw-radius-control);
+  padding: 5px var(--sw-space-2); cursor: pointer;
+}
+.swb-commands select:hover { background: var(--swb-ghost-hover); }
 
-/* --- document tabs ---------------------------------------------------- */
+/* ============================ document tabs ============================ */
+/* Underline tabs, not boxes: the active document reads as a position, not another button. */
 .swb-tabs {
-  display: flex; gap: var(--sw-space-1); align-items: stretch;
-  padding: var(--sw-space-1) var(--sw-space-3) 0;
-  border-bottom: 1px solid var(--sw-line);
-  background: var(--sw-surface);
-  overflow-x: auto;
+  display: flex; align-items: stretch; gap: var(--sw-space-1);
+  padding: 0 var(--sw-space-3);
+  background: var(--swb-chrome);
+  box-shadow: inset 0 -1px 0 var(--swb-hairline);
+  overflow-x: auto; scrollbar-width: thin;
 }
 .swb-tabstrip { display: contents; }
 .swb .swb-tabstrip button[data-ui-kind] {
-  display: inline-flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 0;
-  border-bottom-left-radius: 0; border-bottom-right-radius: 0;
-  border-bottom-color: transparent;
+  display: inline-flex; flex-direction: column; align-items: flex-start; justify-content: center;
+  gap: 1px; padding: var(--sw-space-2) var(--sw-space-3) calc(var(--sw-space-2) + 2px);
+  border-radius: 0; white-space: nowrap;
+  box-shadow: inset 0 -2px 0 transparent;
 }
-.swb .swb-tabstrip button[aria-selected="true"] { background: var(--sw-paper); border-bottom-color: var(--sw-paper); }
-/* Secondary text sits on a control surface, so it inherits the control's own foreground.
-   Using --sw-muted here (a panel-surface token) drops below 4.5:1 in the dark theme. */
-.swb-tabs small { color: inherit; font-size: 12px; }
+.swb .swb-tabstrip button[data-ui-kind]:hover:enabled { background: var(--swb-ghost-hover); }
+.swb .swb-tabstrip button[aria-selected="true"] {
+  color: var(--sw-ink); background: transparent;
+  box-shadow: inset 0 -2px 0 var(--sw-accent);
+}
+.swb-tabs span { font-size: 13px; font-weight: 550; }
+.swb-tabs small { color: inherit; font-size: 11px; font-weight: 400; }
 .swb-tabs em { font-style: normal; color: var(--sw-select-strong); }
 
-/* --- contextual options bar ------------------------------------------- */
+/* ============================ options bar ============================ */
 .swb-options {
-  display: flex; align-items: center; gap: var(--sw-space-2); flex-wrap: wrap;
-  padding: var(--sw-space-2) var(--sw-space-3);
-  border-bottom: 1px solid var(--sw-line);
-  background: var(--sw-surface);
-  min-height: var(--sw-control-height);
+  display: flex; align-items: center; gap: var(--sw-space-3); flex-wrap: wrap;
+  padding: var(--sw-space-2) var(--sw-space-4);
+  background: var(--sw-paper);
+  box-shadow: inset 0 -1px 0 var(--swb-hairline);
+  min-height: 48px;
 }
-.swb-options label { display: inline-flex; align-items: center; gap: var(--sw-space-2); font-size: 13px; }
+/* First child of a group acts as its caption. */
+.swb-options > span:not([class]) {
+  font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--sw-muted); font-weight: 600;
+}
+/* Joined segmented control for mutually exclusive view modes. */
+.swb-options .swb-segment { display: inline-flex; padding: 2px; gap: 2px; background: var(--swb-sunken); border-radius: 7px; }
+.swb .swb-segment button[data-ui-kind="selection"] {
+  min-height: 32px; padding: 0 var(--sw-space-3); border-radius: 5px; font-size: 13px; font-weight: 500;
+}
+.swb .swb-segment button[aria-pressed="true"] {
+  background: var(--sw-surface); color: var(--sw-ink); box-shadow: var(--swb-shadow);
+}
 
-/* --- body: rail | docks | canvas -------------------------------------- */
-.swb-body { display: flex; min-height: 0; min-width: 0; }
+/* ============================ body ============================ */
+.swb-body { display: flex; min-height: 0; min-width: 0; background: var(--sw-paper); }
 
 .swb-rail {
-  display: flex; flex-direction: column; gap: var(--sw-space-1);
-  flex: 0 0 auto; padding: var(--sw-space-2);
-  border-inline-end: 1px solid var(--sw-line);
-  background: var(--sw-surface);
+  display: flex; flex-direction: column; gap: 2px; align-items: center;
+  flex: 0 0 var(--swb-rail); padding: var(--sw-space-2) var(--sw-space-1);
+  background: var(--sw-paper);
+  box-shadow: inset -1px 0 0 var(--swb-hairline);
 }
 
-.swb-canvas { flex: 1 1 auto; display: flex; min-width: 0; min-height: 0; overflow: hidden; }
-.swb-canvas-stack { flex: 1 1 auto; display: grid; min-width: 0; min-height: 0; }
+.swb-canvas { flex: 1 1 auto; display: flex; min-width: 0; min-height: 0; overflow: hidden; padding: var(--sw-space-3); }
+.swb-canvas-stack {
+  flex: 1 1 auto; display: grid; min-width: 0; min-height: 0;
+  background: var(--sw-surface); border-radius: 10px; box-shadow: var(--swb-shadow);
+  overflow: hidden;
+}
 /* Grid overlay keeps every mode in flow at the same cell; `hidden` chooses which one paints. */
 .swb-canvas-layer { grid-area: 1 / 1; min-width: 0; min-height: 0; overflow: auto; }
 
-/* --- dockable panel groups -------------------------------------------- */
+/* ============================ dock ============================ */
 .swb-dock {
-  flex: 0 0 clamp(264px, 25vw, 380px);
+  flex: 0 0 var(--swb-dock);
   display: grid; grid-template-rows: auto minmax(0, 1fr);
-  min-height: 0; background: var(--sw-surface);
+  min-height: 0; background: var(--sw-paper);
 }
-.swb-dock[data-side="right"] { border-inline-start: 1px solid var(--sw-line); }
-.swb-dock[data-side="left"] { border-inline-end: 1px solid var(--sw-line); }
+.swb-dock[data-side="right"] { box-shadow: inset 1px 0 0 var(--swb-hairline); }
+.swb-dock[data-side="left"] { box-shadow: inset -1px 0 0 var(--swb-hairline); }
+/* One row, scrolls rather than wrapping into a ragged second line. */
 .swb-dock-tabs {
-  display: flex; gap: var(--sw-space-1); flex-wrap: wrap;
-  padding: var(--sw-space-2); border-bottom: 1px solid var(--sw-line);
+  display: flex; gap: 0; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
+  padding: 0 var(--sw-space-2);
+  box-shadow: inset 0 -1px 0 var(--swb-hairline);
+}
+.swb-dock-tabs::-webkit-scrollbar { display: none; }
+.swb .swb-dock-tabs button[data-ui-kind="selection"] {
+  min-height: 42px; padding: 0 var(--sw-space-3); border-radius: 0; white-space: nowrap;
+  font-size: 12px; font-weight: 550; letter-spacing: .01em;
+  box-shadow: inset 0 -2px 0 transparent;
+}
+.swb .swb-dock-tabs button[aria-selected="true"] {
+  color: var(--sw-ink); background: transparent; box-shadow: inset 0 -2px 0 var(--sw-accent);
 }
 .swb-dock-body { min-height: 0; display: grid; }
-.swb-panel { grid-area: 1 / 1; min-height: 0; overflow: auto; padding: var(--sw-panel-padding); }
+.swb-panel { grid-area: 1 / 1; min-height: 0; overflow: auto; padding: var(--sw-space-4); }
 
-/* --- status bar ------------------------------------------------------- */
+/* ============================ status bar ============================ */
 .swb-status {
-  display: flex; align-items: center; gap: var(--sw-space-4); flex-wrap: wrap;
-  padding: var(--sw-space-2) var(--sw-space-3);
-  border-top: 1px solid var(--sw-line);
-  background: var(--sw-surface);
-  font-family: var(--sw-font-data); font-size: 12px; color: var(--sw-muted);
+  display: flex; align-items: center; gap: var(--sw-space-5); flex-wrap: wrap;
+  padding: 0 var(--sw-space-4); min-height: 30px;
+  background: var(--swb-chrome);
+  box-shadow: inset 0 1px 0 var(--swb-hairline);
+  font-size: 11px; color: var(--sw-muted);
 }
-.swb-status strong { color: var(--sw-ink); font-weight: 500; }
+.swb-status > span { display: inline-flex; align-items: baseline; gap: var(--sw-space-2); }
+.swb-status strong {
+  color: var(--sw-ink); font-weight: 500;
+  font-family: var(--sw-font-data); font-size: 11px;
+}
 
-/* --- layer manager ---------------------------------------------------- */
-.swb-layers { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sw-space-1); }
-.swb-layer { display: flex; align-items: center; gap: var(--sw-space-1); }
-.swb-layer[data-visible="false"] .swb-layer-name { opacity: .55; }
-.swb-layer[data-locked] .swb-layer-name { font-style: italic; }
+/* ============================ layer manager ============================ */
+.swb-layers { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+.swb-layer {
+  display: flex; align-items: center; gap: var(--sw-space-1);
+  padding-inline-end: var(--sw-space-1); border-radius: 7px;
+  transition: background-color .12s ease;
+}
+.swb-layer:hover { background: var(--swb-ghost-hover); }
+.swb-layer[data-selected] { background: var(--swb-accent-wash); }
+.swb-layer[data-visible="false"] .swb-layer-name span { color: var(--sw-muted); font-weight: 400; }
+.swb-layer[data-locked] .swb-layer-name span { font-style: italic; }
+/* Icon affordances stay quiet until the row is touched, so the list reads as content. */
+.swb-layer button[data-ui-kind="command"][type] { color: var(--sw-muted); }
+.swb-layer button[data-ui-kind="command"][type]:enabled:hover { color: var(--sw-ink); }
+
 .swb .swb-layer .swb-layer-name {
   display: inline-flex; flex: 1 1 auto; min-width: 0;
-  flex-direction: column; align-items: flex-start; justify-content: center; gap: 0; text-align: start;
+  flex-direction: column; align-items: flex-start; justify-content: center; gap: 0;
+  padding-inline: var(--sw-space-1); text-align: start;
 }
-.swb-layer .swb-layer-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
-.swb-layer .swb-layer-name small { color: inherit; font-size: 12px; }
+.swb-layer .swb-layer-name span {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
+  font-size: 13px; font-weight: 500; color: var(--sw-ink);
+}
+.swb-layer .swb-layer-name small { color: inherit; font-size: 11px; }
 
+/* Tinted chip, not an outline: provenance should register before it is read. */
 .swb-badge {
-  flex: 0 0 auto; font-size: 10px; letter-spacing: .04em; text-transform: uppercase;
-  padding: 2px 6px; border-radius: var(--sw-radius-control); border: 1px solid var(--sw-line);
-  color: var(--sw-muted); background: var(--sw-paper); white-space: nowrap;
+  flex: 0 0 auto; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; font-weight: 650;
+  padding: 3px 7px; border-radius: 999px; border: 0; white-space: nowrap;
+  color: var(--sw-ink); background: var(--swb-ghost-hover);
 }
-.swb-badge[data-provenance="documented"] { color: var(--sw-accent); border-color: var(--sw-accent); }
-.swb-badge[data-provenance="synthetic"] { color: var(--sw-warning); border-color: var(--sw-warning); }
-.swb-badge[data-provenance="user-authored"] { color: var(--sw-select-strong); border-color: var(--sw-select-strong); }
+.swb-badge[data-provenance="documented"] {
+  color: color-mix(in oklab, var(--sw-accent) 62%, var(--sw-ink)); background: var(--swb-accent-wash);
+}
+.swb-badge[data-provenance="synthetic"] {
+  color: color-mix(in oklab, var(--sw-warning) 62%, var(--sw-ink));
+  background: color-mix(in oklab, var(--sw-warning) 16%, transparent);
+}
+.swb-badge[data-provenance="user-authored"] {
+  color: color-mix(in oklab, var(--sw-select-strong) 62%, var(--sw-ink));
+  background: color-mix(in oklab, var(--sw-select-strong) 16%, transparent);
+}
 
-.swb-empty { margin: 0; color: var(--sw-muted); font-size: 13px; }
+.swb-empty { margin: 0; color: var(--sw-muted); font-size: 13px; line-height: 1.55; }
 
-/* --- narrow viewports: docks stack under the canvas ------------------- */
+/* ============================ narrow viewports ============================ */
 @media (max-width: 900px) {
   .swb-body { flex-direction: column; }
-  .swb-rail { flex-direction: row; overflow-x: auto; border-inline-end: 0; border-bottom: 1px solid var(--sw-line); }
-  .swb-dock { flex: 0 0 auto; max-height: 45dvh; border-inline: 0; border-top: 1px solid var(--sw-line); }
-  .swb-canvas { min-height: 45dvh; }
+  .swb-rail {
+    flex: 0 0 auto; flex-direction: row; justify-content: flex-start;
+    overflow-x: auto; box-shadow: inset 0 -1px 0 var(--swb-hairline);
+  }
+  .swb-canvas { padding: var(--sw-space-2); min-height: 44dvh; }
+  .swb-dock { flex: 0 0 auto; max-height: 46dvh; box-shadow: inset 0 1px 0 var(--swb-hairline); }
+  .swb-commandbar {
+    flex-wrap: wrap; gap: var(--sw-space-2);
+    padding: var(--sw-space-2) var(--sw-space-3); min-height: 0;
+  }
+  .swb-commands { margin-inline-start: 0; width: 100%; justify-content: space-between; }
+  .swb-options { padding-inline: var(--sw-space-3); }
 }
