@@ -3,5 +3,6 @@ packages:
   - packages/*
 minimumReleaseAgeExclude:
   - lucide-react@1.52.0
+  - maplibre-gl@6.14.0
 overrides:
   "@maplibre/vt-pbf": "4.0.3"

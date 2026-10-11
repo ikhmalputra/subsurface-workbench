@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createSubsurfaceStore } from "@ikhmalputra/subsurface-core/state";
 import { GisMap } from "../dist/gis-map.js";
-import maplibre from "maplibre-gl";
+import * as maplibre from "maplibre-gl";
 import { prepareGisDocument } from "@ikhmalputra/subsurface-core/gis";
 import { makeGisTrajectoryLayer } from "../dist/gis-trajectories.js";
 import { seabedDepthAt } from "../dist/offshore-environment.js";
@@ -23,7 +23,7 @@ test("GIS entry point server-renders controls without importing a browser engine
     layers: [],
   };
   const html = renderToStaticMarkup(createElement(GisMap, {
-    document, store: createSubsurfaceStore(), workerUrl: "/gis/maplibre-gl-csp-worker.js",
+    document, store: createSubsurfaceStore(), workerUrl: "/gis/maplibre-gl-worker.mjs",
   }));
   assert.match(html, /data-ready="false"/);
   assert.match(html, /No basemap supplied/);
@@ -39,7 +39,7 @@ test("continuous linked MD keeps its value while the map labels the nearest sour
       id: "a", label: "Test well", crs: "EPSG:32631", depthDatum: "RKB", source: "Test survey", provenance: "synthetic",
       xyz: new Float64Array([500000, 0, 0, 500100, 0, 100]), depthsMdM: new Float64Array([0, 105]),
     }] },
-    store, workerUrl: "/gis/maplibre-gl-csp-worker.js",
+    store, workerUrl: "/gis/maplibre-gl-worker.mjs",
   }));
   assert.match(html, /data-selected-md="60.5"/);
   assert.match(html, /data-marker-md="105"/);

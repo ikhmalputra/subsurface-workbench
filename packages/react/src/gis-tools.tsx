@@ -87,7 +87,9 @@ export function GisTools({ map, state, onChange }: { map: GeographicMap | null; 
           map.addLayer({ id: `${layer.id}-line`, source: layer.id, type: "line", filter: ["!=", "$type", "Point"], layout, paint: { "line-color": layer.color, "line-width": 2, "line-opacity": layer.opacity } }, "well-paths");
           map.addLayer({ id: `${layer.id}-point`, source: layer.id, type: "circle", filter: ["==", "$type", "Point"], layout, paint: { "circle-color": layer.color, "circle-radius": 6, "circle-opacity": layer.opacity } }, "well-paths");
         }
-        for (const [suffix, type] of [["fill", "fill"], ["line", "line"], ["point", "circle"]]) {
+        // `as const` keeps the layer types literal, so the derived paint keys narrow to real
+        // property names instead of `${string}-color`, which maplibre v6 rightly rejects.
+        for (const [suffix, type] of [["fill", "fill"], ["line", "line"], ["point", "circle"]] as const) {
           const id = `${layer.id}-${suffix}`;
           map.setPaintProperty(id, `${type}-color`, layer.color);
           map.setPaintProperty(id, `${type}-opacity`, layer.opacity * (suffix === "fill" ? 0.35 : 1));

@@ -77,7 +77,7 @@ export function GisMap({ document, store, workerUrl, rasterTiles, rasterAttribut
     setThreeReady(false);
     setError(null);
     const setup = async () => {
-      const library = await import("maplibre-gl/dist/maplibre-gl-csp.js");
+      const library = await import("maplibre-gl");
       const makeLayer = trajectories3d?.length ? (await import("./gis-trajectories.js")).makeGisTrajectoryLayer : null;
       if (cancelled || !element.current) return;
       library.setWorkerUrl(localUrl(workerUrl));

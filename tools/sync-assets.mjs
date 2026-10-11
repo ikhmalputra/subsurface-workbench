@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const source = join(root, "packages/react/assets/well-components");
-const worker = join(root, "packages/react/node_modules/maplibre-gl/dist/maplibre-gl-csp-worker.js");
+const worker = join(root, "packages/react/node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs");
 
 for (const app of ["demo"]) {
   const appRoot = join(root, "apps", app);
@@ -22,7 +22,9 @@ for (const app of ["demo"]) {
   // Only the demo mounts the MapLibre GIS views today; skip the worker where nothing imports it.
   if (app === "demo") {
     const gisTarget = join(appRoot, "public/gis");
+    // Cleared, not merged: a renamed engine file would otherwise linger and be served forever.
+    rmSync(gisTarget, { recursive: true, force: true });
     mkdirSync(gisTarget, { recursive: true });
-    cpSync(worker, join(gisTarget, "maplibre-gl-csp-worker.js"));
+    cpSync(worker, join(gisTarget, "maplibre-gl-worker.mjs"));
   }
 }

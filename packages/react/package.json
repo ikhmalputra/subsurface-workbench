@@ -95,11 +95,11 @@
     "./assets/*": "./assets/*"
   },
   "dependencies": {
-    "@types/geojson": "7946.0.16",
-    "maplibre-gl": "5.10.0",
     "@ikhmalputra/subsurface-core": "workspace:*",
+    "@types/geojson": "7946.0.16",
     "d3-scale": "4.0.2",
     "lucide-react": "1.52.0",
+    "maplibre-gl": "6.14.0",
     "react-zoom-pan-pinch": "4.2.0"
   },
   "peerDependencies": {
