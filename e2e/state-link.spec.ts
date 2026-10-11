@@ -2,7 +2,13 @@ import { expect, test } from "@playwright/test";
 
 test("shared selection is encoded in the URL and survives reload without losing host query/hash", async ({ page }) => {
   await page.goto("/view-well/?theme=dark#inspect");
-  await page.getByRole("button", { name: /Production casing \/ 7 in/ }).first().click();
+  // The drawing is server-rendered before hydration attaches its handlers, so wait for
+  // it to become interactive before selecting.
+  await expect(page.getByTestId("curved-assembly-schematic")).toBeVisible();
+  // The default curved drawing draws each tubular as two fill-less paths, so a
+  // bounding-box-centre click falls through to the cement behind it. Select with the
+  // keyboard, which the curved schematic supports directly.
+  await page.locator('[data-item-id="production-casing"]').press("Enter");
   await expect.poll(() => new URL(page.url()).searchParams.get("sw.component")).toBe("production-casing");
   let url = new URL(page.url());
   expect(url.searchParams.get("theme")).toBe("dark");
@@ -52,7 +58,7 @@ test("invalid and unknown asset links show explicit errors without replacing the
   await expect(page.getByRole("combobox", { name: "Well", exact: true })).toHaveValue("forge");
   await page.goto("/view-well/?sw.v=1&sw.well=forge&sw.md=-5");
   await expect(page.getByRole("alert").filter({ hasText: "shared view link" })).toContainText("non-negative");
-  await expect(page.locator(".sw-asm-item")).toHaveCount(7);
+  await expect(page.getByTestId("curved-assembly-schematic").locator("[data-item-id]")).toHaveCount(7);
   await page.goto("/view-well/?theme=dark&sw.v=1&sw.retired=1");
   await expect(page.getByRole("alert").filter({ hasText: "shared view link" })).toContainText("Unknown state URL parameter");
   await page.getByRole("combobox", { name: "Well", exact: true }).selectOption("s-profile");

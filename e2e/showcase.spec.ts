@@ -31,6 +31,8 @@ test("landing page links every capability to a working consumer example", async 
 
 test("view-well composes the adapter, 2.5D schematic and 3D cutaway directly", async ({ page }) => {
   await page.goto("/view-well/");
+  // View well opens on the curved construction; this test is about the straight 2.5D schematic.
+  await page.getByRole("combobox", { name: "View", exact: true }).selectOption("schematic");
   await expect(page.locator(".sw-asm-item")).toHaveCount(7);
   await expect(page.locator(".sw-asm-scene")).toHaveCount(0);
   await page.getByRole("combobox", { name: "View", exact: true }).selectOption("split");
@@ -204,6 +206,8 @@ test("showcase pages fit a phone viewport", async ({ page }) => {
 test("view-well inventory searches every record and shares selection with the schematic", async ({ page }) => {
   await page.goto("/view-well/");
   await page.getByRole("combobox", { name: "Well" }).selectOption("s-profile");
+  // The inventory links selection to the straight schematic's drawing items.
+  await page.getByRole("combobox", { name: "View", exact: true }).selectOption("schematic");
   await expect(page.getByRole("button", { name: "Components", exact: true })).toHaveCount(1);
   await page.getByRole("button", { name: "Components", exact: true }).click();
   const inventory = page.getByRole("region", { name: "Component inventory", exact: true });
@@ -213,15 +217,20 @@ test("view-well inventory searches every record and shares selection with the sc
   await inventory.getByRole("button", { name: "Next records" }).click();
   await expect(inventory).toContainText("page 2 of 21");
   await inventory.locator('[data-component-id="tubular-joint-11"]').click();
-  await expect(inventory.locator('[data-component-id="tubular-joint-11"]')).toHaveAttribute("aria-pressed", "true");
+  // Selecting a record hands the inspector back to the record panel, so the
+  // inventory unmounts; the selection itself must still reach record and drawing.
   await expect(page.getByTestId("demo-record")).toHaveAttribute("data-component-id", "tubular-joint-11");
   await expect(page.locator('.sw-asm-schematic-frame [data-item-id="tubular"]').first()).toHaveAttribute("aria-pressed", "true");
 
+  // Re-opening the inventory jumps to the page holding the shared selection.
+  await page.getByRole("button", { name: "Components", exact: true }).click();
+  await expect(inventory.locator('[data-component-id="tubular-joint-11"]')).toHaveAttribute("aria-pressed", "true");
   await inventory.getByLabel("Type").selectOption("all");
   await inventory.getByLabel("Search").fill("mandrel");
   await expect(inventory).toContainText("3 matching · page 1 of 1");
   await inventory.getByLabel("Search").fill("");
   await page.locator('.sw-asm-schematic-frame [data-item-id="mandrel-2"]').first().click();
+  await page.getByRole("button", { name: "Components", exact: true }).click();
   await expect(inventory.locator('[data-component-id="mandrel-2"]')).toHaveAttribute("aria-pressed", "true");
   await expect(inventory.locator('[data-component-id="mandrel-2"]')).toBeVisible();
   await noAxeViolations(page);
