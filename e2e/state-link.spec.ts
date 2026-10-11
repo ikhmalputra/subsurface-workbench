@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { HEAVY_ASSET, SCENE_READY } from "./support/timing";
 
 test("shared selection is encoded in the URL and survives reload without losing host query/hash", async ({ page }) => {
   await page.goto("/view-well/?theme=dark#inspect");
@@ -85,7 +86,7 @@ test("well-scene camera hydrates in metre coordinates and camera input updates t
   await page.goto("/view-well/?sw.v=1&sw.well=forge&sw.camera=1000,1000,-1000&sw.target=0,0,1300&sw.zoom=1");
   await page.getByRole("combobox", { name: "View", exact: true }).selectOption("earth");
   const scene = page.getByTestId("interactive-well-scene");
-  await expect(scene).toHaveAttribute("data-ready", "true", { timeout: 20_000 });
+  await expect(scene).toHaveAttribute("data-ready", "true", { timeout: SCENE_READY });
   await expect(scene).toHaveAttribute("data-camera", /^10\.000,10\.000,-10\.000,/);
   await expect(scene).toHaveAttribute("data-target", "0.000,-13.000,0.000");
   await page.getByRole("button", { name: "Fit 3D well", exact: true }).first().click();
@@ -95,11 +96,11 @@ test("well-scene camera hydrates in metre coordinates and camera input updates t
   // do not need. Opening them here rather than straight after the view switch keeps the camera half
   // of this test independent of a multi-megabyte asset finishing first.
   const volumeOptions = page.locator(".demo-scene-options > summary");
-  await expect(volumeOptions).toBeVisible({ timeout: 60_000 });
+  await expect(volumeOptions).toBeVisible({ timeout: HEAVY_ASSET });
   await volumeOptions.click();
   const controls = page.getByRole("group", { name: "Cut the volume" });
   const slider = controls.locator("label", { hasText: "Across well" }).locator("input");
-  await expect(slider).toBeVisible({ timeout: 20_000 });
+  await expect(slider).toBeVisible({ timeout: SCENE_READY });
   await slider.fill("50");
   await expect.poll(() => new URL(page.url()).searchParams.get("sw.crossline")).not.toBeNull();
   await expect(scene).toHaveAttribute("data-ready", "true");

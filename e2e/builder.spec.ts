@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import type { Locator, Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { readFile } from "node:fs/promises";
+import { SCENE_READY } from "./support/timing";
 
 const schematic = (page: Page) => page.locator(".sw-wd-canvas [data-testid='assembly-schematic']");
 const tile = (page: Page, id: string) => page.locator(`.sw-asm-tile[data-catalog-id="${id}"]`);
@@ -235,7 +236,7 @@ test("example well loads every Blender model, moves a shoe by pointer drag and p
   await page.getByRole("button", { name: "Example", exact: true }).click();
   await page.getByRole("button", { name: "3D view", exact: true }).click();
   const scene = page.getByTestId("assembly-scene");
-  await expect(scene).toHaveAttribute("data-models-loaded", "10", { timeout: 20_000 });
+  await expect(scene).toHaveAttribute("data-models-loaded", "10", { timeout: SCENE_READY });
   await page.getByRole("button", { name: "Schematic", exact: true }).click();
 
   const casing = item(page, "intermediate-casing-1");

@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { SCENE_READY } from "./support/timing";
 
 async function horizontalOverflow(page: Page) {
   return page.evaluate(() => Array.from(document.body.querySelectorAll<HTMLElement>("*"))
@@ -93,7 +94,7 @@ test("view-well selection is pronounced and both views explode into individual c
 test("trajectory path click probes depth and selects the string at that depth", async ({ page }) => {
   await page.goto("/trajectory/");
   const scene = page.getByTestId("interactive-well-scene");
-  await expect(scene).toHaveAttribute("data-ready", "true", { timeout: 20_000 });
+  await expect(scene).toHaveAttribute("data-ready", "true", { timeout: SCENE_READY });
   const readout = page.getByTestId("well-scene-readout");
   await expect(readout).toHaveAttribute("data-md", "");
   const box = (await scene.boundingBox())!;
@@ -117,7 +118,7 @@ test("trajectory path click probes depth and selects the string at that depth", 
 
 test("trajectory math is verified, the planner hits a dragged target and station edits recompute", async ({ page }) => {
   await page.goto("/trajectory/");
-  await expect(page.getByTestId("interactive-well-scene")).toHaveAttribute("data-ready", "true", { timeout: 20_000 });
+  await expect(page.getByTestId("interactive-well-scene")).toHaveAttribute("data-ready", "true", { timeout: SCENE_READY });
   await expect(page.getByTestId("trajectory-verification")).toContainText("422 stations");
   await expect(page.getByTestId("trajectory-summary")).toContainText("3,339.1 m");
   await expect(page.getByTestId("well-scene-dls-legend")).toBeVisible();

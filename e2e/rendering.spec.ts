@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { SCENE_READY } from "./support/timing";
 
 test("arbitrary slices rotate and translate inside the existing scene and restore through a shared URL", async ({ page }) => {
   const errors: string[] = [];
@@ -66,7 +67,7 @@ test("float GPU framebuffer reads exact surface coordinates and sampled amplitud
   await page.getByRole("button", { name: "Open independent synthetic example" }).click();
   await page.getByRole("button", { name: "Run WebGL picking check" }).click();
   const result = page.getByTestId("gpu-check-result");
-  await expect(result).toBeVisible({ timeout: 20_000 });
+  await expect(result).toBeVisible({ timeout: SCENE_READY });
   expect(Number(await result.getAttribute("data-amplitude"))).toBeCloseTo(1.5, 5);
   const xyz = (await result.getAttribute("data-xyz"))!.split(",").map(Number);
   expect(xyz[0]).toBeCloseTo(0.03125, 5);
