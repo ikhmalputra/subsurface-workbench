@@ -1,5 +1,22 @@
 /* Selection colours shared by every schematic, scene and list; override on any ancestor.
    --sw-select is the vivid outline/ring colour; --sw-select-strong backs white text (WCAG AA). */
+/* The 3D backdrop. It was two hard-coded near-white gradients, so a lit grey-and-orange model
+   sat on a ground of almost its own value — no contrast, no form, and in the dark theme a bright
+   patch that ignored the theme entirely. A studio backdrop with real tonal range, per theme, is
+   what lets the tubulars read as cylinders. */
+:where(:root) {
+  --sw-scene-backdrop:
+    radial-gradient(130% 100% at 50% 0%, rgb(0 0 0 / 0) 42%, rgb(32 50 42 / .13) 100%),
+    linear-gradient(180deg, #f3f6f4 0%, #dde5e0 52%, #c4d0ca 100%);
+}
+[data-sw-theme="dark"] {
+  --sw-scene-backdrop:
+    radial-gradient(130% 100% at 50% 0%, rgb(0 0 0 / 0) 38%, rgb(0 0 0 / .45) 100%),
+    linear-gradient(180deg, #1d2823 0%, #141d19 55%, #0b110e 100%);
+}
+[data-sw-theme="high-contrast"] {
+  --sw-scene-backdrop: linear-gradient(180deg, #ffffff 0%, #e9ece9 100%);
+}
 :where(:root) { --sw-ink: #20322a; --sw-muted: #53655a; --sw-line: #cbd5ce; --sw-grid: #dfe6e1; --sw-accent: #147a65; --sw-paper: #f7f9f7; --sw-surface: #fff; --sw-hover: #fff5d9; --sw-selected: #e5eff9; --sw-select: #ff6a00; --sw-select-strong: #c2410c; --sw-cursor: #1d4ed8; --sw-focus: #174ea6; --sw-text-halo: #fff; --sw-axis-text: #596b60; --sw-well-text: #263d31; --sw-top: #9a5b00; --sw-top-text: #754500; --sw-offset: #8b6b36; --sw-map-well: #147a65; --sw-map-active: #235faa; --sw-map-seismic-fill: #dfeaf4; --sw-map-seismic-line: #547d9f; --sw-map-surface: #8b6b36; --sw-warning: #754500; --sw-control-height: 44px; --sw-panel-padding: 14px; --sw-density-gap: 14px; }
 [data-sw-theme="light"] { color-scheme: light; }
 :where(:root) {
@@ -295,7 +312,7 @@
 .sw-transform-content { width: 100% !important; height: 100% !important; }
 .sw-viewport-tools { position: absolute; right: 8px; top: 8px; z-index: 2; display: flex; border: 1px solid var(--sw-line); border-radius: var(--sw-radius-control); background: var(--sw-surface); }
 .sw-well-scene, .sw-scene-loading { position: relative; height: 515px; width: 100%; }
-.sw-well-scene { background: radial-gradient(120% 90% at 30% 15%, #fbfcfa 0%, #eef2ee 55%, #dfe6e1 100%); overflow: hidden; }
+.sw-well-scene { background: var(--sw-scene-backdrop); overflow: hidden; }
 .sw-scene-host { width: 100%; height: 100%; }
 .sw-scene-host canvas { display: block; touch-action: none; cursor: grab; }
 .sw-scene-host canvas:active { cursor: grabbing; }
@@ -652,7 +669,7 @@
 .sw-asm-ghost.is-invalid line { stroke: var(--sw-error); }
 .sw-asm-ghost.is-invalid rect { fill: var(--sw-error); }
 
-.sw-asm-canvas { position: relative; flex: 1; min-height: 0; background: radial-gradient(ellipse at 50% 30%, #f7f9f8 0, #dfe6e2 100%); cursor: grab; touch-action: none; overflow: hidden; }
+.sw-asm-canvas { position: relative; flex: 1; min-height: 0; background: var(--sw-scene-backdrop); cursor: grab; touch-action: none; overflow: hidden; }
 .sw-asm-canvas:active { cursor: grabbing; }
 .sw-asm-canvas canvas { display: block; width: 100% !important; height: 100% !important; }
 .sw-asm-scene-hint { position: absolute; transform: translate(14px, -50%); pointer-events: none; background: var(--sw-accent); color: var(--sw-surface); font: 600 11.5px "IBM Plex Sans", sans-serif; padding: 6px 9px; border-radius: var(--sw-radius-control); box-shadow: 0 4px 14px rgba(0, 0, 0, .2); white-space: nowrap; max-width: 320px; overflow: hidden; text-overflow: ellipsis; z-index: 2; }

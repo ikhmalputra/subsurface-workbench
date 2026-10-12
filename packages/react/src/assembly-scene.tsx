@@ -88,14 +88,26 @@ function disposeTree(group: THREE.Object3D) {
   group.clear();
 }
 
-function depthLabel(text: string) {
+/**
+ * A depth tick drawn into a sprite.
+ *
+ * The colour used to be a hard-coded dark grey, which was legible only because the backdrop was a
+ * hard-coded near-white in every theme. Both now follow the theme, and the label carries the
+ * halo the rest of the drawing text uses, so it stays readable against the model as well as
+ * against the ground.
+ */
+function depthLabel(text: string, ink: string, halo: string) {
   const canvas = document.createElement("canvas");
   canvas.width = 256;
   canvas.height = 64;
   const context = canvas.getContext("2d")!;
   context.font = "500 30px 'IBM Plex Mono', monospace";
-  context.fillStyle = "#3d4a44";
   context.textAlign = "right";
+  context.lineWidth = 5;
+  context.lineJoin = "round";
+  context.strokeStyle = halo;
+  context.strokeText(text, 248, 42);
+  context.fillStyle = ink;
   context.fillText(text, 248, 42);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -154,6 +166,9 @@ export function AssemblyScene({ assembly, assetBaseUrl, selectedId = null, onSel
     ladder.visible = false;
     scene.add(context, ladder, world, selection);
     const selectTone = () => new THREE.Color(getComputedStyle(element).getPropertyValue("--sw-select").trim() || "#ff6a00");
+    const themeColour = (name: string, fallback: string) => getComputedStyle(element).getPropertyValue(name).trim() || fallback;
+    const labelInk = () => themeColour("--sw-well-text", "#3d4a44");
+    const labelHalo = () => themeColour("--sw-text-halo", "#ffffff");
     const nameTag = document.createElement("div");
     nameTag.className = "sw-asm3d-tag";
     nameTag.setAttribute("aria-hidden", "true");
@@ -202,11 +217,11 @@ export function AssemblyScene({ assembly, assetBaseUrl, selectedId = null, onSel
         const ring = new THREE.Mesh(new THREE.RingGeometry(maxRadius + 0.35, maxRadius + 0.42, 64), new THREE.MeshBasicMaterial({ color: 0x9aa59f, side: THREE.DoubleSide, transparent: true, opacity: 0.55 }));
         ring.rotation.x = -Math.PI / 2;
         ring.position.y = y(md);
-        const label = depthLabel(md === 0 ? "0 m" : `${md.toLocaleString("en-US")} m`);
+        const label = depthLabel(md === 0 ? "0 m" : `${md.toLocaleString("en-US")} m`, labelInk(), labelHalo());
         label.position.set(-(maxRadius + 2.6), y(md), 0);
         context.add(ring, label);
       }
-      const td3 = depthLabel(`TD ${formatDepth(td)}`);
+      const td3 = depthLabel(`TD ${formatDepth(td)}`, labelInk(), labelHalo());
       td3.position.set(maxRadius + 2.6, y(td), 0);
       context.add(td3);
     }
@@ -352,7 +367,7 @@ export function AssemblyScene({ assembly, assetBaseUrl, selectedId = null, onSel
       const step = [100, 200, 250, 500, 1000, 2000].find((size) => td / size <= 9) ?? 5000;
       for (let md = 0; md <= td + 1e-6; md += step) {
         const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(left, y(md), 0), new THREE.Vector3(right, y(md), 0)]), new THREE.LineBasicMaterial({ color: 0x9aa59f, transparent: true, opacity: 0.6 }));
-        const label = depthLabel(md === 0 ? "0 m" : `${md.toLocaleString("en-US")} m`);
+        const label = depthLabel(md === 0 ? "0 m" : `${md.toLocaleString("en-US")} m`, labelInk(), labelHalo());
         label.position.set(left - 2.1, y(md), 0);
         ladder.add(line, label);
       }

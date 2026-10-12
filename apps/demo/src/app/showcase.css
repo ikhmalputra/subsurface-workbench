@@ -709,3 +709,65 @@ body { margin: 0; background: var(--sw-paper); color: var(--sw-ink); font-family
 }
 :is(.sw-wd-canvas, .demo-edit-canvas) :is(.sw-asm, .sw-asm-schematic, .sw-curved-assembly, .sw-viewport, .sw-transform-wrapper, .sw-well-schematic) { background: transparent; }
 @media print { .sw-wd-canvas, .demo-edit-canvas { background: none; } }
+
+/* ---------------------------------------------------------------------------
+   Toolbar, inspector and navigation weight
+   ---------------------------------------------------------------------------
+   The tools were a row of eight controls of identical weight: the four that
+   switch what the canvas shows, the two that toggle linking and the panel, and
+   the one that opens the editor all looked the same, so the strip read as a
+   list rather than an instrument. Weight now follows what a control does.
+   ------------------------------------------------------------------------ */
+
+/* Toggles read as pressed, not as another button. */
+.demo-inspection .demo-toolbar .demo-toggle[aria-pressed="true"],
+.demo-inspection .demo-toolbar .demo-tool-button[aria-expanded="true"] {
+  background: var(--sw-selected);
+  border-color: color-mix(in oklab, var(--sw-accent) 45%, var(--sw-line));
+  color: var(--sw-ink);
+  font-weight: 600;
+}
+/* The one control that opens an editor is the one that looks like an action.
+   It uses the theme's own contrast pair rather than the accent: white on the
+   light theme's accent is 2.09:1 and white on the dark theme's accent is worse,
+   so an accent-filled button cannot pass AA in both. Ink on surface inverts
+   correctly in all three themes by construction. */
+.demo-inspection .demo-toolbar .demo-edit-action {
+  margin-left: auto;
+  display: inline-flex; align-items: center;
+  min-height: 34px; padding: 6px 14px;
+  border: 1px solid var(--sw-ink); border-radius: var(--sw-radius-control);
+  background: var(--sw-ink); color: var(--sw-surface); font-size: 12px; font-weight: 600;
+}
+.demo-inspection .demo-toolbar .demo-edit-action:hover { background: color-mix(in oklab, var(--sw-ink) 85%, var(--sw-accent)); border-color: transparent; }
+/* A hairline between choosing a view and acting on it. */
+.demo-inspection .demo-toolbar .sw-asm-canvas-modes + * { margin-left: var(--sw-space-2); }
+.demo-inspection .demo-toolbar .sw-asm-canvas-modes::after {
+  content: ""; position: absolute; right: -9px; top: 6px; bottom: 6px;
+  border-right: 1px solid var(--sw-line);
+}
+.demo-inspection .sw-asm-canvas-modes { position: relative; }
+
+/* The inspector is docked to the canvas, so the column ends where the drawing
+   ends instead of floating short, and the active pane scrolls inside it. */
+.demo-view-grid > .demo-side {
+  display: flex; flex-direction: column;
+  height: clamp(520px, calc(100dvh - 268px), 1000px);
+  overflow: hidden;
+}
+.demo-view-grid > .demo-side > :is(section, div):not(.demo-inspector-head):not(.demo-inspector-tabs):not(.demo-view-picker) {
+  overflow-y: auto; padding: var(--sw-space-4); min-height: 0;
+}
+.demo-view-grid > .demo-side > :is(section, div)[hidden] { display: none; }
+.demo-inspector-tabs { padding: 6px 8px; gap: 2px; }
+.demo-inspector-tabs button { min-height: 30px; font-size: 11.5px; }
+
+/* Navigation: a rail of destinations, not a page of cards. The 28px it gives
+   back goes to the canvas, which is the only thing on screen that wants it. */
+.demo-workbench-shell { grid-template-columns: 196px minmax(0, 1fr); }
+.demo-nav { padding: 18px 10px 14px; }
+.demo-brand { padding: 0 8px 18px; font-size: 16px; }
+.demo-nav-group a { padding: 7px 9px; gap: var(--sw-space-2); }
+.demo-nav-group a small { margin-top: 2px; font-size: 9.5px; line-height: 1.35; }
+.demo-nav-views a, .demo-nav-secondary a { padding: 6px 9px; }
+.demo-nav-content { gap: var(--sw-space-4); }
