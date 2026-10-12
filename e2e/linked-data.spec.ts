@@ -1,9 +1,10 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { createMockLogCurve, createMockTrajectory } from "../packages/core/dist/sandbox.js";
+import { gotoApp } from "./support/app";
 
 test("table hover, chart brush, and spatial selection link using stable sample IDs", async ({ page }) => {
-  await page.goto("/linked-data/");
+  await gotoApp(page, "/linked-data/");
   await page.getByRole("button", { name: "Open independent synthetic example" }).click();
   const view = page.getByTestId("linked-dataset");
   await expect(view).toBeVisible();
@@ -57,7 +58,7 @@ test("table hover, chart brush, and spatial selection link using stable sample I
 });
 
 test("virtual table supports keyboard movement, filtering, and CSV export with no axe violations", async ({ page }) => {
-  await page.goto("/linked-data/");
+  await gotoApp(page, "/linked-data/");
   await page.getByRole("button", { name: "Open independent synthetic example" }).click();
   const view = page.getByTestId("linked-dataset");
   const firstRow = view.locator('tr[data-sample-id="well-a:sample:0001"]');
@@ -77,7 +78,7 @@ test("virtual table supports keyboard movement, filtering, and CSV export with n
 });
 
 test("chart samples are keyboard-navigable and theme/density controls update the view", async ({ page }) => {
-  await page.goto("/linked-data/");
+  await gotoApp(page, "/linked-data/");
   await page.getByRole("button", { name: "Open independent synthetic example" }).click();
   const view = page.getByTestId("linked-dataset");
   const points = view.locator(".sw-linked-dataset-point");
@@ -112,7 +113,7 @@ test("chart samples are keyboard-navigable and theme/density controls update the
 
 test("reduced-motion preference removes linked-mark animations", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("/linked-data/");
+  await gotoApp(page, "/linked-data/");
   await page.getByRole("button", { name: "Open independent synthetic example" }).click();
   const point = page.getByTestId("linked-dataset").locator(".sw-linked-dataset-point").first();
   const duration = await point.evaluate((element) => getComputedStyle(element).transitionDuration);

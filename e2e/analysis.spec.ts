@@ -1,11 +1,12 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { readFile } from "node:fs/promises";
+import { gotoApp, reloadApp } from "./support/app";
 
 test("engineering study completes scope, QC, evidence, findings and durable export", async ({ page }) => {
   const renderingErrors: string[] = [];
   page.on("console", (message) => { if (message.type() === "error" && message.text().includes("<path>")) renderingErrors.push(message.text()); });
-  await page.goto("/analysis/");
+  await gotoApp(page, "/analysis/");
   await expect(page.getByRole("heading", { name: "Drilling performance review" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Open independent synthetic example" })).toHaveCount(0);
   await page.getByLabel("Investigation question").fill("Why does sampled ROP change between these intervals?");
@@ -62,7 +63,7 @@ test("engineering study completes scope, QC, evidence, findings and durable expo
   expect(report.evaluation.target.rows.length).toBeGreaterThan(0);
   expect(report.study.evidenceIds).toEqual(expect.arrayContaining([`run:${runId}`, `day:${dayDate}`]));
   expect(renderingErrors).toEqual([]);
-  await page.reload();
+  await reloadApp(page);
   const saved = page.getByLabel("Saved studies", { exact: true });
   await saved.selectOption({ label: "Why does sampled ROP change between these intervals?" });
   await page.getByRole("button", { name: /4.*Findings/ }).click();
@@ -72,7 +73,7 @@ test("engineering study completes scope, QC, evidence, findings and durable expo
 });
 
 test("operational evidence stays compact, keyboard accessible and themed on phones", async ({ page }) => {
-  await page.goto("/analysis/");
+  await gotoApp(page, "/analysis/");
   await page.getByRole("button", { name: "Check inputs", exact: true }).click();
   await page.getByRole("checkbox", { name: /I reviewed source units/ }).check();
   await page.getByRole("button", { name: "Review evidence", exact: true }).click();
@@ -130,7 +131,7 @@ test("blocked study writes report failure without claiming durable save", async 
       return original.call(this, key, value);
     };
   });
-  await page.goto("/analysis/");
+  await gotoApp(page, "/analysis/");
   await page.getByRole("button", { name: "Check inputs", exact: true }).click();
   await page.getByRole("checkbox", { name: /I reviewed source units/ }).check();
   await page.getByRole("button", { name: "Review evidence", exact: true }).click();
@@ -144,7 +145,7 @@ test("blocked study writes report failure without claiming durable save", async 
 });
 
 test("Analysis has honest missing-data state, storage errors and responsive themed workflow", async ({ page }) => {
-  await page.goto("/analysis/");
+  await gotoApp(page, "/analysis/");
   await page.locator(".demo-nav-secondary").filter({ hasText: "Appearance" }).locator("summary").click();
   for (const theme of ["light", "dark", "high-contrast"]) {
     await page.getByRole("combobox", { name: "Theme", exact: true }).selectOption(theme);
@@ -158,6 +159,6 @@ test("Analysis has honest missing-data state, storage errors and responsive them
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(391);
   await page.addInitScript(() => localStorage.setItem("subsurface:drilling-studies:v1", "{broken"));
-  await page.reload();
+  await reloadApp(page);
   await expect(page.getByRole("alert").filter({ hasText: "Saved studies could not be loaded" })).toBeVisible();
 });

@@ -1,11 +1,12 @@
 import { expect, test } from "@playwright/test";
 import { writeArrayBuffer } from "../packages/core/node_modules/geotiff/dist-module/geotiff.js";
+import { gotoApp } from "./support/app";
 
 test("local vectors support CRS import, styles, identify, measurement and Field navigation persistence", async ({ page }) => {
   const errors: string[] = [], external: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("request", (request) => { if (!request.url().startsWith("http://127.0.0.1:3101/")) external.push(request.url()); });
-  await page.goto("/map/");
+  await gotoApp(page, "/map/");
   await expect(page.getByTestId("gis-map")).toHaveAttribute("data-ready", "true");
   const tools = page.getByTestId("gis-tools");
   const file = { type: "FeatureCollection", features: [{ type: "Feature", id: "permit-1", properties: { name: "Local permit", operator: "Test", pressure: null }, geometry: { type: "Polygon", coordinates: [[[114.19, 0.39], [114.21, 0.39], [114.21, 0.41], [114.19, 0.41], [114.19, 0.39]]] } }] };
@@ -57,7 +58,7 @@ test("local vectors support CRS import, styles, identify, measurement and Field 
 
 test("invalid imports report errors and a projected local vector fits on a phone", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/map/");
+  await gotoApp(page, "/map/");
   await expect(page.getByTestId("gis-map")).toHaveAttribute("data-ready", "true");
   const tools = page.getByTestId("gis-tools");
   await tools.getByLabel("Import local GIS file").setInputFiles({ name: "invalid.geojson", mimeType: "application/json", buffer: Buffer.from('{"type":"Point","coordinates":[0,0,5]}') });
@@ -76,7 +77,7 @@ test("local TIFF renders, samples and replaces the illustrative seabed on the sa
   const errors: string[] = [], external: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("request", (request) => { if (!request.url().startsWith("http://127.0.0.1:3101/")) external.push(request.url()); });
-  await page.goto("/map/");
+  await gotoApp(page, "/map/");
   await expect(page.getByTestId("gis-map")).toHaveAttribute("data-3d-ready", "true");
   const tools = page.getByTestId("gis-tools"), canvas = page.getByTestId("gis-map").locator("canvas");
   await tools.getByLabel("GeoTIFF use").selectOption("depth");

@@ -40,3 +40,18 @@ export async function selectWellView(page: Page, preset: string, panes: readonly
       .toBeAttached({ timeout: SCENE_READY });
   }
 }
+
+/**
+ * Reload and wait for the application to be driveable again.
+ *
+ * A reload is the worse case, not the gentler one: the document is served from cache, so the
+ * prerendered markup paints almost immediately and the window before hydration is wider in
+ * wall-clock terms than on a cold navigation. A CI shard selected a view preset in that window and
+ * the `<select>` went back to its React value, which the test then spent 90 seconds describing as a
+ * 3D renderer that would not attach.
+ */
+export async function reloadApp(page: Page): Promise<void> {
+  await page.reload();
+  await expect(page.locator("html[data-sw-hydrated='true']"), "the application should hydrate after a reload before being driven")
+    .toBeAttached({ timeout: SCENE_READY });
+}

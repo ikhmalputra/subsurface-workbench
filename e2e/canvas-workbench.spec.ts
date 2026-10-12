@@ -1,11 +1,12 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { gotoApp } from "./support/app";
 
 for (const route of ["/view-well/?well=s-profile", "/edit-well/?well=s-profile", "/builder/"]) {
   test(`${route} opens with a dominant curved canvas and immediate view controls`, async ({ page }) => {
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
-    await page.goto(route);
+    await gotoApp(page, route);
     const canvas = page.getByTestId("curved-assembly-schematic");
     await expect(canvas).toBeVisible();
     const modes = page.getByRole("group", { name: "Canvas view", exact: true });
@@ -34,7 +35,7 @@ for (const route of ["/view-well/?well=s-profile", "/edit-well/?well=s-profile",
 }
 
 test("editing tools never replace or remount the canvas and changes reach both drawing modes", async ({ page }) => {
-  await page.goto("/edit-well/?well=s-profile");
+  await gotoApp(page, "/edit-well/?well=s-profile");
   const curved = page.getByTestId("curved-assembly-schematic");
   await curved.evaluate((element) => element.setAttribute("data-mount-check", "same-canvas"));
   const tabs = page.getByRole("tablist", { name: "Well editor" });
@@ -64,7 +65,7 @@ test("editing tools never replace or remount the canvas and changes reach both d
 });
 
 test("curved canvas accepts native palette drops and wall picks reveal editing tools", async ({ page }) => {
-  await page.goto("/builder/");
+  await gotoApp(page, "/builder/");
   const workflow = page.getByTestId("well-design-workflow");
   const canvas = workflow.getByTestId("curved-assembly-schematic");
   await workflow.locator(".sw-asm-draft-tools summary").click();
@@ -108,7 +109,7 @@ for (const width of [1440, 1024, 768, 390]) {
     test(`design dock controls remain unobstructed at ${width}px across all tools`, async ({ page }) => {
       test.setTimeout(90000);
       await page.setViewportSize({ width, height: 1000 });
-      await page.goto("/builder/");
+      await gotoApp(page, "/builder/");
       const dock = page.getByRole("complementary", { name: "Well design tools", exact: true });
       const content = page.getByRole("region", { name: "Active design tools", exact: true });
       const canvas = page.getByTestId("curved-assembly-schematic");
@@ -167,7 +168,7 @@ test("the application frame survives navigation between routes", async ({ page }
   // between destinations replaced it. Stamping the live DOM node is the only way to tell a surviving
   // element from an identical replacement: a re-rendered node keeps the attribute, a remounted one
   // cannot, because React created it after the stamp was written.
-  await page.goto("/view-well/?well=s-profile");
+  await gotoApp(page, "/view-well/?well=s-profile");
   const sidebar = page.getByTestId("workbench-sidebar");
   const status = page.getByTestId("workbench-status");
   await expect(sidebar).toBeVisible();

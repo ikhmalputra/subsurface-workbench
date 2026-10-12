@@ -1,10 +1,11 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { gotoApp } from "./support/app";
 
 test("continuous offshore scene selects multiple wells and descends to their seabed location", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto("/map/");
+  await gotoApp(page, "/map/");
   await page.getByRole("combobox", { name: "Spatial view" }).selectOption("3d");
   const scene = page.getByTestId("offshore-scene");
   await expect(scene).toHaveAttribute("data-ready", "true");
@@ -50,7 +51,7 @@ test("continuous offshore scene selects multiple wells and descends to their sea
 
 test("offshore scene fits a phone and supports keyboard well selection", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/map/");
+  await gotoApp(page, "/map/");
   await page.getByRole("combobox", { name: "Spatial view" }).selectOption("3d");
   const scene = page.getByTestId("offshore-scene");
   await expect(scene).toHaveAttribute("data-ready", "true");

@@ -1,7 +1,8 @@
 import { expect, test } from "@playwright/test";
+import { gotoApp } from "./support/app";
 
 test("workspace preserves source-well context and appearance across compatible views", async ({ page }) => {
-  await page.goto("/trajectory/");
+  await gotoApp(page, "/trajectory/");
   const context = page.getByTestId("workspace-context");
   await expect(context).toContainText("Documented record");
   await page.locator(".demo-nav-secondary").filter({ hasText: "Appearance" }).locator("summary").click();
@@ -49,7 +50,7 @@ test("workspace preserves source-well context and appearance across compatible v
 });
 
 test("legacy well links hydrate canonical identity and component selection survives navigation", async ({ page }) => {
-  await page.goto("/view-well/?well=s-profile");
+  await gotoApp(page, "/view-well/?well=s-profile");
   const context = page.getByTestId("workspace-context");
   await expect(context.getByRole("combobox", { name: "Well", exact: true })).toHaveValue("s-profile");
   await page.getByRole("button", { name: "Schematic", exact: true }).click();
@@ -64,7 +65,7 @@ test("legacy well links hydrate canonical identity and component selection survi
 });
 
 test("four workspaces expose contextual views without merging incompatible example datasets", async ({ page }) => {
-  await page.goto("/view-well/");
+  await gotoApp(page, "/view-well/");
   await page.getByRole("link", { name: "Field", exact: true }).click();
   const fieldViews = page.getByRole("group", { name: "Field views", exact: true });
   await expect(fieldViews.getByRole("link")).toHaveText(["Field workspace"]);

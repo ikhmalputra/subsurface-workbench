@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { HEAVY_ASSET, SCENE_READY } from "./support/timing";
 import { waitForScene } from "./support/scene";
-import { gotoApp } from "./support/app";
+import { gotoApp, reloadApp } from "./support/app";
 
 test("shared selection is encoded in the URL and survives reload without losing host query/hash", async ({ page }) => {
   await gotoApp(page, "/view-well/?theme=dark#inspect");
@@ -17,7 +17,7 @@ test("shared selection is encoded in the URL and survives reload without losing 
   let url = new URL(page.url());
   expect(url.searchParams.get("theme")).toBe("dark");
   expect(url.hash).toBe("#inspect");
-  await page.reload();
+  await reloadApp(page);
   await expect(page.getByTestId("demo-record")).toHaveAttribute("data-component-id", "production-casing");
   await page.getByRole("combobox", { name: "View", exact: true }).selectOption("split");
   await expect(page.getByTestId("assembly-scene")).toHaveAttribute("data-selected", "production-casing");
@@ -26,7 +26,7 @@ test("shared selection is encoded in the URL and survives reload without losing 
   url = new URL(page.url());
   expect(url.searchParams.has("sw.component")).toBe(false);
   expect(url.searchParams.get("theme")).toBe("dark");
-  await page.reload();
+  await reloadApp(page);
   await expect(page.getByRole("combobox", { name: "Well", exact: true })).toHaveValue("s-profile");
   await page.getByRole("button", { name: "Components", exact: true }).click();
   await expect(page.getByTestId("component-inventory-total")).toHaveText("746 records");
@@ -67,7 +67,7 @@ test("invalid and unknown asset links show explicit errors without replacing the
   await expect(page.getByRole("alert").filter({ hasText: "shared view link" })).toContainText("Unknown state URL parameter");
   await page.getByRole("combobox", { name: "Well", exact: true }).selectOption("s-profile");
   await expect.poll(() => new URL(page.url()).searchParams.has("sw.retired")).toBe(false);
-  await page.reload();
+  await reloadApp(page);
   await expect(page.getByRole("alert").filter({ hasText: "shared view link" })).toHaveCount(0);
   await expect(page.getByRole("combobox", { name: "Well", exact: true })).toHaveValue("s-profile");
 });

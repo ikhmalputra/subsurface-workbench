@@ -1,8 +1,9 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { gotoApp } from "./support/app";
 
 test("well report links supplied depths and preserves report values in print media", async ({ page }) => {
-  await page.goto("/well-report/");
+  await gotoApp(page, "/well-report/");
   const report = page.getByTestId("well-report");
   await expect(report).toHaveAttribute("data-well-id", "utah-forge-16a-2021");
   await expect(report.getByRole("heading", { name: "Utah FORGE 16A(78)-32 — As-drilled record" })).toBeVisible();

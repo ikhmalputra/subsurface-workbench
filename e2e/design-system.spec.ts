@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { gotoApp } from "./support/app";
 
 const showcaseViews = [
   { route: "/correlation/", testId: "multiwell-correlation", svg: ".sw-correlation-svg" },
@@ -14,7 +15,7 @@ const themes = [
 
 for (const view of showcaseViews) {
   test(`${view.route} flagship view responds to shared themes without axe violations`, async ({ page }) => {
-    await page.goto(view.route);
+    await gotoApp(page, view.route);
     const renderedView = page.getByTestId(view.testId);
     await expect(renderedView).toBeVisible();
     const provider = page.locator("[data-sw-theme]");
@@ -49,7 +50,7 @@ for (const view of showcaseViews) {
 }
 
 test("WebGPU canvas exposes keyboard camera controls and announces shared zoom state", async ({ page }) => {
-  await page.goto("/sandbox/");
+  await gotoApp(page, "/sandbox/");
   await page.getByRole("button", { name: "Open independent synthetic example" }).click();
   await page.getByRole("button", { name: "Start WebGPU" }).click();
   const viewer = page.getByTestId("webgpu-viewer");
@@ -64,7 +65,7 @@ test("WebGPU canvas exposes keyboard camera controls and announces shared zoom s
 });
 
 test("trajectory charts expose keyboard-readable station tables", async ({ page }) => {
-  await page.goto("/trajectory/");
+  await gotoApp(page, "/trajectory/");
   for (const [testId, label, columnCount] of [
     ["trajectory-plan-view", "trajectory plan stations", 5],
     ["trajectory-section-view", "vertical section stations", 4],
@@ -91,7 +92,7 @@ test("trajectory charts expose keyboard-readable station tables", async ({ page 
 });
 
 test("well components can be selected and inspected without a pointer", async ({ page }) => {
-  await page.goto("/trajectory/");
+  await gotoApp(page, "/trajectory/");
   const scene = page.getByTestId("interactive-well-scene");
   await expect(scene).toHaveAttribute("data-ready", "true");
   const picker = scene.locator(".sw-scene-component-picker");
@@ -103,7 +104,7 @@ test("well components can be selected and inspected without a pointer", async ({
 });
 
 test("daily, log, and seismic charts expose paged raw-value tables", async ({ page }) => {
-  await page.goto("/view-well/");
+  await gotoApp(page, "/view-well/");
   await page.locator(".demo-records-drawer > summary").click();
   const dailyChart = page.getByTestId("days-vs-depth");
   const dailyTable = dailyChart.locator(".sw-accessible-table");

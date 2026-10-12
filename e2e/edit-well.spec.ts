@@ -3,9 +3,10 @@ import AxeBuilder from "@axe-core/playwright";
 import { readFile } from "node:fs/promises";
 import { waitForScene } from "./support/scene";
 import { SCENE_READY } from "./support/timing";
+import { gotoApp, reloadApp } from "./support/app";
 
 test("View well opens the selected record and uses edits as the active revision", async ({ page }) => {
-  await page.goto("/view-well/");
+  await gotoApp(page, "/view-well/");
   await page.getByRole("button", { name: /Production casing \/ 7 in/ }).first().focus();
   await page.keyboard.press("Enter");
   await page.locator(".demo-toolbar").getByRole("link", { name: "Edit well", exact: true }).click();
@@ -21,7 +22,7 @@ test("View well opens the selected record and uses edits as the active revision"
   const results = await new AxeBuilder({ page }).analyze();
   expect(results.violations.map((violation) => `${violation.id}: ${violation.nodes.map((node) => `${node.target.join(" ")} ${node.failureSummary}`).join(", ")}`)).toEqual([]);
   await page.screenshot({ path: "output/playwright/edit-well.png" });
-  await page.reload();
+  await reloadApp(page);
   await expect(label).toHaveValue(original);
   await page.getByRole("link", { name: "Back to View well" }).click();
   await expect(page.getByRole("combobox", { name: "View", exact: true })).toBeVisible();
@@ -39,7 +40,7 @@ test("full well edits recompute trajectory and reach construction, source record
   test.setTimeout(120000);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto("/edit-well/?well=forge");
+  await gotoApp(page, "/edit-well/?well=forge");
   const tabs = page.getByRole("tablist", { name: "Well editor" });
   const schematic = page.getByTestId("curved-assembly-schematic");
   await expect(schematic).toBeVisible();
@@ -136,17 +137,17 @@ test("full well edits recompute trajectory and reach construction, source record
 });
 
 test("edit page reports unknown wells and fits a phone viewport", async ({ page }) => {
-  await page.goto("/edit-well/?well=missing");
+  await gotoApp(page, "/edit-well/?well=missing");
   await expect(page.getByRole("alert").filter({ hasText: "not found" })).toBeVisible();
   await expect(page.getByTestId("assembly-schematic")).toHaveCount(0);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/edit-well/?well=forge");
+  await gotoApp(page, "/edit-well/?well=forge");
   await expect(page.getByTestId("curved-assembly-schematic")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
 test("active revision preserves edits and undo history across navigation while reload restores the source", async ({ page }) => {
-  await page.goto("/edit-well/?well=forge&component=production-casing");
+  await gotoApp(page, "/edit-well/?well=forge&component=production-casing");
   const inspector = page.getByTestId("assembly-inspector");
   const label = inspector.getByLabel("Label", { exact: true });
   const original = await label.inputValue();
@@ -175,7 +176,7 @@ test("active revision preserves edits and undo history across navigation while r
   await expect(page.locator(".demo-toolbar").getByRole("link", { name: "Edit well", exact: true })).toHaveAttribute("href", "/edit-well/?well=forge");
   await page.locator(".demo-toolbar").getByRole("link", { name: "Edit well", exact: true }).click();
   await expect(label).toHaveValue("Draft production casing");
-  await page.reload();
+  await reloadApp(page);
   await page.getByTestId("curved-assembly-schematic").locator('[data-item-id="production-casing"]').first().focus();
   await page.keyboard.press("Enter");
   await expect(label).toHaveValue(original);

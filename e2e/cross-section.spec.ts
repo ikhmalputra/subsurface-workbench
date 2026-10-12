@@ -1,8 +1,9 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { gotoApp } from "./support/app";
 
 test("section uses the same R1 markers and sea-surface depth, with explicit endpoints", async ({ page }) => {
-  await page.goto("/cross-section/");
+  await gotoApp(page, "/cross-section/");
   const section = page.getByTestId("well-cross-section");
   await expect(section).toContainText("synthetic sea surface");
   await expect(section.getByText("Sand R1 top").first()).toBeVisible();
@@ -17,7 +18,7 @@ test("section uses the same R1 markers and sea-surface depth, with explicit endp
 });
 
 test("section labels off-plane limitations and passes accessibility", async ({ page }) => {
-  await page.goto("/cross-section/");
+  await gotoApp(page, "/cross-section/");
   await expect(page.getByTestId("well-cross-section")).toContainText("offset");
   const results = await new AxeBuilder({ page }).analyze();
   expect(results.violations.map((violation) => violation.id)).toEqual([]);

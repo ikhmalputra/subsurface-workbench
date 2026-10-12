@@ -3,13 +3,14 @@ import type { Locator, Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { readFile } from "node:fs/promises";
 import { SCENE_READY } from "./support/timing";
+import { gotoApp, reloadApp } from "./support/app";
 
 const schematic = (page: Page) => page.locator(".sw-wd-canvas [data-testid='assembly-schematic']");
 const tile = (page: Page, id: string) => page.locator(`.sw-asm-tile[data-catalog-id="${id}"]`);
 const item = (page: Page, id: string) => schematic(page).locator(`[data-item-id="${id}"]`).first();
 
 async function openBuilder(page: Page) {
-  await page.goto("/builder/");
+  await gotoApp(page, "/builder/");
   await expect(page.getByTestId("curved-assembly-schematic")).toBeVisible();
   await page.getByRole("button", { name: "Schematic", exact: true }).click();
   await page.getByRole("button", { name: "Add parts", exact: true }).click();
@@ -85,7 +86,7 @@ async function dropAt(page: Page, catalogId: string, target: Locator, fraction: 
 }
 
 test("open directly to the well schematic and start a new design", async ({ page }) => {
-  await page.goto("/builder/");
+  await gotoApp(page, "/builder/");
   const workflow = page.getByTestId("well-design-workflow");
   await expect(workflow.getByTestId("curved-assembly-schematic")).toBeVisible();
   await expect(workflow.locator(".sw-wd-title small")).toContainText("EXAMPLE WELL");
@@ -269,7 +270,7 @@ test("example well loads every Blender model, moves a shoe by pointer drag and p
 });
 
 test("design a well from data: propose casing from pressures, inspect loads, then assemble the engineered design", async ({ page }) => {
-  await page.goto("/builder/");
+  await gotoApp(page, "/builder/");
   await page.getByRole("button", { name: "Schematic", exact: true }).click();
   const workflow = page.getByTestId("well-design-workflow");
   await expect(workflow.getByTestId("design-readiness")).toContainText("100% data · no errors");
@@ -325,7 +326,7 @@ test("design a well from data: propose casing from pressures, inspect loads, the
 });
 
 test("offset wells: rank FORGE, start a pad well beside it, adopt its design and re-check it", async ({ page }) => {
-  await page.goto("/builder/");
+  await gotoApp(page, "/builder/");
   const workflow = page.getByTestId("well-design-workflow");
   await selectDesignStep(workflow, "Offset wells");
   const library = page.getByTestId("offset-library");
@@ -353,7 +354,7 @@ test("offset wells: rank FORGE, start a pad well beside it, adopt its design and
   await expect(library.locator(".sw-ow-list li")).toHaveCount(2);
   const storedLibrary = await page.evaluate(() => JSON.parse(localStorage.getItem("subsurface-demo-wells") ?? "null"));
   expect(storedLibrary).toMatchObject({ version: 1, offsets: [expect.objectContaining({ id: expect.any(String), brief: expect.any(Object) })] });
-  await page.reload();
+  await reloadApp(page);
   await selectDesignStep(workflow, "Offset wells");
   await expect(library.locator(".sw-ow-list li")).toHaveCount(2);
   await page.screenshot({ path: "output/playwright/offset-wells.png", fullPage: true });
@@ -363,7 +364,7 @@ test("offset wells: rank FORGE, start a pad well beside it, adopt its design and
 
 test("corrupt saved offset data is reported and does not break the builder", async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("subsurface-demo-wells", JSON.stringify([null])));
-  await page.goto("/builder/");
+  await gotoApp(page, "/builder/");
   await expect(page.getByTestId("curved-assembly-schematic")).toBeVisible();
   await expect(page.getByTestId("well-library-error")).toContainText("could not be loaded");
   await expect(page.getByTestId("well-library-error")).toContainText("legacyOffsets[0] must be an object");
@@ -379,7 +380,7 @@ test("blocked local storage access is reported while the in-memory builder remai
       get() { throw new DOMException("Storage is disabled", "SecurityError"); },
     });
   });
-  await page.goto("/builder/");
+  await gotoApp(page, "/builder/");
   await expect(page.getByTestId("well-library-error")).toContainText("could not be loaded");
   await expect(page.getByTestId("well-library-error")).toContainText("Storage is disabled");
   await expect(page.getByTestId("curved-assembly-schematic")).toBeVisible();
@@ -395,7 +396,7 @@ test("a blocked library write is reported and is not shown as durably saved", as
       original.call(this, key, value);
     };
   });
-  await page.goto("/builder/");
+  await gotoApp(page, "/builder/");
   const workflow = page.getByTestId("well-design-workflow");
   await selectDesignStep(workflow, "Offset wells");
   const library = page.getByTestId("offset-library");

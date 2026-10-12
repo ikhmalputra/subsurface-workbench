@@ -3,7 +3,7 @@ import type { Locator } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { GPU_PICK_DWELL, SCENE_READY, SOFTWARE_RENDERING } from "./support/timing";
 import { waitForScene } from "./support/scene";
-import { gotoApp, selectWellView } from "./support/app";
+import { gotoApp, reloadApp, selectWellView } from "./support/app";
 
 /**
  * A GPU change is only observable once the renderer has presented a new frame. On a real GPU that
@@ -72,7 +72,7 @@ test("arbitrary slices rotate and translate inside the existing scene and restor
   await expect(scene).toHaveAttribute("data-slice-vertices", /^[3-6]$/);
   await expect.poll(() => Number(new URL(page.url()).searchParams.get("sw.planeNormal")?.split(",")[2]).toFixed(4)).toBe(Math.cos(65 * Math.PI / 180).toFixed(4));
   const url = page.url(), normal = new URL(url).searchParams.get("sw.planeNormal");
-  await page.reload();
+  await reloadApp(page);
   await selectWellView(page, "earth", ["earth"]);
   await waitForScene(page);
   await page.locator(".demo-scene-options > summary").click();
@@ -104,7 +104,7 @@ test("log colour and display radius update co-axial geometry without rebuilding 
   await page.getByLabel("Well log styling").selectOption("radius");
   await expect(scene).toHaveAttribute("data-camera", camera!);
   await expect.poll(() => new URL(page.url()).searchParams.get("sw.logMode")).toBe("radius");
-  await page.reload();
+  await reloadApp(page);
   await selectWellView(page, "earth", ["earth"]);
   await waitForScene(page);
   await page.locator(".demo-scene-options > summary").click();

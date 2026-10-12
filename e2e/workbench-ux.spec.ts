@@ -1,8 +1,9 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { gotoApp } from "./support/app";
 
 test("desktop opens a drawing-first workspace with a single ownership point for controls", async ({ page }) => {
-  await page.goto("/view-well/");
+  await gotoApp(page, "/view-well/");
   await expect(page.getByRole("combobox", { name: "Well", exact: true })).toHaveCount(1);
   const workspaces = page.getByRole("group", { name: "Workspaces", exact: true });
   await expect(workspaces.getByRole("link")).toHaveCount(4);
@@ -41,7 +42,7 @@ test("desktop opens a drawing-first workspace with a single ownership point for 
 });
 
 test("drawing tools locate exact depth, focus sourced intervals and reclaim inspector space", async ({ page }) => {
-  await page.goto("/view-well/");
+  await gotoApp(page, "/view-well/");
   await page.getByRole("button", { name: "Schematic", exact: true }).click();
   const drawing = page.getByRole("region", { name: "Construction schematic" });
   const width = (await drawing.boundingBox())!.width;
@@ -79,7 +80,7 @@ test("drawing tools locate exact depth, focus sourced intervals and reclaim insp
 
 test("phone navigation is deliberate, keyboard accessible and closes after changing tasks", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/view-well/");
+  await gotoApp(page, "/view-well/");
   const menu = page.getByRole("button", { name: "Open navigation" });
   await expect(menu).toHaveAttribute("aria-expanded", "false");
   await expect(page.getByRole("link", { name: "3D trajectory", exact: true })).toBeHidden();

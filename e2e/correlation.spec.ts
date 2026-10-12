@@ -1,8 +1,9 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { gotoApp } from "./support/app";
 
 test("correlation compares the shared field interval with unit-labelled distinct logs", async ({ page }) => {
-  await page.goto("/correlation/");
+  await gotoApp(page, "/correlation/");
   const view = page.getByTestId("multiwell-correlation");
   await expect(view.locator("[data-linked-top='reservoir-base']")).toHaveCount(1);
   await expect(view.locator(".sw-correlation-svg")).toHaveCSS("height", "700px");
@@ -29,7 +30,7 @@ test("correlation compares the shared field interval with unit-labelled distinct
 });
 
 test("correlation supports keyboard selection and has no axe violations", async ({ page }) => {
-  await page.goto("/correlation/");
+  await gotoApp(page, "/correlation/");
   await expect(page.getByRole("heading", { name: "Equator field", level: 1 })).toBeVisible();
   const results = await new AxeBuilder({ page }).analyze();
   expect(results.violations.map((violation) => violation.id)).toEqual([]);

@@ -1,11 +1,12 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { gotoApp } from "./support/app";
 
 test("geographic Field map shares four well identities with the underwater scene without external requests", async ({ page }) => {
   const external: string[] = [], errors: string[] = [];
   page.on("request", (request) => { if (!request.url().startsWith("http://127.0.0.1:3101/")) external.push(request.url()); });
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto("/map/");
+  await gotoApp(page, "/map/");
   await page.getByRole("combobox", { name: "Spatial view" }).selectOption("map");
   const gis = page.getByTestId("gis-map");
   await expect(gis).toHaveAttribute("data-ready", "true");
@@ -66,7 +67,7 @@ test("geographic Field map shares four well identities with the underwater scene
 
 test("geographic Field map fits a phone", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/map/");
+  await gotoApp(page, "/map/");
   await page.getByRole("combobox", { name: "Spatial view" }).selectOption("map");
   await expect(page.getByTestId("gis-map")).toHaveAttribute("data-ready", "true");
   await page.getByRole("button", { name: "Inspect Equator A" }).click();
@@ -78,7 +79,7 @@ test("geographic Field map fits a phone", async ({ page }) => {
 });
 
 test("clicking the detailed 3D path pins a continuous depth across Field tools", async ({ page }) => {
-  await page.goto("/map/");
+  await gotoApp(page, "/map/");
   await page.getByRole("combobox", { name: "Spatial view" }).selectOption("map");
   await page.getByRole("button", { name: "Inspect Equator A" }).click();
   const gis = page.getByTestId("gis-map");
@@ -112,7 +113,7 @@ test("clicking the detailed 3D path pins a continuous depth across Field tools",
 test("map renders selectable synthetic well construction rather than only a trajectory line", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto("/map/");
+  await gotoApp(page, "/map/");
   const gis = page.getByTestId("gis-map"), canvas = gis.locator("canvas");
   await expect(gis).toHaveAttribute("data-3d-ready", "true");
   await expect(canvas).toHaveAttribute("data-component-count", "56");
@@ -152,7 +153,7 @@ test("map renders selectable synthetic well construction rather than only a traj
 });
 
 test("offshore environment renders in the same map canvas and layers preserve well inspection", async ({ page }) => {
-  await page.goto("/map/");
+  await gotoApp(page, "/map/");
   const gis = page.getByTestId("gis-map"), canvas = gis.locator("canvas");
   await expect(gis).toHaveAttribute("data-3d-ready", "true");
   await expect(canvas).toHaveAttribute("data-fitting", "false");

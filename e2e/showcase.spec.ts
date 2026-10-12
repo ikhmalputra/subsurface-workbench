@@ -204,7 +204,7 @@ test("view-well follows the trajectory with the cited FORGE record and shares se
 test("showcase pages fit a phone viewport", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   for (const path of ["/", "/view-well/", "/builder/", "/trajectory/"]) {
-    await page.goto(path);
+    await gotoApp(page, path);
     await page.waitForLoadState("networkidle");
     expect(await horizontalOverflow(page), path).toEqual([]);
   }

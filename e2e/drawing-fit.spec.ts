@@ -1,10 +1,11 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { gotoApp } from "./support/app";
 
 for (const width of [1440, 1024, 390]) {
   test(`drawing fits the canvas and zoom changes actual geometry at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
-    await page.goto("/builder/");
+    await gotoApp(page, "/builder/");
     const canvas = page.getByTestId("curved-assembly-schematic");
     const path = canvas.locator(".sw-curved-centerline");
     await expect(canvas).toBeVisible();
@@ -49,7 +50,7 @@ for (const width of [1440, 1024, 390]) {
 for (const width of [1440, 1024, 390]) {
   test(`vertical schematic uses the available canvas without shrinking at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
-    await page.goto("/builder/");
+    await gotoApp(page, "/builder/");
     await page.getByRole("group", { name: "Canvas view", exact: true }).getByRole("button", { name: "Schematic", exact: true }).click();
     const canvas = page.getByTestId("assembly-schematic");
     await expect.poll(() => canvas.evaluate((svg: SVGSVGElement) => {
@@ -89,7 +90,7 @@ for (const width of [1440, 1024, 390]) {
 }
 
 test("engineering overview preserves diameter ratios, component designs and selected depth detail", async ({ page }) => {
-  await page.goto("/builder/");
+  await gotoApp(page, "/builder/");
   await page.getByRole("group", { name: "Canvas view", exact: true }).getByRole("button", { name: "Schematic", exact: true }).click();
   const canvas = page.getByTestId("assembly-schematic");
   const diameter = (id: string) => canvas.locator(`[data-item-id="${id}"] .sw-asm-wall`).evaluateAll((walls) => {
@@ -119,7 +120,7 @@ test("engineering overview preserves diameter ratios, component designs and sele
 });
 
 test("downhole symbols use their real MD lengths before and after depth zoom", async ({ page }) => {
-  await page.goto("/builder/");
+  await gotoApp(page, "/builder/");
   await page.getByRole("group", { name: "Canvas view", exact: true }).getByRole("button", { name: "Schematic", exact: true }).click();
   const canvas = page.getByTestId("assembly-schematic");
   const verify = async () => {
@@ -150,7 +151,7 @@ test("downhole symbols use their real MD lengths before and after depth zoom", a
 
 for (const route of ["/builder/", "/view-well/?well=s-profile", "/edit-well/?well=s-profile"]) {
   test(`${route} lets users clear component selection in either drawing`, async ({ page }) => {
-    await page.goto(route);
+    await gotoApp(page, route);
     const modes = page.getByRole("group", { name: "Canvas view", exact: true });
     for (const mode of ["Schematic", "Curved"]) {
       await modes.getByRole("button", { name: mode, exact: true }).click();
@@ -195,7 +196,7 @@ for (const route of ["/builder/", "/view-well/?well=s-profile", "/edit-well/?wel
 
 for (const route of ["/edit-well/?well=s-profile", "/view-well/?well=s-profile"]) {
   test(`${route} exposes formation layers alongside its drawing modes`, async ({ page }) => {
-    await page.goto(route);
+    await gotoApp(page, route);
     const modes = page.getByRole("group", { name: "Canvas view", exact: true });
     const formations = modes.getByRole("button", { name: "Formations", exact: true });
     await formations.click();

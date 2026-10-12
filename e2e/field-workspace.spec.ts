@@ -1,7 +1,8 @@
 import { expect, test } from "@playwright/test";
+import { gotoApp } from "./support/app";
 
 test("one Field project preserves selected wells, depth and tool settings through the workflow", async ({ page }) => {
-  await page.goto("/map/");
+  await gotoApp(page, "/map/");
   await page.getByRole("button", { name: "Inspect Equator B" }).click();
   await page.getByRole("checkbox", { name: "Include Equator D" }).uncheck();
   await page.getByRole("link", { name: "2 · Compare intervals" }).click();
@@ -26,7 +27,7 @@ test("one Field project preserves selected wells, depth and tool settings throug
 
 test("phone Field tools fit and guard an empty comparison", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/correlation/");
+  await gotoApp(page, "/correlation/");
   for (const name of ["A", "B", "C", "D"]) await page.getByRole("checkbox", { name: `Include Equator ${name}` }).uncheck();
   await expect(page.getByRole("alert").filter({ hasText: "at least two" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

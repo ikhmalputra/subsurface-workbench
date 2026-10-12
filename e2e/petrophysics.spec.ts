@@ -1,8 +1,9 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { gotoApp } from "./support/app";
 
 test("petrophysics log exposes aligned tracks, supplied context, and a linked keyboard depth cursor", async ({ page }) => {
-  await page.goto("/petrophysics/");
+  await gotoApp(page, "/petrophysics/");
   await page.getByRole("button", { name: "Open independent synthetic example" }).click();
   const view = page.getByTestId("petrophysics-log");
   await expect(view).toHaveAttribute("data-well-id", "synthetic-petro-01");
@@ -56,7 +57,7 @@ test("petrophysics log exposes aligned tracks, supplied context, and a linked ke
 });
 
 test("petrophysics templates and analysis views link selections to the shared MD range", async ({ page }) => {
-  await page.goto("/petrophysics/");
+  await gotoApp(page, "/petrophysics/");
   await page.getByRole("button", { name: "Open independent synthetic example" }).click();
   await page.getByLabel("Track template").selectOption("porosity");
   await expect(page.getByTestId("petrophysics-log").locator("[data-curve-id]")).toHaveCount(2);
