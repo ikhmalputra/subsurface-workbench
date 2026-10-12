@@ -18,7 +18,10 @@ export default defineConfig({
   // sensitive; they pass in isolation. A retry keeps CI usable, and Playwright still reports a
   // retried test as flaky rather than green, so it stays visible instead of being masked.
   retries: softwareRendering ? 1 : 0,
-  workers: 1,
+  // CI shards across jobs on two-core runners, so each shard stays serial. Locally the suite
+  // parallelises, but only to two: at four, concurrent Chromium instances contend for the GPU
+  // and the scene-heavy specs fail. Two is stable and still halves the wall time.
+  workers: process.env.CI ? 1 : 2,
   // Software rendering is several times slower than a real GPU; the scene-heavy specs need the
   // headroom, and CI measured 21.6 minutes against 7 locally.
   timeout: softwareRendering ? 120_000 : 30_000,
