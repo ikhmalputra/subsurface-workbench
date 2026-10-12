@@ -369,7 +369,7 @@ test("view-well links seismic, schematic and mud log by depth, and can unlink th
   await expect(page.getByTestId("seismic-cursor")).toHaveCount(0);
 });
 
-test("view-well puts the well inside the full seismic volume beside the survey log in one linked 3D view", async ({ page }) => {
+test("view-well puts the well inside the full seismic volume beside the survey log in one linked 3D view @slow", async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1400 });
   await page.goto("/view-well/");
   await page.getByRole("combobox", { name: "View", exact: true }).selectOption("earth");

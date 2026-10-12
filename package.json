@@ -7,17 +7,18 @@
     "node": "24.21.0"
   },
   "scripts": {
-    "test": "node --test packages/core/src/*.test.ts",
-    "test:demo-library": "node --test apps/demo/test/*.test.ts",
-    "test:render-adapters": "node --test packages/react/test/*.test.mjs packages/shell/test/*.test.mjs",
     "build": "pnpm --filter @ikhmalputra/subsurface-core build && pnpm --filter @ikhmalputra/subsurface-react build && pnpm --filter @ikhmalputra/subsurface-shell build && pnpm --filter demo build",
-    "typecheck": "pnpm --filter @ikhmalputra/subsurface-core build && pnpm --filter @ikhmalputra/subsurface-react build && pnpm --filter demo exec tsc --noEmit",
-    "lint": "eslint apps/demo/src packages --max-warnings 0",
     "dev": "pnpm --filter demo dev",
-    "test:e2e": "playwright test",
-    "test:packages": "node tools/verify-packages.mjs",
+    "lint": "eslint apps/demo/src packages --max-warnings 0",
+    "render:catalog": "blender --background --python tools/blender/catalog.py",
+    "test": "node --test packages/core/src/*.test.ts",
     "test:asset": "node --test tools/asset.test.mjs",
-    "render:catalog": "blender --background --python tools/blender/catalog.py"
+    "test:demo-library": "node --test apps/demo/test/*.test.ts",
+    "test:e2e": "playwright test",
+    "test:e2e:fast": "playwright test --grep-invert \"@slow\"",
+    "test:packages": "node tools/verify-packages.mjs",
+    "test:render-adapters": "node --test packages/react/test/*.test.mjs packages/shell/test/*.test.mjs",
+    "typecheck": "pnpm --filter @ikhmalputra/subsurface-core build && pnpm --filter @ikhmalputra/subsurface-react build && pnpm --filter demo exec tsc --noEmit"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
