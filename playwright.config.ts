@@ -1,9 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
+import { SOFTWARE_RENDERING as softwareRendering } from "./e2e/support/timing";
 
 // CI runners have no GPU, and Chrome no longer falls back to software WebGL on its own: without
 // these flags every WebGL context fails to create, so the 3D scenes report data-ready="false" and
 // every scene-dependent test fails while the 2D ones pass. Local runs keep the real GPU for speed.
-const softwareRendering = Boolean(process.env.CI) || process.env.WEBGPU_TEST === "1";
+// The flag itself lives in e2e/support/timing so the specs scale their budgets off the same value.
 const args = [
   ...(softwareRendering ? ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"] : []),
   // On a GPU-less Linux runner Chrome will hand out a WebGPU adapter that never presents a frame:

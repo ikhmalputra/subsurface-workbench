@@ -9,7 +9,7 @@
   "scripts": {
     "build": "pnpm --filter @ikhmalputra/subsurface-core build && pnpm --filter @ikhmalputra/subsurface-react build && pnpm --filter @ikhmalputra/subsurface-shell build && pnpm --filter demo build",
     "dev": "pnpm --filter demo dev",
-    "lint": "eslint apps/demo/src packages --max-warnings 0",
+    "lint": "eslint apps/demo/src packages e2e playwright.config.ts --max-warnings 0",
     "render:catalog": "blender --background --python tools/blender/catalog.py",
     "test": "node --test packages/core/src/*.test.ts",
     "test:asset": "node --test tools/asset.test.mjs",
@@ -18,7 +18,7 @@
     "test:e2e:fast": "playwright test --grep-invert \"@slow\"",
     "test:packages": "node tools/verify-packages.mjs",
     "test:render-adapters": "node --test packages/react/test/*.test.mjs packages/shell/test/*.test.mjs",
-    "typecheck": "pnpm --filter @ikhmalputra/subsurface-core build && pnpm --filter @ikhmalputra/subsurface-react build && pnpm --filter demo exec tsc --noEmit"
+    "typecheck": "pnpm --filter @ikhmalputra/subsurface-core build && pnpm --filter @ikhmalputra/subsurface-react build && pnpm --filter demo exec tsc --noEmit && pnpm exec tsc -p tsconfig.e2e.json"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",

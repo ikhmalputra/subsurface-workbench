@@ -1,7 +1,8 @@
 import { expect, test } from "@playwright/test";
 import type { Locator } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { SCENE_READY } from "./support/timing";
+import { GPU_PICK_DWELL, SCENE_READY, SOFTWARE_RENDERING } from "./support/timing";
+import { waitForScene } from "./support/scene";
 
 /**
  * A GPU change is only observable once the renderer has presented a new frame. On a real GPU that
@@ -18,7 +19,7 @@ async function expectRenderedPixelsToChange(canvas: Locator, before: Buffer, why
     // "The pixels did not change" has two very different causes: a canvas that drew nothing at all,
     // and one that drew correctly but ignored the control. Report which, so the failure is
     // actionable instead of ambiguous.
-    throw new Error(`${why}\ncanvas content: ${JSON.stringify(await describeCanvas(canvas))}\n${String(failure)}`);
+    throw new Error(`${why}\ncanvas content: ${JSON.stringify(await describeCanvas(canvas))}`, { cause: failure });
   }
 }
 
@@ -47,9 +48,11 @@ test("arbitrary slices rotate and translate inside the existing scene and restor
   page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
   await page.goto("/view-well/");
   await page.getByRole("combobox", { name: "View", exact: true }).selectOption("earth");
+  // Wait for the scene before touching anything else. Selecting "earth" starts a software-rendered
+  // build that occupies the main thread, and a click issued into that window waits on actionability
+  // checks that cannot run — which is how a disclosure click consumed a whole test budget.
+  const scene = await waitForScene(page);
   await page.locator(".demo-scene-options > summary").click();
-  const scene = page.getByTestId("interactive-well-scene");
-  await expect(scene).toHaveAttribute("data-ready", "true");
   const canvas = scene.locator("canvas");
   await expect(canvas).toHaveAttribute("role", "img");
   await expect(canvas).toHaveAttribute("tabindex", "0");
@@ -70,6 +73,7 @@ test("arbitrary slices rotate and translate inside the existing scene and restor
   const url = page.url(), normal = new URL(url).searchParams.get("sw.planeNormal");
   await page.reload();
   await page.getByRole("combobox", { name: "View", exact: true }).selectOption("earth");
+  await waitForScene(page);
   await page.locator(".demo-scene-options > summary").click();
   await expect(scene).toHaveAttribute("data-slice-vertices", /^[3-6]$/);
   expect(new URL(page.url()).searchParams.get("sw.planeNormal")).toBe(normal);
@@ -81,11 +85,17 @@ test("arbitrary slices rotate and translate inside the existing scene and restor
 });
 
 test("log colour and display radius update co-axial geometry without rebuilding the well scene", async ({ page }) => {
+  // The only test that builds the earth scene twice: once, then again after a reload to prove the
+  // log mode survives in the URL. Two software-rendered scene builds plus the seismic decode do not
+  // fit the default budget on a loaded runner, where a single build has been measured near 110 s.
+  test.slow(SOFTWARE_RENDERING, "two software-rendered scene builds in one test");
   await page.goto("/view-well/");
   await page.getByRole("combobox", { name: "View", exact: true }).selectOption("earth");
+  // Wait for the scene before touching anything else. Selecting "earth" starts a software-rendered
+  // build that occupies the main thread, and a click issued into that window waits on actionability
+  // checks that cannot run — which is how a disclosure click consumed a whole test budget.
+  const scene = await waitForScene(page);
   await page.locator(".demo-scene-options > summary").click();
-  const scene = page.getByTestId("interactive-well-scene");
-  await expect(scene).toHaveAttribute("data-ready", "true");
   const camera = await scene.getAttribute("data-camera");
   await page.getByLabel("Well log styling").selectOption("color-radius");
   await expect(scene).toHaveAttribute("data-log-triangles", /^\d{4,}$/);
@@ -95,6 +105,7 @@ test("log colour and display radius update co-axial geometry without rebuilding 
   await expect.poll(() => new URL(page.url()).searchParams.get("sw.logMode")).toBe("radius");
   await page.reload();
   await page.getByRole("combobox", { name: "View", exact: true }).selectOption("earth");
+  await waitForScene(page);
   await page.locator(".demo-scene-options > summary").click();
   await expect(page.getByLabel("Well log styling")).toHaveValue("radius");
   await expect(scene).toHaveAttribute("data-log-triangles", /^\d{4,}$/);
@@ -120,25 +131,44 @@ test("float GPU framebuffer reads exact surface coordinates and sampled amplitud
 });
 
 test("GPU slice picking reads coordinates on the oblique plane and publishes the chosen XYZ", async ({ page }) => {
+  test.slow(SOFTWARE_RENDERING, "up to 24 software-rendered GPU picks in one sweep");
   await page.setViewportSize({ width: 1600, height: 1400 });
   await page.goto("/view-well/");
   await page.getByRole("combobox", { name: "View", exact: true }).selectOption("earth");
+  // Wait for the scene before touching anything else. Selecting "earth" starts a software-rendered
+  // build that occupies the main thread, and a click issued into that window waits on actionability
+  // checks that cannot run — which is how a disclosure click consumed a whole test budget.
+  const scene = await waitForScene(page);
   await page.locator(".demo-scene-options > summary").click();
-  const scene = page.getByTestId("interactive-well-scene");
-  await expect(scene).toHaveAttribute("data-ready", "true");
   await page.getByLabel("Seismic slice", { exact: true }).selectOption("arbitrary");
   await page.getByLabel("Plane tilt", { exact: true }).fill("60");
   await page.getByLabel("Picking engine").selectOption("gpu");
   const box = (await scene.locator("canvas").boundingBox())!;
+  const readout = page.getByTestId("gpu-pick-readout");
+  /**
+   * Whether the pick under the pointer reports an amplitude, allowing the pick a frame to arrive.
+   *
+   * A fixed 100 ms dwell was enough on a GPU and nowhere near enough under SwiftShader, so every
+   * one of the 24 probe points read "no hit" and the sweep reported the plane unhittable without
+   * ever having rendered a pick. Waiting for the readout keeps the assertion exactly as strong —
+   * the pick must still produce a finite amplitude — and only allows the frame time to arrive.
+   */
+  const picked = async () => {
+    const deadline = Date.now() + GPU_PICK_DWELL;
+    do {
+      const value = await readout.count() ? await readout.getAttribute("data-amplitude") : null;
+      if (value !== null && value !== "" && Number.isFinite(Number(value))) return true;
+      await page.waitForTimeout(50);
+    } while (Date.now() < deadline);
+    return false;
+  };
   let hit: [number, number] | null = null;
   for (let fy = 0.35; fy <= 0.8 && !hit; fy += 0.08) for (let fx = 0.3; fx <= 0.8 && !hit; fx += 0.08) {
-    await page.mouse.move(box.x + box.width * fx, box.y + box.height * fy);
-    await page.waitForTimeout(100);
-    const readout = page.getByTestId("gpu-pick-readout");
-    const value = await readout.count() ? await readout.getAttribute("data-amplitude") : null;
-    if (value && Number.isFinite(Number(value))) hit = [box.x + box.width * fx, box.y + box.height * fy];
+    const at: [number, number] = [box.x + box.width * fx, box.y + box.height * fy];
+    await page.mouse.move(at[0], at[1]);
+    if (await picked()) hit = at;
   }
-  expect(hit).not.toBeNull();
+  expect(hit, "no probe point on the tilted plane produced a GPU pick").not.toBeNull();
   await page.mouse.click(hit![0], hit![1]);
   await expect.poll(() => new URL(page.url()).searchParams.get("sw.xyz")).not.toBeNull();
   const url = new URL(page.url()), xyz = url.searchParams.get("sw.xyz")!.split(",").map(Number), origin = url.searchParams.get("sw.planeOrigin")!.split(",").map(Number), normal = url.searchParams.get("sw.planeNormal")!.split(",").map(Number);
@@ -171,9 +201,11 @@ test("native WebGPU compiles and renders the synthetic volume and oblique plane"
   await page.goto("/sandbox/");
   await page.getByRole("button", { name: "Open independent synthetic example" }).click();
   const supported = await page.evaluate(async () => {
-    if (!("gpu" in navigator) || !navigator.gpu) return false;
-    const adapter = await navigator.gpu.requestAdapter();
-    return adapter !== null;
+    // Typed locally rather than by pulling @webgpu/types into the suite: this is the only WebGPU
+    // reference in the specs, and all it needs to know is whether an adapter comes back.
+    const gpu = (navigator as { gpu?: { requestAdapter: () => Promise<unknown> } }).gpu;
+    if (!gpu) return false;
+    return (await gpu.requestAdapter()) !== null;
   });
   if (process.env.WEBGPU_TEST === "1") expect(supported, "GPU validation job must obtain a real native WebGPU adapter").toBe(true);
   test.skip(!supported, "This browser/device has no WebGPU adapter; unsupported behavior is covered separately.");
