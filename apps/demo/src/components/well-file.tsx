@@ -105,7 +105,7 @@ export function WellFile({ operations, components, selected, onSelectComponent, 
         const section = ops.sections.find((item) => item.id === run.holeSection);
         if (section) onSelectComponent(section.holeComponentId);
       }} />}
-      {tab === "log" && (log.loaded ? <LogTracks las={log.loaded.las} tracks={tracks} markers={markers} intervals={intervals} selectedRange={range} cursorFt={cursorFt} title="Mud log · 10 ft means" height={340}
+      {tab === "log" && (log.loaded ? <LogTracks las={log.loaded.las} tracks={tracks} markers={markers} intervals={intervals} selectedRange={range} cursorFt={cursorFt} title="Mud log · 10 ft means" height={260}
         depthWindowFt={link.linked ? bridge.windowFt : undefined}
         onDepthWindowChange={link.linked ? bridge.setWindowFt : undefined}
         onCursorChange={link.linked ? bridge.setCursorFt : undefined} onSelectDepth={(depthFt) => {

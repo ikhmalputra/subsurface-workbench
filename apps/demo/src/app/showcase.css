@@ -658,7 +658,9 @@ body { margin: 0; background: var(--sw-paper); color: var(--sw-ink); font-family
   box-shadow: 0 1px 0 rgb(0 0 0 / .03);
 }
 .demo-inspection .demo-toolbar > * + * { position: relative; }
-.demo-inspection .sw-asm-canvas-modes { display: inline-flex; gap: 2px; padding: 2px; background: var(--sw-paper); border: 1px solid var(--sw-line); border-radius: 7px; }
+/* Five mode buttons wrap on a phone; unwrapped, the group's 370px forced the page to 392 at a
+   390px viewport — measured as the one thing on /view-well/ wider than the screen. */
+.demo-inspection .sw-asm-canvas-modes { display: inline-flex; flex-wrap: wrap; max-width: 100%; gap: 2px; padding: 2px; background: var(--sw-paper); border: 1px solid var(--sw-line); border-radius: 7px; }
 .demo-inspection .sw-asm-canvas-modes button { border-color: transparent; background: transparent; }
 .demo-inspection .sw-asm-canvas-modes button[aria-pressed="true"] { background: var(--sw-surface); border-color: var(--sw-line); font-weight: 600; box-shadow: 0 1px 2px rgb(0 0 0 / .06); }
 
@@ -755,7 +757,10 @@ body { margin: 0; background: var(--sw-paper); color: var(--sw-ink); font-family
   height: clamp(520px, calc(100dvh - 268px), 1000px);
   overflow: hidden;
 }
-.demo-view-grid > .demo-side > :is(section, div):not(.demo-inspector-head):not(.demo-inspector-tabs):not(.demo-view-picker) {
+/* View well's inspector: each tabbed pane is its own scroll region. The trajectory tools column
+   is excluded — it is one scroll region with several panels stacked, and a 0,5,1 rule here was
+   quietly outranking the column's own layout and squashing its summary to a sliver. */
+.demo-view-grid > .demo-side:not(.demo-traj-side) > :is(section, div):not(.demo-inspector-head):not(.demo-inspector-tabs):not(.demo-view-picker) {
   overflow-y: auto; padding: var(--sw-space-4); min-height: 0;
 }
 .demo-view-grid > .demo-side > :is(section, div)[hidden] { display: none; }
@@ -792,7 +797,12 @@ body { margin: 0; background: var(--sw-paper); color: var(--sw-ink); font-family
       sliver, and the GIS map overflowing its panel far enough to swallow the
       pointer events of the tool beside it — because those grids size their own
       rows and panels against their content, not against the window. */
-.demo-page { min-height: calc(100dvh - 54px); padding-bottom: var(--sw-space-5); }
+.demo-page { padding-bottom: var(--sw-space-5); }
+/* No minimum height on the page. One was added here (100dvh minus the context bar) to put a
+   ground under short routes, and it was wrong by the frame's own chrome: the workbench's scroll
+   region is 885px at a 980px window, the rule forced the page to 962, and every route carried a
+   77px scroll that only showed when something scrolled into view. Measured; the frame already
+   paints the ground. */
 
 /* 2. The availability notice is a strip, not a 230px card. It says one thing —
       this module's data is not your active well's — which is a line, not an
@@ -943,7 +953,7 @@ body { margin: 0; background: var(--sw-paper); color: var(--sw-ink); font-family
 .demo-inspection .demo-fill, .demo-inspection .demo-view-grid > .demo-side { height: clamp(520px, calc(100dvh - 298px), 1000px); }
 .demo-records-drawer { margin-top: 0; border-radius: var(--sw-radius-panel, 8px); overflow: hidden; }
 .demo-records-drawer > summary {
-  display: flex; align-items: baseline; gap: var(--sw-space-3); min-height: 28px; padding: 0 12px;
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--sw-space-3); min-height: 28px; padding: 0 12px;
   font-size: 12.5px; font-weight: 600; background: var(--sw-paper); border-bottom: 1px solid transparent;
   list-style: none; cursor: pointer;
 }
@@ -951,13 +961,17 @@ body { margin: 0; background: var(--sw-paper); color: var(--sw-ink); font-family
 .demo-records-drawer > summary::before { content: "▸"; font-size: 10px; color: var(--sw-muted); }
 .demo-records-drawer[open] > summary::before { content: "▾"; }
 .demo-records-drawer[open] > summary { border-bottom-color: var(--sw-line); }
-.demo-records-drawer > summary span { margin-left: 0; }
-.demo-records-drawer .demo-file { max-height: 360px; overflow: auto; padding: 10px 12px; gap: var(--sw-space-2); }
+/* The summary line wraps on narrow screens; unwrapped, its min-content width was the one
+   thing forcing the whole page to 392px at a 390px viewport. */
+.demo-records-drawer > summary span { margin-left: 0; min-width: 0; }
+.demo-records-drawer .demo-file { max-height: 300px; overflow: auto; padding: 10px 12px; gap: var(--sw-space-2); }
 .demo-records-drawer .demo-file-bar { display: none; }
 .demo-records-drawer .demo-file-tabs button { min-height: 30px; font-size: 12px; }
 /* Open dock: the canvas and the inspector give up the dock's height rather than the page growing. */
 .demo-inspection:has(.demo-records-drawer[open]) .demo-fill,
-.demo-inspection:has(.demo-records-drawer[open]) .demo-view-grid > .demo-side { height: calc(100dvh - 298px - 400px); min-height: 260px; }
+/* Open dock: 300px of records plus the tab, and the canvas gives up the rest. Measured to fit the
+   workbench's 885px scroll region at a 980px window once the page stopped forcing its own height. */
+.demo-inspection:has(.demo-records-drawer[open]) .demo-view-grid > .demo-side { height: calc(100dvh - 298px - 360px); min-height: 280px; }
 /* In the dock the hole-section log is a strip, not three cards: it is context for every tab and
    was costing 150px of a 360px dock before the tab's own content began. */
 .demo-records-drawer .sw-sections ol { display: flex; gap: var(--sw-space-2); }
@@ -965,3 +979,33 @@ body { margin: 0; background: var(--sw-paper); color: var(--sw-ink); font-family
 .demo-records-drawer .sw-sections button { padding: 5px 8px; font-size: 11px; }
 .demo-records-drawer .sw-sections .sw-sections-body > :not(strong) { display: none; }
 .demo-records-drawer .sw-sections header { display: none; }
+
+/* Trajectory on the spine: the section, the plan/section pair, or the 3D path, beside the tools. */
+.demo-view-traj { grid-template-columns: minmax(0, 1fr) 320px; }
+.demo-view-traj.demo-inspector-hidden { grid-template-columns: minmax(0, 1fr); }
+.demo-traj-views-pane { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.1fr) minmax(300px, .9fr); gap: var(--sw-space-3); padding: var(--sw-space-3); overflow: auto; align-items: stretch; }
+.demo-traj-views-pane .sw-traj-plot { min-height: 0; }
+.demo-traj-views-pane .sw-traj-plot svg { height: auto; max-height: 100%; }
+.demo-view-grid > .demo-side.demo-traj-side { display: grid; align-content: start; gap: var(--sw-space-3); padding: 10px; overflow-y: auto; }
+.demo-view-grid > .demo-side.demo-traj-side > * { min-height: auto; }
+.demo-records-drawer > summary .demo-small-button { margin-left: auto; min-height: 24px; padding: 2px 8px; font-size: 11px; }
+.demo-traj-table { display: block; }
+.demo-traj-explainer { margin-top: var(--sw-space-3); font-size: 12px; }
+.demo-traj-explainer > summary { cursor: pointer; color: var(--sw-muted); padding: 6px 0; }
+/* Below 1180px the inspector column goes under the section rather than beside it. The section
+   preset had no responsive rule at all: at 390px its 300px inspector column forced the grid to
+   392px and the whole page scrolled sideways — measured, after the phone check had been passing
+   on the curved default for months. */
+@media (max-width: 1180px) { .demo-view-traj, .demo-view-section { grid-template-columns: minmax(0, 1fr); } }
+/* The docked seven-curve log renders at its natural width, so its 200px height is 200px on screen
+   and the dock shows it whole; stretched to the dock's width it was 320px tall and the lower half
+   sat below the dock's scroll edge. */
+.demo-records-drawer .sw-logs-frame svg { width: auto; }
+/* The side column is the scroll region; nothing inside it scrolls on its own. */
+.demo-traj-side .sw-traj-summary { max-height: none; overflow: visible; }
+/* The hole-section strip in the dock: one row of three, names only, a short bar. */
+.demo-records-drawer .sw-sections ol { grid-template-columns: repeat(3, minmax(0, 1fr)); display: grid; gap: var(--sw-space-2); }
+.demo-records-drawer .sw-sections button { grid-template-columns: 10px minmax(0, 1fr); gap: 8px; padding: 4px 8px; }
+.demo-records-drawer .sw-sections-bar { min-height: 18px; }
+.demo-records-drawer .sw-sections-body strong { font-size: 12px; }
+@media (max-width: 1180px) { .demo-traj-views-pane { grid-template-columns: minmax(0, 1fr); } }

@@ -73,9 +73,13 @@ export interface WellSectionProps {
   readonly onSelectMd: (mdM: number) => void;
   readonly link: DepthLink;
   readonly showFormations?: boolean;
+  /** Depth markers beyond the casing shoes — a planner's kick-off, end of build and target. */
+  readonly markers?: readonly { readonly mdM: number; readonly label: string }[];
+  /** Dogleg limit drawn on the survey track. */
+  readonly dlsLimitDegPer30m?: number;
 }
 
-export function WellSection({ assembly, components, survey, stations, formations = [], totalDepthM, operations, logUrl, selectedId, onSelect, onSelectMd, link, showFormations = true }: WellSectionProps) {
+export function WellSection({ assembly, components, survey, stations, formations = [], totalDepthM, operations, logUrl, selectedId, onSelect, onSelectMd, link, showFormations = true, markers = [], dlsLimitDegPer30m }: WellSectionProps) {
   const host = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState(640);
   useEffect(() => {
@@ -142,7 +146,7 @@ export function WellSection({ assembly, components, survey, stations, formations
       <div className="demo-track-body" style={{ height: trackHeight }}>
         <TrajectoryLog survey={survey} height={trackHeight} frame={frame} domainMdM={windowM} mdWindow={null}
           selectedMdM={link.pinnedMdM} onSelectMd={onSelectMd} cursorMdM={link.cursorMdM} onCursorMdChange={link.setCursorMdM}
-          markers={shoes.map(({ mdM, label }) => ({ mdM, label }))} />
+          markers={[...shoes.map(({ mdM, label }) => ({ mdM, label })), ...markers]} dlsLimitDegPer30m={dlsLimitDegPer30m} />
       </div>
     </div>}
   </div>;

@@ -1278,7 +1278,12 @@ line.sw-wd-grid { stroke: #e7ece9; stroke-width: 1; }
 .sw-logs-tools button { min-height: 28px; padding: 3px 9px; border: 1px solid var(--sw-line); border-radius: var(--sw-radius-control); background: var(--sw-surface); color: var(--sw-ink); font-size: 11.5px; cursor: pointer; }
 .sw-logs-tools button[aria-pressed="true"] { border-color: var(--sw-accent); background: var(--sw-accent); color: var(--sw-surface); }
 .sw-logs-tools button:disabled { cursor: default; color: #8a978f; }
-.sw-logs-readout { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sw-space-1) var(--sw-space-4); min-height: 30px; padding: 6px 10px; border-radius: var(--sw-radius-control); background: #f4f7f4; font: 11px "IBM Plex Mono", monospace; color: #33443b; }
+/* One line, always. The readout sits above the plot and used to wrap when seven curve values
+   did not fit, so the first hover grew it by a line and moved the plot down under the pointer —
+   a click then landed shallower than the depth it was aimed at. Values past the edge are cut
+   rather than wrapped; the table below the plot carries every value. */
+.sw-logs-readout { display: flex; flex-wrap: nowrap; align-items: center; gap: var(--sw-space-1) var(--sw-space-4); height: 30px; box-sizing: border-box; padding: 6px 10px; overflow: hidden; white-space: nowrap; border-radius: var(--sw-radius-control); background: #f4f7f4; font: 11px "IBM Plex Mono", monospace; color: #33443b; }
+.sw-logs-readout > * { flex: 0 0 auto; }
 .sw-logs-readout strong { color: var(--sw-ink); }
 .sw-logs-readout i { display: inline-block; width: 9px; height: 3px; margin-right: 5px; vertical-align: 3px; }
 .sw-logs-run { padding: 1px 6px; border-radius: var(--sw-radius-control); background: var(--sw-ink); color: var(--sw-surface); }

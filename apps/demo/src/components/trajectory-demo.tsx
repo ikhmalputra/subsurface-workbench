@@ -3,12 +3,14 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useMemo, useRef, useState } from "react";
-import { computeMinimumCurvature, designWithTrajectory, getWellComponents, planBuildHold, ratioFactor, summarizeTrajectory, surveyConsistency, validateSurveyStations } from "@ikhmalputra/subsurface-core";
+import { computeMinimumCurvature, designWithTrajectory, getWellComponents, planBuildHold, ratioFactor, summarizeTrajectory, surveyConsistency, validateSurveyStations, wellComponentsToAssembly } from "@ikhmalputra/subsurface-core";
 import type { BuildHoldInput, BuildHoldPlan, ComputedStation, SurveyStationInput, WellDesign } from "@ikhmalputra/subsurface-core";
 import { BuildHoldForm, SurveyTable, TrajectoryLog, TrajectoryPlanView, TrajectorySectionView, TrajectorySummaryPanel } from "@ikhmalputra/subsurface-react/trajectory";
 import type { TrajectoryMarker } from "@ikhmalputra/subsurface-react/trajectory";
 import { RecordCard, useWell } from "./wells";
-import { InfoTip } from "@ikhmalputra/subsurface-react";
+import { InfoTip, useDepthLink } from "@ikhmalputra/subsurface-react";
+import { Pane, PaneGrid } from "@ikhmalputra/subsurface-shell";
+import { WellSection } from "./well-section";
 import { useSubsurfaceSelector } from "@ikhmalputra/subsurface-react/state";
 import { useWorkspace } from "./workspace-provider";
 import { CommandButton } from "@ikhmalputra/subsurface-react/ui";
@@ -58,19 +60,19 @@ function TrajectoryWellDemo({ wellId, store }: {
   const { design: reference, operations, logUrl } = useWell(wellId);
   const { applyRevision } = useWorkspace();
   const [mode, setMode] = useState<Mode>("survey");
-  const [layers, setLayers] = useState(true);
+  const [layers, setLayers] = useState(false);
   const [dlsLimit, setDlsLimit] = useState(3);
   const [sectionAzimuth, setSectionAzimuth] = useState<number | null>(null);
-  const sharedDepth = useSubsurfaceSelector(store, (state) => state.depthLink.pinnedMdM);
   const sharedComponent = useSubsurfaceSelector(store, (state) => state.activeAsset.componentId);
-  const [workingDepth, setWorkingDepth] = useState<number | null>(null);
+  // The published survey is read through the workspace's shared depth link; a plan or an edit is a
+  // preview, so it gets a link of its own and leaves the shared cursor alone until it is applied.
+  const sharedLink = useDepthLink(true, store);
+  const previewLink = useDepthLink(true);
+  const link = mode === "survey" ? sharedLink : previewLink;
   const [workingComponent, setWorkingComponent] = useState<string | null>(null);
-  const selectedMdM = mode === "survey" ? sharedDepth : workingDepth;
+  const selectedMdM = link.pinnedMdM;
   const selectedId = mode === "survey" ? sharedComponent : workingComponent;
-  const setSelectedMdM = (depth: number | null) => {
-    if (mode === "survey") store.pinDepth(reference.id, depth, "trajectory");
-    else setWorkingDepth(depth);
-  };
+  const setSelectedMdM = (depth: number | null) => link.pinCursor(depth);
   const setSelectedId = (id: string) => {
     if (mode === "survey") store.selectComponent(id, "trajectory");
     else setWorkingComponent(id);
@@ -95,7 +97,11 @@ function TrajectoryWellDemo({ wellId, store }: {
   const issues = useMemo(() => validateSurveyStations(stations, { maxDlsDegPer30m: dlsLimit }), [stations, dlsLimit]);
   const sceneDesign = useMemo(() => sceneStations ? designWithTrajectory(reference, sceneStations, mode === "plan" ? { name: "Build & hold plan", note: "Planned by planBuildHold; positions by minimum curvature." } : { name: "Edited survey" }) : reference, [reference, sceneStations, mode]);
   const components = useMemo(() => getWellComponents(sceneDesign), [sceneDesign]);
-  const selected = components.find((component) => component.id === selectedId) ?? components[0];
+  const assembly = useMemo(() => wellComponentsToAssembly({ id: sceneDesign.id, name: sceneDesign.wellName ?? sceneDesign.id, totalDepthM: sceneDesign.totalDepthM, components }), [sceneDesign, components]);
+  const [view, setView] = useState<"section" | "views" | "scene">("section");
+  // Nothing is selected until the reader selects it. Defaulting to the first record put a
+  // selection band and its depth tags on the construction track of every fresh load.
+  const selected = components.find((component) => component.id === selectedId);
   const consistency = useMemo(() => reference.survey ? surveyConsistency(reference.survey) : null, [reference]);
 
   const markers = useMemo(() => {
@@ -115,7 +121,7 @@ function TrajectoryWellDemo({ wellId, store }: {
     if (next === "edit") setEditStations(inputsOf(survey));
     setRejected(null);
     setMode(next);
-    setWorkingDepth(null);
+    previewLink.pinCursor(null);
     setWorkingComponent(null);
   };
   const updatePlan = (input: BuildHoldInput, commit: boolean) => {
@@ -135,7 +141,7 @@ function TrajectoryWellDemo({ wellId, store }: {
     setEditStations([...next]);
   };
 
-  return <section className="demo-stage" aria-label="Trajectory engineering example">
+  return <section className="demo-stage demo-inspection" aria-label="Trajectory engineering example">
     {mode !== "survey" && <div className="demo-workspace-availability"><p>Trajectory preview: apply it to use this user-authored revision throughout the workspace. The original observed source is preserved.</p>
       <CommandButton icon="apply" onClick={() => {
         try {
@@ -148,39 +154,54 @@ function TrajectoryWellDemo({ wellId, store }: {
     <div className="demo-toolbar">
       <div className="demo-segment" role="group" aria-label="Trajectory mode">{modes.map((item) => <CommandButton kind="selection" key={item.id} type="button" aria-pressed={mode === item.id} onClick={() => changeMode(item.id)}>{item.label}</CommandButton>)}</div>
       <span className="demo-mode-tip" data-testid="trajectory-mode-note"><InfoTip wide label="About this mode">{mode === "survey" ? (reference.provenance === "documented" ? "Published survey, read-only. Positions below are recomputed from MD, inclination and azimuth by minimum curvature and checked against the published values." : "Synthetic survey fixture. Positions are recomputed from MD, inclination and azimuth by minimum curvature.") : mode === "plan" ? "Drag the blue target in the plan or section view, or type values. The build-and-hold profile is solved exactly through the target; the 3D scene updates when you release." : "Every station is editable. Change MD, inclination or azimuth and every position, DLS and the 3D path are recomputed. Physically impossible edits are rejected."}</InfoTip></span>
+      {/* The same spine as View well: the section first, the plan and vertical section as a second
+          rendering, the 3D path as a third. All three read the one depth link above. */}
+      <div className="sw-asm-canvas-modes" role="group" aria-label="Trajectory view">
+        <CommandButton kind="selection" type="button" aria-pressed={view === "section"} onClick={() => setView("section")}>Section</CommandButton>
+        <CommandButton kind="selection" type="button" aria-pressed={view === "views"} onClick={() => setView("views")}>Plan &amp; section</CommandButton>
+        <CommandButton kind="selection" type="button" aria-pressed={view === "scene"} onClick={() => setView("scene")}>3D</CommandButton>
+      </div>
       <label className="demo-inline-field"><span>DLS limit</span><input type="number" min="0.5" max="30" step="0.5" value={dlsLimit} onChange={(event) => { const value = Number(event.target.value); if (Number.isFinite(value) && value > 0) setDlsLimit(value); }} /><small>°/30 m</small></label>
       <label className="demo-inline-field"><span>VS azimuth</span><input type="number" min="0" max="359.9" step="1" placeholder={`auto ${vsAzimuth.toFixed(1)}`} value={sectionAzimuth ?? ""} onChange={(event) => { const raw = event.target.value; const value = Number(raw); setSectionAzimuth(raw === "" || !Number.isFinite(value) ? null : ((value % 360) + 360) % 360); }} /><small>°</small></label>
       <label className="demo-check"><input type="checkbox" checked={layers} onChange={(event) => setLayers(event.target.checked)} /> Formations</label>
     </div>
 
-
-    <div className="demo-traj-top">
-      <div className="demo-panel demo-panel-flush demo-traj-scene">{selected && <WellScene design={sceneDesign} selectedId={selected.id} onSelect={setSelectedId} layersVisible={layers} colorBy="dls" dlsLimitDegPer30m={dlsLimit} target={mode === "plan" ? committedPlan.target : null} probeMdM={selectedMdM} onProbe={setSelectedMdM} />}</div>
-      <div className="demo-traj-side">
+    <PaneGrid active={[view]} className="demo-view-grid demo-view-traj">
+      <Pane id="section" deferUntilShown keep={false} className="demo-fill demo-section-pane">
+        <WellSection assembly={assembly} components={components} survey={survey} stations={sceneDesign.survey} formations={reference.formations} totalDepthM={Math.max(sceneDesign.totalDepthM, summary.totalDepthMdM)}
+          operations={mode === "survey" ? operations : null} logUrl={mode === "survey" ? logUrl : undefined}
+          selectedId={selected?.id ?? null} onSelect={(id) => { if (id) setSelectedId(id); }} onSelectMd={setSelectedMdM} link={link} showFormations={layers}
+          markers={markers} dlsLimitDegPer30m={dlsLimit} />
+      </Pane>
+      <Pane id="views" deferUntilShown className="demo-fill demo-traj-views-pane">
+        <TrajectoryPlanView survey={survey} selectedMdM={selectedMdM} onSelectMd={setSelectedMdM} dlsLimitDegPer30m={dlsLimit} markers={markers} target={mode === "plan" ? planInput.target : null} targetInvalid={!!live.error} onTargetChange={mode === "plan" ? (target) => updatePlan({ ...livePlan.current, target }, false) : undefined} onTargetCommit={commitPlan} />
+        <TrajectorySectionView survey={survey} selectedMdM={selectedMdM} onSelectMd={setSelectedMdM} dlsLimitDegPer30m={dlsLimit} markers={markers} verticalSectionAzimuthDeg={vsAzimuth} formations={layers ? reference.formations : undefined} target={mode === "plan" ? planInput.target : null} targetInvalid={!!live.error} onTargetChange={mode === "plan" ? (target) => updatePlan({ ...livePlan.current, target }, false) : undefined} onTargetCommit={commitPlan} />
+        <TrajectoryLog survey={survey} selectedMdM={selectedMdM} onSelectMd={setSelectedMdM} dlsLimitDegPer30m={dlsLimit} markers={markers} height={560} cursorMdM={link.cursorMdM} onCursorMdChange={link.setCursorMdM} />
+      </Pane>
+      <Pane id="scene" deferUntilShown className="demo-fill demo-earth-view">
+        <WellScene design={sceneDesign} selectedId={selected?.id ?? ""} onSelect={setSelectedId} layersVisible={layers} colorBy="dls" dlsLimitDegPer30m={dlsLimit} target={mode === "plan" ? committedPlan.target : null} probeMdM={selectedMdM} onProbe={setSelectedMdM} />
+      </Pane>
+      <aside className="demo-side demo-traj-side" aria-label="Trajectory tools" tabIndex={0}>
         <TrajectorySummaryPanel summary={summary} dlsLimitDegPer30m={dlsLimit} footer={consistency && mode === "survey" && <p className="demo-verify" data-testid="trajectory-verification"><b>✓ Verified</b> Recomputed positions match the {reference.provenance === "documented" ? "published" : "fixture"} survey within {fmt(consistency.maxDeviationM * 1000, 1)} mm over {reference.survey!.length} stations.</p>} />
         {mode === "plan" && <BuildHoldForm value={planInput} onChange={(input) => updatePlan(input, true)} plan={live.plan} error={live.error} />}
         <CourseMath survey={survey} selectedMdM={selectedMdM} />
-      </div>
-    </div>
+        <RecordCard component={selected} design={sceneDesign} />
+      </aside>
+    </PaneGrid>
 
-    <div className="demo-traj-views">
-      <TrajectoryPlanView survey={survey} selectedMdM={selectedMdM} onSelectMd={setSelectedMdM} dlsLimitDegPer30m={dlsLimit} markers={markers} target={mode === "plan" ? planInput.target : null} targetInvalid={!!live.error} onTargetChange={mode === "plan" ? (target) => updatePlan({ ...livePlan.current, target }, false) : undefined} onTargetCommit={commitPlan} />
-      <TrajectorySectionView survey={survey} selectedMdM={selectedMdM} onSelectMd={setSelectedMdM} dlsLimitDegPer30m={dlsLimit} markers={markers} verticalSectionAzimuthDeg={vsAzimuth} formations={layers ? reference.formations : undefined} target={mode === "plan" ? planInput.target : null} targetInvalid={!!live.error} onTargetChange={mode === "plan" ? (target) => updatePlan({ ...livePlan.current, target }, false) : undefined} onTargetCommit={commitPlan} />
-    </div>
-
-    <div className="demo-traj-data">
-      <TrajectoryLog survey={survey} selectedMdM={selectedMdM} onSelectMd={setSelectedMdM} dlsLimitDegPer30m={dlsLimit} markers={markers} height={460} />
-      <div className="demo-traj-table">
-        <div className="demo-traj-table-head"><strong>Survey stations</strong><span>{survey.length} stations · {mode === "edit" ? "editable — positions are always computed" : "computed by minimum curvature"}</span>{mode !== "edit" && <CommandButton icon="edit" type="button" className="demo-small-button" onClick={() => changeMode("edit")}>Edit these stations</CommandButton>}</div>
+    {/* The station table is the editor, so it docks under the canvas rather than below the fold:
+        change a station and the survey track above redraws against the construction. It opens
+        with the planner and the editor — the modes whose output it is — and stays closed while
+        the published survey is being read, so the section keeps its height. */}
+    <details className="demo-records-drawer" open={mode !== "survey"}>
+      <summary>Survey stations <span>{survey.length} stations · {mode === "edit" ? "editable — positions are always computed" : "computed by minimum curvature"}</span></summary>
+      <div className="demo-file demo-traj-table" tabIndex={0}>
+        {mode !== "edit" && <div className="demo-traj-table-head"><CommandButton icon="edit" type="button" className="demo-small-button" onClick={() => changeMode("edit")}>Edit these stations</CommandButton></div>}
         {rejected && <p className="demo-reject" role="alert">{rejected}</p>}
-        <SurveyTable survey={survey} onChange={mode === "edit" ? editSurvey : undefined} issues={issues} selectedMdM={selectedMdM} onSelectMd={setSelectedMdM} dlsLimitDegPer30m={dlsLimit} maxHeight={420} />
+        <SurveyTable survey={survey} onChange={mode === "edit" ? editSurvey : undefined} issues={issues} selectedMdM={selectedMdM} onSelectMd={setSelectedMdM} dlsLimitDegPer30m={dlsLimit} maxHeight={260} />
       </div>
-    </div>
-
-    <div className="demo-traj-bottom">
-      <Explainer />
-      <RecordCard component={selected} design={sceneDesign} />
-    </div>
+    </details>
+    <details className="demo-traj-explainer"><summary>How every number on this page is computed</summary><Explainer /></details>
   </section>;
 }
 

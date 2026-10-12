@@ -19,7 +19,21 @@ export async function gotoApp(page: Page, url: string): Promise<Response | null>
   const response = await page.goto(url);
   await expect(page.locator("html[data-sw-hydrated='true']"), "the application should hydrate before being driven")
     .toBeAttached({ timeout: SCENE_READY });
+  await paintedFrame(page);
   return response;
+}
+
+/**
+ * Wait until the document has painted a frame.
+ *
+ * Hydration is a DOM fact; a screenshot needs a compositor frame, and after a heavy predecessor
+ * in the same browser the first frame of a new document can lag the DOM by long enough for
+ * Chromium to refuse the capture ("Unable to capture screenshot"). It happened only in the full
+ * file, never in isolation, which is the signature of exactly this. Two animation frames is the
+ * standard way to be past the first paint.
+ */
+async function paintedFrame(page: Page): Promise<void> {
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
 }
 
 /**
@@ -54,4 +68,5 @@ export async function reloadApp(page: Page): Promise<void> {
   await page.reload();
   await expect(page.locator("html[data-sw-hydrated='true']"), "the application should hydrate after a reload before being driven")
     .toBeAttached({ timeout: SCENE_READY });
+  await paintedFrame(page);
 }

@@ -7,7 +7,10 @@ import { gotoApp, selectWellView } from "./support/app";
 
 async function horizontalOverflow(page: Page) {
   return page.evaluate(() => Array.from(document.body.querySelectorAll<HTMLElement>("*"))
-    .filter((element) => !element.closest(".demo-code pre, .demo-install, .sw-traj-table-scroll table, .sw-wd-steps ol"))
+    // Regions that scroll sideways by design are exempt: the well section's tracks are wider than
+    // a phone and the section itself is the scroller, which is the same arrangement as the station
+    // table. The test is about the page, which must never scroll sideways.
+    .filter((element) => !element.closest(".demo-code pre, .demo-install, .sw-traj-table-scroll table, .sw-wd-steps ol, .demo-section"))
     .map((element) => ({ tag: element.tagName, className: String(element.className), right: Math.round(element.getBoundingClientRect().right), left: Math.round(element.getBoundingClientRect().left) }))
     .filter((bounds) => bounds.right > window.innerWidth + 1 || bounds.left < -1));
 }
@@ -101,6 +104,8 @@ test("view-well selection is pronounced and both views explode into individual c
 
 test("trajectory path click probes depth and selects the string at that depth", async ({ page }) => {
   await gotoApp(page, "/trajectory/");
+  // The route opens on the well section; the 3D path is one of its views.
+  await page.getByRole("group", { name: "Trajectory view" }).getByRole("button", { name: "3D", exact: true }).click();
   const scene = page.getByTestId("interactive-well-scene");
   await expect(scene).toHaveAttribute("data-ready", "true", { timeout: SCENE_READY });
   const readout = page.getByTestId("well-scene-readout");
@@ -126,12 +131,15 @@ test("trajectory path click probes depth and selects the string at that depth", 
 
 test("trajectory math is verified, the planner hits a dragged target and station edits recompute", async ({ page }) => {
   await gotoApp(page, "/trajectory/");
+  const views = page.getByRole("group", { name: "Trajectory view" });
+  await views.getByRole("button", { name: "3D", exact: true }).click();
   await waitForScene(page);
   await expect(page.getByTestId("trajectory-verification")).toContainText("422 stations");
   await expect(page.getByTestId("trajectory-summary")).toContainText("3,339.1 m");
   await expect(page.getByTestId("well-scene-dls-legend")).toBeVisible();
 
   await page.getByRole("group", { name: "Trajectory mode" }).getByRole("button", { name: "Plan build & hold" }).click();
+  await views.getByRole("button", { name: "Plan & section", exact: true }).click();
   const holdBefore = await page.getByLabel("Solved build and hold geometry").textContent();
   const handle = page.getByTestId("trajectory-plan-view").getByRole("slider");
   await handle.scrollIntoViewIfNeeded();
@@ -209,7 +217,10 @@ test("showcase pages fit a phone viewport", async ({ page }) => {
     expect(await horizontalOverflow(page), path).toEqual([]);
   }
   await gotoApp(page, "/");
-  await page.screenshot({ path: "output/playwright/showcase-home-mobile.png", fullPage: true });
+  // The application shell is the viewport (100dvh with its own scroll region), so a full-page
+  // capture adds nothing; this captures what a phone shows. `gotoApp` waits for a painted frame,
+  // which is what the capture needs — it was refused when this ran after the file's 3D tests.
+  await page.screenshot({ path: "output/playwright/showcase-home-mobile.png" });
 });
 
 test("view-well inventory searches every record and shares selection with the schematic", async ({ page }) => {
@@ -578,4 +589,27 @@ test("the well section puts construction, log and survey on one depth axis in on
 
   // And the selection reached the record the depth falls in, with no second click anywhere.
   await expect(page.getByTestId("demo-record")).toHaveAttribute("data-component-id", "intermediate-hole");
+});
+
+test("the trajectory route opens on the same spine as View well, with the planner's survey as a track", async ({ page }) => {
+  await gotoApp(page, "/trajectory/");
+  const section = page.getByTestId("well-section");
+  await expect(section).toBeVisible();
+  await expect(section.getByTestId("assembly-schematic")).toBeAttached();
+  await expect(section.getByTestId("trajectory-log")).toBeAttached();
+  // Reading the published survey, the section has the height; the station table is docked under
+  // it and closed. Entering the editor opens the dock, so an edit and its effect share a screen.
+  await expect(page.getByTestId("survey-table")).toBeHidden();
+  const box = (await section.boundingBox())!;
+  expect(box.y + box.height).toBeLessThanOrEqual(1000);
+  await page.getByRole("group", { name: "Trajectory mode" }).getByRole("button", { name: "Edit stations" }).click();
+  await expect(page.getByTestId("survey-table")).toBeVisible();
+
+  // Editing a station redraws the survey track above it; the construction stays put beside it.
+  const before = await section.getByTestId("trajectory-log").locator("polyline").first().getAttribute("points");
+  const inclination = page.getByLabel("Station 15 inclination");
+  await inclination.fill("30");
+  await inclination.press("Enter");
+  await expect.poll(async () => section.getByTestId("trajectory-log").locator("polyline").first().getAttribute("points")).not.toBe(before);
+  await expect(section.getByTestId("assembly-schematic")).toBeAttached();
 });
