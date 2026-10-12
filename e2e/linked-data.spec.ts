@@ -30,6 +30,8 @@ test("table hover, chart brush, and spatial selection link using stable sample I
   await expect(view.locator('tr[data-sample-id="well-a:sample:0010"] [role="gridcell"]').nth(2)).toHaveText(String(expectedValue));
 
   const spatialSample = view.locator('.sw-linked-dataset-spatial-point[data-sample-id="well-a:sample:0012"]');
+  // The document scrolls inside the sheet; a raw pointer click needs the point on screen first.
+  await spatialSample.scrollIntoViewIfNeeded();
   const spatialBounds = await spatialSample.boundingBox();
   if (!spatialBounds) throw new Error("Spatial sample is not laid out.");
   await page.mouse.click(spatialBounds.x + spatialBounds.width / 2, spatialBounds.y + spatialBounds.height / 2);

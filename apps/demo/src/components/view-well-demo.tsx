@@ -2,8 +2,8 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
-import { getWellComponents, metresToFeet, positionAtMeasuredDepth, sectionAtDepth, summarizeTrajectory, validateWellboreTrajectory, wellComponentsToAssembly } from "@ikhmalputra/subsurface-core";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { designWithTrajectory, getWellComponents, metresToFeet, positionAtMeasuredDepth, sectionAtDepth, summarizeTrajectory, validateWellboreTrajectory, wellComponentsToAssembly } from "@ikhmalputra/subsurface-core";
 import { designSurvey } from "../lib/well-data";
 import { createMockLogCurve } from "@ikhmalputra/subsurface-core/sandbox";
 import { createInitialSubsurfaceState } from "@ikhmalputra/subsurface-core/state";
@@ -18,6 +18,10 @@ import { TrajectoryLog, TrajectoryPlanView, TrajectorySectionView } from "@ikhma
 import { WellFile } from "./well-file";
 import { WellSection } from "./well-section";
 import { FloatingPanel, FloatingToolbar } from "./floating";
+import { useTools } from "./tools";
+import { planDraft, tryPlan } from "../lib/trajectory-draft";
+import { studyHighlights } from "../lib/study-draft";
+import type { BuildHoldInput } from "@ikhmalputra/subsurface-core";
 import { WellSeismicSection, useSceneSeismic, useSegy, useWellOnSection } from "./well-seismic";
 import { RecordCard, useWell, wells } from "./wells";
 import { InterpretationControls } from "./interpretation-controls";
@@ -33,10 +37,10 @@ interface VolumeCuts { readonly along: number; readonly offset: number; readonly
 const FULL_VOLUME: VolumeCuts = { along: 100, offset: 100, depth: 100 };
 const cutAt = (start: number, end: number, percent: number) => start + (end - start) * Math.max(percent, 2) / 100;
 
-type Layout = "section" | "split" | "seismic" | "earth" | "schematic" | "scene" | "curved" | "profile" | "trajectory";
+type Layout = "section" | "split" | "seismic" | "earth" | "schematic" | "scene" | "curved" | "profile" | "trajectory" | "well3d";
 
 /** The seven panes this route can show. A preset is a set of them, not an alternative to them. */
-type PaneId = "wellsection" | "curved" | "profile" | "schematic" | "seismic" | "earth" | "survey" | "cutaway" | "plan" | "section";
+type PaneId = "wellsection" | "curved" | "profile" | "schematic" | "seismic" | "earth" | "survey" | "well3d" | "cutaway" | "plan" | "section";
 
 /**
  * Which panes each preset shows.
@@ -60,7 +64,10 @@ const panesFor: Readonly<Record<Layout, readonly PaneId[]>> = {
   // The directional picture of the well that is already active, in the workspace that owns it.
   // The surveyed path was rendered by five different component sets across four routes; a reader
   // asking where this well goes had to leave the well to find out.
-  trajectory: ["plan", "section"],
+  trajectory: ["plan", "section", "survey"],
+  // The well alone in 3D: path coloured by dogleg severity, formations, the planner's target, a
+  // probe that pins depth. What the trajectory workspace's 3D view was.
+  well3d: ["well3d"],
 };
 
 const layouts: readonly { value: Layout; label: string }[] = [
@@ -73,6 +80,7 @@ const layouts: readonly { value: Layout; label: string }[] = [
   { value: "curved", label: "Curved construction" },
   { value: "profile", label: "Survey & interval data" },
   { value: "trajectory", label: "Trajectory plan & section" },
+  { value: "well3d", label: "3D well · path, DLS & formations" },
 ];
 
 export function ViewWellDemo() {
@@ -137,7 +145,15 @@ export function ViewWellDemo() {
   const [layoutChoice, setLayout] = useState<Layout>("section");
   const [showFormations, setShowFormations] = useState(false);
   const [sectionMode, setSectionMode] = useState<"construction" | "depth" | "trajectory">("trajectory");
-  const { design, components, operations, logUrl, seismic } = useWell(wellId);
+  const { design: sourceDesign, components, operations, logUrl, seismic } = useWell(wellId);
+  // A trajectory draft — the planner's or the station editor's — is drawn in place of the source
+  // survey until it is applied or discarded, with the construction unchanged.
+  const { trajectoryDrafts, updateTrajectoryDraft, studyDrafts } = useWorkspace();
+  const draft = trajectoryDrafts[sourceDesign.id];
+  const design = useMemo(() => draft ? designWithTrajectory(sourceDesign, draft.stations, draft.mode === "plan" ? { name: "Build & hold plan", note: "Planned trajectory, shown as a preview; not applied." } : { name: "Edited stations", note: "Edited stations, shown as a preview; not applied." }) : sourceDesign, [sourceDesign, draft]);
+  const plan = useMemo(() => draft?.mode === "plan" ? tryPlan(draft.plan).plan : null, [draft]);
+  const planMarkers = useMemo(() => plan && draft ? [{ mdM: draft.plan.kickoffMdM, label: "KOP" }, { mdM: plan.endOfBuildMdM, label: "EOB" }, { mdM: plan.targetMdM, label: "Target" }].filter((marker) => marker.mdM >= 0) : [], [plan, draft]);
+  const moveTarget = (target: BuildHoldInput["target"]) => { if (!draft) return; const next = planDraft({ ...draft.plan, target }, draft); if (next) updateTrajectoryDraft(sourceDesign.id, next); };
   const layout: Layout = (layoutChoice === "seismic" || layoutChoice === "earth") && !seismic ? "schematic" : layoutChoice;
   const link = useDepthLink(true, store);
   const panes = panesFor[layout];
@@ -192,16 +208,37 @@ export function ViewWellDemo() {
   const [exploded, setExploded] = useState(false);
   const [inspectorVisible, setInspectorVisible] = useState(true);
   const [fileOpen, setFileOpen] = useState(false);
+  const [fileTab, setFileTab] = useState<{ readonly tab?: string; readonly nonce: number } | null>(null);
+  // A tool that names the inspector or the records opens it here, on the tab it asked for.
+  const tools = useTools();
+  // The study's two intervals are bands across every track while the study tool is open.
+  const studyDraft = studyDrafts[sourceDesign.id];
+  const studyBands = useMemo(() => tools.open.has("study") && studyDraft ? studyHighlights(studyDraft) : undefined, [tools.open, studyDraft]);
+  const inspectorRequest = tools.requests.inspector, fileRequest = tools.requests["well-file"];
+  const sectionRequest = tools.requests.section;
+  useEffect(() => {
+    if (!sectionRequest?.tab) return;
+    const next = layouts.find((item) => item.value === sectionRequest.tab);
+    if (next) setLayout(next.value);
+  }, [sectionRequest]);
+  useEffect(() => {
+    if (!inspectorRequest) return;
+    setInspectorVisible(true);
+    const tab = inspectorRequest.tab;
+    if (tab === "tools" || tab === "properties" || tab === "components" || tab === "basis") setInspectorTab(tab);
+  }, [inspectorRequest]);
+  useEffect(() => {
+    if (!fileRequest) return;
+    setFileOpen(true);
+    setFileTab({ tab: fileRequest.tab, nonce: fileRequest.nonce });
+  }, [fileRequest]);
   const [sceneOptionsOpen, setSceneOptionsOpen] = useState(false);
   const [inspectorTab, setInspectorTab] = useState<"properties" | "components" | "basis" | "tools">("tools");
-  const [depthInput, setDepthInput] = useState("");
-  const [commandError, setCommandError] = useState<string | null>(null);
   const lastSurvey = design.survey?.at(-1);
 
   function clearInspection() {
     store.selectComponent(null, "view-well");
     link.pinCursor(null);
-    setCommandError(null);
   }
 
   function focusComponent() {
@@ -234,11 +271,12 @@ export function ViewWellDemo() {
     }
   }}>
     <h1 className="sw-sr-only">View a well in 2.5D and 3D</h1>
+    {draft && <p className="demo-preview-banner" role="status" data-testid="trajectory-preview">{draft.mode === "plan" ? "Trajectory preview · build & hold plan" : "Trajectory preview · edited stations"} — apply or discard it from the planner or the station editor.</p>}
     {linkError && <p role="alert" className="demo-fullbleed-alert">The shared view link could not be applied: {linkError}</p>}
     {/* The sheet is the window. The view tools float over it at the top left under the workspace
         toolbar; the inspector and the well file are panels from the tray; the depth command line
         floats at the foot. Everything can be dragged where it is useful. */}
-    <FloatingToolbar id="view-well-tools" label="view tools" defaultStyle={{ left: "calc(var(--dock-left, 0px) + 8px)", top: "calc(var(--dock-top, 0px) + 50px)" }} className="demo-toolbar">
+    <FloatingToolbar id="view-well-tools" label="view tools" defaultStyle={{ left: "calc(var(--dock-left, 0px) + 8px)", top: "calc(var(--dock-top, 0px) + var(--band-row, 50px))" }} className="demo-toolbar">
       <div className="sw-asm-canvas-modes" role="group" aria-label="Canvas view">
         <CommandButton kind="selection" aria-pressed={layout === "section"} onClick={() => setLayout("section")}>Section</CommandButton>
         <CommandButton kind="selection" aria-pressed={layout === "curved"} onClick={() => setLayout("curved")}>Curved</CommandButton>
@@ -272,7 +310,7 @@ export function ViewWellDemo() {
           copy of the schematic in the document for anything that queries the page as a whole. */}
       <Pane id="wellsection" deferUntilShown keep={false} className="demo-fill demo-section-pane">
         <WellSection assembly={assembly} components={components} survey={survey} stations={design.survey} formations={design.formations} totalDepthM={design.totalDepthM}
-          operations={operations} logUrl={logUrl} selectedId={highlighted ?? null} onSelect={(id) => setSelectedId(id)} onSelectMd={selectAtMd} link={link} showFormations={showFormations} />
+          operations={operations} logUrl={logUrl} selectedId={highlighted ?? null} onSelect={(id) => setSelectedId(id)} onSelectMd={selectAtMd} link={link} showFormations={showFormations} markers={planMarkers} dlsLimitDegPer30m={draft?.dlsLimitDegPer30m} highlights={studyBands} />
       </Pane>
       <Pane id="curved" deferUntilShown className="demo-fill demo-section-view"><CurvedAssemblySchematic assembly={assembly} survey={design.survey} formations={showFormations ? design.formations : undefined} assetBaseUrl="/well-components" selectedId={highlighted} onSelect={setSelectedId} /></Pane>
       <Pane id="profile" deferUntilShown className="demo-fill demo-section-view"><InteractiveViewport name="Curved well section"><CurvedSchematic key={design.id} design={design} components={components} selectedId={picked?.id ?? ""} onSelect={setSelectedId} mode={sectionMode} onModeChange={setSectionMode} layersVisible /></InteractiveViewport></Pane>
@@ -280,13 +318,16 @@ export function ViewWellDemo() {
       <Pane id="seismic" className="demo-fill demo-seismic-view" deferUntilShown>{seismic && (segy?.file ? <WellSeismicSection file={segy.file} meta={seismic.meta} wellPath={wellPath} components={components} formations={design.formations ?? []} survey={design.survey ?? []} selected={picked}
         onSelectMd={selectAtMd} cursorMdM={link.cursorMdM} onCursorMdChange={link.linked ? link.setCursorMdM : undefined} mdWindow={link.linked ? link.window : undefined} onMdWindowChange={link.linked ? link.setWindow : undefined} title="Seismic along the well · FORGE 3D PSDM" />
         : <p className="sw-scene-loading" role="status">{segy?.error ? `SEG-Y could not be loaded (${segy.error}).` : "Loading SEG-Y…"}</p>)}</Pane>
+      <Pane id="well3d" className="demo-fill demo-earth-view" deferUntilShown>
+        <WellScene design={design} selectedId={picked?.id ?? ""} onSelect={setSelectedId} layersVisible={showFormations} colorBy="dls" dlsLimitDegPer30m={draft?.dlsLimitDegPer30m ?? 3} target={plan && draft ? draft.plan.target : null} probeMdM={link.pinnedMdM} onProbe={selectAtMd}
+          cursorMdM={link.linked ? link.cursorMdM : null} onCursorMdChange={link.linked ? link.setCursorMdM : undefined} mdWindow={link.linked ? link.window : null} /></Pane>
       <Pane id="earth" className="demo-fill demo-earth-view" deferUntilShown>{earth.error && <p className="sw-scene-loading" role="status">Seismic could not be loaded ({earth.error}); the well is shown without it.</p>}
         <WellScene design={design} selectedId={picked?.id ?? ""} onSelect={setSelectedId} volume={earth.volume} volumeView={volumeView} colorBy="dls" dlsLimitDegPer30m={3} probeMdM={link.pinnedMdM} onProbe={selectAtMd}
           slicePlane={interpretation?.slicePlane ?? null} onSlicePlaneChange={(plane) => store.setSlicePlane(plane, "plane-gizmo")} picking={picking} logCurve={porosity} logStyle={interpretation?.logStyle ?? null}
           cameraView={cameraIsAutomatic ? null : camera} onCameraViewChange={(view) => store.setViewState(view, "well-scene")} onSpatialPick={(xyz) => store.triggerSpatialPick(xyz, "well-scene")}
           cursorMdM={link.linked ? link.cursorMdM : null} onCursorMdChange={link.linked ? link.setCursorMdM : undefined} mdWindow={link.linked ? link.window : null} /></Pane>
-      <Pane id="plan" deferUntilShown className="demo-fill demo-survey-view"><TrajectoryPlanView survey={survey} selectedMdM={link.pinnedMdM} onSelectMd={selectAtMd} markers={shoeMarkers} height={620} /></Pane>
-      <Pane id="section" deferUntilShown className="demo-fill demo-survey-view"><TrajectorySectionView survey={survey} selectedMdM={link.pinnedMdM} onSelectMd={selectAtMd} markers={shoeMarkers} formations={design.formations} verticalSectionAzimuthDeg={sectionAzimuthDeg} height={620} /></Pane>
+      <Pane id="plan" deferUntilShown className="demo-fill demo-survey-view"><TrajectoryPlanView survey={survey} selectedMdM={link.pinnedMdM} onSelectMd={selectAtMd} markers={[...shoeMarkers, ...planMarkers]} height={620} dlsLimitDegPer30m={draft?.dlsLimitDegPer30m} target={plan && draft ? draft.plan.target : null} onTargetChange={plan ? moveTarget : undefined} onTargetCommit={plan ? () => undefined : undefined} /></Pane>
+      <Pane id="section" deferUntilShown className="demo-fill demo-survey-view"><TrajectorySectionView survey={survey} selectedMdM={link.pinnedMdM} onSelectMd={selectAtMd} markers={[...shoeMarkers, ...planMarkers]} formations={design.formations} dlsLimitDegPer30m={draft?.dlsLimitDegPer30m} target={plan && draft ? draft.plan.target : null} onTargetChange={plan ? moveTarget : undefined} onTargetCommit={plan ? () => undefined : undefined} verticalSectionAzimuthDeg={sectionAzimuthDeg} height={620} /></Pane>
       <Pane id="survey" deferUntilShown className="demo-fill demo-survey-view"><TrajectoryLog survey={survey} selectedMdM={link.pinnedMdM} onSelectMd={selectAtMd} height={900}
         cursorMdM={link.linked ? link.cursorMdM : null} onCursorMdChange={link.linked ? link.setCursorMdM : undefined} mdWindow={link.linked ? link.window : null}
         markers={shoeMarkers} /></Pane>
@@ -354,26 +395,8 @@ export function ViewWellDemo() {
         </section>
       </aside>
     </FloatingPanel>
-    <FloatingToolbar id="depth-line" label="depth command line" defaultStyle={{ left: "calc(var(--dock-left, 0px) + 12px)", bottom: "calc(var(--dock-bottom, 0px) + 40px)" }} className="demo-drawing-status">
-      <form onSubmit={(event) => {
-        event.preventDefault();
-        const mdM = Number(depthInput);
-        if (!depthInput.trim() || !Number.isFinite(mdM) || mdM < 0 || mdM > design.totalDepthM) {
-          setCommandError(`Enter an MD between 0 and ${design.totalDepthM.toLocaleString("en")} m.`);
-          return;
-        }
-        setCommandError(null);
-        selectAtMd(mdM);
-      }}>
-        <label>Go to MD <input type="number" step="any" value={depthInput} onChange={(event) => setDepthInput(event.target.value)} placeholder="metres" /></label>
-        <CommandButton icon="locate" type="submit" className="demo-tool-button">Locate depth</CommandButton>
-      </form>
-      <output aria-live="polite">{link.pinnedMdM === null ? "No pinned depth" : `Pinned ${link.pinnedMdM.toLocaleString("en", { maximumFractionDigits: 1 })} m MD`}</output>
-      <span>Widths exaggerated / Escape clears selection</span>
-      {commandError && <p className="demo-command-error" role="alert">{commandError}</p>}
-    </FloatingToolbar>
     <FloatingPanel id="well-file" title="Well file" detail={operations ? `${operations.days.length} daily reports / ${operations.runs.length} service runs / logs & survey` : "No operational records attached"} open={fileOpen} onOpenChange={setFileOpen} defaultDock="bottom" defaultStyle={{ left: "calc(var(--dock-left, 0px) + 12px)", bottom: "calc(var(--dock-bottom, 0px) + 84px)", width: "min(1120px, calc(100vw - 24px))" }} className="demo-records-drawer">
-      <WellFile key={design.id} operations={operations} components={components} selected={picked} onSelectComponent={setSelectedId} logUrl={logUrl} survey={design.survey} formations={design.formations} seismic={seismic} link={link} />
+      <WellFile key={design.id} operations={operations} components={components} selected={picked} onSelectComponent={setSelectedId} logUrl={logUrl} survey={design.survey} formations={design.formations} seismic={seismic} link={link} openTab={fileTab} />
     </FloatingPanel>
   </section>;
 }

@@ -1315,10 +1315,16 @@ body { background: var(--swc-bg-2); }
 .demo-page:has(> .demo-fullbleed) { padding: 0; overflow: hidden; }
 /* A 44px band at the top of the sheet is where the toolbars sit by default, so the drawing's own
    top edge — the section's zoom strip and track heads — is not under them until they are moved. */
-.demo-fullbleed { position: relative; height: 100%; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr); gap: 0; padding-top: 88px; background: var(--sw-paper); }
+.demo-fullbleed { position: relative; height: 100%; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr); gap: 0; padding-top: var(--band, 88px); background: var(--sw-paper); }
+/* With the ribbon open the workspace bar rides its title row, so the band is one row of view tools. */
+.demo-frame-body { display: contents; }
+[data-ribbon="open"] { --band: 44px; --band-row: 6px; }
+[data-ribbon="closed"] { --band: 88px; --band-row: 50px; }
 .demo-fullbleed .demo-view-grid { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); height: 100% !important; min-height: 0; gap: 0; }
 /* The paired presets keep their two columns; the inspector's column is gone, it is a panel. */
-.demo-fullbleed :is(.demo-view-split, .demo-view-seismic, .demo-view-trajectory) { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 2px; }
+.demo-fullbleed :is(.demo-view-split, .demo-view-seismic) { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 2px; }
+.demo-fullbleed .demo-view-trajectory { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) minmax(300px, .7fr); gap: 2px; }
+.demo-fullbleed .demo-view-trajectory > .demo-survey-view { overflow: auto; }
 .demo-fullbleed .demo-view-earth { grid-template-columns: minmax(0, 1.7fr) minmax(280px, .75fr); gap: 2px; }
 .demo-fullbleed .demo-fill { height: 100% !important; min-height: 0; border: 0; border-radius: 0; }
 .demo-fullbleed .demo-section-pane { padding: 0; }
@@ -1540,6 +1546,8 @@ body { background: var(--swc-bg-2); }
 /* ---- the one page: documents fill the sheet; the empty sheet says so ---- */
 .demo-tool-panel .demo-tool-page:has(> .demo-fullbleed) { height: 100%; min-height: 0; padding: 0; overflow: hidden; }
 .demo-document .demo-float-body { background: var(--sw-paper); }
+/* A document other than the section starts under the workspace toolbar's row, not beneath it. */
+.demo-document:not(.demo-document-section) .demo-tool-page { padding-top: 0; }
 .demo-document-section .demo-float-body { overflow: hidden; }
 .demo-sheet-empty { display: grid; gap: var(--sw-space-2); align-content: center; justify-items: center; height: 100%; min-height: 60vh; padding: 24px; text-align: center; color: var(--sw-muted); }
 .demo-sheet-empty h1 { font-size: 15px; font-weight: 600; color: var(--sw-ink); }
@@ -1562,3 +1570,80 @@ body { background: var(--swc-bg-2); }
 @media (max-width: 760px) {
   .sw-tip-pop, .sw-tip-pop.is-wide { width: auto !important; max-width: calc(100vw - 24px) !important; left: 8px !important; right: auto !important; transform: none !important; }
 }
+
+/* ---- survey tools over the section ---- */
+.demo-preview-banner { position: absolute; z-index: 4; left: 50%; top: 94px; transform: translateX(-50%); margin: 0; padding: 4px 12px; border-radius: 3px; background: var(--sw-warning-surface); color: var(--sw-warning); font: 600 11px "IBM Plex Mono", monospace; letter-spacing: .04em; white-space: nowrap; pointer-events: none; }
+.demo-preview-actions { display: grid; gap: var(--sw-space-2); padding: 8px 10px; border: 1px solid var(--sw-line); border-left: 3px solid var(--sw-warning); border-radius: 3px; background: var(--sw-warning-surface); }
+.demo-preview-actions p { margin: 0; font-size: 12px; line-height: 1.5; color: var(--sw-ink); }
+.demo-preview-actions button { justify-self: start; }
+.demo-station-editor { gap: var(--sw-space-2); }
+.demo-station-head { grid-template-columns: minmax(0, 1fr) auto 160px; align-items: end; }
+.demo-survey-tool .demo-course, .demo-survey-tool .sw-traj-summary { border-radius: 3px; }
+.demo-survey-tool .demo-traj-explainer { font-size: 12px; }
+.demo-survey-tool .demo-traj-explainer > summary { cursor: pointer; color: var(--sw-muted); padding: 4px 0; }
+
+/* ---- the workspace bar on the ribbon's title row ---- */
+.demo-workspace-bar { display: flex; align-items: center; gap: 6px; flex: 1 1 auto; min-width: 0; margin-left: 6px; }
+.demo-workspace-bar .demo-picker { flex: 0 1 300px; }
+.demo-workspace-bar .demo-picker select { width: 100%; max-width: 300px; min-height: 24px; font-size: 12px; }
+.demo-workspace-bar .demo-nav-toggle[data-ui-kind="command"][type], .demo-workspace-bar .demo-tools-toggle[data-ui-kind="command"][type] { min-height: 32px; padding: 0 8px; font-size: 11.5px; }
+.demo-workspace-bar .demo-drawing-status { display: flex; align-items: center; gap: 6px; margin: 0 0 0 4px; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--swc-muted); font-size: 11px; flex-wrap: nowrap; min-width: 0; }
+.demo-workspace-bar .demo-drawing-status label { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; color: var(--swc-muted); font: 600 10px "IBM Plex Mono", monospace; letter-spacing: .1em; text-transform: uppercase; }
+.demo-workspace-bar .demo-drawing-status input { width: 88px; min-height: 24px; padding: 0 6px; border: 1px solid var(--swc-line); border-radius: 3px; background: var(--swc-bg-2); color: var(--swc-ink); font: 12px "IBM Plex Mono", monospace; }
+.demo-workspace-bar .demo-drawing-status button[data-ui-kind="command"][type] { min-height: 32px; padding: 0 8px; border-color: var(--swc-line); background: transparent; color: var(--swc-ink); font-size: 11.5px; }
+.demo-workspace-bar .demo-drawing-status output { white-space: nowrap; color: var(--swc-ink); font: 11px "IBM Plex Mono", monospace; }
+.demo-workspace-bar .demo-drawing-status .demo-command-error { margin: 0; white-space: nowrap; color: var(--sw-top-text); font-size: 11px; }
+.demo-ribbon-float > .demo-float-head { gap: 8px; }
+.demo-ribbon-float > .demo-float-head .demo-float-sub { flex: 0 1 220px; }
+@media (max-width: 760px) {
+  .demo-ribbon-float > .demo-float-head { flex-wrap: wrap; row-gap: 4px; padding-bottom: 4px; }
+  .demo-workspace-bar { flex-basis: 100%; flex-wrap: wrap; margin-left: 0; }
+  .demo-workspace-bar .demo-drawing-status { flex-wrap: wrap; margin-left: 0; }
+  .demo-workspace-bar .demo-picker { flex-basis: 100%; }
+}
+@media (max-width: 760px) {
+  /* On a phone the bar is one row of its own: the two toggles as icons, the well, and no depth
+     command — Go to MD is on the section's ruler there. It never rides the ribbon's title row. */
+  .demo-float-toolbar.demo-workspace-toolbar { flex-wrap: nowrap; max-width: calc(100vw - 16px); }
+  .demo-workspace-toolbar .demo-drawing-status { display: none; }
+  .demo-workspace-toolbar .demo-nav-toggle, .demo-workspace-toolbar .demo-tools-toggle[data-ui-kind="command"][type] { font-size: 0; gap: 0; padding: 0 8px; white-space: nowrap; }
+  .demo-workspace-toolbar .demo-picker { flex: 1 1 auto; min-width: 0; }
+  .demo-workspace-toolbar .demo-picker select { width: 100%; max-width: none; }
+}
+/* The bar's labels stay on one line; what gives way is the read-out and the ribbon's tally. */
+.demo-workspace-toolbar .demo-nav-toggle, .demo-workspace-toolbar .demo-tools-toggle[data-ui-kind="command"][type], .demo-workspace-bar .demo-drawing-status button[data-ui-kind="command"][type] { white-space: nowrap; }
+.demo-workspace-bar .demo-drawing-status output { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.demo-ribbon-float > .demo-float-head .demo-float-sub { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.demo-workspace-bar .demo-picker { flex: 0 1 260px; }
+
+/* ---- the drilling study as tools: steps beside the section, evidence under it ---- */
+.demo-study-tool { display: grid; align-content: start; gap: var(--sw-space-3); padding: 0; border: 0; background: transparent; overflow: visible; }
+.demo-study-head { display: grid; gap: var(--sw-space-2); }
+.demo-study-head h3 { margin: 0; font-size: 14px; }
+.demo-study-head p, .demo-study-head small { margin: 0; font-size: 12px; color: var(--sw-muted); line-height: 1.4; }
+.demo-study-head .demo-edit-actions { display: flex; flex-wrap: wrap; gap: var(--sw-space-2); }
+.demo-study-notice { margin: 0; padding: 6px 8px; border-left: 3px solid var(--sw-accent); background: color-mix(in srgb, var(--sw-accent) 8%, transparent); color: var(--sw-ink); font-size: 12px; line-height: 1.4; }
+.demo-study-tool .demo-study-navigator { border: 0; padding: 0; background: transparent; gap: 2px; }
+.demo-study-tool .demo-study-panel h3 { margin: 0; font-size: 13.5px; }
+.demo-study-tool .demo-study-panel h4 { margin: 0; font-size: 12.5px; }
+.demo-study-tool .demo-study-panel ul { margin: 0; padding-left: 18px; font-size: 12px; }
+.demo-study-tool textarea { min-height: 72px; }
+.demo-study-footnote { margin: 0; font-size: 11px; color: var(--sw-muted); }
+.demo-evidence-tool { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sw-space-3); align-items: start; height: 100%; min-height: 0; padding: 0; border: 0; background: transparent; overflow: hidden; }
+.demo-evidence-tool .demo-study-evidence-log { max-height: calc(100% - 4px); }
+.demo-evidence-tool .demo-study-context-table { max-height: min(320px, calc(100dvh - 520px)); }
+.demo-evidence-tool > .demo-track-empty { grid-column: 1 / -1; }
+.demo-float[data-float="tool-evidence"] .demo-tool-page { height: 100%; min-height: 0; }
+@media (max-width: 760px) {
+  .demo-evidence-tool { grid-template-columns: minmax(0, 1fr); height: auto; max-height: none; overflow: visible; }
+  .demo-evidence-tool .demo-study-context-table { max-height: 320px; }
+}
+/* The ribbon-head bar at 1440px: labels never shrink, the well picker gives way, the pinned-depth
+   read-out is spoken but not shown here (the status bar shows the depth). */
+.demo-workspace-bar .demo-nav-toggle[data-ui-kind="command"][type] { white-space: nowrap; flex: 0 0 auto; }
+.demo-workspace-bar .demo-tools-toggle[data-ui-kind="command"][type] { flex: 0 0 auto; }
+.demo-workspace-bar .demo-picker { flex: 1 1 160px; max-width: 300px; }
+.demo-workspace-bar .demo-picker select { min-width: 0; }
+.demo-workspace-bar .demo-drawing-status { flex: 0 0 auto; }
+.demo-workspace-bar .demo-drawing-status label, .demo-workspace-bar .demo-drawing-status button[data-ui-kind="command"][type] { flex: 0 0 auto; }
+.demo-workspace-bar .demo-drawing-status output { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

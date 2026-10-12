@@ -18,7 +18,7 @@ async function auditExpandedCommands(page: Page) {
   expect(defects).toEqual([]);
 }
 
-test("full well editor tabs support themes, keyboard navigation and phone containment", async ({ page }) => {
+test("full well editor tabs support themes and keyboard navigation", async ({ page }) => {
   test.setTimeout(budget(180_000));
   await gotoApp(page, "/edit-well/?well=forge");
   await openAppearance(page);
@@ -52,11 +52,7 @@ test("full well editor tabs support themes, keyboard navigation and phone contai
       expect(result.violations.map((issue) => ({ tab, theme, id: issue.id, nodes: issue.nodes.map((node) => node.target) }))).toEqual([]);
     }
   }
-  await page.setViewportSize({ width: 390, height: 844 });
-  for (const tab of ["Construction", "Well properties", "Trajectory", "Component records", "Formations", "Records & data"]) {
-    await tabs.getByRole("tab", { name: tab, exact: true }).click();
-    expect(await page.evaluate(() => document.documentElement.scrollWidth), tab).toBeLessThanOrEqual(391);
-  }
+  // Desktop-only product (Ikhmal, 2026-10-13): the phone containment pass is out of scope.
 });
 
 for (const route of routes) {

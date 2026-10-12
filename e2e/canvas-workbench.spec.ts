@@ -175,8 +175,9 @@ test("the application frame survives navigation between routes", async ({ page }
   // element from an identical replacement: a re-rendered node keeps the attribute, a remounted one
   // cannot, because React created it after the stamp was written.
   await gotoApp(page, "/view-well/?well=s-profile");
-  // The frame's persistent parts: the workspace toolbar floating over the sheet and the status bar.
-  const sidebar = page.locator('[data-float="workspace"]');
+  // The frame's persistent parts: the workspace bar (on the ribbon's title row while the ribbon is
+  // open, floating over the sheet otherwise) and the status bar.
+  const sidebar = page.locator(".demo-workspace-toolbar").first();
   const status = page.getByTestId("workbench-status");
   await expect(sidebar).toBeVisible();
   await sidebar.evaluate((element) => element.setAttribute("data-mount-check", "same-frame"));

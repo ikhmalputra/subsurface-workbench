@@ -105,8 +105,8 @@ test("view-well selection is pronounced and both views explode into individual c
 
 test("trajectory path click probes depth and selects the string at that depth", async ({ page }) => {
   await gotoApp(page, "/trajectory/");
-  // The route opens on the well section; the 3D path is one of its views.
-  await page.getByRole("group", { name: "Trajectory view" }).getByRole("button", { name: "3D", exact: true }).click();
+  // The survey opens on the well section; the 3D well is one of the section's presets.
+  await selectWellView(page, "well3d", ["well3d"]);
   const scene = page.getByTestId("interactive-well-scene");
   await expect(scene).toHaveAttribute("data-ready", "true", { timeout: SCENE_READY });
   const readout = page.getByTestId("well-scene-readout");
@@ -131,16 +131,18 @@ test("trajectory path click probes depth and selects the string at that depth", 
 });
 
 test("trajectory math is verified, the planner hits a dragged target and station edits recompute", async ({ page }) => {
+  // The survey is the section with its summary and station editor beside it; the planner is a
+  // tool over the same section, and the plan view is one of the section's presets.
   await gotoApp(page, "/trajectory/");
-  const views = page.getByRole("group", { name: "Trajectory view" });
-  await views.getByRole("button", { name: "3D", exact: true }).click();
-  await waitForScene(page);
   await expect(page.getByTestId("trajectory-verification")).toContainText("422 stations");
   await expect(page.getByTestId("trajectory-summary")).toContainText("3,339.1 m");
+  await selectWellView(page, "well3d", ["well3d"]);
+  await waitForScene(page);
   await expect(page.getByTestId("well-scene-dls-legend")).toBeVisible();
 
-  await page.getByRole("group", { name: "Trajectory mode" }).getByRole("button", { name: "Plan build & hold" }).click();
-  await views.getByRole("button", { name: "Plan & section", exact: true }).click();
+  await page.getByRole("button", { name: "Trajectory planner", exact: true }).click();
+  await expect(page.getByTestId("trajectory-preview")).toContainText("build & hold plan");
+  await selectWellView(page, "trajectory", ["plan", "section"]);
   const holdBefore = await page.getByLabel("Solved build and hold geometry").textContent();
   const handle = page.getByTestId("trajectory-plan-view").getByRole("slider");
   await handle.scrollIntoViewIfNeeded();
@@ -158,13 +160,15 @@ test("trajectory math is verified, the planner hits a dragged target and station
   expect(Math.abs(Number((await lastRow.locator("td").nth(3).textContent())!.replace(/,/g, "")) - targetTvd)).toBeLessThan(0.05);
   expect(Math.abs(Number((await lastRow.locator("td").nth(5).textContent())!.replace(/,/g, "")) - targetEast)).toBeLessThan(0.05);
 
-  await page.getByRole("group", { name: "Trajectory mode" }).getByRole("button", { name: "Edit stations" }).click();
+  // Editing a station in the station editor takes over the preview from the plan.
+  await page.getByRole("button", { name: "Edit these stations", exact: true }).click();
   const tvdCell = page.getByTestId("survey-table").locator("tbody tr").nth(20).locator("td").nth(3);
   const tvdBefore = await tvdCell.textContent();
   const inclination = page.getByLabel("Station 15 inclination");
   await inclination.fill("30");
   await inclination.press("Enter");
   await expect(tvdCell).not.toHaveText(tvdBefore!);
+  await expect(page.getByTestId("trajectory-preview")).toContainText("edited stations");
   await expect(page.getByLabel("Survey issues")).toContainText("exceeds the 3°/30 m limit");
   const md = page.getByLabel("Station 16 measured depth");
   await md.fill("1");
@@ -598,16 +602,15 @@ test("the trajectory route opens on the same spine as View well, with the planne
   await expect(section).toBeVisible();
   await expect(section.getByTestId("assembly-schematic")).toBeAttached();
   await expect(section.getByTestId("trajectory-log")).toBeAttached();
-  // Reading the published survey, the section has the height; the station table is docked under
-  // it and closed. Entering the editor opens the dock, so an edit and its effect share a screen.
-  await expect(page.getByTestId("survey-table")).toBeHidden();
+  // The survey opens with the station editor docked under the section, so an edit and its effect
+  // share a screen.
+  await expect(page.getByTestId("survey-table")).toBeVisible();
   const box = (await section.boundingBox())!;
   expect(box.y + box.height).toBeLessThanOrEqual(1000);
-  await page.getByRole("group", { name: "Trajectory mode" }).getByRole("button", { name: "Edit stations" }).click();
-  await expect(page.getByTestId("survey-table")).toBeVisible();
 
   // Editing a station redraws the survey track above it; the construction stays put beside it.
   const before = await section.getByTestId("trajectory-log").locator("polyline").first().getAttribute("points");
+  await page.getByRole("button", { name: "Edit these stations", exact: true }).click();
   const inclination = page.getByLabel("Station 15 inclination");
   await inclination.fill("30");
   await inclination.press("Enter");

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { gotoApp, openAppearance } from "./support/app";
+import { gotoApp, openAppearance, selectWellView } from "./support/app";
 
 const showcaseViews = [
   { route: "/correlation/", testId: "multiwell-correlation", svg: ".sw-correlation-svg" },
@@ -68,8 +68,8 @@ test("WebGPU canvas exposes keyboard camera controls and announces shared zoom s
 
 test("trajectory charts expose keyboard-readable station tables", async ({ page }) => {
   await gotoApp(page, "/trajectory/");
-  // The route opens on the well section; the plan, section and survey-log charts are its second view.
-  await page.getByRole("group", { name: "Trajectory view" }).getByRole("button", { name: "Plan & section", exact: true }).click();
+  // The survey opens on the well section; the plan, section and survey-log charts are its "Trajectory plan & section" preset.
+  await selectWellView(page, "trajectory", ["plan", "section", "survey"]);
   for (const [testId, label, columnCount] of [
     ["trajectory-plan-view", "trajectory plan stations", 5],
     ["trajectory-section-view", "vertical section stations", 4],
@@ -97,7 +97,7 @@ test("trajectory charts expose keyboard-readable station tables", async ({ page 
 
 test("well components can be selected and inspected without a pointer", async ({ page }) => {
   await gotoApp(page, "/trajectory/");
-  await page.getByRole("group", { name: "Trajectory view" }).getByRole("button", { name: "3D", exact: true }).click();
+  await selectWellView(page, "well3d", ["well3d"]);
   const scene = page.getByTestId("interactive-well-scene");
   await expect(scene).toHaveAttribute("data-ready", "true");
   const picker = scene.locator(".sw-scene-component-picker");

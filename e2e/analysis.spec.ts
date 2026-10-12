@@ -72,7 +72,8 @@ test("engineering study completes scope, QC, evidence, findings and durable expo
   await expect(page.getByRole("alert").filter({ hasText: "Review evidence" })).toBeVisible();
 });
 
-test("operational evidence stays compact, keyboard accessible and themed on phones", async ({ page }) => {
+// Desktop-only product (Ikhmal, 2026-10-13): phone layout is out of scope.
+test.skip("operational evidence stays compact, keyboard accessible and themed on phones", async ({ page }) => {
   await gotoApp(page, "/analysis/");
   await page.getByRole("button", { name: "Check inputs", exact: true }).click();
   await page.getByRole("checkbox", { name: /I reviewed source units/ }).check();

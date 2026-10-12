@@ -199,10 +199,12 @@ export interface FloatingPanelProps {
   readonly dockSize?: number;
   /** No title bar: the panel is the ground others sit on, and another document puts it away. */
   readonly headless?: boolean;
+  /** Controls the host puts on the title bar, after the title — the ribbon carries the workspace bar. */
+  readonly headExtra?: ReactNode;
 }
 
 /** A panel: a tab in the tray when closed; a window over the sheet, or a dock beside it, when open. */
-export function FloatingPanel({ id, title, detail, open, onOpenChange, defaultStyle, defaultDock = "float", className, children, tray = true, scrollable = false, dockSize, headless = false }: FloatingPanelProps) {
+export function FloatingPanel({ id, title, detail, open, onOpenChange, defaultStyle, defaultDock = "float", className, children, tray = true, scrollable = false, dockSize, headless = false, headExtra }: FloatingPanelProps) {
   const host = useContext(FloatContext);
   const ref = useRef<HTMLElement>(null);
   const { dock, setDock, style: docked } = useDock(id, open, defaultDock, dockSize);
@@ -232,6 +234,7 @@ export function FloatingPanel({ id, title, detail, open, onOpenChange, defaultSt
     {!headless && <div className="demo-float-head" {...(docked ? {} : pointer)}>
       {!docked && <span className="demo-float-grip" tabIndex={0} role="button" aria-label={`Move the ${title.toLowerCase()} panel`} onKeyDown={onKeyDown} />}
       <h2 className="demo-float-title">{title}</h2>{detail && <span className="demo-float-sub">{detail}</span>}
+      {headExtra}
       <DockControl title={title} dock={dock} onChange={setDock} />
       <CommandButton icon="close" className="demo-float-close" aria-label={`Dismiss ${title.toLowerCase()} panel`} onClick={() => onOpenChange(false)} />
     </div>}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { metresToFeet, sectionAtDepth, type FormationLayer, type SurveyPoint, type WellComponent, type WellOperations } from "@ikhmalputra/subsurface-core";
 import type { DepthLink } from "@ikhmalputra/subsurface-react";
 import { DaysVsDepthChart, HoleSectionLog, LogTracks, ServiceRunLog, WellHistoryLog } from "@ikhmalputra/subsurface-react/records";
@@ -43,12 +43,18 @@ export interface WellFileProps {
   readonly seismic?: WellSeismicSource;
   /** Shared MD window and cursor with the construction views. */
   readonly link: DepthLink;
+  /** A tool asked for a tab; a new nonce per request so the same tab can be asked for twice. */
+  readonly openTab?: { readonly tab?: string; readonly nonce: number } | null;
 }
 
 /** Operational well file: hole sections, daily history, runs and mud log, all linked to the construction selection by depth. */
-export function WellFile({ operations, components, selected, onSelectComponent, logUrl, survey = [], formations = [], seismic, link }: WellFileProps) {
+export function WellFile({ operations, components, selected, onSelectComponent, logUrl, survey = [], formations = [], seismic, link, openTab = null }: WellFileProps) {
   const id = useId();
   const [tab, setTab] = useState<Tab>("history");
+  useEffect(() => {
+    if (!openTab?.tab) return;
+    if (tabs.some((item) => item.id === openTab.tab)) setTab(openTab.tab as Tab);
+  }, [openTab]);
   const [focusDate, setFocusDate] = useState<string | null>(null);
   const [focusRunId, setFocusRunId] = useState<string | null>(null);
   const bridge = depthBridge(link);

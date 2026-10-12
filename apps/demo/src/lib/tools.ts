@@ -13,16 +13,16 @@ export type ToolVerb = "view" | "create" | "edit" | "delete";
 export const toolVerbs: readonly ToolVerb[] = ["view", "create", "edit", "delete"];
 
 /** The panels tools open. Route workspaces become panels on the sheet; the rest already are. */
-export type ToolPanelId = "section" | "trajectory" | "study" | "brief" | "report" | "field" | "correlation" | "cross-section" | "edit-well" | "petrophysics" | "production" | "linked-data" | "sandbox" | "inspector" | "well-file" | "kick" | "cement" | "time" | "hydraulics";
+export type ToolPanelId = "section" | "brief" | "report" | "field" | "correlation" | "cross-section" | "edit-well" | "petrophysics" | "production" | "linked-data" | "sandbox" | "inspector" | "well-file" | "kick" | "cement" | "time" | "hydraulics" | "planner" | "stations" | "survey-summary" | "study" | "evidence";
 
 /**
  * Documents: the workspaces that fill the sheet. One is open at a time, like the active drawing;
  * opening another puts the current one away. Each had a route of its own; the route now forwards
  * to the sheet with `?tool=<document>`, which is also the deep link.
  */
-export const documents: readonly ToolPanelId[] = ["section", "trajectory", "study", "brief", "report", "field", "correlation", "cross-section", "edit-well", "petrophysics", "production", "linked-data", "sandbox"];
+export const documents: readonly ToolPanelId[] = ["section", "brief", "report", "field", "correlation", "cross-section", "edit-well", "petrophysics", "production", "linked-data", "sandbox"];
 export const documentLabels: Readonly<Record<string, string>> = {
-  section: "Well section", trajectory: "Survey", study: "Drilling study", brief: "Design brief", report: "Well report", field: "Field",
+  section: "Well section", trajectory: "Survey", study: "Drilling study", evidence: "Study evidence", planner: "Trajectory planner", stations: "Station editor", "survey-summary": "Survey summary", brief: "Design brief", report: "Well report", field: "Field",
   correlation: "Correlation", "cross-section": "Cross-section", "edit-well": "Edit well", petrophysics: "Petrophysics", production: "Production", "linked-data": "Linked data", sandbox: "WebGPU sandbox",
 };
 /** The route each document used to be, for the forwarders and for anything still linking there. */
@@ -32,7 +32,7 @@ export const documentRoutes: Readonly<Record<string, string>> = {
 };
 export const SHEET = "/view-well/";
 /** The sheet URL that opens a document, keeping any query the caller carries (a well, a component). */
-export function documentHref(document: ToolPanelId, query?: Readonly<Record<string, string | undefined>>): string {
+export function documentHref(document: ToolPanelId | "trajectory", query?: Readonly<Record<string, string | undefined>>): string {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(query ?? {})) if (value !== undefined && key !== "tool") params.set(key, value);
   if (document !== "section") params.set("tool", document);
@@ -56,8 +56,12 @@ export interface ToolSupply {
 
 export interface ToolAction {
   readonly panel: ToolPanelId;
+  /** Panels that open with it — the survey opens the summary and the station editor beside the section. */
+  readonly also?: readonly ToolPanelId[];
   /** Where in the panel the verb happens, for the reader and the command line's echo. */
   readonly where?: string;
+  /** The tab the panel opens on — the records' "days", the inspector's "components". */
+  readonly tab?: string;
 }
 
 export interface ToolObject {
@@ -78,40 +82,40 @@ const missing = (detail = "not supplied"): ToolSupply => ({ state: "missing", de
 
 export const toolObjects: readonly ToolObject[] = [
   { id: "well", label: "Well", group: "identity", supply: (well) => supplied(`${well.design.wellName ?? well.label} · ${well.design.provenance}`),
-    verbs: { view: { panel: "inspector", where: "This well" }, edit: { panel: "edit-well", where: "Well properties" } } },
+    verbs: { view: { panel: "inspector", where: "This well", tab: "tools" }, edit: { panel: "edit-well", where: "Well properties" } } },
   { id: "reference", label: "Reference and datum", group: "identity", aliases: ["datum", "crs"],
     supply: (well) => well.design.depthDatum ? supplied(`datum ${well.design.depthDatum}`) : missing("datum not reported"),
-    verbs: { view: { panel: "inspector", where: "This well" }, edit: { panel: "edit-well", where: "Well properties · location and datum" } } },
+    verbs: { view: { panel: "inspector", where: "This well", tab: "tools" }, edit: { panel: "edit-well", where: "Well properties · location and datum" } } },
   { id: "survey", label: "Survey", group: "geometry", aliases: ["trajectory", "stations"],
     supply: (well) => wellCapabilities(well).survey ? supplied(count(well.design.survey!.length, "station")) : missing(),
-    verbs: { view: { panel: "trajectory", where: "View survey" }, create: { panel: "trajectory", where: "Plan build & hold" }, edit: { panel: "trajectory", where: "Edit stations" } } },
+    verbs: { view: { panel: "section", where: "Survey track, summary and stations", also: ["survey-summary", "stations"] }, create: { panel: "planner", where: "Plan build & hold" }, edit: { panel: "stations", where: "Edit stations" } } },
   { id: "hole", label: "Hole sections", group: "construction", aliases: ["holes"],
     supply: (well) => { const n = well.components.filter((c) => c.kind === "Hole").length; return n ? supplied(count(n, "section")) : missing(); },
-    verbs: { view: { panel: "inspector", where: "Components" }, create: { panel: "edit-well", where: "Add parts" }, edit: { panel: "edit-well", where: "Properties" }, delete: { panel: "edit-well", where: "Properties · remove" } } },
+    verbs: { view: { panel: "inspector", where: "Components", tab: "components" }, create: { panel: "edit-well", where: "Add parts" }, edit: { panel: "edit-well", where: "Properties" }, delete: { panel: "edit-well", where: "Properties · remove" } } },
   { id: "casing", label: "Casing and tubing", group: "construction", aliases: ["tubular", "string", "liner", "tubing"],
     supply: (well) => { const n = well.components.filter((c) => c.kind === "Casing" || c.kind === "Tubular").length; return n ? supplied(count(n, "string")) : missing(); },
-    verbs: { view: { panel: "inspector", where: "Components" }, create: { panel: "edit-well", where: "Add parts" }, edit: { panel: "edit-well", where: "Properties" }, delete: { panel: "edit-well", where: "Properties · remove" } } },
+    verbs: { view: { panel: "inspector", where: "Components", tab: "components" }, create: { panel: "edit-well", where: "Add parts" }, edit: { panel: "edit-well", where: "Properties" }, delete: { panel: "edit-well", where: "Properties · remove" } } },
   { id: "completion", label: "Completion equipment", group: "construction", aliases: ["equipment", "packer"],
     supply: (well) => { const n = well.components.filter((c) => c.kind !== "Hole" && c.kind !== "Casing" && c.kind !== "Tubular" && c.kind !== "Cement").length; return n ? supplied(count(n, "item")) : missing(); },
-    verbs: { view: { panel: "inspector", where: "Components" }, create: { panel: "edit-well", where: "Add parts" }, edit: { panel: "edit-well", where: "Properties" }, delete: { panel: "edit-well", where: "Properties · remove" } } },
+    verbs: { view: { panel: "inspector", where: "Components", tab: "components" }, create: { panel: "edit-well", where: "Add parts" }, edit: { panel: "edit-well", where: "Properties" }, delete: { panel: "edit-well", where: "Properties · remove" } } },
   { id: "formations", label: "Formations", group: "geology", aliases: ["formation", "tops", "layers"],
     supply: (well) => wellCapabilities(well).formations ? supplied(count(well.design.formations!.length, "layer")) : missing(),
-    verbs: { view: { panel: "inspector", where: "Formations on the section" }, create: { panel: "edit-well", where: "Formations" }, edit: { panel: "edit-well", where: "Formations" }, delete: { panel: "edit-well", where: "Formations" } } },
+    verbs: { view: { panel: "inspector", where: "Formations on the section", tab: "tools" }, create: { panel: "edit-well", where: "Formations" }, edit: { panel: "edit-well", where: "Formations" }, delete: { panel: "edit-well", where: "Formations" } } },
   { id: "pressure", label: "Pressure window", group: "geology", aliases: ["pore", "fracture"],
     supply: () => derived("in the design brief"),
     verbs: { view: { panel: "brief", where: "Geology & pressure" }, edit: { panel: "brief", where: "Geology & pressure" } } },
   { id: "log", label: "Mud log (LAS)", group: "measurements", aliases: ["las", "mudlog", "logs"],
     supply: (well) => wellCapabilities(well).mudLog ? supplied("attached, depth in feet") : missing(),
-    verbs: { view: { panel: "well-file", where: "Mud log" }, create: { panel: "edit-well", where: "Records & data · attach" }, delete: { panel: "edit-well", where: "Records & data · detach" } } },
+    verbs: { view: { panel: "well-file", where: "Mud log", tab: "log" }, create: { panel: "edit-well", where: "Records & data · attach" }, delete: { panel: "edit-well", where: "Records & data · detach" } } },
   { id: "seismic", label: "Seismic", group: "measurements", aliases: ["segy", "volume"],
     supply: (well) => wellCapabilities(well).seismic ? supplied("section and volume") : missing(),
-    verbs: { view: { panel: "well-file", where: "Seismic (SEG-Y)" } }, hostOwned: "seismic is registered by the host for the field" },
+    verbs: { view: { panel: "well-file", where: "Seismic (SEG-Y)", tab: "seismic" } }, hostOwned: "seismic is registered by the host for the field" },
   { id: "reports", label: "Daily reports", group: "operations", aliases: ["days", "history"],
     supply: (well) => wellCapabilities(well).operations ? supplied(count(well.operations!.days.length, "daily report")) : missing(),
-    verbs: { view: { panel: "well-file", where: "Daily history" } }, hostOwned: "reports are written in the host's reporting system; this reads them with their page citations" },
+    verbs: { view: { panel: "well-file", where: "Daily history", tab: "history" } }, hostOwned: "reports are written in the host's reporting system; this reads them with their page citations" },
   { id: "runs", label: "Runs and BHAs", group: "operations", aliases: ["bha", "run"],
     supply: (well) => wellCapabilities(well).operations ? supplied(count(well.operations!.runs.length, "run")) : missing(),
-    verbs: { view: { panel: "well-file", where: "Service & BHA runs" } }, hostOwned: "runs are reported, not authored here" },
+    verbs: { view: { panel: "well-file", where: "Service & BHA runs", tab: "runs" } }, hostOwned: "runs are reported, not authored here" },
   { id: "brief", label: "Design brief", group: "design", aliases: ["design", "builder"],
     supply: () => derived("design draft"),
     verbs: { view: { panel: "brief", where: "Schematic" }, create: { panel: "brief", where: "New design" }, edit: { panel: "brief", where: "Define · Plan · Design" } } },
@@ -154,7 +158,7 @@ export const subDomains: readonly { readonly id: SubDomain; readonly label: stri
 
 export type ToolStatus = "built" | "partial" | "planned";
 /** What a ribbon icon opens: a panel, the well sheet itself, or one of the well view's own panels. */
-export type ToolOpen = { readonly panel: ToolPanelId; readonly where?: string } | { readonly route: string; readonly where?: string };
+export type ToolOpen = { readonly panel: ToolPanelId; readonly where?: string; readonly tab?: string; readonly also?: readonly ToolPanelId[] } | { readonly route: string; readonly where?: string };
 
 export interface DomainTool {
   readonly id: string;
@@ -175,9 +179,9 @@ const T = (id: string, label: string, domain: SubDomain, status: ToolStatus, ico
 export const domainTools: readonly DomainTool[] = [
   // Drilling engineering
   T("section", "Well section", "drilling", "built", "Layers", "The schematic, the log and the survey on one depth axis", "components, survey, LAS", { panel: "section" }),
-  T("survey", "Survey", "drilling", "built", "Route", "Stations to positions by minimum curvature; plan, section and log views", "survey stations", { panel: "trajectory", where: "View survey" }),
-  T("planner", "Trajectory planner", "drilling", "built", "Target", "Build-and-hold design through a target with a DLS limit", "kick-off, target", { panel: "trajectory", where: "Plan build & hold" }),
-  T("stations", "Station editor", "drilling", "built", "ListOrdered", "Edit MD, inclination, azimuth; positions recomputed", "survey", { panel: "trajectory", where: "Edit stations" }),
+  T("survey", "Survey", "drilling", "built", "Route", "Stations to positions by minimum curvature on the section, with the summary and the station table", "survey stations", { panel: "section", where: "Survey", also: ["survey-summary", "stations"] }),
+  T("planner", "Trajectory planner", "drilling", "built", "Target", "Build-and-hold design through a target with a DLS limit, previewed on the section", "kick-off, target", { panel: "planner", also: ["stations"] }),
+  T("stations", "Station editor", "drilling", "built", "ListOrdered", "Edit MD, inclination, azimuth; positions recomputed and previewed on the section", "survey", { panel: "stations" }),
   T("anticollision", "Anti-collision", "drilling", "planned", "Crosshair", "Separation factor against offset wellbores", "offset surveys, tool error models"),
   T("casing-design", "Casing design", "drilling", "built", "Cylinder", "Strings, setting depths, API 5C3 ratings with derating", "casing scheme, pressures", { panel: "brief", where: "Design · Casing" }),
   T("pressure-window", "Pressure window", "drilling", "built", "Gauge", "Pore, fracture and mud weight vs TVD with provenance", "pressure data", { panel: "brief", where: "Plan · Geology & pressure" }),
@@ -185,10 +189,10 @@ export const domainTools: readonly DomainTool[] = [
   T("cement-design", "Cement volumes", "drilling", "built", "Container", "Annular cement volume per string from the host's diameters, split at the previous shoe", "casing and hole geometry; top of cement if not reported", { panel: "cement" }),
   T("hydraulics", "Hydraulics", "drilling", "built", "Waves", "Annular velocity by section and bit hydraulics from typed flow, mud and nozzles", "hole sections; flow, mud and nozzles typed", { panel: "hydraulics" }),
   T("torque-drag", "Torque and drag", "drilling", "planned", "Anchor", "Hookload and torque vs depth for the string in the hole", "string weights, friction factors"),
-  T("performance", "Drilling performance", "drilling", "built", "Activity", "ROP, WOB, RPM vs depth from the mud log", "LAS", { panel: "well-file", where: "Mud log" }),
-  T("days-depth", "Days vs depth", "drilling", "built", "Timer", "The time-depth curve with runs and trouble marked", "daily reports, runs", { panel: "well-file", where: "Daily history" }),
-  T("reports", "Daily reports", "drilling", "built", "ClipboardList", "The operational record with its citations", "daily reports", { panel: "well-file", where: "Daily history" }),
-  T("runs", "Runs and BHAs", "drilling", "built", "Wrench", "Run intervals, outcomes and footage", "runs", { panel: "well-file", where: "Service & BHA runs" }),
+  T("performance", "Drilling performance", "drilling", "built", "Activity", "ROP, WOB, RPM vs depth from the mud log", "LAS", { panel: "well-file", where: "Mud log", tab: "log" }),
+  T("days-depth", "Days vs depth", "drilling", "built", "Timer", "The time-depth curve with runs and trouble marked", "daily reports, runs", { panel: "well-file", where: "Days vs depth", tab: "history" }),
+  T("reports", "Daily reports", "drilling", "built", "ClipboardList", "The operational record with its citations", "daily reports", { panel: "well-file", where: "Daily history", tab: "history" }),
+  T("runs", "Runs and BHAs", "drilling", "built", "Wrench", "Run intervals, outcomes and footage", "runs", { panel: "well-file", where: "Service & BHA runs", tab: "runs" }),
   T("time", "Time breakdown", "drilling", "built", "Calendar", "Days by activity and per hole section from the daily reports; trouble from run outcomes", "daily reports, runs", { panel: "time" }),
   T("study", "Drilling study", "drilling", "built", "FlaskConical", "Two intervals compared on evidence, with a finding and its uncertainty", "LAS, operations", { panel: "study" }),
   // Geology
@@ -201,7 +205,7 @@ export const domainTools: readonly DomainTool[] = [
   T("core", "Core description", "geology", "planned", "Box", "Core intervals and descriptions on depth", "core records"),
   T("facies", "Facies", "geology", "planned", "Boxes", "Facies by interval from logs or core", "facies log"),
   // Geophysics
-  T("seismic-section", "Seismic section", "geophysics", "built", "AudioWaveform", "SEG-Y along the well, the well projected on it, linked by depth", "SEG-Y, section geometry", { panel: "well-file", where: "Seismic (SEG-Y)" }),
+  T("seismic-section", "Seismic section", "geophysics", "built", "AudioWaveform", "SEG-Y along the well, the well projected on it, linked by depth", "SEG-Y, section geometry", { panel: "well-file", where: "Seismic (SEG-Y)", tab: "seismic" }),
   T("seismic-volume", "Seismic volume", "geophysics", "built", "Box", "The cube around the well, cut along, across and by depth", "sub-volume", { panel: "section", where: "3D well + seismic + survey" }),
   T("horizons", "Horizon interpretation", "geophysics", "partial", "Scan", "Pick and edit horizons on the section", "interpretation records", { panel: "section", where: "Volume & interpretation tools" }),
   T("faults", "Fault picking", "geophysics", "planned", "Zap", "Fault sticks on the section", "fault records"),

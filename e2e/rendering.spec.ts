@@ -259,7 +259,8 @@ test("native WebGPU compiles and renders the synthetic volume and oblique plane"
   expect(errors.filter((error) => /shader|WGSL|WebGPU|validation|pipeline/i.test(error))).toEqual([]);
 });
 
-test("sandbox controls fit a phone and have accessible names without starting a GPU", async ({ page }) => {
+// Desktop-only product (Ikhmal, 2026-10-13): phone layout is out of scope.
+test.skip("sandbox controls fit a phone and have accessible names without starting a GPU", async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await gotoApp(page, "/sandbox/");
   await page.getByRole("button", { name: "Open independent synthetic example" }).click();

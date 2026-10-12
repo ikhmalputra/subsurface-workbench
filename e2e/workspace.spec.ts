@@ -15,10 +15,9 @@ test("workspace preserves source-well context and appearance across compatible v
   await log.press("Enter");
   const depth = await context.locator("span").filter({ hasText: /^Depth:/ }).innerText();
   expect(depth).not.toContain("not selected");
-  await page.getByRole("button", { name: "Plan build & hold", exact: true }).click();
-  await log.focus();
-  await log.press("End");
-  await log.press("Enter");
+  // Opening the planner previews a trajectory on the section and leaves the pinned depth alone.
+  await page.getByRole("button", { name: "Trajectory planner", exact: true }).click();
+  await expect(page.getByTestId("trajectory-preview")).toBeVisible();
   await expect(context.locator("span").filter({ hasText: /^Depth:/ })).toHaveText(depth);
 
   await openNavigation(page);

@@ -6,6 +6,7 @@ import { Workbench } from "@ikhmalputra/subsurface-shell";
 import { useWorkspace } from "./workspace-provider";
 import { WorkspaceContextBar } from "./workspace-context-bar";
 import { WorkspaceNavigation } from "./workspace-navigation";
+import { DepthCommand } from "./depth-command";
 import { FloatProvider, FloatingToolbar, useDockRegistry } from "./floating";
 import { wells } from "./wells-data";
 import { ToolPanels, ToolsPalette, ToolsProvider, ToolsRibbon, useTools } from "./tools";
@@ -61,7 +62,8 @@ export function WorkbenchFrame({ children }: { children: ReactNode }) {
 /** The frame proper, inside the tools provider so the navigation can highlight the open document. */
 function FrameBody({ path, setLayer, setTray, children }: { readonly path: string; readonly setLayer: (element: HTMLElement | null) => void; readonly setTray: (element: HTMLElement | null) => void; readonly children: ReactNode }) {
   const tools = useTools();
-  const current = path === SHEET && tools.document && tools.document !== "section" ? `${SHEET}?tool=${tools.document}` : path;
+  const current = path === SHEET && tools.link ? `${SHEET}?tool=${tools.link}` : path;
+  const barInRibbon = tools.ribbonOpen && !tools.phone;
   return <>
     <Workbench status={<>
       <CommandLine />
@@ -69,20 +71,32 @@ function FrameBody({ path, setLayer, setTray, children }: { readonly path: strin
       <WorkspaceContextBar part="readouts" />
       <AppearanceMenu />
     </>}>
-      <div className="demo-page">{children}</div>
-      <div className="demo-float-layer" ref={setLayer} />
+      {/* `data-ribbon` lets the sheet's band and the view toolbars size to one row or two in CSS. */}
+      <div className="demo-frame-body" data-ribbon={tools.ribbonOpen ? "open" : "closed"}>
+        <div className="demo-page">{children}</div>
+        <div className="demo-float-layer" ref={setLayer} />
+      </div>
     </Workbench>
-    <FloatingToolbar id="workspace" label="workspace toolbar" defaultStyle={{ left: "calc(var(--dock-left, 0px) + 8px)", top: "calc(var(--dock-top, 0px) + 6px)" }} className="demo-workspace-toolbar">
-      <WorkspaceNavigation current={current} />
-      <ToolsToggle />
-      <WorkspaceContextBar part="picker" />
-    </FloatingToolbar>
-    <ToolsRibbon />
+    {/* The workspace bar — navigation, tools, the well, go-to-depth — rides on the ribbon's title
+        row, so it costs the sheet nothing; with the ribbon put away it floats over the sheet. */}
+    {!barInRibbon && <FloatingToolbar id="workspace" label="workspace toolbar" defaultStyle={{ left: "calc(var(--dock-left, 0px) + 8px)", top: "calc(var(--dock-top, 0px) + 6px)" }} className="demo-workspace-toolbar">
+      <WorkspaceBar current={current} />
+    </FloatingToolbar>}
+    <ToolsRibbon headExtra={barInRibbon ? <div className="demo-workspace-toolbar demo-workspace-bar"><WorkspaceBar current={current} /></div> : undefined} />
     <ToolsPalette />
     <ToolPanels />
   </>;
 }
 
+
+function WorkspaceBar({ current }: { readonly current: string }) {
+  return <>
+    <WorkspaceNavigation current={current} />
+    <ToolsToggle />
+    <WorkspaceContextBar part="picker" />
+    <DepthCommand />
+  </>;
+}
 
 function ToolsToggle() {
   const tools = useTools();

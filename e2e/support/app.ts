@@ -33,7 +33,11 @@ async function forwarded(page: Page): Promise<void> {
   await expect(page.locator("[data-forwarding]"), "a forwarding route should reach the sheet").toHaveCount(0, { timeout: SCENE_READY });
   if (new URL(page.url()).pathname.replace(/\/$/, "") === "/view-well") {
     const tool = new URL(page.url()).searchParams.get("tool") ?? "section";
-    await expect(page.locator(`.demo-tool-page[data-document="${tool}"]`), `the "${tool}" document should open on the sheet`).toBeAttached({ timeout: SCENE_READY });
+    // The survey is not a document: it is the section with the summary and the station editor beside it.
+    const document = tool === "trajectory" || tool === "study" ? "section" : tool;
+    await expect(page.locator(`.demo-tool-page[data-document="${document}"]`), `the "${document}" document should open on the sheet`).toBeAttached({ timeout: SCENE_READY });
+    if (tool === "trajectory") await expect(page.getByTestId("tool-stations"), "the station editor should open with the survey").toBeAttached({ timeout: SCENE_READY });
+    if (tool === "study") await expect(page.getByTestId("tool-study"), "the study tool should open with the section").toBeAttached({ timeout: SCENE_READY });
   }
 }
 

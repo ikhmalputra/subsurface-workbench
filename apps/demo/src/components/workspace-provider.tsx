@@ -13,6 +13,8 @@ import type { FieldProject, FieldOptions } from "../lib/field-project";
 import { emptyGisWorkspace } from "@ikhmalputra/subsurface-core/gis";
 import type { GisWorkspaceState } from "@ikhmalputra/subsurface-core/gis";
 import { authoredRevision } from "../lib/well-revision";
+import type { TrajectoryDraft } from "../lib/trajectory-draft";
+import type { StudyDraft } from "../lib/study-draft";
 import type { WellRevision } from "../lib/well-revision";
 
 interface Workspace {
@@ -36,6 +38,12 @@ interface Workspace {
   readonly setDensity: (density: SubsurfaceDensity) => void;
   readonly assemblyDrafts: Readonly<Record<string, WellAssemblyEditorState>>;
   readonly updateAssemblyDraft: (wellId: string, state: WellAssemblyEditorState) => void;
+  /** The trajectory being planned or edited per well, drawn by the section as a preview until applied. */
+  readonly trajectoryDrafts: Readonly<Record<string, TrajectoryDraft>>;
+  readonly updateTrajectoryDraft: (wellId: string, draft: TrajectoryDraft | null) => void;
+  /** The drilling study in progress per well: the study and evidence tools edit it, the section bands its intervals. */
+  readonly studyDrafts: Readonly<Record<string, StudyDraft>>;
+  readonly updateStudyDraft: (wellId: string, update: (current: StudyDraft | null) => StudyDraft | null) => void;
 }
 
 const WorkspaceContext = createContext<Workspace | null>(null);
@@ -63,6 +71,17 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<SubsurfaceThemeName>("light");
   const [density, setDensity] = useState<SubsurfaceDensity>("comfortable");
   const [assemblyDrafts, setAssemblyDrafts] = useState<Readonly<Record<string, WellAssemblyEditorState>>>({});
+  const [trajectoryDrafts, setTrajectoryDrafts] = useState<Readonly<Record<string, TrajectoryDraft>>>({});
+  const updateTrajectoryDraft = useCallback((id: string, draft: TrajectoryDraft | null) => setTrajectoryDrafts((current) => {
+    if (draft === null) { if (!(id in current)) return current; const next = { ...current }; delete next[id]; return next; }
+    return { ...current, [id]: draft };
+  }), []);
+  const [studyDrafts, setStudyDrafts] = useState<Readonly<Record<string, StudyDraft>>>({});
+  const updateStudyDraft = useCallback((id: string, update: (current: StudyDraft | null) => StudyDraft | null) => setStudyDrafts((current) => {
+    const next = update(current[id] ?? null);
+    if (next === null) { if (!(id in current)) return current; const rest = { ...current }; delete rest[id]; return rest; }
+    return { ...current, [id]: next };
+  }), []);
   if (!well) throw new Error(`Unknown workspace well: ${wellId}`);
 
   const chooseWell = useCallback((id: string) => {
@@ -108,7 +127,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     store.pinDepth(id, null, "restore-source");
   }
 
-  return <WorkspaceContext.Provider value={{ revisions, applyRevision, restoreSource, fieldGisState, setFieldGisState, fieldProject, fieldStore, fieldWellIds, setFieldWellIds, fieldOptions, updateFieldOptions, store, well, chooseWell, theme, setTheme, density, setDensity, assemblyDrafts, updateAssemblyDraft }}>
+  return <WorkspaceContext.Provider value={{ revisions, applyRevision, restoreSource, fieldGisState, setFieldGisState, fieldProject, fieldStore, fieldWellIds, setFieldWellIds, fieldOptions, updateFieldOptions, store, well, chooseWell, theme, setTheme, density, setDensity, assemblyDrafts, updateAssemblyDraft, trajectoryDrafts, updateTrajectoryDraft, studyDrafts, updateStudyDraft }}>
     <SubsurfaceThemeProvider theme={theme} density={density} className="demo-theme-shell">
       {children}
     </SubsurfaceThemeProvider>
