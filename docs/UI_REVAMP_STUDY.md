@@ -276,12 +276,26 @@ Eleven design views are individually exported, individually props-driven, and mo
 place each — inside `WellDesignWorkflow`: `WellIdentityForm`, `WellLocationForm`,
 `GeologyPressureEditor`, `PressureWindowPlot`, `CasingSchemeTable`, `CasingLoadCard`,
 `CementPlanTable`, `CompletionForm`, `DesignCoveragePanel`, `DesignReadinessPanel`,
-`WellProgrammeSummary`. **`PressureWindowPlot` — the view the shoe-depth decision is made on — is
-reachable through exactly one step of one wizard, and is mounted nowhere else in the application.**
+`WellProgrammeSummary`.
 
-They are already pane-shaped. Nothing needs rewriting; the wizard stops being the only way to reach
-them, and the Design preset puts the pressure window, the casing scheme and the trajectory TVD on
-screen together, which is what the wizard's own help text says is required.
+**Correction to this section as first written.** It claimed `PressureWindowPlot` is "reachable
+through exactly one step of one wizard". That is wrong, and reading the workflow rather than the
+mount count shows why: each step renders a `main` *and* an `aside`, and the pressure plot is the
+aside for the offsets, geology, casing and cement steps. The casing scheme and the mud-weight window
+are therefore already side by side — the pairing §7 says the shoe-depth decision needs. The
+construction canvas is likewise always present, which is what `canvas-workbench`'s no-remount test
+already asserts.
+
+What survives the correction is narrower and still worth fixing:
+
+- **One mount site means a host cannot compose them.** Using the pressure window beside its own
+  casing table requires copying a 236-line reference composition. That is a packaging problem, not a
+  layout one, and it is the same shape as `MapHub` having no caller at all.
+- **Only two panels at a time, chosen for you.** The coupling the wizard's own help text states —
+  *"Every pressure load downstream uses TVD from this plan. Changing it moves TD; re-propose the
+  casing scheme afterwards"* — is between the trajectory step and the casing step, which are in
+  different phases and never visible together. The phases already group the steps, so a phase is a
+  pane set waiting to be used.
 
 (`MapHub` is mounted nowhere at all — not in the SDK, not in the app. It is the only view in the
 package with no caller, and should be either placed in the Frame preset or deleted, not left in the
@@ -321,7 +335,12 @@ third state.)
      against the previous wiring. Found while doing it: `hidden` does not guarantee a pane takes no
      space — the UA rule loses to any class that sets `display`, and a 3D pane's `display: grid` kept
      a 700px invisible pane in flow, pushing the depth controls below the fold.
-   - Still to do: the remaining well routes as presets, and §9.3.
+   - **5b done.** The active well's directional picture is a preset of its own workspace: a plan
+     view and a vertical section as panes of `/view-well/`, sharing the one pinned depth and one
+     derivation of the casing-shoe markers. The surveyed path was rendered by five component sets
+     across four routes, so asking where a well goes meant leaving the well.
+   - Still to do: the remaining well routes as presets, and §9.3 as corrected above — a host-facing
+     composition of the design panels, and phases as pane sets.
 6. **Cursor props for the blind views** — `AssemblyScene`, `CurvedAssemblySchematic`,
    `CurvedSchematic`, and now `DaysVsDepthChart` (§9.2).
 7. **Retire the route gates** in favour of capability checks.

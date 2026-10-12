@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
-import { getWellComponents, metresToFeet, positionAtMeasuredDepth, sectionAtDepth, validateWellboreTrajectory, wellComponentsToAssembly } from "@ikhmalputra/subsurface-core";
+import { getWellComponents, metresToFeet, positionAtMeasuredDepth, sectionAtDepth, summarizeTrajectory, validateWellboreTrajectory, wellComponentsToAssembly } from "@ikhmalputra/subsurface-core";
 import { designSurvey } from "../lib/well-data";
 import { createMockLogCurve } from "@ikhmalputra/subsurface-core/sandbox";
 import { createInitialSubsurfaceState } from "@ikhmalputra/subsurface-core/state";
@@ -14,7 +14,7 @@ import { AssemblySchematic } from "@ikhmalputra/subsurface-react/assembly";
 import { CurvedAssemblySchematic } from "@ikhmalputra/subsurface-react/assembly";
 import { CurvedSchematic } from "@ikhmalputra/subsurface-react/schematic";
 import { InteractiveViewport } from "@ikhmalputra/subsurface-react/viewport";
-import { TrajectoryLog } from "@ikhmalputra/subsurface-react/trajectory";
+import { TrajectoryLog, TrajectoryPlanView, TrajectorySectionView } from "@ikhmalputra/subsurface-react/trajectory";
 import { WellFile } from "./well-file";
 import { WellSeismicSection, useSceneSeismic, useSegy, useWellOnSection } from "./well-seismic";
 import { RecordCard, useWell, wells } from "./wells";
@@ -31,10 +31,10 @@ interface VolumeCuts { readonly along: number; readonly offset: number; readonly
 const FULL_VOLUME: VolumeCuts = { along: 100, offset: 100, depth: 100 };
 const cutAt = (start: number, end: number, percent: number) => start + (end - start) * Math.max(percent, 2) / 100;
 
-type Layout = "split" | "seismic" | "earth" | "schematic" | "scene" | "curved" | "profile";
+type Layout = "split" | "seismic" | "earth" | "schematic" | "scene" | "curved" | "profile" | "trajectory";
 
 /** The seven panes this route can show. A preset is a set of them, not an alternative to them. */
-type PaneId = "curved" | "profile" | "schematic" | "seismic" | "earth" | "survey" | "cutaway";
+type PaneId = "curved" | "profile" | "schematic" | "seismic" | "earth" | "survey" | "cutaway" | "plan" | "section";
 
 /**
  * Which panes each preset shows.
@@ -52,6 +52,10 @@ const panesFor: Readonly<Record<Layout, readonly PaneId[]>> = {
   seismic: ["schematic", "seismic"],
   earth: ["earth", "survey"],
   scene: ["cutaway"],
+  // The directional picture of the well that is already active, in the workspace that owns it.
+  // The surveyed path was rendered by five different component sets across four routes; a reader
+  // asking where this well goes had to leave the well to find out.
+  trajectory: ["plan", "section"],
 };
 
 const layouts: readonly { value: Layout; label: string }[] = [
@@ -62,6 +66,7 @@ const layouts: readonly { value: Layout; label: string }[] = [
   { value: "scene", label: "3D cutaway" },
   { value: "curved", label: "Curved construction" },
   { value: "profile", label: "Survey & interval data" },
+  { value: "trajectory", label: "Trajectory plan & section" },
 ];
 
 export function ViewWellDemo() {
@@ -203,6 +208,13 @@ export function ViewWellDemo() {
     link.pinCursor(mdM);
   }
   const schematicLink = link.linked ? { depthWindow: link.window, onDepthWindowChange: link.setWindow, cursorDepthM: link.cursorMdM, onCursorDepthChange: link.setCursorMdM } : {};
+  // One shoe list for every trajectory pane: the plan view, the vertical section and the survey log
+  // mark the same casing shoes, and three copies of the same derivation is how they drift apart.
+  const shoeMarkers = useMemo(() => components
+    .filter((component) => component.kind === "Casing")
+    .map((component) => ({ mdM: component.bottomDepthM, label: `${component.name.split(" / ").pop()?.trim()} shoe` })), [components]);
+  // The section needs a plane to project onto; the closure azimuth is the one the survey implies.
+  const sectionAzimuthDeg = useMemo(() => survey.length > 1 ? summarizeTrajectory(survey).closureAzimuthDeg : 0, [survey]);
 
   return <section className="demo-stage demo-inspection" aria-label="View well example" onKeyDown={(event) => {
     if (event.key === "Escape" && !(event.target as HTMLElement).closest("input, select, textarea")) {
@@ -246,9 +258,11 @@ export function ViewWellDemo() {
           slicePlane={interpretation?.slicePlane ?? null} onSlicePlaneChange={(plane) => store.setSlicePlane(plane, "plane-gizmo")} picking={picking} logCurve={porosity} logStyle={interpretation?.logStyle ?? null}
           cameraView={cameraIsAutomatic ? null : camera} onCameraViewChange={(view) => store.setViewState(view, "well-scene")} onSpatialPick={(xyz) => store.triggerSpatialPick(xyz, "well-scene")}
           cursorMdM={link.linked ? link.cursorMdM : null} onCursorMdChange={link.linked ? link.setCursorMdM : undefined} mdWindow={link.linked ? link.window : null} /></Pane>
+      <Pane id="plan" deferUntilShown className="demo-fill demo-survey-view"><TrajectoryPlanView survey={survey} selectedMdM={link.pinnedMdM} onSelectMd={selectAtMd} markers={shoeMarkers} height={620} /></Pane>
+      <Pane id="section" deferUntilShown className="demo-fill demo-survey-view"><TrajectorySectionView survey={survey} selectedMdM={link.pinnedMdM} onSelectMd={selectAtMd} markers={shoeMarkers} formations={design.formations} verticalSectionAzimuthDeg={sectionAzimuthDeg} height={620} /></Pane>
       <Pane id="survey" deferUntilShown className="demo-fill demo-survey-view"><TrajectoryLog survey={survey} selectedMdM={link.pinnedMdM} onSelectMd={selectAtMd} height={900}
         cursorMdM={link.linked ? link.cursorMdM : null} onCursorMdChange={link.linked ? link.setCursorMdM : undefined} mdWindow={link.linked ? link.window : null}
-        markers={components.filter((component) => component.kind === "Casing").map((component) => ({ mdM: component.bottomDepthM, label: `${component.name.split(" / ").pop()?.trim()} shoe` }))} /></Pane>
+        markers={shoeMarkers} /></Pane>
       <Pane id="cutaway" className="demo-fill" deferUntilShown><AssemblyScene assembly={assembly} assetBaseUrl="/well-components" selectedId={highlighted} onSelect={(id) => setSelectedId(id)} exploded={exploded} onExplodedChange={setExploded} title="Construction cutaway" /></Pane>
       <aside id="well-inspector" className="demo-side" aria-label="Component inspector" hidden={!inspectorVisible}>
         <header className="demo-inspector-head"><span>INSPECTOR</span><small>{components.length} source records</small></header>

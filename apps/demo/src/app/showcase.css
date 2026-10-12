@@ -139,13 +139,15 @@ body { margin: 0; background: var(--sw-paper); color: var(--sw-ink); font-family
 .demo-seismic-view > .sw-seis { height: 100%; box-sizing: border-box; grid-template-rows: auto auto minmax(0, 1fr) auto; }
 .demo-seismic-view .sw-seis-frame { aspect-ratio: auto; height: 100%; min-height: 0; }
 .demo-view-earth { grid-template-columns: minmax(0, 1.7fr) minmax(300px, .75fr) 300px; }
+/* Plan view and vertical section read as a pair, so they get equal width. */
+.demo-view-trajectory { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 300px; }
 .demo-earth-view { position: relative; display: grid; grid-template-rows: auto minmax(0, 1fr); border: 1px solid var(--sw-line); border-radius: var(--sw-radius-panel); overflow: hidden; }
 .demo-earth-view > .sw-well-scene, .demo-earth-view > .sw-scene-loading { grid-row: 2; height: 100%; min-height: 0; }
 .demo-survey-view > .sw-traj-plot { height: 100%; box-sizing: border-box; }
 .demo-survey-view > .sw-traj-plot svg { flex: 1; min-height: 0; height: 100%; }
 .demo-view-schematic, .demo-view-scene, .demo-view-curved, .demo-view-profile { grid-template-columns: minmax(0, 1fr) 300px; }
 .demo-view-schematic.demo-inspector-hidden, .demo-view-scene.demo-inspector-hidden, .demo-view-curved.demo-inspector-hidden, .demo-view-profile.demo-inspector-hidden { grid-template-columns: minmax(0, 1fr); }
-.demo-view-split.demo-inspector-hidden, .demo-view-seismic.demo-inspector-hidden { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.demo-view-split.demo-inspector-hidden, .demo-view-seismic.demo-inspector-hidden, .demo-view-trajectory.demo-inspector-hidden { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .demo-view-earth.demo-inspector-hidden { grid-template-columns: minmax(0, 1.7fr) minmax(280px, .75fr); }
 .demo-side { display: grid; gap: var(--sw-space-4); align-content: start; }
 .demo-view-grid > .demo-side { max-height: clamp(520px, calc(100dvh - 300px), 1000px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
@@ -208,7 +210,7 @@ body { margin: 0; background: var(--sw-paper); color: var(--sw-ink); font-family
 }
 @media (max-width: 1000px) {
   .demo-workbench-shell { grid-template-columns: 190px minmax(0, 1fr); }
-  .demo-view-split, .demo-view-seismic, .demo-view-earth { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .demo-view-split, .demo-view-seismic, .demo-view-earth, .demo-view-trajectory { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .demo-view-grid > .demo-side { max-height: none; overflow: visible; grid-column: 1 / -1; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); align-items: start; }
   .demo-view-grid .demo-record { position: static; }
   .demo-view-schematic, .demo-view-scene, .demo-view-curved { grid-template-columns: minmax(0, 1fr); }
@@ -272,7 +274,7 @@ body { margin: 0; background: var(--sw-paper); color: var(--sw-ink); font-family
   .demo-records-drawer > summary span { display: block; margin: 8px 0 0; }
   .demo-page, .demo-home { padding: 22px 14px 40px; }
   .demo-hero h1 { font-size: 34px; }
-  .demo-view-split, .demo-view-seismic, .demo-view-earth, .demo-cards { grid-template-columns: minmax(0, 1fr); }
+  .demo-view-split, .demo-view-seismic, .demo-view-earth, .demo-view-trajectory, .demo-cards { grid-template-columns: minmax(0, 1fr); }
   .demo-view-grid.demo-inspector-hidden { grid-template-columns: minmax(0, 1fr); }
   .demo-earth-view { height: 520px; }
   .demo-survey-view { height: auto; }

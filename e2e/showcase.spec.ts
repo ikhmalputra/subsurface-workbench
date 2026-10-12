@@ -3,6 +3,7 @@ import type { Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { SCENE_READY } from "./support/timing";
 import { waitForScene } from "./support/scene";
+import { gotoApp } from "./support/app";
 
 async function horizontalOverflow(page: Page) {
   return page.evaluate(() => Array.from(document.body.querySelectorAll<HTMLElement>("*"))
@@ -483,4 +484,37 @@ test("view-well presets are sets of panes that keep their state instead of being
   await expect(schematic).toBeVisible();
   await expect(page.getByTestId("seismic-section")).toBeVisible();
   await expect(cutaway).not.toBeVisible();
+});
+
+test("the active well's trajectory is a preset of its own workspace, sharing one depth", async ({ page }) => {
+  await gotoApp(page, "/view-well/");
+  const view = page.getByRole("combobox", { name: "View", exact: true });
+  await view.selectOption("trajectory");
+
+  // Plan view and vertical section of the well that is already active — the surveyed path was
+  // rendered by five component sets across four routes, so asking where this well goes meant
+  // leaving the well.
+  const plan = page.locator("[data-pane='plan']");
+  const section = page.locator("[data-pane='section']");
+  await expect(plan).toBeVisible();
+  await expect(section).toBeVisible();
+
+  // Both mark the same casing shoes, from one derivation. FORGE has three casing strings, and the
+  // marker label is the nominal size — asserting the count rather than the wording keeps this about
+  // the shared derivation rather than the phrasing.
+  for (const pane of [plan, section]) {
+    await expect(pane.locator(".sw-traj-marker")).toHaveCount(3);
+  }
+  await expect(section.getByText("7 in shoe")).toBeAttached();
+
+  // One depth: picking in the section moves the pinned MD that every other pane reads.
+  await page.getByRole("spinbutton", { name: "Go to MD" }).fill("2000");
+  await page.getByRole("button", { name: "Locate depth" }).click();
+  const pinned = page.getByRole("status").filter({ hasText: "Pinned" });
+  await expect(pinned).toContainText("2,000 m MD");
+
+  // And the construction is one selection away, in the same workspace, with the depth intact.
+  await view.selectOption("curved");
+  await expect(page.getByTestId("curved-assembly-schematic")).toBeVisible();
+  await expect(pinned).toContainText("2,000 m MD");
 });
