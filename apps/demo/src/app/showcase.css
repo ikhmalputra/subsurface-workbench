@@ -131,7 +131,9 @@ body { margin: 0; background: var(--sw-paper); color: var(--sw-ink); font-family
 .demo-cuts output { min-width: 58px; font-variant-numeric: tabular-nums; color: var(--sw-ink); }
 .demo-meta { margin-left: auto; font: 11px "IBM Plex Mono", monospace; color: var(--sw-muted); }
 .demo-panel { min-width: 0; background: var(--sw-surface); border: 1px solid var(--sw-line); border-radius: var(--sw-radius-panel); overflow: hidden; }
-.demo-fill { min-width: 0; height: clamp(520px, calc(100dvh - 300px), 1000px); }
+/* The canvas takes the height the compact title bar gave back, and no more: the depth
+   command line has to stay above the fold, which is what workbench-ux measures. */
+.demo-fill { min-width: 0; height: clamp(520px, calc(100dvh - 268px), 1000px); }
 .demo-fill > .sw-asm-schematic, .demo-fill > .sw-asm-scene, .demo-fill > .sw-scene-loading { height: 100%; min-height: 0; }
 .demo-view-grid { display: grid; gap: var(--sw-space-4); align-items: start; }
 .demo-view-split { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) 300px; }
@@ -583,3 +585,127 @@ body { margin: 0; background: var(--sw-paper); color: var(--sw-ink); font-family
 
 /* The route is a scrolling document inside the shell's canvas host. */
 .demo-page { flex: 1 1 auto; min-width: 0; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; }
+
+/* ============================================================================
+   Workspace design pass
+   ----------------------------------------------------------------------------
+   The workspace read as a documentation page with a drawing dropped into it: a
+   24px marketing headline above the tools, and a true-scale well — correctly
+   narrow, because a 3,339 m well with 1,200 m of departure *is* narrow — alone
+   in a wide white field with nothing to say the field was a drawing surface.
+
+   Nothing here distorts the drawing. The well keeps its true scale; what
+   changes is that the space around it becomes a drafting surface with a depth
+   grid, the chrome gets out of the way, and the tools read as instruments.
+   ========================================================================== */
+
+:root {
+  /* A recessed ground for drawings, one step back from the page. Every pro
+     subsurface and CAD application separates these two surfaces; this one did
+     not, so the drawing floated with no edge of its own. */
+  --sw-canvas: #eef2ef;
+  --sw-canvas-grid: #e4eae6;
+  --sw-canvas-edge: #c6d2ca;
+}
+[data-sw-theme="dark"] { --sw-canvas: #121a16; --sw-canvas-grid: #1e2823; --sw-canvas-edge: #3b4a41; }
+[data-sw-theme="high-contrast"] { --sw-canvas: #fff; --sw-canvas-grid: #b9c4bd; --sw-canvas-edge: #20322a; }
+
+/* The workspace title row: route label and title on one line, with the SDK
+   disclosure at its right. It was a 62px marketing headline above the tools of
+   every workspace — a third of the chrome between the reader and the drawing. */
+.demo-page > .demo-header { margin: 0 0 var(--sw-space-3); padding: 0 0 var(--sw-space-2); }
+.demo-page > .demo-header .demo-header-line { align-items: baseline; gap: var(--sw-space-3); }
+.demo-page > .demo-header .demo-header-line::before {
+  content: attr(data-route-label);
+  font: 10px "IBM Plex Mono", monospace; letter-spacing: .09em; text-transform: uppercase; color: var(--sw-muted);
+}
+.demo-page > .demo-header h1 { font-size: 15px; font-weight: 600; letter-spacing: 0; }
+.demo-page > .demo-header > .demo-eyebrow {
+  position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+.demo-page > .demo-header .demo-about > summary { top: -2px; }
+
+/* The drafting surface. The grid is 1 cm of screen, not of rock: it is a
+   surface texture, so it carries no scale claim and no tick labels. */
+.demo-fill {
+  position: relative;
+  background-color: var(--sw-canvas);
+  background-image:
+    linear-gradient(var(--sw-canvas-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--sw-canvas-grid) 1px, transparent 1px);
+  background-size: 44px 44px, 44px 44px;
+  border: 1px solid var(--sw-canvas-edge);
+  border-radius: var(--sw-radius-panel, 8px);
+  overflow: hidden;
+}
+/* Views that paint their own full-bleed surface (3D, seismic, maps) opt out:
+   a grid behind an opaque canvas is invisible, and behind a translucent one it
+   would read as data. */
+.demo-fill:is(.demo-earth-view, .demo-seismic-view) {
+  background-image: none;
+  background-color: var(--sw-surface);
+}
+/* The drawing roots paint their own paper, which covered the surface entirely —
+   the ground was there and invisible. They sit on the surface instead. */
+.demo-fill > :is(.sw-curved-assembly, .sw-asm-schematic, .sw-well-schematic, .sw-viewport, .sw-transform-wrapper, .sw-traj-plot, .sw-construction-section) { background: transparent; }
+.demo-fill .sw-transform-wrapper, .demo-fill .sw-viewport { background: transparent; }
+
+/* Tools read as one instrument strip rather than a row of equal ghosts. */
+.demo-inspection .demo-toolbar {
+  gap: var(--sw-space-2) var(--sw-space-3);
+  padding: 7px 10px;
+  border-radius: var(--sw-radius-panel, 8px);
+  box-shadow: 0 1px 0 rgb(0 0 0 / .03);
+}
+.demo-inspection .demo-toolbar > * + * { position: relative; }
+.demo-inspection .sw-asm-canvas-modes { display: inline-flex; gap: 2px; padding: 2px; background: var(--sw-paper); border: 1px solid var(--sw-line); border-radius: 7px; }
+.demo-inspection .sw-asm-canvas-modes button { border-color: transparent; background: transparent; }
+.demo-inspection .sw-asm-canvas-modes button[aria-pressed="true"] { background: var(--sw-surface); border-color: var(--sw-line); font-weight: 600; box-shadow: 0 1px 2px rgb(0 0 0 / .06); }
+
+/* The inspector is a panel, not a column of loose text. */
+.demo-inspector-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--sw-space-3);
+  padding: 10px 12px; border-bottom: 1px solid var(--sw-line);
+  font: 10px "IBM Plex Mono", monospace; letter-spacing: .09em; color: var(--sw-muted);
+}
+.demo-view-grid > .demo-side {
+  background: var(--sw-surface);
+  border: 1px solid var(--sw-line);
+  border-radius: var(--sw-radius-panel, 8px);
+}
+.demo-view-picker { display: grid; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--sw-line); }
+.demo-view-picker > span { font: 10px "IBM Plex Mono", monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--sw-muted); }
+.demo-view-picker select { width: 100%; min-height: 36px; padding: 5px 8px; border: 1px solid var(--sw-line); border-radius: var(--sw-radius-control); background: var(--sw-surface); color: var(--sw-ink); }
+
+/* Depth command line: instrument chrome under the canvas, not stray text. */
+.demo-drawing-status {
+  border: 1px solid var(--sw-line); border-radius: var(--sw-radius-panel, 8px);
+  background: var(--sw-surface); padding: 6px 10px;
+}
+.demo-drawing-status output { font-family: "IBM Plex Mono", monospace; }
+
+@media print {
+  .demo-fill { background: none; border: 0; }
+}
+
+/* The well's own facts, as a dense instrument read-out rather than prose. */
+.demo-well-facts { display: grid; gap: 0; margin: 0 0 var(--sw-space-4); }
+.demo-well-facts > div { display: flex; justify-content: space-between; gap: var(--sw-space-3); padding: 5px 0; border-bottom: 1px solid var(--sw-line); }
+.demo-well-facts > div:last-child { border-bottom: 0; }
+.demo-well-facts dt { color: var(--sw-muted); font-size: 11.5px; }
+.demo-well-facts dd { margin: 0; font: 11.5px "IBM Plex Mono", monospace; text-align: right; }
+.demo-inspection-tools h2 { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--sw-muted); margin: 0 0 var(--sw-space-2); }
+.demo-inspection-tools p { margin: 0; font-size: 12px; line-height: 1.5; color: var(--sw-muted); }
+
+/* The same drafting surface for the other canvas hosts. The well builder and the
+   well editor draw into their own containers, so a surface defined only for
+   `.demo-fill` left two of the three workspaces on bare paper. */
+.sw-wd-canvas, .demo-edit-canvas {
+  background-color: var(--sw-canvas);
+  background-image:
+    linear-gradient(var(--sw-canvas-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--sw-canvas-grid) 1px, transparent 1px);
+  background-size: 44px 44px, 44px 44px;
+}
+:is(.sw-wd-canvas, .demo-edit-canvas) :is(.sw-asm, .sw-asm-schematic, .sw-curved-assembly, .sw-viewport, .sw-transform-wrapper, .sw-well-schematic) { background: transparent; }
+@media print { .sw-wd-canvas, .demo-edit-canvas { background: none; } }

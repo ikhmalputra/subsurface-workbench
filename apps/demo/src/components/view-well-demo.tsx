@@ -277,10 +277,30 @@ export function ViewWellDemo() {
             {seismic && <optgroup label="Subsurface context">{layouts.filter((item) => item.value === "seismic" || item.value === "earth").map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</optgroup>}
         </select></label>
         <section className="demo-inspection-tools" aria-label="Well view tools" hidden={inspectorTab !== "tools"}>
-          <h2>Views</h2>
-          {layout === "earth" && <p>3D well, seismic volume and trajectory survey share the selected well and depth.</p>}
-          {layout === "seismic" && <p>Compare the construction schematic with the seismic section along this well.</p>}
-          {layout === "curved" && <p>Follow the measured trajectory in a schematic section.</p>}
+          {/* With nothing selected this pane was one sentence in a 400px column. An inspector with
+              no selection should describe the thing being inspected, and every fact here was
+              already on the page — scattered across the context bar, the status line and the
+              drawing caption — or buried in the Evidence tab. */}
+          <h2>This well</h2>
+          <dl className="demo-well-facts">
+            <div><dt>Total depth</dt><dd>{design.totalDepthM.toLocaleString("en", { maximumFractionDigits: 0 })} m MD</dd></div>
+            <div><dt>Survey</dt><dd>{survey.length > 1 ? `${survey.length} stations · ${survey.at(-1)!.mdM.toLocaleString("en", { maximumFractionDigits: 0 })} m` : "Not reported"}</dd></div>
+            <div><dt>Construction</dt><dd>{components.length} records · {assembly.items.length} drawn</dd></div>
+            <div><dt>Formations</dt><dd>{design.formations?.length ? `${design.formations.length} layers` : "Not reported"}</dd></div>
+            <div><dt>Operations</dt><dd>{operations ? `${operations.days.length} daily · ${operations.runs.length} runs` : "Not attached"}</dd></div>
+            <div><dt>Mud log</dt><dd>{logUrl ? "Attached" : "Not attached"}</dd></div>
+            <div><dt>Seismic</dt><dd>{seismic ? "Section & volume" : "Not attached"}</dd></div>
+            <div><dt>Depth datum</dt><dd>{design.depthDatum ?? "Not reported"}</dd></div>
+          </dl>
+          <h2>This view</h2>
+          <p>{layout === "earth" ? "3D well, seismic volume and trajectory survey share the selected well and depth."
+            : layout === "seismic" ? "Compare the construction schematic with the seismic section along this well."
+            : layout === "trajectory" ? "Plan view and vertical section of the surveyed path, marking every casing shoe."
+            : layout === "profile" ? "Interval tracks beside the measured-depth schematic."
+            : layout === "split" ? "The 2.5D construction schematic beside the lit 3D cutaway."
+            : layout === "scene" ? "The lit 3D cutaway of the assembled construction."
+            : layout === "schematic" ? "The straight 2.5D construction schematic, by measured depth."
+            : "Follow the measured trajectory in a schematic section."}</p>
         </section>
         <div hidden={inspectorTab !== "properties"}>
           <RecordCard component={picked} design={design} />

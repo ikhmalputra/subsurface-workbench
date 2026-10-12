@@ -13,7 +13,13 @@ test("desktop opens a drawing-first workspace with a single ownership point for 
   await expect(page.getByTestId("assembly-scene")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Curved", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("link", { name: "Edit well", exact: true })).toHaveCount(1);
-  await expect(page.getByRole("complementary", { name: "Component inspector" })).toContainText("Views");
+  // With nothing selected the inspector describes the well and the view it is showing. It used to
+  // be the single sentence under a "Views" heading; the heading is now "This view" and the well's
+  // own facts sit above it, so the assertion checks both halves rather than the old wording.
+  const inspector = page.getByRole("complementary", { name: "Component inspector" });
+  await expect(inspector).toContainText("This well");
+  await expect(inspector).toContainText("3,339 m MD");
+  await expect(inspector).toContainText("Follow the measured trajectory in a schematic section.");
   await expect(page.getByRole("region", { name: "Component inventory", exact: true })).toBeHidden();
   await expect(page.getByTestId("well-file")).toBeHidden();
   await expect(page.getByRole("combobox", { name: "Theme", exact: true })).toBeHidden();

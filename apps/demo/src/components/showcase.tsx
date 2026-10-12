@@ -3,8 +3,10 @@ import { WorkspaceRoute } from "./workspace-route";
 
 export function DemoHeader({ eyebrow, title, lede, points, uses, code, children }: { eyebrow: string; title: string; lede: string; points: readonly string[]; uses: readonly string[]; code: string; children?: ReactNode }) {
   return <header className="demo-header">
+    {/* The route label rides on the title line rather than above it; the readable copy stays in
+        the accessibility tree so nothing is lost when it stops being a 24px headline. */}
     <span className="demo-eyebrow">{eyebrow}</span>
-    <div className="demo-header-line"><h1>{title}</h1></div>
+    <div className="demo-header-line" data-route-label={eyebrow.replace(/^Capability · /i, "")}><h1>{title}</h1></div>
     <details className="demo-about">
       <summary>Usage and SDK details</summary>
       <div className="demo-header-body">
