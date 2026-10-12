@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { HEAVY_ASSET, SCENE_READY } from "./support/timing";
+import { waitForScene } from "./support/scene";
 
 test("shared selection is encoded in the URL and survives reload without losing host query/hash", async ({ page }) => {
   await page.goto("/view-well/?theme=dark#inspect");
@@ -88,12 +89,7 @@ test("well-scene camera hydrates in metre coordinates and camera input updates t
   // volume fetch at the same time, and then renders through software WebGL on CI.
   test.slow();
   await page.getByRole("combobox", { name: "View", exact: true }).selectOption("earth");
-  const scene = page.getByTestId("interactive-well-scene");
-  // Mounting the lazy chunk and producing a first frame are separate waits, each with its own
-  // budget. Sharing one meant a slow import left nothing for rendering, and the failure said
-  // "element not found" without distinguishing the two.
-  await expect(scene).toBeAttached({ timeout: SCENE_READY });
-  await expect(scene).toHaveAttribute("data-ready", "true", { timeout: SCENE_READY });
+  const scene = await waitForScene(page);
   await expect(scene).toHaveAttribute("data-camera", /^10\.000,10\.000,-10\.000,/);
   await expect(scene).toHaveAttribute("data-target", "0.000,-13.000,0.000");
   await page.getByRole("button", { name: "Fit 3D well", exact: true }).first().click();

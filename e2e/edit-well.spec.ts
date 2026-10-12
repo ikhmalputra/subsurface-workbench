@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { readFile } from "node:fs/promises";
+import { waitForScene } from "./support/scene";
 
 test("View well opens the selected record and uses edits as the active revision", async ({ page }) => {
   await page.goto("/view-well/");
@@ -107,8 +108,10 @@ test("full well edits recompute trajectory and reach construction, source record
   expect(exported.operations.runs[0].summary).toBe("User revised service run");
   await page.getByRole("link", { name: "Back to View well" }).click();
   await expect(page.getByTestId("workspace-context")).toContainText("User-authored revision");
+  // The 3D view lazily imports Three and renders through software WebGL on CI.
+  test.slow();
   await page.getByRole("combobox", { name: "View", exact: true }).selectOption("earth");
-  await expect(page.getByTestId("interactive-well-scene")).toHaveAttribute("data-ready", "true");
+  await waitForScene(page);
   await page.getByRole("link", { name: "Well report", exact: true }).click();
   await expect(page.getByTestId("well-report"), errors.join("\n")).toContainText("My FORGE revision");
   await expect(page.getByTestId("well-report")).toContainText("Revised formation");

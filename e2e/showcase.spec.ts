@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { SCENE_READY } from "./support/timing";
+import { waitForScene } from "./support/scene";
 
 async function horizontalOverflow(page: Page) {
   return page.evaluate(() => Array.from(document.body.querySelectorAll<HTMLElement>("*"))
@@ -118,7 +119,7 @@ test("trajectory path click probes depth and selects the string at that depth", 
 
 test("trajectory math is verified, the planner hits a dragged target and station edits recompute", async ({ page }) => {
   await page.goto("/trajectory/");
-  await expect(page.getByTestId("interactive-well-scene")).toHaveAttribute("data-ready", "true", { timeout: SCENE_READY });
+  await waitForScene(page);
   await expect(page.getByTestId("trajectory-verification")).toContainText("422 stations");
   await expect(page.getByTestId("trajectory-summary")).toContainText("3,339.1 m");
   await expect(page.getByTestId("well-scene-dls-legend")).toBeVisible();
@@ -374,8 +375,7 @@ test("view-well puts the well inside the full seismic volume beside the survey l
   await page.goto("/view-well/");
   await page.getByRole("combobox", { name: "View", exact: true }).selectOption("earth");
   await page.locator(".demo-scene-options > summary").click();
-  const scene = page.locator('[data-testid="interactive-well-scene"][data-ready="true"]');
-  await expect(scene).toHaveCount(1);
+  const scene = await waitForScene(page);
   const legend = page.getByTestId("well-scene-section-legend");
   await expect(legend).toContainText("FORGE PSDM volume · 2.75 × 1.52 km");
   // The cube can be volume-rendered and cut open without rebuilding the scene.
