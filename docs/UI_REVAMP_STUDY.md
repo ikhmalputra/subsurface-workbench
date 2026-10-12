@@ -147,3 +147,146 @@ interface is more honest than merging two depth references and hoping.
 6. **Cursor props for the three blind views** — `AssemblyScene`, `CurvedAssemblySchematic`,
    `CurvedSchematic`.
 7. **Retire the route gates** in favour of capability checks.
+
+---
+
+# Second pass: what belongs on screen together
+
+The first pass asked what is duplicated. This one asks the harder question — **which views are
+useless apart** — by taking each stage's actual decision and asking what evidence a person needs in
+front of them to make it. Written after step 1 (project model) and step 2 (load once) landed.
+
+## 7. Stage by stage: the decision, and what it needs simultaneously
+
+A pairing earns its place only if the decision **cannot** be made by looking at one view and then the
+other. Everything else is a tab.
+
+| Stage | The decision | Must be simultaneous | Shared key | Status here |
+| --- | --- | --- | --- | --- |
+| Frame | Is this well where I think it is? | map · section through it · trajectory plan | XY | **works** (`/map`) |
+| Correlate | Is this the same rock in both wells? | N logs side by side, flattened on one marker, tops joined | MD, flattened | **works** (`/correlation`) |
+| Evaluate | Is this interval pay? | multitrack log · crossplot · histogram · zone summary — *one dataset, three projections* | MD **and sample identity** | partly — see §9.1 |
+| Design | Where does the shoe go? | mud-weight window · casing scheme · cement plan · trajectory TVD | TVD | **broken** — see §9.3 |
+| Drill | Why did this interval take so long? | days-vs-depth · daily records · service runs · the mud log at that depth | **date and MD together** | **broken** — see §9.2 |
+| Complete | What is installed and what is it flowing? | schematic · production history · events | MD + time | separate routes, two stores |
+| Report | What do we actually know? | the document, with every number's source | document | **works** (`/well-report`) |
+
+Three stages already work. Three are broken in a specific, fixable way, and each one is broken for
+the same underlying reason: **the shared key the views need is finer than the key the store carries.**
+
+## 8. What the reference apps got right, and what they got wrong
+
+**Petrel's "perspectives" are presets, and they are per-discipline.** Petrel 2014 moved to a ribbon
+with a different ribbon per discipline — geology/geophysics, reservoir, production, drilling — and
+reported *click counts per task and mouse mileage* as the measure of whether the reorganisation
+worked, with a route back to the old interface for people it did not suit. Three lessons, in order of
+importance: presets are **named after the discipline, not the view**; the claim is **measurable**, so
+measure it; and there is **a way out** for someone the preset does not fit. Our §5 presets are named
+after the workflow stages, which is the same idea arrived at independently — and we have no measure
+and no escape hatch yet.
+
+**Interactive Petrophysics and Techlog link crossplots to depth by the sample, not by the range.**
+The practitioner workflow is: brush the shale cloud on a crossplot, and *those samples* light up on
+the log beside it — hover a point, the depth highlights; drag a box, the samples mark along the
+borehole, with the log placed immediately beside the crossplot at a matching depth scale. Our
+crossplot brushes, computes exactly that set — and then throws it away, emitting only its MD extent
+([petrophysics-analysis-view.tsx:74](../packages/react/src/petrophysics-analysis-view.tsx)). §9.1.
+
+**Core-to-log work starts with a depth shift.** The standard practice is that core depth is adjusted
+to log depth *before* any comparison, and then the comparison is made three ways at once — overlay
+versus depth, crossplot, histogram. We render core points as fixed MD markers with no shift
+affordance, which means our core-to-log view begins one step after the step that matters.
+
+**Drilling performance is read as plan versus actual, with every event at the depth and time it
+happened.** Days-vs-depth is the canonical chart, and what makes it useful is NPT and bit runs marked
+on it, then benchmarked against offsets. Ours draws the actual curve, alone. §9.2.
+
+**The mistake we should not copy — and have:** a *wizard per decision*. Our well design is a
+ten-step `switch (step)` that shows exactly one panel at a time
+([well-design-workflow.tsx:140](../packages/react/src/well-design-workflow.tsx)), and its own help
+text admits the coupling it then hides: *"Every pressure load downstream uses TVD from this plan.
+Changing it moves TD; re-propose the casing scheme afterwards."* The interface knows two panels
+depend on each other and asks the engineer to remember the dependency instead of showing it. That is
+the same error as the mutually-exclusive `layout` variable in §3, in a different file.
+
+## 9. Three modules worth building
+
+Each one is backed by data already in the repo, and each closes a specific gap above.
+
+### 9.1 A shared **sample** selection, not just a depth window
+
+`dataInteraction` in the store already has `hoveredId`, `selectedIds`, `depthRange`, `timeRange` and
+`brush` — the exact shape this needs — and §3 found it **is never written on the shared store at
+all**. Meanwhile the crossplot reduces a brushed cloud to `[minMd, maxMd]`.
+
+Why that reduction is not merely coarse: the synthetic well's porosity curve dips between samples 72
+and 92 and the gamma ray steps up after 70, so brushing the low-porosity cloud returns samples from
+*both* ends of the logged interval. Their MD extent is then almost the whole well, and every sample
+in between — including the five nulls at 55–59 — is presented as selected. The view's own caption is
+honest about this ("link their measured-depth extent"), which is the tell: a correct statement about
+the wrong quantity.
+
+The fix is small and additive. `onBrushChange` keeps its range; a new `onBrushSamples(ids, mdMs)`
+reports the set, the workspace writes it to `dataInteraction.selectedIds`, and the log view, the
+sample table and the zone summary read it. The histogram gets it for free. **This also makes
+`/petrophysics/` and `/linked-data/` panes of a workspace** rather than isolated examples — they
+become the first two views that share a selection finer than a depth.
+
+### 9.2 A drill-stage pane: one chart on the date **and** MD axes
+
+`DaysVsDepthChart` takes `focusDate` and `onSelectDay` and nothing else — the only view on the axis
+§1 calls "date and MD together" cannot accept or emit a depth. So the question "why did this interval
+take so long" is answered by reading four views in sequence and holding the depth in your head.
+
+Everything needed is already in `forgeOperations`, and the counts are worth stating because they
+decide whether this is a visualization or a fabrication:
+
+- **76 daily reports**, each already classified into one of ten activity categories — `drilling` 15,
+  `tripping` 16, `rig` 12, `casing` 9, `circulating` 7, `logging` 6, `coring` 6, `testing` 3,
+  `repair` 1, `other` 1. That is enough to colour the curve by what was actually happening, which is
+  the thing a drilling engineer reads first.
+- **9 of 54 service runs** ended `problem` or `failed`, and each has a depth interval and dates — real
+  trouble markers, placeable on both axes.
+- **66 of 76 days carry a mud weight**, so the weight actually used can be drawn against the designed
+  pressure window, with the other 10 days shown as not reported.
+
+What is **not** there: a planned depth-versus-days curve. `WellDay.planned` is the day's narrative
+text, not a plan. So plan-versus-actual is a host-supplied addition to the operations contract, and
+until a host supplies one we draw actual only and say so. Colouring by category, marking the nine
+bad runs, and giving the chart `cursorMdM` / `onSelectMd` needs no new data at all.
+
+### 9.3 Unlock the design panels from the wizard
+
+Eleven design views are individually exported, individually props-driven, and mounted in exactly one
+place each — inside `WellDesignWorkflow`: `WellIdentityForm`, `WellLocationForm`,
+`GeologyPressureEditor`, `PressureWindowPlot`, `CasingSchemeTable`, `CasingLoadCard`,
+`CementPlanTable`, `CompletionForm`, `DesignCoveragePanel`, `DesignReadinessPanel`,
+`WellProgrammeSummary`. **`PressureWindowPlot` — the view the shoe-depth decision is made on — is
+reachable through exactly one step of one wizard, and is mounted nowhere else in the application.**
+
+They are already pane-shaped. Nothing needs rewriting; the wizard stops being the only way to reach
+them, and the Design preset puts the pressure window, the casing scheme and the trajectory TVD on
+screen together, which is what the wizard's own help text says is required.
+
+(`MapHub` is mounted nowhere at all — not in the SDK, not in the app. It is the only view in the
+package with no caller, and should be either placed in the Frame preset or deleted, not left in the
+third state.)
+
+## 10. Build order, revised
+
+1. ~~**Project model**~~ — done (`apps/demo/src/lib/project.ts`, 6 tests).
+2. ~~**Load once**~~ — done (`apps/demo/src/lib/well-data.ts`, 5 tests): one LAS fetch and parse per
+   well shared by three views, projections memoized per parse, minimum curvature once per station
+   list, and `wells-data` reduced to a view of the project.
+3. **Frame to `layout.tsx`** — make the no-remount claim true.
+4. **Depth bridge** — metres store ↔ feet props, in one place.
+5. **Panes and presets** — the five well routes become one workspace. Includes §9.3, because the
+   Design preset cannot exist while the design panels have one mount site.
+6. **Cursor props for the blind views** — `AssemblyScene`, `CurvedAssemblySchematic`,
+   `CurvedSchematic`, and now `DaysVsDepthChart` (§9.2).
+7. **Retire the route gates** in favour of capability checks.
+8. **Shared sample selection** (§9.1) — additive to the store's existing `dataInteraction`, and the
+   thing that makes Evaluate a workspace rather than a page.
+
+Steps 3–7 are composition over existing components. Step 8 and the §9.2 colouring are the only new
+capability, and both are built from data the repo already holds.
