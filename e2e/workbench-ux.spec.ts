@@ -8,9 +8,15 @@ test("desktop opens a drawing-first workspace with a single ownership point for 
   const workspaces = page.getByRole("group", { name: "Workspaces", exact: true });
   await expect(workspaces.getByRole("link")).toHaveCount(4);
   for (const name of ["Well", "Design", "Field", "Analysis"]) await expect(workspaces.getByRole("link", { name, exact: true })).toBeVisible();
-  await expect(page.getByRole("combobox", { name: "View", exact: true })).toHaveValue("curved");
-  await expect(page.getByTestId("curved-assembly-schematic")).toBeVisible();
+  // The workspace opens on the well section — the schematic with the log and survey as tracks on
+  // one depth axis — and no 3D canvas has been started for it.
+  await expect(page.getByRole("combobox", { name: "View", exact: true })).toHaveValue("section");
+  await expect(page.getByTestId("well-section")).toBeVisible();
   await expect(page.getByTestId("assembly-scene")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Section", exact: true })).toHaveAttribute("aria-pressed", "true");
+  // The rest of this test is about the curved drawing's geometry and chrome, one click away.
+  await page.getByRole("button", { name: "Curved", exact: true }).click();
+  await expect(page.getByTestId("curved-assembly-schematic")).toBeVisible();
   await expect(page.getByRole("button", { name: "Curved", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("link", { name: "Edit well", exact: true })).toHaveCount(1);
   // With nothing selected the inspector describes the well and the view it is showing. It used to
@@ -90,7 +96,8 @@ test("phone navigation is deliberate, keyboard accessible and closes after chang
   const menu = page.getByRole("button", { name: "Open navigation" });
   await expect(menu).toHaveAttribute("aria-expanded", "false");
   await expect(page.getByRole("link", { name: "3D trajectory", exact: true })).toBeHidden();
-  await expect(page.getByTestId("curved-assembly-schematic")).toBeVisible();
+  // On a phone the section scrolls sideways inside its own box; the page itself must not.
+  await expect(page.getByTestId("well-section")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await menu.focus();
   await menu.press("Enter");

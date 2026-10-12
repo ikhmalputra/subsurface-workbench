@@ -5,13 +5,10 @@ import { gotoApp, reloadApp } from "./support/app";
 
 test("shared selection is encoded in the URL and survives reload without losing host query/hash", async ({ page }) => {
   await gotoApp(page, "/view-well/?theme=dark#inspect");
-  // `gotoApp` has waited for hydration; this only waits for the drawing itself. The previous
-  // comment here claimed visibility proved interactivity, which it does not — that is what
-  // `gotoApp` is for.
-  await expect(page.getByTestId("curved-assembly-schematic")).toBeVisible();
-  // The default curved drawing draws each tubular as two fill-less paths, so a
-  // bounding-box-centre click falls through to the cement behind it. Select with the
-  // keyboard, which the curved schematic supports directly.
+  // `gotoApp` has waited for hydration; this only waits for the section itself.
+  await expect(page.getByTestId("well-section")).toBeVisible();
+  // Select with the keyboard: the schematic track's items are focusable buttons, and only the
+  // section pane is mounted on load, so the id resolves to exactly one element.
   await page.locator('[data-item-id="production-casing"]').press("Enter");
   await expect.poll(() => new URL(page.url()).searchParams.get("sw.component")).toBe("production-casing");
   let url = new URL(page.url());
@@ -62,7 +59,7 @@ test("invalid and unknown asset links show explicit errors without replacing the
   await expect(page.getByRole("combobox", { name: "Well", exact: true })).toHaveValue("forge");
   await gotoApp(page, "/view-well/?sw.v=1&sw.well=forge&sw.md=-5");
   await expect(page.getByRole("alert").filter({ hasText: "shared view link" })).toContainText("non-negative");
-  await expect(page.getByTestId("curved-assembly-schematic").locator("[data-item-id]")).toHaveCount(7);
+  await expect(page.getByTestId("well-section").locator(".sw-asm-item")).toHaveCount(7);
   await gotoApp(page, "/view-well/?theme=dark&sw.v=1&sw.retired=1");
   await expect(page.getByRole("alert").filter({ hasText: "shared view link" })).toContainText("Unknown state URL parameter");
   await page.getByRole("combobox", { name: "Well", exact: true }).selectOption("s-profile");

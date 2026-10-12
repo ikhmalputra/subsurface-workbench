@@ -924,3 +924,44 @@ body { margin: 0; background: var(--sw-paper); color: var(--sw-ink); font-family
 /* The ruler's cursor readout is a pill over the scale, not a label fighting the nearest tick. */
 .demo-ruler-cursor rect { fill: var(--sw-cursor, #1d4ed8); }
 .demo-ruler-cursor text { fill: var(--sw-surface); }
+
+/* ============================================================================
+   Records dock — the well file inside the viewport, not below it
+   ----------------------------------------------------------------------------
+   The daily history, runs, hole sections and the full log were a disclosure
+   under the canvas: opening it put them at y>950 on a 980px screen, so reading
+   a record against the drawing meant scrolling the drawing away. It is now a
+   dock at the foot of the workspace. Closed, it is a 36px tab bar; open, it
+   takes a fixed slice and the canvas and inspector above it shrink to fit, so
+   the drawing stays on screen while the record is read against it.
+   ========================================================================== */
+/* 298px of chrome above and below the canvas: title bar, toolbar, depth command line and the
+   dock tab (28px plus its 2px of border). The canvas box is then 702px at a 1000px window, and
+   the drawing inside it — what workbench-ux measures — is 700px, because the drafting surface's
+   1px border sits inside the box on each edge. Measured, not reasoned: the first budget left the
+   drawing at 698. */
+.demo-inspection .demo-fill, .demo-inspection .demo-view-grid > .demo-side { height: clamp(520px, calc(100dvh - 298px), 1000px); }
+.demo-records-drawer { margin-top: 0; border-radius: var(--sw-radius-panel, 8px); overflow: hidden; }
+.demo-records-drawer > summary {
+  display: flex; align-items: baseline; gap: var(--sw-space-3); min-height: 28px; padding: 0 12px;
+  font-size: 12.5px; font-weight: 600; background: var(--sw-paper); border-bottom: 1px solid transparent;
+  list-style: none; cursor: pointer;
+}
+.demo-records-drawer > summary::-webkit-details-marker { display: none; }
+.demo-records-drawer > summary::before { content: "▸"; font-size: 10px; color: var(--sw-muted); }
+.demo-records-drawer[open] > summary::before { content: "▾"; }
+.demo-records-drawer[open] > summary { border-bottom-color: var(--sw-line); }
+.demo-records-drawer > summary span { margin-left: 0; }
+.demo-records-drawer .demo-file { max-height: 360px; overflow: auto; padding: 10px 12px; gap: var(--sw-space-2); }
+.demo-records-drawer .demo-file-bar { display: none; }
+.demo-records-drawer .demo-file-tabs button { min-height: 30px; font-size: 12px; }
+/* Open dock: the canvas and the inspector give up the dock's height rather than the page growing. */
+.demo-inspection:has(.demo-records-drawer[open]) .demo-fill,
+.demo-inspection:has(.demo-records-drawer[open]) .demo-view-grid > .demo-side { height: calc(100dvh - 298px - 400px); min-height: 260px; }
+/* In the dock the hole-section log is a strip, not three cards: it is context for every tab and
+   was costing 150px of a 360px dock before the tab's own content began. */
+.demo-records-drawer .sw-sections ol { display: flex; gap: var(--sw-space-2); }
+.demo-records-drawer .sw-sections li { flex: 1 1 0; min-width: 0; }
+.demo-records-drawer .sw-sections button { padding: 5px 8px; font-size: 11px; }
+.demo-records-drawer .sw-sections .sw-sections-body > :not(strong) { display: none; }
+.demo-records-drawer .sw-sections header { display: none; }

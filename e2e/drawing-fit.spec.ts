@@ -200,6 +200,11 @@ for (const route of ["/edit-well/?well=s-profile", "/view-well/?well=s-profile"]
     const modes = page.getByRole("group", { name: "Canvas view", exact: true });
     const formations = modes.getByRole("button", { name: "Formations", exact: true });
     await formations.click();
+    if (route.startsWith("/view")) {
+      // View well opens on the section, whose schematic track carries the layers too.
+      await expect(page.getByTestId("well-section").getByTestId("assembly-schematic").locator("[data-formation-id]").first()).toBeVisible();
+      await modes.getByRole("button", { name: "Curved", exact: true }).click();
+    }
     await expect(page.getByTestId("curved-assembly-schematic").locator("[data-formation-id]").first()).toBeVisible();
     await modes.getByRole("button", { name: "Schematic", exact: true }).click();
     await expect(page.getByTestId("assembly-schematic").locator("[data-formation-id]").first()).toBeVisible();

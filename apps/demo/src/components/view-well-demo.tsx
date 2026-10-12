@@ -130,7 +130,10 @@ export function ViewWellDemo() {
     },
     });
   }, [store, revisions]);
-  const [layoutChoice, setLayout] = useState<Layout>("curved");
+  // The section opens first. It is the view in which the schematic is the centre and every other
+  // record is read against it; the drawings and the 3D views are alternative renderings of the
+  // same construction and sit one click away in the same strip.
+  const [layoutChoice, setLayout] = useState<Layout>("section");
   const [showFormations, setShowFormations] = useState(false);
   const [sectionMode, setSectionMode] = useState<"construction" | "depth" | "trajectory">("trajectory");
   const { design, components, operations, logUrl, seismic } = useWell(wellId);
@@ -230,10 +233,11 @@ export function ViewWellDemo() {
     {linkError && <p role="alert">The shared view link could not be applied: {linkError}</p>}
     <div className="demo-toolbar">
       <div className="sw-asm-canvas-modes" role="group" aria-label="Canvas view">
+        <CommandButton kind="selection" aria-pressed={layout === "section"} onClick={() => setLayout("section")}>Section</CommandButton>
         <CommandButton kind="selection" aria-pressed={layout === "curved"} onClick={() => setLayout("curved")}>Curved</CommandButton>
         <CommandButton kind="selection" aria-pressed={layout === "schematic"} onClick={() => setLayout("schematic")}>Schematic</CommandButton>
         <CommandButton kind="selection" aria-pressed={layout === "scene"} onClick={() => setLayout("scene")}>3D view</CommandButton>
-        <CommandButton kind="selection" aria-pressed={showFormations} disabled={!design.formations?.length || (layout !== "curved" && layout !== "schematic")} onClick={() => setShowFormations((value) => !value)}>Formations</CommandButton>
+        <CommandButton kind="selection" aria-pressed={showFormations} disabled={!design.formations?.length || (layout !== "section" && layout !== "curved" && layout !== "schematic")} onClick={() => setShowFormations((value) => !value)}>Formations</CommandButton>
       </div>
       <CommandButton icon="link" type="button" className="demo-toggle" aria-pressed={link.linked} onClick={() => link.setLinked(!link.linked)} title="Zoom, pan and the depth cursor follow across the schematic, seismic section and mud log">{link.linked ? "Depth views linked" : "Depth views independent"}</CommandButton>
       <CommandButton icon="view" type="button" className="demo-tool-button" aria-expanded={inspectorVisible} aria-controls="well-inspector" onClick={() => setInspectorVisible(!inspectorVisible)}>{inspectorVisible ? "Hide inspector" : "Show inspector"}</CommandButton>
@@ -252,7 +256,10 @@ export function ViewWellDemo() {
       </details>}
     </div>
     <PaneGrid active={panes} className={`demo-view-grid demo-view-${layout}${inspectorVisible ? "" : " demo-inspector-hidden"}`}>
-      <Pane id="wellsection" deferUntilShown className="demo-fill demo-section-pane">
+      {/* The section has nothing to keep: its window, cursor and selection are the store's, and
+          its data loads are cached. Keeping it mounted behind another preset would leave a second
+          copy of the schematic in the document for anything that queries the page as a whole. */}
+      <Pane id="wellsection" deferUntilShown keep={false} className="demo-fill demo-section-pane">
         <WellSection assembly={assembly} components={components} survey={survey} stations={design.survey} formations={design.formations} totalDepthM={design.totalDepthM}
           operations={operations} logUrl={logUrl} selectedId={highlighted ?? null} onSelect={(id) => setSelectedId(id)} onSelectMd={selectAtMd} link={link} showFormations={showFormations} />
       </Pane>
@@ -285,7 +292,9 @@ export function ViewWellDemo() {
             <optgroup label="Construction">{layouts.filter((item) => item.value !== "seismic" && item.value !== "earth").map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</optgroup>
             {seismic && <optgroup label="Subsurface context">{layouts.filter((item) => item.value === "seismic" || item.value === "earth").map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</optgroup>}
         </select></label>
-        <section className="demo-inspection-tools" aria-label="Well view tools" hidden={inspectorTab !== "tools"}>
+        {/* The inspector panes scroll inside the docked column, so each is keyboard-focusable: a
+            scrolling region the keyboard cannot reach is a region whose lower half is mouse-only. */}
+        <section className="demo-inspection-tools" aria-label="Well view tools" hidden={inspectorTab !== "tools"} tabIndex={0}>
           {/* With nothing selected this pane was one sentence in a 400px column. An inspector with
               no selection should describe the thing being inspected, and every fact here was
               already on the page — scattered across the context bar, the status line and the
@@ -312,7 +321,7 @@ export function ViewWellDemo() {
             : layout === "schematic" ? "The straight 2.5D construction schematic, by measured depth."
             : "Follow the measured trajectory in a schematic section."}</p>
         </section>
-        <div hidden={inspectorTab !== "properties"}>
+        <div hidden={inspectorTab !== "properties"} role="region" aria-label="Selected record" tabIndex={0}>
           <RecordCard component={picked} design={design} />
           {!picked && <div className="demo-inspector-empty"><p>Pick a part in the drawing, or search the component register.</p><CommandButton icon="inspect" type="button" className="demo-tool-button" onClick={() => setInspectorTab("components")}>Browse components</CommandButton></div>}
           {picked && <div className="demo-component-actions">
@@ -321,10 +330,10 @@ export function ViewWellDemo() {
             {picked.topDepthReported === false && <p>Interval focus unavailable: top MD not reported.</p>}
           </div>}
         </div>
-        <div className="demo-component-register" hidden={inspectorTab !== "components"}>
+        <div className="demo-component-register" hidden={inspectorTab !== "components"} tabIndex={0}>
           <ComponentInventory key={design.id} components={components} selectedId={picked?.id ?? null} onSelect={setSelectedId} pageSize={10} />
         </div>
-        <section className="demo-inspection-basis" aria-label="Drawing basis" hidden={inspectorTab !== "basis"}>
+        <section className="demo-inspection-basis" aria-label="Drawing basis" hidden={inspectorTab !== "basis"} tabIndex={0}>
           <h2>Drawing basis</h2>
           <dl><div><dt>Observed survey end</dt><dd>{lastSurvey ? `${lastSurvey.mdM.toLocaleString("en", { maximumFractionDigits: 1 })} m MD` : "not reported"}</dd></div>
             <div><dt>Rendered assembly</dt><dd>{assembly.items.length} parts</dd></div>

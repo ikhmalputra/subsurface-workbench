@@ -43,8 +43,9 @@ exported files; integrators can use their own static host and security headers.
 - `apps/demo` is the private Next.js static showcase application, not a third
 	SDK package or a backend. Its routes consume the two SDK packages and show
 	one possible app composition. `/` is the capability index; each example page
-	includes a "Usage and SDK details" snippet: `/view-well/` (adapter + 2.5D
-	schematic + 3D cutaway, or a curved section that follows the survey, plus a
+	includes a "Usage and SDK details" snippet: `/view-well/` (a well section —
+	the construction schematic, mud log and survey as tracks on one depth axis —
+	with the 2.5D schematic, 3D cutaway and curved section as other views, plus a
 	searchable record inventory, and a well file with hole sections, daily
 	history, days vs depth, service runs, mud-log tracks and a SEG-Y seismic
 	section along the well), `/edit-well/` (full-well revision editor),
@@ -102,9 +103,11 @@ exported files; integrators can use their own static host and security headers.
   not a fifth workspace. Legacy route URLs remain supported. Route ownership
   and independent-example availability come from one host registry.
   Appearance and developer
-  examples are secondary disclosures. View well opens the construction drawing
-  without loading a second 3D canvas; its View selector exposes cutaway, comparison,
-  curved and subsurface projections. The inspector starts without an assumed
+  examples are secondary disclosures. View well opens on the well section —
+  the schematic as a track beside the mud log and the survey on one depth axis,
+  so a depth picked anywhere is drawn on all of them — without loading a 3D
+  canvas; its View selector exposes cutaway, comparison, curved and subsurface
+  projections. The well file docks under the canvas instead of below the fold. The inspector starts without an assumed
   component. Properties, the searchable component register and drawing evidence
   are inspector panels. The inspector can be hidden to reclaim drawing width;
   sourced component intervals can be focused, exact MD can be located numerically,

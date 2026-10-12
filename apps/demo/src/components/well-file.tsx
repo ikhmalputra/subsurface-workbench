@@ -72,7 +72,9 @@ export function WellFile({ operations, components, selected, onSelectComponent, 
   const markers = components.filter((component) => component.kind === "Casing" && component.rawBottomDepthFt).map((component) => ({ depthFt: component.rawBottomDepthFt as number, label: `${component.name.split(" / ").pop()?.trim()} shoe` }));
   const intervals = ops.runs.filter((run) => run.topFt !== null && run.baseFt !== null && run.baseFt > run.topFt).map((run) => ({ id: run.id, label: `${run.id} · ${run.kind}`, topFt: run.topFt as number, baseFt: run.baseFt as number, tone: run.outcome === "completed" ? "neutral" as const : run.outcome }));
 
-  return <section className="demo-file" aria-label="Well file" data-testid="well-file">
+  // Docked, the file is a scrolling region, and a scrolling region has to be reachable from the
+  // keyboard or its lower records are reachable only with a mouse.
+  return <section className="demo-file" aria-label="Well file" data-testid="well-file" tabIndex={0}>
     <div className="demo-file-bar">
       <h2 className="demo-file-title">Well file</h2>
       <p className="demo-file-note">{ops.days.length} daily reports · {ops.runs.length} service runs · {ops.milestones.length} milestones{selected ? <> · linked to <strong>{selected.name}</strong> ({Math.round(range?.topFt ?? 0).toLocaleString("en-US")}–{Math.round(range?.baseFt ?? 0).toLocaleString("en-US")} ft)</> : null}</p>
@@ -103,7 +105,7 @@ export function WellFile({ operations, components, selected, onSelectComponent, 
         const section = ops.sections.find((item) => item.id === run.holeSection);
         if (section) onSelectComponent(section.holeComponentId);
       }} />}
-      {tab === "log" && (log.loaded ? <LogTracks las={log.loaded.las} tracks={tracks} markers={markers} intervals={intervals} selectedRange={range} cursorFt={cursorFt} title="Mud log · 10 ft means"
+      {tab === "log" && (log.loaded ? <LogTracks las={log.loaded.las} tracks={tracks} markers={markers} intervals={intervals} selectedRange={range} cursorFt={cursorFt} title="Mud log · 10 ft means" height={340}
         depthWindowFt={link.linked ? bridge.windowFt : undefined}
         onDepthWindowChange={link.linked ? bridge.setWindowFt : undefined}
         onCursorChange={link.linked ? bridge.setCursorFt : undefined} onSelectDepth={(depthFt) => {

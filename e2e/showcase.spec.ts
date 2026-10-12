@@ -35,7 +35,7 @@ test("landing page links every capability to a working consumer example", async 
 test("view-well composes the adapter, 2.5D schematic and 3D cutaway directly", async ({ page }) => {
   test.slow(SOFTWARE_RENDERING, "software-rendered 3D cutaway");
   await gotoApp(page, "/view-well/");
-  // View well opens on the curved construction; this test is about the straight 2.5D schematic.
+  // View well opens on the well section; this test is about the straight 2.5D schematic.
   await page.getByRole("combobox", { name: "View", exact: true }).selectOption("schematic");
   await expect(page.locator(".sw-asm-item")).toHaveCount(7);
   // Hidden, not destroyed: a preset the 3D cutaway is not part of no longer throws the scene away.

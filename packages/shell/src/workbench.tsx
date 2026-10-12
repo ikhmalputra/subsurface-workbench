@@ -122,19 +122,23 @@ export function CanvasStack({ active, children }: { readonly active: string | re
  * mounted: the saving is on first paint, and the state is kept for every switch after that. Panes
  * without it mount immediately, which is what a cheap 2D view should do.
  */
-function useKeepAlive(id: string, deferUntilShown: boolean, child: string, parent: string) {
+function useKeepAlive(id: string, deferUntilShown: boolean, keep: boolean, child: string, parent: string) {
   const active = useContext(CanvasStackContext);
   // Naming the parent matters: the failure is always a missing wrapper, and the fix is to add that one.
   if (active === null) throw new Error(`<${child}> must be rendered inside <${parent}>.`);
   const shown = active.includes(id);
-  const [mounted, setMounted] = useState(!deferUntilShown || shown);
-  if (shown && !mounted) setMounted(true);
-  return { shown, mounted };
+  const [everShown, setEverShown] = useState(!deferUntilShown || shown);
+  if (shown && !everShown) setEverShown(true);
+  // `keep` is the point of the group: a hidden pane stays mounted so its view state survives.
+  // A pane whose state lives entirely in the shared store has nothing to keep, and keeping it
+  // means every drawing it contains stays in the document — twice over, once hidden — for
+  // anything that queries the page as a whole.
+  return { shown, mounted: shown || (keep && everShown) };
 }
 
 /** One pane of an overlay stack: every mode in the same cell, `hidden` choosing which paints. */
-export function CanvasLayer({ id, children, deferUntilShown = false }: { readonly id: string; readonly children: ReactNode; readonly deferUntilShown?: boolean }) {
-  const { shown, mounted } = useKeepAlive(id, deferUntilShown, "CanvasLayer", "CanvasStack");
+export function CanvasLayer({ id, children, deferUntilShown = false, keep = true }: { readonly id: string; readonly children: ReactNode; readonly deferUntilShown?: boolean; readonly keep?: boolean }) {
+  const { shown, mounted } = useKeepAlive(id, deferUntilShown, keep, "CanvasLayer", "CanvasStack");
   return <div className="swb-canvas-layer" data-layer={id} data-active={shown || undefined} data-mounted={mounted || undefined} hidden={!shown}>
     {mounted ? children : null}
   </div>;
@@ -158,8 +162,8 @@ export function PaneGrid({ active, className, children }: { readonly active: str
   </CanvasStackContext.Provider>;
 }
 
-export function Pane({ id, className, children, deferUntilShown = false }: { readonly id: string; readonly className?: string; readonly children: ReactNode; readonly deferUntilShown?: boolean }) {
-  const { shown, mounted } = useKeepAlive(id, deferUntilShown, "Pane", "PaneGrid");
+export function Pane({ id, className, children, deferUntilShown = false, keep = true }: { readonly id: string; readonly className?: string; readonly children: ReactNode; readonly deferUntilShown?: boolean; readonly keep?: boolean }) {
+  const { shown, mounted } = useKeepAlive(id, deferUntilShown, keep, "Pane", "PaneGrid");
   return <div className={className} data-pane={id} data-active={shown || undefined} data-mounted={mounted || undefined} hidden={!shown}>
     {mounted ? children : null}
   </div>;

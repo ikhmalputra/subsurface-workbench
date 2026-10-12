@@ -7,9 +7,15 @@ for (const route of ["/view-well/?well=s-profile", "/edit-well/?well=s-profile",
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
     await gotoApp(page, route);
+    const modes = page.getByRole("group", { name: "Canvas view", exact: true });
+    if (route.startsWith("/view")) {
+      // View well opens on the well section; the curved drawing this test measures is a mode of it.
+      await expect(page.getByTestId("well-section")).toBeVisible();
+      await expect(modes.getByRole("button", { name: "Section", exact: true })).toHaveAttribute("aria-pressed", "true");
+      await modes.getByRole("button", { name: "Curved", exact: true }).click();
+    }
     const canvas = page.getByTestId("curved-assembly-schematic");
     await expect(canvas).toBeVisible();
-    const modes = page.getByRole("group", { name: "Canvas view", exact: true });
     await expect(modes.getByRole("button", { name: "Curved", exact: true })).toHaveAttribute("aria-pressed", "true");
     const dock = page.locator(route.startsWith("/view") ? "#well-inspector" : route.startsWith("/edit") ? ".demo-edit-tool-panel" : ".sw-wd-tools");
     const drawing = (await canvas.boundingBox())!, tools = (await dock.boundingBox())!;
