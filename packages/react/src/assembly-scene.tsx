@@ -149,10 +149,24 @@ export function AssemblyScene({ assembly, assetBaseUrl, selectedId = null, onSel
     const scene = new THREE.Scene();
     const environment = new THREE.PMREMGenerator(renderer);
     scene.environment = environment.fromScene(new RoomEnvironment(), 0.04).texture;
-    scene.add(new THREE.HemisphereLight(0xf4f1e8, 0x56605a, 1.1));
-    const sun = new THREE.DirectionalLight(0xffffff, 1.6);
-    sun.position.set(14, 30, 22);
-    scene.add(sun);
+    /**
+     * Three-point lighting, because one sun and a bright hemisphere is what made this flat.
+     *
+     * The hemisphere was carrying most of the exposure, which lights every surface of a cylinder
+     * almost equally — so casing read as a flat orange stripe rather than a tube. Dropping it to a
+     * fill and putting the energy into a key gives the tubulars a lit side and a shaded side; a
+     * dim rim from behind separates the model from the backdrop it now has.
+     */
+    scene.add(new THREE.HemisphereLight(0xf4f1e8, 0x56605a, 0.55));
+    const key = new THREE.DirectionalLight(0xfff4e6, 2.4);
+    key.position.set(14, 30, 22);
+    scene.add(key);
+    const fill = new THREE.DirectionalLight(0xdfe9ff, 0.7);
+    fill.position.set(-22, 8, 14);
+    scene.add(fill);
+    const rim = new THREE.DirectionalLight(0xffffff, 1.1);
+    rim.position.set(-8, 16, -26);
+    scene.add(rim);
     const camera = new THREE.PerspectiveCamera(32, 1, 0.05, 2000);
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -461,14 +475,37 @@ export function AssemblyScene({ assembly, assetBaseUrl, selectedId = null, onSel
       const box = new THREE.Box3();
       if (id) world.getObjectByName(id)?.traverse((child) => { if (child instanceof THREE.Mesh) box.expandByObject(child); });
       if (box.isEmpty()) { world.children.forEach((child) => { if (child.visible) box.expandByObject(child); }); box.expandByPoint(new THREE.Vector3(0, y(td), 0)).expandByPoint(new THREE.Vector3(0, explodedNow ? 3.4 : 2, 0)); }
-      const size = box.getSize(new THREE.Vector3());
       const center = box.getCenter(new THREE.Vector3());
       const minimum = id ? 7 : 4;
-      const height = Math.max(size.y, minimum) * 1.1;
-      const width = Math.max(size.x, size.z, minimum) * 1.35;
+      // A three-quarter view rather than a near-side-on one. Looking at a vertical object from
+      // almost square on is what makes a 3D scene read as a 2D stick: there is no foreshortening
+      // anywhere, so nothing tells the eye it has depth.
+      const direction = new THREE.Vector3(0.92, 0.34, 1).normalize();
+
+      /**
+       * Fit the box as the camera will actually see it.
+       *
+       * The old fit measured the world-axis extents and assumed the camera looked down -Z, which
+       * is true only for a front-on view. Tilting the camera made the projected height larger than
+       * `size.y` and the wellhead went off the top of the frame. Measuring the corners in the
+       * camera's own basis is exact from any direction, and it is what lets the padding come down
+       * to a few percent without risking a crop.
+       */
+      const forward = direction.clone().negate();
+      const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), forward).normalize();
+      const up = new THREE.Vector3().crossVectors(forward, right).normalize();
+      let halfWidth = 0, halfHeight = 0, halfDepth = 0;
+      for (const cx of [box.min.x, box.max.x]) for (const cy of [box.min.y, box.max.y]) for (const cz of [box.min.z, box.max.z]) {
+        const offset = new THREE.Vector3(cx, cy, cz).sub(center);
+        halfWidth = Math.max(halfWidth, Math.abs(offset.dot(right)));
+        halfHeight = Math.max(halfHeight, Math.abs(offset.dot(up)));
+        halfDepth = Math.max(halfDepth, Math.abs(offset.dot(forward)));
+      }
+      halfHeight = Math.max(halfHeight, minimum / 2);
+      halfWidth = Math.max(halfWidth, minimum / 2);
       const vertical = THREE.MathUtils.degToRad(camera.fov) / 2;
-      const distance = Math.max(height / 2 / Math.tan(vertical), width / 2 / Math.tan(Math.atan(Math.tan(vertical) * camera.aspect))) + Math.max(size.x, size.z);
-      const direction = new THREE.Vector3(0.52, 0.2, 1).normalize();
+      const horizontal = Math.atan(Math.tan(vertical) * camera.aspect);
+      const distance = Math.max(halfHeight / Math.tan(vertical), halfWidth / Math.tan(horizontal)) * 1.06 + halfDepth;
       controls.target.copy(center);
       camera.position.copy(center).addScaledVector(direction, distance);
       camera.near = Math.max(0.02, distance / 500);
