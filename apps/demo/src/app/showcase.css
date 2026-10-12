@@ -1009,3 +1009,13 @@ body { margin: 0; background: var(--sw-paper); color: var(--sw-ink); font-family
 .demo-records-drawer .sw-sections-bar { min-height: 18px; }
 .demo-records-drawer .sw-sections-body strong { font-size: 12px; }
 @media (max-width: 1180px) { .demo-traj-views-pane { grid-template-columns: minmax(0, 1fr); } }
+
+/* The editor's canvas cell hosts two panes: the builder (the editing surface) and the section
+   (the same spine as the other well routes, over the live revision). */
+.demo-edit-canvas { display: grid; grid-template-columns: minmax(0, 1fr); }
+.demo-edit-canvas > .demo-edit-canvas-pane { min-width: 0; min-height: 0; display: grid; }
+.demo-edit-canvas > .demo-edit-canvas-pane > .sw-asm { min-height: 0; }
+.demo-edit-canvas > .demo-section-pane { height: clamp(520px, calc(100dvh - 240px), 1000px); }
+.demo-edit-actions .sw-asm-canvas-modes { display: inline-flex; gap: 2px; padding: 2px; background: var(--sw-paper); border: 1px solid var(--sw-line); border-radius: 7px; }
+.demo-edit-actions .sw-asm-canvas-modes button { border-color: transparent; background: transparent; }
+.demo-edit-actions .sw-asm-canvas-modes button[aria-pressed="true"] { background: var(--sw-surface); border-color: var(--sw-line); font-weight: 600; }

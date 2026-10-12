@@ -10,6 +10,9 @@ import { BuildHoldForm, SurveyTable, TrajectoryPlanView, TrajectorySectionView, 
 import { CommandButton, CommandIcon } from "@ikhmalputra/subsurface-react/ui";
 import { wells } from "./wells-data";
 import { useWorkspace } from "./workspace-provider";
+import { WellSection } from "./well-section";
+import { Pane, PaneGrid } from "@ikhmalputra/subsurface-shell";
+import { useDepthLink } from "@ikhmalputra/subsurface-react";
 import { assertWellDesign, assertWellOperations, editTrajectory, localLogUrl, mergeAssembly, parseWellRevision } from "../lib/well-revision";
 import type { WellRevision } from "../lib/well-revision";
 
@@ -90,7 +93,12 @@ export function EditWellDemo() {
 }
 
 function WellEditor({ source, componentId }: { source: (typeof wells)[number]; componentId: string | null }) {
-  const { revisions, applyRevision, restoreSource, assemblyDrafts, updateAssemblyDraft, chooseWell } = useWorkspace();
+  const { store, revisions, applyRevision, restoreSource, assemblyDrafts, updateAssemblyDraft, chooseWell } = useWorkspace();
+  // The editor's canvas is the builder; the section is its context view — the same spine as View
+  // well and Trajectory, over the live revision, so an edit shows up against the log and the
+  // survey one click away rather than on another page.
+  const [view, setView] = useState<"edit" | "section">("edit");
+  const link = useDepthLink(true, store);
   const revision = revisions[source.design.id] ?? { design: source.design, operations: source.operations ?? null, logUrl: source.logUrl ?? null };
   const { design } = revision;
   const [tab, setTab] = useState<EditTab>("construction");
@@ -147,6 +155,10 @@ function WellEditor({ source, componentId }: { source: (typeof wells)[number]; c
     <header className="demo-edit-commandbar">
       <div className="demo-edit-identity"><span className="demo-eyebrow">WELL EDITOR</span><h1>Edit {design.wellName ?? source.label}</h1></div>
       <div className="demo-edit-actions">
+        <div className="sw-asm-canvas-modes" role="group" aria-label="Editor view">
+          <CommandButton kind="selection" type="button" aria-pressed={view === "edit"} onClick={() => setView("edit")}>Edit</CommandButton>
+          <CommandButton kind="selection" type="button" aria-pressed={view === "section"} onClick={() => setView("section")}>Section</CommandButton>
+        </div>
         <Link className="demo-edit-back" href={`/view-well/?well=${encodeURIComponent(source.id)}`}><CommandIcon name="previous" />Back to View well</Link>
         <CommandButton icon="download" onClick={() => {
           const url = URL.createObjectURL(new Blob([JSON.stringify(revision, null, 2)], { type: "application/json" }));
@@ -161,16 +173,22 @@ function WellEditor({ source, componentId }: { source: (typeof wells)[number]; c
     </header>
     <section role="tabpanel" id="well-edit-panel" aria-labelledby={`well-edit-${tab}`} className={`demo-well-editor demo-edit-${tab}`}>
       <div className="demo-edit-workbench">
-        <div className="demo-edit-canvas">
-          <WellAssemblyBuilder embedded workbench survey={design.survey} formations={design.formations} toolsContainer={constructionTools} onToolsRequested={() => setTab("construction")} assetBaseUrl="/well-components"
+        <PaneGrid active={[view]} className="demo-edit-canvas">
+          <Pane id="edit" className="demo-edit-canvas-pane"><WellAssemblyBuilder embedded workbench survey={design.survey} formations={design.formations} toolsContainer={constructionTools} onToolsRequested={() => setTab("construction")} assetBaseUrl="/well-components"
             editorState={draft ?? { past: [], present: assembly, future: [], selectedId }}
             onEditorStateChange={(state) => {
               const previous = draft?.present ?? assembly;
               if (state.present !== previous) apply({ ...revision, design: mergeAssembly(design, previous, state.present) }, "Construction applied to active well.", true);
               if (state.selectedId !== (draft?.selectedId ?? selectedId)) { setRecordId(state.selectedId ?? ""); setTab("construction"); }
               updateAssemblyDraft(design.id, state);
-            }} />
-        </div>
+            }} /></Pane>
+          <Pane id="section" deferUntilShown keep={false} className="demo-fill demo-section-pane">
+            <WellSection assembly={draft?.present ?? assembly} components={getWellComponents(design)} survey={survey} stations={design.survey} formations={design.formations} totalDepthM={design.totalDepthM}
+              operations={revision.operations} logUrl={revision.logUrl ?? undefined}
+              selectedId={draft?.selectedId ?? selectedId} onSelect={(id) => { if (id) { setRecordId(id); if (draft) updateAssemblyDraft(design.id, { ...draft, selectedId: id }); } }}
+              onSelectMd={(mdM) => link.pinCursor(mdM)} link={link} showFormations={false} />
+          </Pane>
+        </PaneGrid>
         <aside className="demo-edit-tool-panel" aria-label="Well editing tools">
           <div className="demo-edit-tabs" role="tablist" aria-label="Well editor">
             {tabs.map((item, index) => <CommandButton key={item.id} kind="selection" role="tab" id={`well-edit-${item.id}`} tabIndex={tab === item.id ? 0 : -1} aria-selected={tab === item.id} aria-controls="well-edit-panel" onClick={() => setTab(item.id)} onKeyDown={(event) => {

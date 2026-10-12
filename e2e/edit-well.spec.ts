@@ -181,3 +181,27 @@ test("active revision preserves edits and undo history across navigation while r
   await page.keyboard.press("Enter");
   await expect(label).toHaveValue(original);
 });
+
+test("an edit in the builder is on the section's construction track one click later", async ({ page }) => {
+  await gotoApp(page, "/edit-well/?well=forge");
+  // Rename a casing through the builder's inspector.
+  const curved = page.getByTestId("curved-assembly-schematic");
+  await curved.locator('[data-item-id="production-casing"]').first().focus();
+  await page.keyboard.press("Enter");
+  const inspector = page.getByTestId("assembly-inspector");
+  await inspector.getByLabel("Label", { exact: true }).fill("Section-checked casing");
+  await inspector.getByRole("button", { name: "Apply changes" }).click();
+
+  // The section is the same spine as View well, over this revision: the renamed casing sits on
+  // the construction track beside the mud log and the survey, with nothing re-entered.
+  await page.getByRole("group", { name: "Editor view" }).getByRole("button", { name: "Section", exact: true }).click();
+  const section = page.getByTestId("well-section");
+  await expect(section).toBeVisible();
+  await expect(section.getByTestId("assembly-schematic").locator('[data-item-id="production-casing"]')).toHaveAttribute("aria-label", /Section-checked casing/);
+  await expect(section.getByTestId("log-tracks")).toBeAttached();
+  await expect(section.getByTestId("trajectory-log")).toBeAttached();
+  // Back to the editor, which kept its canvas and its undo history.
+  await page.getByRole("group", { name: "Editor view" }).getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(curved).toBeVisible();
+  await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeEnabled();
+});
