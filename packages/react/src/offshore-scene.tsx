@@ -111,6 +111,23 @@ export function OffshoreScene({ model, origin, waterDepthsM, selectedWellId, onS
     }
     let animation = 0, transition: { start: number; from: THREE.Vector3; to: THREE.Vector3; targetFrom: THREE.Vector3; targetTo: THREE.Vector3 } | null = null;
     function report() { setCamera(`${view.position.x.toFixed(0)}, ${view.position.y.toFixed(0)}, ${view.position.z.toFixed(0)}`); }
+    // Where each wellhead is on screen, in canvas pixels, published on the host as it changes. It
+    // is what lets a host (or a test) point at a well without guessing where the camera put it,
+    // and it is the same projection the pick below uses, so the two agree by construction.
+    const projected = new THREE.Vector3();
+    let lastHeads = "";
+    function screenOf(object: THREE.Object3D, width: number, height: number) {
+      projected.copy(object.position).project(view);
+      return { x: (projected.x + 1) / 2 * width, y: (1 - projected.y) / 2 * height, behind: projected.z > 1 };
+    }
+    function reportHeads() {
+      const width = renderer.domElement.clientWidth, height = renderer.domElement.clientHeight;
+      const heads = objects.filter((object) => object.geometry instanceof THREE.SphereGeometry).map((object) => {
+        const at = screenOf(object, width, height);
+        return at.behind ? null : `${String(object.userData.wellId)}:${at.x.toFixed(0)},${at.y.toFixed(0)}`;
+      }).filter((entry): entry is string => entry !== null).join(";");
+      if (heads !== lastHeads) { lastHeads = heads; element.setAttribute("data-wellheads", heads); }
+    }
     focus.current = (id) => {
       const head = id ? heads.get(id) : null;
       const bounds = id ? targets.get(id) : null;
@@ -140,8 +157,11 @@ export function OffshoreScene({ model, origin, waterDepthsM, selectedWellId, onS
       ray.setFromCamera(new THREE.Vector2((event.clientX - box.left) / box.width * 2 - 1, -(event.clientY - box.top) / box.height * 2 + 1), view);
       const hit = ray.intersectObjects(objects)[0];
       if (!hit) {
+        // A pick box, as a CAD tool has one: the nearest wellhead within 16 screen pixels of the
+        // click. It was a distance in scene metres, which at the overview camera was a few pixels.
+        const px = event.clientX - box.left, py = event.clientY - box.top;
         const candidates = objects.filter((object) => object.geometry instanceof THREE.SphereGeometry);
-        const nearest = candidates.map((object) => ({ object, distance: ray.ray.distanceToPoint(object.position) })).filter((entry) => entry.distance < 180).sort((a, b) => a.distance - b.distance)[0];
+        const nearest = candidates.map((object) => { const at = screenOf(object, box.width, box.height); return { object, distance: at.behind ? Infinity : Math.hypot(at.x - px, at.y - py) }; }).filter((entry) => entry.distance <= 16).sort((a, b) => a.distance - b.distance)[0];
         if (nearest) { const id = String(nearest.object.userData.wellId); focus.current(id); select(id); return; }
       }
       if (hit) { const id = String(hit.object.userData.wellId); focus.current(id); select(id); }
@@ -164,7 +184,7 @@ export function OffshoreScene({ model, origin, waterDepthsM, selectedWellId, onS
         controls.target.lerpVectors(transition.targetFrom, transition.targetTo, eased);
         if (t === 1) { transition = null; setFlying(false); report(); }
       }
-      controls.update(); renderer.render(scene, view); animation = requestAnimationFrame(render);
+      controls.update(); renderer.render(scene, view); reportHeads(); animation = requestAnimationFrame(render);
     }
     animation = requestAnimationFrame(render); setReady(true);
     return () => {

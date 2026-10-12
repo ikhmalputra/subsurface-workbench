@@ -1,5 +1,5 @@
 /* Demo-owned showcase styles. The SDK stylesheet is scoped and does not touch globals. */
-:root { color-scheme: light; --sw-ink: #20322a; --sw-muted: #53655a; --sw-line: #dbe2dd; --sw-accent: #147a65; --sw-paper: #f7f9f7; }
+:root { color-scheme: light; --sw-ink: #1f2327; --sw-muted: #5c636b; --sw-line: #d3d7dd; --sw-accent: #1864ab; --sw-paper: #f3f4f6; }
 body { margin: 0; background: var(--sw-paper); color: var(--sw-ink); font-family: "IBM Plex Sans", sans-serif; -webkit-font-smoothing: antialiased; }
 .demo-nav, .demo-page, .demo-home { font-family: "IBM Plex Sans", sans-serif; color: var(--sw-ink); }
 :where(.demo-nav, .demo-page, .demo-home) * { box-sizing: border-box; }
@@ -603,11 +603,11 @@ body { margin: 0; background: var(--sw-paper); color: var(--sw-ink); font-family
   /* A recessed ground for drawings, one step back from the page. Every pro
      subsurface and CAD application separates these two surfaces; this one did
      not, so the drawing floated with no edge of its own. */
-  --sw-canvas: #eef2ef;
-  --sw-canvas-grid: #e4eae6;
-  --sw-canvas-edge: #c6d2ca;
+  --sw-canvas: #f0f1f3;
+  --sw-canvas-grid: #e1e3e7;
+  --sw-canvas-edge: #c8ccd2;
 }
-[data-sw-theme="dark"] { --sw-canvas: #121a16; --sw-canvas-grid: #1e2823; --sw-canvas-edge: #3b4a41; }
+[data-sw-theme="dark"] { --sw-canvas: #1f2124; --sw-canvas-grid: #2a2d31; --sw-canvas-edge: #3a3d42; }
 [data-sw-theme="high-contrast"] { --sw-canvas: #fff; --sw-canvas-grid: #b9c4bd; --sw-canvas-edge: #20322a; }
 
 /* The workspace title row: route label and title on one line, with the SDK
@@ -1106,4 +1106,196 @@ body { margin: 0; background: var(--sw-paper); color: var(--sw-ink); font-family
   .demo-analysis:has(.demo-records-drawer[open]) .demo-fill { height: 480px; }
   .demo-analysis .demo-view-grid > .demo-side.demo-study-side, .demo-analysis:has(.demo-records-drawer[open]) .demo-view-grid > .demo-side.demo-study-side { height: auto; max-height: none; overflow: visible; }
   .demo-study-evidence .demo-study-context-table { max-height: 320px; }
+}
+
+/* ============================================================================
+   Identity: graphite frame, drafting canvas
+   ----------------------------------------------------------------------------
+   The frame reads as an engineering tool's: the command bar, the document
+   tabs, the tool rail and the status bar are graphite in every theme, the way
+   Illustrator and AutoCAD keep their chrome dark around a light sheet. The
+   canvas and the panels take the theme. Controls are 32px — dense, and still
+   past WCAG's 24px target — panel heads are a flat grey strip with a tracked
+   capital label, corners are 3px, and the selection colour is AutoCAD's
+   orange. The tokens below are the chrome's own; nothing in a plot reads them.
+   ========================================================================== */
+:root {
+  --swc-bg: #26282c; --swc-bg-2: #1e2023; --swc-ink: #e9eaec; --swc-muted: #aeb2b8; --swc-line: #3a3d43;
+  --swc-hover: #34373d; --swc-selected: #2f3f52; --swc-accent: #7cc4ff;
+  --sw-panel-head: #eceef1;
+  --sw-radius-panel: 3px;
+}
+[data-sw-theme="dark"] { --swc-bg: #1a1b1e; --swc-bg-2: #141517; --swc-ink: #e6e7e9; --swc-muted: #a9adb3; --swc-line: #2f3237; --swc-hover: #27292e; --swc-selected: #243650; --swc-accent: #7cc4ff; --sw-panel-head: #2a2c30; }
+[data-sw-theme="high-contrast"] { --swc-bg: #000; --swc-bg-2: #000; --swc-ink: #fff; --swc-muted: #fff; --swc-line: #fff; --swc-hover: #3b3200; --swc-selected: #002b49; --swc-accent: #0ff; --sw-panel-head: #000; }
+[data-sw-density="comfortable"] { --sw-control-height: 32px; --sw-panel-padding: 10px; --sw-density-gap: 10px; }
+[data-sw-density="compact"] { --sw-control-height: 28px; --sw-panel-padding: 8px; --sw-density-gap: 8px; }
+@media (pointer: coarse) { [data-sw-density] { --sw-control-height: 40px; } }
+body { background: var(--swc-bg-2); }
+
+/* ---- command bar ---- */
+.swb { background: var(--swc-bg-2); }
+.swb-commandbar { min-height: 42px; padding: 0 10px; gap: var(--sw-space-3); background: var(--swc-bg); color: var(--swc-ink); box-shadow: inset 0 -1px 0 var(--swc-line); }
+.demo-brand, .demo-brand:visited { display: inline-flex; align-items: center; gap: 9px; padding: 0 4px; color: var(--swc-ink); font-size: 14px; font-weight: 600; letter-spacing: -.01em; line-height: 1; text-decoration: none; }
+.demo-brand span { color: var(--swc-ink); font-weight: 600; }
+.demo-brand svg { color: var(--swc-accent); }
+.demo-brand small { display: block; margin-top: 3px; font: 600 8.5px "IBM Plex Mono", monospace; letter-spacing: .2em; color: var(--swc-muted); }
+.demo-appearance { position: relative; padding: 0; font-size: 12px; color: var(--swc-ink); }
+.demo-appearance > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 10px; border: 1px solid var(--swc-line); border-radius: 4px; color: var(--swc-ink); font-size: 12px; }
+.demo-appearance > summary::before { content: none; }
+.demo-appearance > summary::-webkit-details-marker { display: none; }
+.demo-appearance > summary::after { content: "\25BE"; font-size: 10px; color: var(--swc-muted); }
+.demo-appearance > summary:hover, .demo-appearance[open] > summary { background: var(--swc-hover); }
+.demo-appearance .demo-appearance-controls { position: absolute; right: 0; top: calc(100% + 6px); z-index: 60; min-width: 220px; padding: 10px 12px; background: var(--sw-surface); border: 1px solid var(--sw-line); border-radius: 4px; box-shadow: 0 12px 32px rgb(0 0 0 / .28); color: var(--sw-ink); }
+
+/* ---- document tabs and the context line ---- */
+.swb-options { padding: 0; gap: 0; background: var(--swc-bg); color: var(--swc-ink); box-shadow: inset 0 -1px 0 var(--swc-line); }
+.demo-doc-tabs { flex: 1 1 100%; display: flex; align-items: flex-end; gap: 2px; min-height: 32px; padding: 4px 8px 0; background: var(--swc-bg-2); box-shadow: inset 0 -1px 0 var(--swc-line); overflow-x: auto; scrollbar-width: none; }
+.demo-doc-tabs a, .demo-doc-tabs a:visited { text-decoration: none; }
+.demo-doc-tabs a { display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 14px; border: 1px solid transparent; border-bottom: 0; border-radius: 4px 4px 0 0; color: var(--swc-muted); font-size: 12px; font-weight: 500; white-space: nowrap; }
+.demo-doc-tabs a:hover { color: var(--swc-ink); background: var(--swc-hover); }
+.demo-doc-tabs a[aria-current="page"] { color: var(--swc-ink); background: var(--swc-bg); border-color: var(--swc-line); box-shadow: inset 0 2px 0 var(--swc-accent), 0 1px 0 var(--swc-bg); }
+.demo-workspace-context { flex: 1 1 100%; padding: 5px 12px; gap: 6px 18px; border-bottom: 0; background: var(--swc-bg); color: var(--swc-muted); font-size: 11.5px; }
+.demo-workspace-context .demo-picker { flex: 0 1 460px; display: flex; align-items: center; gap: 8px; }
+.demo-workspace-context .demo-picker > span { font: 600 10px "IBM Plex Mono", monospace; letter-spacing: .12em; text-transform: uppercase; color: var(--swc-muted); }
+.demo-workspace-context .demo-picker select { min-height: 28px; padding: 2px 8px; border: 1px solid var(--swc-line); border-radius: 4px; background: var(--swc-bg-2); color: var(--swc-ink); font: 12.5px "IBM Plex Sans", sans-serif; }
+.demo-workspace-context .demo-workspace-provenance { color: var(--swc-ink); }
+.demo-workspace-context .demo-context-depth { color: var(--swc-accent); }
+.demo-workspace-context button[data-ui-kind="command"][type] { min-height: var(--sw-control-height); padding: 2px 10px; border-color: var(--swc-line); background: transparent; color: var(--swc-ink); font-size: 12px; }
+.demo-workspace-context button[data-ui-kind="command"][type]:hover { background: var(--swc-hover); }
+
+/* ---- tool rail ---- */
+.swb-sidebar { background: var(--swc-bg); box-shadow: inset -1px 0 0 var(--swc-line); }
+.demo-nav { position: static; box-sizing: border-box; width: 96px; height: 100%; padding: 8px 6px; background: transparent; border-right: 0; color: var(--swc-ink); }
+.demo-nav-content { gap: 8px; }
+.demo-nav-group { gap: 2px; }
+.demo-nav-group > span, .demo-nav-views > span { padding: 4px 4px 4px; font-size: 8.5px; letter-spacing: .14em; color: var(--swc-muted); text-align: center; }
+.demo-nav .demo-nav-group a, .demo-nav .demo-nav-secondary a, .demo-nav details.demo-nav-secondary > summary {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+  min-height: 54px; padding: 6px 2px; border: 1px solid transparent; border-radius: 4px;
+  color: var(--swc-muted); font-size: 10.5px; line-height: 1.15; text-align: center;
+}
+.demo-nav .demo-nav-group a svg, .demo-nav .demo-nav-secondary a svg, .demo-nav details.demo-nav-secondary > summary svg { width: 20px; height: 20px; flex: 0 0 auto; color: inherit; }
+.demo-nav-group a small { display: none; }
+.demo-nav .demo-nav-group a:hover, .demo-nav .demo-nav-secondary a:hover, .demo-nav details.demo-nav-secondary > summary:hover { background: var(--swc-hover); color: var(--swc-ink); }
+.demo-nav-group a[aria-current="true"], .demo-nav-secondary a[aria-current="page"] { color: var(--swc-ink); background: var(--swc-selected); border-color: var(--swc-line); font-weight: 600; box-shadow: inset 2px 0 0 var(--swc-accent); }
+.demo-nav-group a[aria-current="true"] :is(svg, small) { color: var(--swc-accent); }
+.demo-nav-views { display: none; }
+.demo-nav .demo-nav-secondary { padding: 0; font-size: 10.5px; color: var(--swc-muted); }
+.demo-nav details.demo-nav-secondary > summary { cursor: pointer; list-style: none; }
+.demo-nav details.demo-nav-secondary > summary::-webkit-details-marker { display: none; }
+.demo-nav details.demo-nav-secondary > summary::before { content: none; }
+.demo-nav details.demo-nav-secondary[open] > summary { background: var(--swc-hover); color: var(--swc-ink); }
+.demo-nav details.demo-nav-secondary > a { min-height: 34px; padding: 4px 2px; font-size: 9.5px; }
+.demo-nav-foot { display: none; }
+.demo-nav :focus-visible, .swb-commandbar :focus-visible, .swb-options :focus-visible, .swb-status :focus-visible { outline: 2px solid var(--swc-accent); outline-offset: 1px; }
+
+/* ---- status bar with the command line ---- */
+.swb-status { min-height: 28px; padding: 0 10px; gap: 16px; flex-wrap: nowrap; overflow: hidden; background: var(--swc-bg); color: var(--swc-muted); box-shadow: inset 0 1px 0 var(--swc-line); font-size: 11px; }
+.swb-status > span { white-space: nowrap; }
+.swb-status strong { color: var(--swc-ink); }
+.demo-cmdline { flex: 1 1 360px; display: flex; align-items: center; gap: 8px; min-width: 0; margin: 0; }
+.demo-cmdline-prompt { color: var(--swc-accent); font: 600 14px "IBM Plex Mono", monospace; }
+.demo-cmdline input { flex: 0 1 280px; min-width: 120px; height: 22px; padding: 0 8px; border: 1px solid var(--swc-line); border-radius: 3px; background: var(--swc-bg-2); color: var(--swc-ink); font: 12px "IBM Plex Mono", monospace; }
+.demo-cmdline input::placeholder { color: var(--swc-muted); opacity: 1; }
+.demo-cmdline-echo { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--swc-ink); font: 11px "IBM Plex Mono", monospace; }
+
+/* ---- the sheet: panels, heads, controls ---- */
+.swb-canvas { background: var(--sw-paper); }
+.demo-page { padding: 10px 12px 12px; }
+@media screen { .demo-page, .demo-home { padding: 10px 12px 12px; } }
+.demo-inspector-head, .demo-track-head, .demo-records-drawer > summary, .demo-study-context-header, .demo-section-toolbar, .demo-file-tabs, .demo-inspector-tabs, .sw-rec-head, .sw-asm-panel-head {
+  background: var(--sw-panel-head);
+}
+.demo-inspector-head { min-height: 28px; padding: 0 10px; align-items: center; font: 600 10px "IBM Plex Mono", monospace; letter-spacing: .12em; text-transform: uppercase; }
+.demo-inspector-tabs { padding: 0 4px; gap: 0; }
+.demo-inspector-tabs button { min-height: 30px; border-radius: 0; font-size: 11.5px; box-shadow: inset 0 -2px 0 transparent; }
+.demo-inspector-tabs button[aria-pressed="true"] { background: transparent; box-shadow: inset 0 -2px 0 var(--sw-accent); }
+.demo-file-tabs { gap: 0; }
+.demo-file-tabs button { min-height: 30px; border: 0; border-radius: 0; margin: 0; font-size: 11.5px; box-shadow: inset 0 -2px 0 transparent; }
+.demo-file-tabs button[aria-selected="true"] { background: transparent; border: 0; color: var(--sw-ink); box-shadow: inset 0 -2px 0 var(--sw-accent); }
+.demo-records-drawer > summary { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+.demo-records-drawer > summary span { text-transform: none; letter-spacing: 0; }
+.demo-inspection .demo-toolbar, .demo-template-row, .demo-field-controls, .demo-gis-toolbar { padding: 4px 8px; box-shadow: none; }
+.demo-inspection .sw-asm-canvas-modes, .demo-edit-actions .sw-asm-canvas-modes, .demo-segment { border-radius: 3px; }
+.demo-inspection .sw-asm-canvas-modes button[aria-pressed="true"], .demo-edit-actions .sw-asm-canvas-modes button[aria-pressed="true"] { border-radius: 2px; box-shadow: none; }
+.demo-inspection .demo-toolbar .demo-edit-action { min-height: 30px; padding: 4px 12px; border-radius: 3px; }
+.demo-drawing-status { border-radius: 3px; padding: 4px 8px; }
+.demo-page > .demo-header { margin-bottom: var(--sw-space-2); }
+.demo-page > .demo-header h1 { font-size: 14px; }
+.demo-edit-commandbar h1 { font-size: 14px; }
+.demo-eyebrow { color: var(--sw-muted); }
+.demo-fill, .demo-view-grid > .demo-side, .demo-records-drawer, .demo-panel, .demo-toolbar, .demo-file, .demo-edit-workspace, .demo-study-context, .demo-study-metrics > div, .demo-study-scopes fieldset, .demo-card, .demo-code, .demo-hero-parts, .demo-packages table { border-radius: 3px; }
+.demo-section-toolbar button[data-ui-kind="selection"][aria-pressed="true"] { background: var(--sw-selected); }
+
+/* ---- the well builder's top: one command bar, phases as a tab strip ---- */
+/* The design bar was a 90px card — a 17px name, a readiness chip, a note on its own row and four
+   buttons — above a page heading above the canvas toolbar: three bars before the drawing. It is
+   now the same 40px command bar the editor has, with the note inline. */
+.demo-page .sw-wd-bar { flex-wrap: nowrap; gap: 10px 14px; min-height: 40px; padding: 4px 10px; border-radius: 3px; background: var(--sw-surface); }
+.demo-page .sw-wd-title { gap: 0; }
+.demo-page .sw-wd-title small { font-size: 9px; letter-spacing: .14em; }
+.demo-page .sw-wd-title strong { font-size: 14px; }
+.demo-page .sw-wd-status { margin-right: 0; padding: 2px 7px; font-size: 11px; border-radius: 3px; background: var(--sw-selected); color: var(--sw-ink); }
+.demo-page .sw-wd-bar .sw-wd-draft-note { flex: 1 1 auto; order: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.demo-page .sw-wd-bar-actions { flex-wrap: nowrap; gap: 4px; margin-left: auto; }
+.demo-page .sw-wd-bar-actions .sw-asm-button { min-height: var(--sw-control-height); padding: 0 10px; font-size: 12px; }
+/* The phases: a flat tab strip in the panel head, status as the tab's underline colour, instead
+   of five bordered boxes with coloured edges stacked over a second row of sub-steps. */
+.demo-page .sw-wd-tools { height: clamp(480px, calc(100dvh - 290px), 1000px); border-radius: 3px; }
+.demo-page .sw-wd-tool-navigation { gap: 0; padding: 0; background: var(--sw-panel-head); border-bottom: 1px solid var(--sw-line); }
+.demo-page .sw-wd-steps ol { gap: 0; }
+.demo-page .sw-wd-steps button { min-height: 32px; padding: 4px 2px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--sw-muted); font-size: 11px; font-weight: 600; }
+.demo-page .sw-wd-steps button:hover { background: var(--sw-hover); color: var(--sw-ink); }
+.demo-page .sw-wd-steps button[data-status="complete"] { border-bottom-color: var(--sw-accent); }
+.demo-page .sw-wd-steps button[data-status="attention"] { border-bottom-color: #d99a00; }
+.demo-page .sw-wd-steps button[data-status="missing"] { border-bottom-color: var(--sw-error); }
+.demo-page .sw-wd-steps button[aria-current="step"] { background: var(--sw-surface); color: var(--sw-ink); border-bottom-color: var(--sw-accent); box-shadow: inset 0 2px 0 var(--sw-accent); }
+.demo-page .sw-wd-substeps { gap: 2px; margin: 0; padding: 6px 8px 0; background: var(--sw-surface); }
+.demo-page .sw-wd-substeps button { min-height: 26px; padding: 0 9px; border-radius: 3px; font-size: 11px; }
+.demo-page .sw-wd-step-context { margin: 0; padding: 4px 10px 6px; background: var(--sw-surface); font: 10px "IBM Plex Mono", monospace; letter-spacing: .08em; text-transform: uppercase; }
+.demo-page .sw-wd-tool-intro h2 { font-size: 13px; }
+.demo-page .sw-wd-note { border-radius: 3px; }
+
+/* ---- the start page ---- */
+.demo-hero { padding: 18px 0 28px; gap: 32px; }
+.demo-hero h1 { font-size: 30px; letter-spacing: -.02em; margin-bottom: 12px; }
+.demo-lede { font-size: 13.5px; }
+.demo-button { min-height: 32px; padding: 0 14px; border-radius: 3px; font-size: 13px; }
+.demo-home .demo-button-primary, .demo-button-primary { background: var(--sw-ink); border-color: var(--sw-ink); color: var(--sw-surface); }
+.demo-hero-parts { background: var(--sw-canvas); background-image: linear-gradient(var(--sw-canvas-grid) 1px, transparent 1px), linear-gradient(90deg, var(--sw-canvas-grid) 1px, transparent 1px); background-size: 44px 44px; border-color: var(--sw-canvas-edge); }
+.demo-hero-parts figure { background: color-mix(in srgb, var(--sw-surface) 80%, transparent); border-radius: 3px; }
+.demo-section-title { font-size: 11px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--sw-muted); margin: 6px 0 10px; }
+.demo-card { padding: 14px 14px 12px; }
+.demo-card:hover { border-color: var(--sw-accent); box-shadow: 0 6px 18px rgb(0 0 0 / .08); transform: none; }
+.demo-card-title { font-size: 15px; }
+.demo-card-body { font-size: 12.5px; }
+.demo-cards { margin-bottom: 28px; }
+.demo-packages th, .demo-packages td { padding: 7px 10px; font-size: 12px; border-bottom-color: var(--sw-line); }
+
+/* ---- phone: the rail becomes a menu row, the tabs hand back to the menu ---- */
+/* The schematic's surface-equipment labels are drawn by the component in its own ink, which is
+   dark; on the dark canvas they vanished. Themed like every other label. */
+[data-sw-theme] .sw-asm-surface text { fill: var(--sw-ink); }
+@media (max-width: 760px) {
+  .demo-nav { width: auto; height: auto; padding: 6px 10px; border-bottom: 1px solid var(--swc-line); }
+  .demo-nav-toggle { padding: 4px 10px; border-color: var(--swc-line); background: transparent; color: var(--swc-ink); }
+  .demo-nav-content { padding-top: 10px; }
+  .demo-nav .demo-nav-group a, .demo-nav .demo-nav-secondary a, .demo-nav details.demo-nav-secondary > summary { flex-direction: row; justify-content: flex-start; gap: 10px; min-height: 40px; padding: 6px 10px; font-size: 13px; text-align: left; }
+  .demo-nav-group a small { display: block; margin: 0; color: inherit; font-size: 10px; }
+  .demo-nav-group a span { display: grid; gap: 2px; }
+  .demo-nav-views { display: grid; border-left: 2px solid var(--swc-line); }
+  .demo-nav-views a { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 4px 8px; color: var(--swc-muted); font-size: 12px; border-radius: 4px; }
+  .demo-nav-views a[aria-current="page"] { color: var(--swc-ink); background: var(--swc-selected); }
+  .demo-nav-foot { display: block; color: var(--swc-muted); border-top-color: var(--swc-line); }
+  .demo-doc-tabs { display: none; }
+  .swb-status { flex-wrap: wrap; padding: 4px 10px; }
+  .demo-cmdline { flex-basis: 100%; }
+  /* The brand and the appearance menu share one row: the shell's phone rule wrapped the commands
+     under the brand, and the bar's 42px minimum then let the second row ride over the picker. */
+  .swb-commandbar { flex-wrap: nowrap; min-height: 40px; padding: 0 10px; }
+  .swb-commands { width: auto; margin-inline-start: auto; }
+  /* The builder's command bar wraps on a phone: four actions in one row were 554px wide. */
+  .demo-page .sw-wd-bar { flex-wrap: wrap; }
+  .demo-page .sw-wd-bar .sw-wd-draft-note { flex-basis: 100%; white-space: normal; }
+  .demo-page .sw-wd-bar-actions { flex-wrap: wrap; margin-left: 0; }
 }

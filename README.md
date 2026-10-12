@@ -97,10 +97,16 @@ exported files; integrators can use their own static host and security headers.
   client navigation and well switches; it never replaces reported source data.
 - Host persistence is explicit through the compositions' change callbacks
 	(`onChange`, `onBriefChange`); the static demo has no product database.
-- The demo host provides a schematic-first shared workspace with task navigation
-  in four groups (Well, Design, Field, Analysis), with contextual views in a
-  responsive sidebar and one shared well selector. Report is an output action,
-  not a fifth workspace. Legacy route URLs remain supported. Route ownership
+- The demo host provides a schematic-first shared workspace in an engineering
+  tool's frame: graphite chrome in every theme around a light drafting sheet —
+  a command bar with the brand and the appearance menu, a document tab strip
+  for the active workspace's views, a tool rail of the four workspaces (Well,
+  Design, Field, Analysis) plus the report and developer examples, one shared
+  well selector with datum, selection and depth read-outs, and a status bar
+  with a command line (`go 1558`, `zoom in`, `well forge`, `theme dark`,
+  `clear`; `help` lists them) that writes to the same store as the controls.
+  Controls are 32px; panels are flat with 3px corners and a grey head strip.
+  Report is an output action, not a fifth workspace. Legacy route URLs remain supported. Route ownership
   and independent-example availability come from one host registry.
   Appearance and developer
   examples are secondary disclosures. View well opens on the well section —

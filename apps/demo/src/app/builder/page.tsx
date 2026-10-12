@@ -22,7 +22,7 @@ const { checked, assumptions, notChecked } = designCoverage(reused);
 
 export default function BuilderPage() {
   return <DemoPage current="/builder/">
-      <header className="demo-design-heading"><h1>Well design</h1></header>
+      <header className="demo-header"><div className="demo-header-line" data-route-label="Design · well builder"><h1>Well design</h1></div></header>
       <DemoWellBuilder />
       <details className="demo-workbench-usage"><summary>Usage and SDK details</summary>
         <p>The curved construction is the starting canvas. Select parts to edit, or open planning, design and review tools in the side dock. Design inputs require an explicit rebuild to replace component edits.</p>

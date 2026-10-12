@@ -32,13 +32,19 @@ test("continuous offshore scene selects multiple wells and descends to their sea
   await scene.getByRole("button", { name: "Surface overview" }).click();
   await expect.poll(async () => Number((await scene.getAttribute("data-camera"))!.split(",")[1])).toBeGreaterThan(6000);
   await canvas.scrollIntoViewIfNeeded();
+  // The scene publishes where it drew each wellhead, so the pick is aimed rather than swept: the
+  // old 13×13 sweep over the middle of the canvas was hoping to land on an eight-pixel marker.
+  await expect(scene).toHaveAttribute("data-flying", "false");
+  const host = scene.locator(".sw-offshore-canvas");
+  await expect(host).toHaveAttribute("data-wellheads", /offshore-1:\d+,\d+/);
+  const heads = Object.fromEntries((await host.getAttribute("data-wellheads"))!.split(";").map((entry) => {
+    const [id, at] = entry.split(":");
+    const [x, y] = at!.split(",").map(Number);
+    return [id, { x: x!, y: y! }];
+  }));
   const box = (await canvas.boundingBox())!;
-  let hit = false;
-  for (let y = .25; y <= .75 && !hit; y += .035) for (let x = .25; x <= .75 && !hit; x += .035) {
-    await page.mouse.click(box.x + box.width * x, box.y + box.height * y);
-    hit = await scene.getAttribute("data-selected-well") !== "offshore-4";
-  }
-  expect(hit, "Picking a rendered offshore well must select its identity").toBe(true);
+  await page.mouse.click(box.x + heads["offshore-1"]!.x, box.y + heads["offshore-1"]!.y);
+  await expect(scene, "Picking a rendered offshore well must select its identity").toHaveAttribute("data-selected-well", "offshore-1");
   expect(errors).toEqual([]);
   const axe = await new AxeBuilder({ page }).analyze();
   expect(axe.violations.map((entry) => entry.id)).toEqual([]);

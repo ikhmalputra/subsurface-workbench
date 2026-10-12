@@ -67,16 +67,17 @@ test("legacy well links hydrate canonical identity and component selection survi
 test("four workspaces expose contextual views without merging incompatible example datasets", async ({ page }) => {
   await gotoApp(page, "/view-well/");
   await page.getByRole("link", { name: "Field", exact: true }).click();
-  const fieldViews = page.getByRole("group", { name: "Field views", exact: true });
+  // A workspace's views are its document tabs; the navigation's own list of them is the phone menu.
+  const fieldViews = page.getByRole("navigation", { name: "Field documents", exact: true });
   await expect(fieldViews.getByRole("link")).toHaveText(["Field workspace"]);
   await page.getByRole("link", { name: "2 · Compare intervals" }).click();
   await expect(page).toHaveURL(/\/correlation\/$/);
   await expect(page.getByRole("heading", { name: "Equator field" })).toBeVisible();
   await page.getByRole("link", { name: "Analysis", exact: true }).click();
-  const analysisViews = page.getByRole("group", { name: "Analysis views", exact: true });
+  const analysisViews = page.getByRole("navigation", { name: "Analysis documents", exact: true });
   await expect(analysisViews.getByRole("link")).toHaveText(["Engineering studies"]);
   await expect(page).toHaveURL(/\/analysis\/$/);
   await expect(page.getByRole("heading", { name: "Drilling performance review" })).toBeVisible();
   await page.getByRole("link", { name: "Well", exact: true }).click();
-  await expect(page.getByRole("group", { name: "Well views", exact: true })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Well documents", exact: true })).toBeVisible();
 });

@@ -98,7 +98,7 @@ test("chart samples are keyboard-navigable and theme/density controls update the
   expect(await view.locator('tr[data-sample-id]').first().evaluate((element) => element.getBoundingClientRect().height)).toBe(44);
   await page.getByLabel("Theme").selectOption("dark");
   await expect(provider).toHaveAttribute("data-sw-theme", "dark");
-  expect(await provider.evaluate((element) => getComputedStyle(element).getPropertyValue("--sw-surface").trim())).toBe("#202b25");
+  expect(await provider.evaluate((element) => getComputedStyle(element).getPropertyValue("--sw-surface").trim())).toBe("#242629");
   let results = await new AxeBuilder({ page }).analyze();
   expect(results.violations.map((violation) => `${violation.id}: ${violation.nodes.map((node) => node.target.join(" ")).join(", ")}`)).toEqual([]);
   await page.getByLabel("Theme").selectOption("high-contrast");

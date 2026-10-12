@@ -12,7 +12,7 @@ async function auditExpandedCommands(page: Page) {
     if (!rect.width || !rect.height) return [];
     const icon = button.querySelector(":scope > svg")?.getBoundingClientRect();
     const name = button.getAttribute("aria-label") || button.textContent?.trim();
-    return !name || rect.height < 43.5 || getComputedStyle(button).borderRadius !== "4px" || icon?.width !== 16 || icon?.height !== 16
+    return !name || rect.height < 31.5 || getComputedStyle(button).borderRadius !== "4px" || icon?.width !== 16 || icon?.height !== 16
       ? [{ name, height: rect.height, icon }] : [];
   }));
   expect(defects).toEqual([]);
@@ -84,7 +84,7 @@ for (const route of routes) {
       }));
       audit.push({ theme, controls });
       expect(controls.filter((control) => !control.name)).toEqual([]);
-      expect(controls.filter((control) => control.kind === "command" && (!control.icon || control.height < 43.5 || control.radius !== "4px"))).toEqual([]);
+      expect(controls.filter((control) => control.kind === "command" && (!control.icon || control.height < 31.5 || control.radius !== "4px"))).toEqual([]);
       expect(controls.filter((control) => control.icon && (control.icon.width !== 16 || control.icon.height !== 16))).toEqual([]);
       const results = await new AxeBuilder({ page }).analyze();
       expect(results.violations.map((violation) => ({ theme, id: violation.id, nodes: violation.nodes.map((node) => ({ target: node.target, reason: node.failureSummary })) }))).toEqual([]);

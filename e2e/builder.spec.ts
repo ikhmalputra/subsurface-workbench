@@ -42,7 +42,9 @@ test("component filter has one control surface and filters the library without o
       expect(layout.outline).toBe("none");
       expect(layout.ring).toBe("solid");
       expect(layout.contained).toBe(true);
-      expect(layout.height).toBeGreaterThanOrEqual(density === "comfortable" ? 44 : 34);
+      // The control contract is 32px comfortable / 28px compact — dense, like the engineering tools
+      // the frame is modelled on, and still past WCAG 2.5.8's 24px target. It was 44 / 34.
+      expect(layout.height).toBeGreaterThanOrEqual(density === "comfortable" ? 32 : 28);
     }
   }
   const matches = await page.locator(".sw-asm-tile").evaluateAll((tiles) => tiles

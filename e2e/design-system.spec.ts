@@ -8,8 +8,10 @@ const showcaseViews = [
 ] as const;
 
 const themes = [
-  { id: "light", surface: "rgb(255, 255, 255)", ink: "rgb(32, 50, 42)" },
-  { id: "dark", surface: "rgb(32, 43, 37)", ink: "rgb(237, 244, 239)" },
+  // The neutral palette of the graphite frame: ink #1f2327 / surface #fff in light, #e6e7e9 on
+  // #242629 in dark. The pins are the tokens, so a drift in either theme fails here by name.
+  { id: "light", surface: "rgb(255, 255, 255)", ink: "rgb(31, 35, 39)" },
+  { id: "dark", surface: "rgb(36, 38, 41)", ink: "rgb(230, 231, 233)" },
   { id: "high-contrast", surface: "rgb(0, 0, 0)", ink: "rgb(255, 255, 255)" },
 ] as const;
 
