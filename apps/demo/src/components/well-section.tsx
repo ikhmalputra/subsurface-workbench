@@ -77,9 +77,15 @@ export interface WellSectionProps {
   readonly markers?: readonly { readonly mdM: number; readonly label: string }[];
   /** Dogleg limit drawn on the survey track. */
   readonly dlsLimitDegPer30m?: number;
+  /**
+   * Depth intervals to show across the section — a study's target and comparison windows, a
+   * focus interval. Drawn as bands on the ruler and as labelled intervals on the log track, in
+   * metres here and converted once at the log's boundary.
+   */
+  readonly highlights?: readonly { readonly id: string; readonly label: string; readonly topM: number; readonly baseM: number; readonly tone?: "neutral" | "problem" | "failed"; readonly focused?: boolean }[];
 }
 
-export function WellSection({ assembly, components, survey, stations, formations = [], totalDepthM, operations, logUrl, selectedId, onSelect, onSelectMd, link, showFormations = true, markers = [], dlsLimitDegPer30m }: WellSectionProps) {
+export function WellSection({ assembly, components, survey, stations, formations = [], totalDepthM, operations, logUrl, selectedId, onSelect, onSelectMd, link, showFormations = true, markers = [], dlsLimitDegPer30m, highlights = [] }: WellSectionProps) {
   const host = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState(640);
   useEffect(() => {
@@ -109,12 +115,26 @@ export function WellSection({ assembly, components, survey, stations, formations
     .filter((run) => run.topFt !== null && run.baseFt !== null && run.baseFt > run.topFt)
     .map((run) => ({ id: run.id, label: `${run.id} · ${run.kind}`, topFt: run.topFt as number, baseFt: run.baseFt as number, tone: run.outcome === "completed" ? "neutral" as const : run.outcome })), [operations]);
   const selected = components.find((component) => component.id === selectedId);
+  const highlightIntervals = useMemo(() => highlights
+    .filter((band) => Number.isFinite(band.topM) && Number.isFinite(band.baseM) && band.baseM > band.topM)
+    .map((band) => ({ id: band.id, label: band.label, topFt: metresToFeet(band.topM), baseFt: metresToFeet(band.baseM), tone: band.tone ?? "neutral" as const })), [highlights]);
+
+  // Bands across the whole section, the way a well-section zone is drawn: a translucent fill over
+  // every track between two depths, labelled once at its top edge. The ruler repeats them opaque
+  // so the scale reads on its own. Clipped to the window; an interval outside it is not drawn.
+  const bands = highlights
+    .filter((band) => Number.isFinite(band.topM) && Number.isFinite(band.baseM) && band.baseM > band.topM && band.baseM > windowM[0] && band.topM < windowM[1])
+    .map((band) => { const top = y(Math.max(windowM[0], band.topM)); const base = y(Math.min(windowM[1], band.baseM)); return { ...band, top, height: Math.max(1, base - top) }; });
 
   const ticks = niceTicks(windowM, Math.max(4, Math.round(trackHeight / 70)));
   return <div ref={host} className="demo-section" data-testid="well-section" data-window={`${Math.round(windowM[0])},${Math.round(windowM[1])}`}>
+    {bands.length > 0 && <div className="demo-section-bands" aria-hidden="true">
+      {bands.map((band) => <div key={band.id} className="demo-section-band" data-highlight={band.id} data-focused={band.focused || undefined} style={{ top: HEAD_PX + band.top, height: band.height }}><span>{band.label}</span></div>)}
+    </div>}
     <div className="demo-section-track demo-section-ruler" aria-hidden="true">
       <div className="demo-track-head"><span>MD</span><small>m</small></div>
       <svg width={56} height={trackHeight} viewBox={`0 0 56 ${trackHeight}`}>
+        {bands.map((band) => <rect key={band.id} className="demo-ruler-band" data-highlight={band.id} data-focused={band.focused || undefined} x={0} y={band.top} width={56} height={band.height}><title>{band.label}</title></rect>)}
         {ticks.map((tick) => <g key={tick}><line x1={44} x2={56} y1={y(tick)} y2={y(tick)} className="demo-ruler-tick" /><text x={40} y={y(tick) + 3} textAnchor="end" className="demo-ruler-label">{tick.toLocaleString("en-US")}</text></g>)}
         {cursorY !== null && <g className="demo-ruler-cursor" data-cursor-md={Math.round(link.cursorMdM!)}><line x1={0} x2={56} y1={cursorY} y2={cursorY} /><rect x={2} y={cursorY - 17} width={44} height={14} rx={3} /><text x={24} y={cursorY - 6} textAnchor="middle">{Math.round(link.cursorMdM!).toLocaleString("en-US")}</text></g>}
       </svg>
@@ -133,7 +153,7 @@ export function WellSection({ assembly, components, survey, stations, formations
       <div className="demo-track-head"><span>Mud log</span><small>{log.loaded ? "ROP · WOB · 10 ft means · ft" : log.status === "error" ? "unavailable" : "loading"}</small></div>
       <div className="demo-track-body" style={{ height: trackHeight }}>
         {log.loaded
-          ? <LogTracks las={log.loaded.las} tracks={logTracks} markers={shoes} intervals={runs} height={trackHeight} frame={frame}
+          ? <LogTracks las={log.loaded.las} tracks={logTracks} markers={shoes} intervals={[...runs, ...highlightIntervals]} height={trackHeight} frame={frame}
               selectedRange={bridge.rangeOf(selected)} cursorFt={bridge.cursorFt}
               depthWindowFt={[metresToFeet(windowM[0]), metresToFeet(windowM[1])]} onDepthWindowChange={bridge.setWindowFt}
               onCursorChange={bridge.setCursorFt} onSelectDepth={(depthFt) => bridge.pinFt(depthFt)} title="Mud log" />

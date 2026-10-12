@@ -345,8 +345,16 @@ third state.)
      view and a vertical section as panes of `/view-well/`, sharing the one pinned depth and one
      derivation of the casing-shoe markers. The surveyed path was rendered by five component sets
      across four routes, so asking where a well goes meant leaving the well.
-   - Still to do: the remaining well routes as presets, and §9.3 as corrected above — a host-facing
-     composition of the design panels, and phases as pane sets.
+   - **5c done — the well section as the spine.** The schematic, the mud log and the survey are
+     tracks on one measured-depth ruler (`WellSection`), and every well route is on it:
+     `/view-well/` opens there, `/trajectory/` puts the planner's survey on it with the station
+     table docked, `/edit-well/` toggles between the builder and the section over the draft, and
+     `/analysis/` draws the study's two intervals as zones across every track with the evidence —
+     the interval's log beside the run and daily-report registers — docked under the canvas. The
+     records drawer became a dock inside the viewport: open, the canvas gives up its height rather
+     than the page growing, so a record is read against the drawing instead of under it.
+   - Still to do: `/well-report/` and the Field routes as presets, and §9.3 as corrected above — a
+     host-facing composition of the design panels, and phases as pane sets.
 6. **Cursor props for the blind views** — `AssemblyScene`, `CurvedAssemblySchematic`,
    `CurvedSchematic`. `DaysVsDepthChart` is **done**: it takes `cursorMdM` and emits `onSelectMd`,
    so the one view on the drill stage's own axis finally joins the shared depth. Its Y axis was

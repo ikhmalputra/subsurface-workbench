@@ -760,7 +760,7 @@ body { margin: 0; background: var(--sw-paper); color: var(--sw-ink); font-family
 /* View well's inspector: each tabbed pane is its own scroll region. The trajectory tools column
    is excluded — it is one scroll region with several panels stacked, and a 0,5,1 rule here was
    quietly outranking the column's own layout and squashing its summary to a sliver. */
-.demo-view-grid > .demo-side:not(.demo-traj-side) > :is(section, div):not(.demo-inspector-head):not(.demo-inspector-tabs):not(.demo-view-picker) {
+.demo-view-grid > .demo-side:not(.demo-traj-side):not(.demo-study-side) > :is(section, div):not(.demo-inspector-head):not(.demo-inspector-tabs):not(.demo-view-picker) {
   overflow-y: auto; padding: var(--sw-space-4); min-height: 0;
 }
 .demo-view-grid > .demo-side > :is(section, div)[hidden] { display: none; }
@@ -1019,3 +1019,68 @@ body { margin: 0; background: var(--sw-paper); color: var(--sw-ink); font-family
 .demo-edit-actions .sw-asm-canvas-modes { display: inline-flex; gap: 2px; padding: 2px; background: var(--sw-paper); border: 1px solid var(--sw-line); border-radius: 7px; }
 .demo-edit-actions .sw-asm-canvas-modes button { border-color: transparent; background: transparent; }
 .demo-edit-actions .sw-asm-canvas-modes button[aria-pressed="true"] { background: var(--sw-surface); border-color: var(--sw-line); font-weight: 600; }
+/* Study intervals and focus windows on the ruler: a wash, not a fill, so ticks stay readable. */
+.demo-ruler-band { fill: var(--sw-accent); opacity: .16; }
+
+/* Analysis on the spine: the section is the study's canvas with its two intervals banded across
+   every track; the study's steps sit beside it in one scrolling column; the evidence — the drilling
+   log for the interval, its samples, and the operational registers — docks under the canvas. */
+.demo-stage.demo-analysis { border: 0; background: transparent; overflow: visible; border-radius: 0; }
+.demo-view-analysis { grid-template-columns: minmax(0, 1fr) 400px; }
+.demo-view-analysis.demo-inspector-hidden { grid-template-columns: minmax(0, 1fr); }
+.demo-view-grid > .demo-side.demo-study-side { display: grid; align-content: start; gap: var(--sw-space-3); padding: 10px 12px; overflow-y: auto; }
+.demo-study-side .demo-study-navigator { border: 0; padding: 0; background: transparent; gap: 2px; }
+.demo-study-side .demo-study-navigator ol { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; margin: var(--sw-space-2) 0 0; }
+.demo-study-side .demo-study-navigator ol button { display: grid; justify-items: center; gap: 1px; min-height: 40px; padding: 4px 2px; font-size: 10.5px; line-height: 1.1; text-align: center; }
+.demo-study-side .demo-study-navigator ol button span { font: 600 12px "IBM Plex Mono", monospace; }
+.demo-study-side .demo-study-panel { padding-top: var(--sw-space-2); border-top: 1px solid var(--sw-line); }
+.demo-study-side .demo-study-panel h2 { font-size: 13.5px; }
+.demo-study-side .demo-study-panel > p { font-size: 12px; line-height: 1.5; }
+.demo-study-side .demo-study-scopes { grid-template-columns: minmax(0, 1fr); gap: var(--sw-space-3); }
+.demo-study-side .demo-study-scopes fieldset { padding: var(--sw-space-3); border-left-width: 4px; }
+.demo-study-side .demo-study-scopes fieldset[data-interval="target"] { border-left-color: var(--sw-accent); }
+.demo-study-side .demo-study-scopes fieldset[data-interval="comparison"] { border-left-color: var(--sw-muted); }
+.demo-study-side .demo-study-metrics { grid-template-columns: minmax(0, 1fr); gap: var(--sw-space-2); }
+.demo-study-side .demo-study-metrics > div { padding: var(--sw-space-2) var(--sw-space-3); }
+.demo-study-side .demo-study-qc > div { grid-template-columns: 110px minmax(0, 1fr); padding: var(--sw-space-2) 0; }
+.demo-study-side .demo-analysis textarea, .demo-analysis .demo-study-side textarea { min-height: 72px; }
+.demo-study-side .demo-study-saved summary, .demo-study-side .demo-study-library summary { font-size: 12px; color: var(--sw-muted); cursor: pointer; }
+.demo-study-side .demo-study-library { display: grid; gap: var(--sw-space-2); padding-top: var(--sw-space-3); border-top: 1px solid var(--sw-line); font-size: 12px; }
+.demo-study-side .demo-study-library p { margin: var(--sw-space-2) 0 0; font-size: 12px; color: var(--sw-muted); line-height: 1.5; }
+.demo-study-side .demo-study-library > button { justify-self: start; }
+.demo-ruler-band { fill: var(--sw-accent); opacity: .16; }
+.demo-ruler-band[data-highlight="comparison"] { fill: var(--sw-ink); opacity: .1; }
+/* The evidence dock: the log beside the registers, both at the dock's height. */
+.demo-records-drawer .demo-study-evidence { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sw-space-3); align-items: start; height: 340px; max-height: 340px; overflow: hidden; }
+/* Each column scrolls on its own, so the registers' header never leaves with the log. */
+.demo-study-evidence-log { display: grid; align-content: start; gap: var(--sw-space-2); min-width: 0; max-height: 320px; overflow-y: auto; scrollbar-width: thin; }
+.demo-study-evidence-log:focus-visible { outline: 3px solid var(--sw-focus); outline-offset: -3px; }
+.demo-study-evidence-log .sw-logs-frame svg { width: auto; }
+.demo-study-evidence-log .sw-accessible-table, .demo-study-evidence-log .sw-sr-only + details { display: none; }
+.demo-study-evidence-log .sw-rec { border: 0; padding: 0; background: transparent; }
+.demo-study-evidence-log > details > summary { font-size: 12px; cursor: pointer; padding: var(--sw-space-2) 0; }
+.demo-study-evidence .demo-study-context { border-radius: var(--sw-radius-control); }
+.demo-study-evidence .demo-study-context-table { max-height: 240px; }
+/* Measured at a 980px window: 158px of chrome above the canvas, the 370px dock and the 60px
+   status line below it. The first budget borrowed View well's 298px and left 90px unused. */
+.demo-analysis:has(.demo-records-drawer[open]) .demo-fill,
+.demo-analysis:has(.demo-records-drawer[open]) .demo-view-grid > .demo-side { height: calc(100dvh - 615px); min-height: 280px; }
+/* Zones across the section: a translucent fill over every track, labelled at its top edge. */
+.demo-section { position: relative; }
+.demo-section-bands { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+/* The fill is translucent through color-mix, not opacity: opacity would fade the label with it. */
+.demo-section-band { position: absolute; left: 0; right: 0; background: color-mix(in srgb, var(--sw-accent) 10%, transparent); border-top: 1px solid var(--sw-accent); border-bottom: 1px solid var(--sw-accent); }
+.demo-section-band[data-highlight="comparison"] { background: color-mix(in srgb, var(--sw-ink) 7%, transparent); border-color: var(--sw-muted); }
+.demo-section-band[data-focused] { background: color-mix(in srgb, var(--sw-accent) 16%, transparent); }
+.demo-section-band[data-highlight="comparison"][data-focused] { background: color-mix(in srgb, var(--sw-ink) 12%, transparent); }
+.demo-section-band span { position: absolute; right: 8px; top: 2px; padding: 1px 6px; font: 600 10px "IBM Plex Mono", monospace; color: var(--sw-ink); background: var(--sw-surface); border: 1px solid var(--sw-line); border-radius: 3px; white-space: nowrap; }
+.demo-ruler-band[data-focused] { opacity: .32; }
+@media (max-width: 1180px) {
+  .demo-view-analysis { grid-template-columns: minmax(0, 1fr); }
+  .demo-records-drawer .demo-study-evidence { grid-template-columns: minmax(0, 1fr); height: auto; max-height: none; overflow: visible; }
+  .demo-study-evidence-log { max-height: none; overflow: visible; }
+  /* A phone is one scrolling column: the open dock sits under the section instead of shrinking it. */
+  .demo-analysis:has(.demo-records-drawer[open]) .demo-fill { height: 480px; }
+  .demo-analysis .demo-view-grid > .demo-side.demo-study-side, .demo-analysis:has(.demo-records-drawer[open]) .demo-view-grid > .demo-side.demo-study-side { height: auto; max-height: none; overflow: visible; }
+  .demo-study-evidence .demo-study-context-table { max-height: 320px; }
+}

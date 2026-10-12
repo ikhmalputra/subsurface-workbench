@@ -120,9 +120,12 @@ exported files; integrators can use their own static host and security headers.
   Changing wells clears incompatible selection, dataset, camera and
   interpretation state. This context is in memory, not saved project storage;
   View well continues to support explicit URL deep links.
-- Analysis opens `/analysis/`, an active-well drilling study workflow:
-  question and target/comparison MD scopes, input QC, linked log/run/daily-report
-  evidence, then user-authored findings and uncertainty. Both intervals require
+- Analysis opens `/analysis/`, an active-well drilling study on the well section:
+  the target and comparison intervals are drawn as zones across the construction,
+  mud log and survey tracks as they are typed; the four steps (question and
+  scopes, input QC, linked evidence, findings) sit beside the section, and the
+  evidence — the interval's drilling log beside the run and daily-report
+  registers — docks under it at step three. Both intervals require
   valid ROP observations in ft/h or m/h. Means are arithmetic sample means,
   not time-weighted speed or causal diagnoses. Missing/negative ROP is excluded
   with counts; zero is retained; intervals are top-inclusive/base-exclusive.
