@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { gotoApp } from "./support/app";
+import { gotoApp, openAppearance } from "./support/app";
 
 test("geographic Field map shares four well identities with the underwater scene without external requests", async ({ page }) => {
   const external: string[] = [], errors: string[] = [];
@@ -49,7 +49,7 @@ test("geographic Field map shares four well identities with the underwater scene
   await gis.locator("canvas").screenshot({ path: "output/playwright/field-embedded-trajectory.png" });
   const canvas = gis.locator("canvas");
   const first = await canvas.screenshot();
-  await page.locator(".demo-nav-secondary").filter({ hasText: "Appearance" }).locator("summary").click();
+  await openAppearance(page);
   await page.getByRole("combobox", { name: "Theme", exact: true }).selectOption("dark");
   expect(first.equals(await canvas.screenshot())).toBe(false);
   const axe = await new AxeBuilder({ page }).analyze();

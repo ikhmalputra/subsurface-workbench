@@ -333,7 +333,8 @@
 .sw-profile-legend i { width: 9px; height: 9px; display: inline-block; }
 .sw-profile-legend .sw-legend-path { height: 3px; background: #274f6a; }
 .sw-profile-selection { display: flex; flex-wrap: wrap; gap: 5px var(--sw-space-4); width: 100%; min-height: 34px; margin-top: 9px; padding: 8px 10px; overflow-wrap: anywhere; border: 1px solid var(--sw-line); background: var(--sw-surface); color: #31483a; align-items: center; font: 9px "IBM Plex Mono", monospace; }
-.sw-profile-selection strong { color: #315d43; font-size: 8px; }
+.sw-profile-selection { color: var(--sw-ink, #20322a); }
+.sw-profile-selection strong { color: var(--sw-accent, #315d43); font-size: 8px; }
 .sw-profile-record-link { width: 100%; margin-top: 6px; padding: 7px 9px; border: 1px solid var(--sw-line); background: #f7faf7; color: #31483a; text-align: left; font-size: 9px; }
 .sw-schematic-selected { display: flex; flex-wrap: wrap; gap: var(--sw-space-2) var(--sw-space-4); padding: 10px 16px; border-top: 1px solid var(--sw-line); background: #f4f7f4; font-size: 9px; }
 .sw-schematic-selected strong { font-weight: 500; }

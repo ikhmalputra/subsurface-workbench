@@ -1299,3 +1299,170 @@ body { background: var(--swc-bg-2); }
   .demo-page .sw-wd-bar .sw-wd-draft-note { flex-basis: 100%; white-space: normal; }
   .demo-page .sw-wd-bar-actions { flex-wrap: wrap; margin-left: 0; }
 }
+
+/* ============================================================================
+   One sheet, floating panels
+   ----------------------------------------------------------------------------
+   No header, no sidebar: the sheet is the window. The status bar is the one
+   strip of chrome — command line, the tray of closed panels, the depth
+   read-out. Everything else is a panel: a tab in the tray when closed, a
+   window over the sheet when open, dragged by its title bar or nudged with the
+   arrow keys. The workspace toolbar (navigation toggle, well, datum, selection,
+   depth) floats at the top left; a route's own tools float under it.
+   ========================================================================== */
+.swb-canvas { position: relative; }
+.demo-page { padding: 10px 12px 12px; }
+.demo-page:has(> .demo-fullbleed) { padding: 0; overflow: hidden; }
+/* A 44px band at the top of the sheet is where the toolbars sit by default, so the drawing's own
+   top edge — the section's zoom strip and track heads — is not under them until they are moved. */
+.demo-fullbleed { position: relative; height: 100%; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr); gap: 0; padding-top: 88px; background: var(--sw-paper); }
+.demo-fullbleed .demo-view-grid { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); height: 100% !important; min-height: 0; gap: 0; }
+/* The paired presets keep their two columns; the inspector's column is gone, it is a panel. */
+.demo-fullbleed :is(.demo-view-split, .demo-view-seismic, .demo-view-trajectory) { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 2px; }
+.demo-fullbleed .demo-view-earth { grid-template-columns: minmax(0, 1.7fr) minmax(280px, .75fr); gap: 2px; }
+.demo-fullbleed .demo-fill { height: 100% !important; min-height: 0; border: 0; border-radius: 0; }
+.demo-fullbleed .demo-section-pane { padding: 0; }
+.demo-fullbleed-alert { position: absolute; z-index: 5; left: 12px; right: 12px; top: 100px; margin: 0; }
+
+/* ---- the floating layer and the tray ---- */
+.demo-float-layer { position: fixed; inset: 0; pointer-events: none; z-index: 40; }
+.demo-float {
+  position: fixed; pointer-events: auto; display: flex; flex-direction: column; box-sizing: border-box;
+  max-width: calc(100vw - 16px); max-height: calc(100dvh - 60px); min-width: 0;
+  background: var(--sw-surface); color: var(--sw-ink);
+  border: 1px solid var(--swc-line); border-radius: 4px;
+  box-shadow: 0 12px 32px rgb(0 0 0 / .32), 0 1px 2px rgb(0 0 0 / .25);
+  overflow: hidden;
+}
+.demo-float-head {
+  display: flex; align-items: center; gap: 10px; min-height: 34px; padding: 0 4px 0 10px;
+  background: var(--swc-bg); color: var(--swc-ink);
+  font: 600 10.5px "IBM Plex Mono", monospace; letter-spacing: .12em; text-transform: uppercase;
+  cursor: grab; user-select: none; touch-action: none; list-style: none;
+}
+.demo-float-head::-webkit-details-marker { display: none; }
+.demo-float-head:active { cursor: grabbing; }
+.demo-float-head:focus-visible { outline: 2px solid var(--swc-accent); outline-offset: -2px; }
+.demo-float-head .demo-float-title { white-space: nowrap; }
+.demo-float-head .demo-float-sub { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 11px "IBM Plex Sans", sans-serif; letter-spacing: 0; text-transform: none; color: var(--swc-muted); }
+.demo-float-head .demo-float-close[data-ui-kind="command"][type] { margin-left: auto; min-height: var(--sw-control-height); width: var(--sw-control-height); padding: 0; border-color: transparent; background: transparent; color: var(--swc-ink); }
+.demo-float-head .demo-float-close[data-ui-kind="command"][type]:hover { background: var(--swc-hover); }
+.demo-float-body { min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+.demo-float-body > * { min-height: 0; }
+.demo-float-body.is-scrollable { overflow: auto; display: block; }
+.demo-float-body.is-scrollable:focus-visible { outline: 2px solid var(--sw-focus); outline-offset: -2px; }
+.demo-float-head .demo-float-grip { width: 12px; min-height: 22px; margin-right: 2px; background-image: radial-gradient(circle, var(--swc-muted) 1px, transparent 1.4px); }
+.demo-float.is-open > .demo-float-head { border-bottom: 1px solid var(--swc-line); }
+/* Toolbars: a strip with a grip, no title bar. */
+.demo-float-toolbar { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 6px 4px 4px; background: var(--sw-surface); max-width: calc(100vw - var(--dock-left, 0px) - var(--dock-right, 0px) - 16px); }
+.demo-float-grip {
+  flex: 0 0 auto; align-self: stretch; width: 12px; min-height: 24px; border-radius: 3px; cursor: grab; touch-action: none;
+  background-image: radial-gradient(circle, var(--sw-muted) 1px, transparent 1.4px); background-size: 4px 4px; background-position: 2px 2px; opacity: .7;
+}
+.demo-float-grip:hover { opacity: 1; background-color: var(--sw-hover); }
+.demo-float-grip:focus-visible { outline: 2px solid var(--sw-focus); outline-offset: 1px; }
+/* The tray: closed panels as tabs in the status bar. */
+.demo-tray { display: flex; align-items: center; gap: 4px; min-width: 0; flex: 0 1 auto; overflow-x: auto; scrollbar-width: none; }
+.demo-tray::-webkit-scrollbar { display: none; }
+.demo-tray > .demo-float { position: static; flex-direction: row; max-height: none; box-shadow: none; border: 1px solid var(--swc-line); border-radius: 3px; background: transparent; overflow: visible; }
+.demo-tray > .demo-float > .demo-float-head { min-height: 22px; padding: 0 9px; background: transparent; font-size: 10px; cursor: pointer; color: var(--swc-muted); }
+.demo-tray > .demo-float > .demo-float-head:hover { background: var(--swc-hover); color: var(--swc-ink); }
+.demo-tray > .demo-float > .demo-float-head .demo-float-sub { display: none; }
+.demo-tray > .demo-float > .demo-float-body { display: none; }
+/* The well file keeps its dock class for the tests that open it, not the dock's colours. */
+.demo-tray > .demo-records-drawer > summary.demo-float-head { min-height: 22px; padding: 0 9px; font: 600 10px "IBM Plex Mono", monospace; letter-spacing: .12em; text-transform: uppercase; color: var(--swc-muted); background: transparent; border: 0; }
+.demo-tray > .demo-records-drawer > summary.demo-float-head:hover { color: var(--swc-ink); background: var(--swc-hover); }
+/* The dock's summary rules (paper background, muted spans) outrank the panel head's; restate the
+   head for this one panel in both of its states. */
+.demo-float.demo-records-drawer > .demo-float-head { background: var(--swc-bg); color: var(--swc-ink); border-bottom: 1px solid var(--swc-line); }
+.demo-float.demo-records-drawer > .demo-float-head > span { margin: 0; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; }
+.demo-float.demo-records-drawer > .demo-float-head > .demo-float-sub { font: 11px "IBM Plex Sans", sans-serif; letter-spacing: 0; text-transform: none; color: var(--swc-muted); }
+.demo-tray > .demo-float.demo-records-drawer > summary.demo-float-head { background: transparent; color: var(--swc-muted); border-bottom: 0; }
+.demo-tray > .demo-float.demo-records-drawer > summary.demo-float-head:hover { color: var(--swc-ink); background: var(--swc-hover); }
+
+/* ---- status bar: command line, tray, read-outs ---- */
+.swb-status { gap: 12px; }
+.demo-cmdline { flex: 0 1 380px; }
+.swb-status .demo-workspace-context { flex: 1 1 auto; justify-content: flex-end; flex-wrap: nowrap; gap: 14px; padding: 0; background: transparent; font-size: 11px; min-width: 0; overflow: hidden; }
+.swb-status .demo-workspace-context > span { white-space: nowrap; }
+.swb-status .demo-workspace-context .demo-context-selection { max-width: 260px; }
+.swb-status .demo-workspace-context button[data-ui-kind="command"][type] { min-height: 24px; padding: 0 8px; font-size: 11px; }
+
+/* ---- the workspace toolbar: navigation toggle, well, datum, selection, depth ---- */
+/* One row: a wrapping toolbar sized itself to the picker's intrinsic width and then wrapped the
+   picker under the toggle once its flex basis applied, covering the section's zoom strip. */
+.demo-workspace-toolbar { flex-wrap: nowrap; background: var(--swc-bg); color: var(--swc-ink); border-color: var(--swc-line); }
+.demo-workspace-toolbar .demo-float-grip { background-image: radial-gradient(circle, var(--swc-muted) 1px, transparent 1.4px); }
+.demo-workspace-toolbar .demo-nav-toggle { display: inline-flex; min-height: var(--sw-control-height); padding: 0 10px; border-color: var(--swc-line); background: transparent; color: var(--swc-ink); font-size: 12px; }
+.demo-workspace-toolbar .demo-nav-toggle:hover { background: var(--swc-hover); }
+.demo-workspace-toolbar .demo-picker { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.demo-workspace-toolbar .demo-picker select { width: 300px; max-width: calc(100vw - 220px); }
+.demo-workspace-toolbar .demo-picker > span { font: 600 10px "IBM Plex Mono", monospace; letter-spacing: .12em; text-transform: uppercase; color: var(--swc-muted); }
+.demo-workspace-toolbar .demo-picker select { min-height: 28px; padding: 2px 8px; border: 1px solid var(--swc-line); border-radius: 4px; background: var(--swc-bg-2); color: var(--swc-ink); font: 12.5px "IBM Plex Sans", sans-serif; }
+.demo-workspace-toolbar .demo-context-field { font-size: 12px; padding: 0 6px; }
+
+/* ---- the navigation panel: the phone menu's layout, in a window ---- */
+.demo-nav-float .demo-nav { width: auto; height: auto; padding: 6px; }
+.demo-nav-float .demo-nav .demo-nav-content { display: grid; gap: 6px; padding: 0; }
+.demo-nav-float .demo-nav .demo-nav-group > span, .demo-nav-float .demo-nav .demo-nav-views > span { text-align: left; padding: 6px 8px 2px; }
+.demo-nav-float .demo-nav .demo-nav-group a, .demo-nav-float .demo-nav .demo-nav-secondary a, .demo-nav-float .demo-nav details.demo-nav-secondary > summary { flex-direction: row; justify-content: flex-start; gap: 10px; min-height: 38px; padding: 4px 10px; font-size: 12.5px; text-align: left; }
+.demo-nav-float .demo-nav .demo-nav-group a small { display: block; margin: 0; font-size: 10px; color: inherit; opacity: .8; }
+.demo-nav-float .demo-nav .demo-nav-group a span { display: grid; gap: 1px; }
+.demo-nav-float .demo-nav .demo-nav-views { display: grid; gap: 1px; margin: 0 0 0 8px; padding: 0 0 0 8px; border-left: 2px solid var(--swc-line); }
+.demo-nav-float .demo-nav .demo-nav-views a { display: flex; align-items: center; gap: 8px; min-height: 34px; padding: 4px 8px; border-radius: 4px; color: var(--swc-muted); font-size: 12px; }
+.demo-nav-float .demo-nav .demo-nav-views a:hover { background: var(--swc-hover); color: var(--swc-ink); }
+.demo-nav-float .demo-nav .demo-nav-views a[aria-current="page"] { color: var(--swc-ink); background: var(--swc-selected); box-shadow: inset 2px 0 0 var(--swc-accent); }
+.demo-nav-float .demo-nav details.demo-nav-secondary > a { min-height: 32px; padding: 4px 10px 4px 38px; font-size: 12px; }
+.demo-nav-float .demo-nav .demo-nav-foot { display: block; margin: 0; padding: 8px 10px 4px; border-top: 1px solid var(--swc-line); color: var(--swc-muted); }
+.demo-nav-float .demo-nav .demo-appearance-controls { padding: 4px 10px 8px; }
+.demo-nav-float .demo-nav .demo-appearance-controls label { color: var(--swc-ink); }
+.demo-nav-float .demo-nav .demo-appearance-controls select { background: var(--swc-bg-2); color: var(--swc-ink); border-color: var(--swc-line); }
+.demo-nav-float .demo-float-body { background: var(--swc-bg); color: var(--swc-ink); max-height: calc(100dvh - 120px); }
+
+/* ---- view well's panels ---- */
+.demo-float.demo-toolbar { padding: 4px 6px 4px 4px; border-radius: 4px; }
+.demo-float.demo-drawing-status { padding: 4px 8px 4px 4px; }
+.demo-float.demo-drawing-status .demo-command-error { flex-basis: 100%; margin: 0; }
+.demo-inspector-float .demo-side { display: flex; flex-direction: column; height: min(640px, calc(100dvh - 120px)); border: 0; border-radius: 0; background: var(--sw-surface); }
+.demo-inspector-float .demo-side > :is(section, div):not(.demo-inspector-tabs):not(.demo-view-picker) { overflow-y: auto; padding: var(--sw-space-4); min-height: 0; }
+.demo-float.demo-records-drawer { margin: 0; }
+.demo-float.demo-records-drawer > .demo-float-head { min-height: 34px; padding: 0 4px 0 10px; font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; border-bottom-color: var(--swc-line); }
+.demo-float.demo-records-drawer > .demo-float-head::before { content: none; }
+.demo-float.demo-records-drawer .demo-file { max-height: min(420px, calc(100dvh - 160px)); border: 0; border-radius: 0; }
+.demo-usage-float .demo-header-body { display: grid; gap: var(--sw-space-3); padding: 12px 14px; max-height: min(620px, calc(100dvh - 120px)); overflow: auto; }
+.demo-usage-float .demo-lede { font-size: 12.5px; }
+
+/* The band holds two toolbar rows: the workspace toolbar, and under it the route's own tools,
+   which take the sheet's full width between the docks instead of running under a docked column. */
+@media (max-width: 760px) {
+  .demo-float { max-width: calc(100vw - 8px); }
+  .demo-workspace-toolbar .demo-workspace-context .demo-picker { flex-basis: 100%; }
+  .demo-inspector-float .demo-side { height: min(480px, calc(100dvh - 140px)); }
+  .swb-status { flex-wrap: wrap; padding: 4px 8px; }
+  .demo-cmdline { flex-basis: 100%; }
+  .demo-status-depth { margin-left: 0; }
+}
+
+/* ---- appearance menu on the status bar ---- */
+.swb-status .demo-appearance { position: relative; flex: 0 0 auto; margin-left: 6px; }
+.swb-status .demo-appearance > summary { min-height: 22px; padding: 0 8px; font-size: 11px; }
+.swb-status .demo-appearance .demo-appearance-controls { top: auto; bottom: calc(100% + 8px); right: 0; left: auto; }
+@media (max-width: 760px) { .swb-status .demo-appearance .demo-appearance-controls { right: auto; left: 0; } }
+
+/* ---- docking: a docked panel takes its edge; the sheet gives it up ---- */
+.swb-canvas { box-sizing: border-box; padding: var(--dock-top, 0px) var(--dock-right, 0px) var(--dock-bottom, 0px) var(--dock-left, 0px); transition: padding .12s ease; }
+.demo-float.is-docked { border-radius: 0; box-shadow: none; max-width: none; max-height: none; border-color: var(--swc-line); }
+.demo-float.is-docked-left { border-top: 0; border-bottom: 0; border-left: 0; }
+.demo-float.is-docked-right { border-top: 0; border-bottom: 0; border-right: 0; }
+.demo-float.is-docked-top { border-top: 0; border-left: 0; border-right: 0; }
+.demo-float.is-docked-bottom { border-bottom: 0; border-left: 0; border-right: 0; }
+.demo-float.is-docked > .demo-float-head { cursor: default; }
+.demo-float.is-docked > .demo-float-body { flex: 1 1 auto; }
+.demo-float-dock { margin-left: auto; min-height: 22px; max-width: 110px; padding: 0 4px; border: 1px solid var(--swc-line); border-radius: 3px; background: var(--swc-bg-2); color: var(--swc-ink); font: 10.5px "IBM Plex Sans", sans-serif; letter-spacing: 0; text-transform: none; }
+.demo-float-head .demo-float-close[data-ui-kind="command"][type] { margin-left: 2px; }
+.demo-tray .demo-float-dock { display: none; }
+/* A docked inspector fills its column; the panes inside it scroll. */
+.demo-float.is-docked .demo-inspector-float, .demo-inspector-float.is-docked .demo-side { height: 100%; }
+.demo-float.is-docked.demo-records-drawer .demo-file { max-height: none; height: 100%; }
+.demo-scene-options-body { display: grid; gap: var(--sw-space-3); padding: 10px 12px; }
+.demo-float.demo-scene-options .demo-float-body { overflow: auto; }

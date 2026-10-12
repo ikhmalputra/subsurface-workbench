@@ -19,8 +19,23 @@ export async function gotoApp(page: Page, url: string): Promise<Response | null>
   const response = await page.goto(url);
   await expect(page.locator("html[data-sw-hydrated='true']"), "the application should hydrate before being driven")
     .toBeAttached({ timeout: SCENE_READY });
+  await streamedBoundariesSettled(page);
   await paintedFrame(page);
   return response;
+}
+
+/**
+ * Wait until Next's streamed Suspense content has been swapped in.
+ *
+ * A prerendered page carries each Suspense boundary's content in a hidden `<div id="S:n">` and
+ * swaps it into place with an inline script. React can client-render the same boundary before
+ * that script runs — the frame hydrates first and marks itself ready — and for a few hundred
+ * milliseconds the document holds two copies of the route: the live one and the hidden streamed
+ * one. A test that reaches for the well section in that window finds both.
+ */
+async function streamedBoundariesSettled(page: Page): Promise<void> {
+  await expect(page.locator('div[hidden][id^="S:"]'), "streamed Suspense content should be swapped in before the app is driven")
+    .toHaveCount(0, { timeout: SCENE_READY });
 }
 
 /**
@@ -68,5 +83,31 @@ export async function reloadApp(page: Page): Promise<void> {
   await page.reload();
   await expect(page.locator("html[data-sw-hydrated='true']"), "the application should hydrate after a reload before being driven")
     .toBeAttached({ timeout: SCENE_READY });
+  await streamedBoundariesSettled(page);
   await paintedFrame(page);
+}
+
+/**
+ * Open the navigation panel if it is closed. There is no sidebar: the navigation is a floating
+ * panel behind a toggle on the workspace toolbar, closed by default so the sheet is clear, and it
+ * closes itself when a destination is chosen. Idempotent, so a test can call it before every move.
+ */
+export async function openNavigation(page: Page): Promise<void> {
+  const open = page.getByRole("button", { name: "Open navigation" });
+  if (await open.count()) await open.click();
+  await expect(page.getByRole("navigation", { name: "Workbench navigation" })).toBeVisible();
+}
+
+/** Put the navigation panel away so it covers nothing on the sheet. */
+export async function closeNavigation(page: Page): Promise<void> {
+  const close = page.getByRole("button", { name: "Close navigation" });
+  if (await close.count()) await close.click();
+  await expect(page.getByRole("navigation", { name: "Workbench navigation" })).toBeHidden();
+}
+
+/** Open the appearance menu on the status bar, so the theme and density selects are usable. */
+export async function openAppearance(page: Page): Promise<void> {
+  const appearance = page.locator(".demo-nav-secondary").filter({ hasText: "Appearance" });
+  if (!(await appearance.evaluate((element) => (element as HTMLDetailsElement).open))) await appearance.locator("summary").click();
+  await expect(page.getByRole("combobox", { name: "Theme", exact: true })).toBeVisible();
 }

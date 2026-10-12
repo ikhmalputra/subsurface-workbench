@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { createMockLogCurve, createMockTrajectory } from "../packages/core/dist/sandbox.js";
-import { gotoApp } from "./support/app";
+import { gotoApp, openAppearance } from "./support/app";
 
 test("table hover, chart brush, and spatial selection link using stable sample IDs", async ({ page }) => {
   await gotoApp(page, "/linked-data/");
@@ -94,7 +94,7 @@ test("chart samples are keyboard-navigable and theme/density controls update the
   await expect(view.locator(`tr[data-sample-id="${selectedSampleId}"]`)).toHaveAttribute("aria-selected", "true");
 
   const provider = page.locator('[data-sw-theme]');
-  await page.locator(".demo-nav-secondary").filter({ hasText: "Appearance" }).locator("summary").click();
+  await openAppearance(page);
   expect(await view.locator('tr[data-sample-id]').first().evaluate((element) => element.getBoundingClientRect().height)).toBe(44);
   await page.getByLabel("Theme").selectOption("dark");
   await expect(provider).toHaveAttribute("data-sw-theme", "dark");

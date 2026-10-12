@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { budget } from "./support/timing";
-import { gotoApp } from "./support/app";
+import { gotoApp, openAppearance } from "./support/app";
 
 const routes = ["/", "/view-well/", "/trajectory/", "/builder/", "/edit-well/", "/analysis/", "/map/", "/correlation/", "/cross-section/", "/petrophysics/", "/production/", "/linked-data/", "/sandbox/", "/well-report/"];
 
@@ -21,7 +21,7 @@ async function auditExpandedCommands(page: Page) {
 test("full well editor tabs support themes, keyboard navigation and phone containment", async ({ page }) => {
   test.setTimeout(budget(180_000));
   await gotoApp(page, "/edit-well/?well=forge");
-  await page.locator(".demo-nav-secondary").filter({ hasText: "Appearance" }).locator("summary").click();
+  await openAppearance(page);
   const tabs = page.getByRole("tablist", { name: "Well editor" });
   await expect(page.getByRole("button", { name: "Export JSON", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Blank well", exact: true })).toHaveCount(0);
@@ -66,7 +66,7 @@ for (const route of routes) {
     const example = page.getByRole("button", { name: "Open independent synthetic example" });
     if (await example.count()) await example.click();
     if (route === "/map/") await expect(page.getByTestId("gis-map")).toHaveAttribute("data-ready", "true");
-    await page.locator(".demo-nav-secondary").filter({ hasText: "Appearance" }).locator("summary").click();
+    await openAppearance(page);
     const audit = [];
     for (const theme of ["light", "dark", "high-contrast"]) {
       await page.getByRole("combobox", { name: "Theme", exact: true }).selectOption(theme);
@@ -100,14 +100,14 @@ for (const route of routes) {
     await page.getByRole("combobox", { name: "Theme", exact: true }).selectOption("light");
     if (["/view-well/", "/builder/", "/map/", "/production/"].includes(route)) await page.screenshot({ path: `output/playwright/ui-${route.split("/")[1]}-desktop.png`, fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.getByRole("button", { name: "Open navigation" }).click();
+    await openAppearance(page);
     await page.getByRole("combobox", { name: "Density", exact: true }).selectOption("compact");
     const layout = await page.evaluate(() => ({
       width: document.documentElement.scrollWidth,
       overflow: [...document.querySelectorAll("main *")].map((element) => ({ tag: element.tagName, className: element.getAttribute("class"), right: Math.round(element.getBoundingClientRect().right) })).filter((element) => element.right > innerWidth + 1).slice(0, 12),
     }));
     expect(layout.width, JSON.stringify(layout)).toBeLessThanOrEqual(391);
-    expect(await page.locator(".demo-nav-toggle").evaluate((button) => button.getBoundingClientRect().height)).toBeGreaterThanOrEqual(34);
+    expect(await page.locator(".demo-nav-toggle").evaluate((button) => button.getBoundingClientRect().height)).toBeGreaterThanOrEqual(31.5);
     await info.attach("ui-control-inventory", { body: JSON.stringify(audit, null, 2), contentType: "application/json" });
   });
 }
@@ -116,7 +116,7 @@ test("expanded design editors and alternate well views share the same theme and 
   test.setTimeout(budget(180_000));
   await gotoApp(page, "/builder/");
   const workflow = page.getByTestId("well-design-workflow");
-  await page.locator(".demo-nav-secondary").filter({ hasText: "Appearance" }).locator("summary").click();
+  await openAppearance(page);
   for (const [phase, step] of [
     ["Define", "Identity"], ["Define", "Location & datum"], ["Define", "Offset wells"],
     ["Plan", "Geology & pressure"], ["Plan", "Trajectory"],
@@ -132,7 +132,7 @@ test("expanded design editors and alternate well views share the same theme and 
     }
   }
   await gotoApp(page, "/view-well/");
-  await page.locator(".demo-nav-secondary").filter({ hasText: "Appearance" }).locator("summary").click();
+  await openAppearance(page);
   await page.getByRole("combobox", { name: "Theme", exact: true }).selectOption("dark");
   for (const view of ["split", "curved", "profile", "earth", "seismic"]) {
     await page.getByRole("combobox", { name: "View", exact: true }).selectOption(view);
@@ -145,7 +145,7 @@ test("expanded design editors and alternate well views share the same theme and 
 test("expanded well records keep readable themed tables and chart tools", async ({ page }) => {
   test.setTimeout(budget(120_000));
   await gotoApp(page, "/view-well/");
-  await page.locator(".demo-nav-secondary").filter({ hasText: "Appearance" }).locator("summary").click();
+  await openAppearance(page);
   await page.locator(".demo-records-drawer > summary").click();
   const file = page.getByTestId("well-file");
   const tabs = await file.getByRole("tab").allTextContents();

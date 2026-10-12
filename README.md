@@ -97,15 +97,25 @@ exported files; integrators can use their own static host and security headers.
   client navigation and well switches; it never replaces reported source data.
 - Host persistence is explicit through the compositions' change callbacks
 	(`onChange`, `onBriefChange`); the static demo has no product database.
-- The demo host provides a schematic-first shared workspace in an engineering
-  tool's frame: graphite chrome in every theme around a light drafting sheet —
-  a command bar with the brand and the appearance menu, a document tab strip
-  for the active workspace's views, a tool rail of the four workspaces (Well,
-  Design, Field, Analysis) plus the report and developer examples, one shared
-  well selector with datum, selection and depth read-outs, and a status bar
-  with a command line (`go 1558`, `zoom in`, `well forge`, `theme dark`,
-  `clear`; `help` lists them) that writes to the same store as the controls.
-  Controls are 32px; panels are flat with 3px corners and a grey head strip.
+- The demo host is one sheet: no header, no sidebar — the drawing is the
+  window, and everything else is a floating panel. The only strip of chrome is
+  the status bar: a command line (`go 1558`, `zoom in`, `well forge`,
+  `theme dark`, `clear`; `help` lists them) that writes to the same store as
+  the controls, the tray of closed panels, and the provenance, datum, selection
+  and depth read-outs. A workspace toolbar floats at the top left with the
+  navigation toggle and the well selector; the navigation (the four workspaces
+  — Well, Design, Field, Analysis — the active one's views, the report, the
+  developer examples and the appearance controls) is a panel it opens. On
+  `/view-well/` the section fills the sheet and the view tools, the inspector,
+  the well file, the depth command line and the SDK usage notes are panels —
+  a closed panel is its tab in the tray; an open one is a window dragged by
+  its grip or nudged with the arrow keys, or docked to the left, right, top or
+  bottom of the window from its title bar (or by dragging it to that edge).
+  A docked panel takes its edge and the sheet gives it up, so nothing on the
+  drawing is ever under it; panels docked to the same side share it, which is
+  how two sit side by side and four sit on four sides. The inspector docks
+  right by default. Positions and docks are kept for the session. Graphite
+  chrome in every theme, 32px controls, 3px corners.
   Report is an output action, not a fifth workspace. Legacy route URLs remain supported. Route ownership
   and independent-example availability come from one host registry.
   Appearance and developer

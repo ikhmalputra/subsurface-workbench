@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { gotoApp } from "./support/app";
+import { gotoApp, openAppearance } from "./support/app";
 
 const showcaseViews = [
   { route: "/correlation/", testId: "multiwell-correlation", svg: ".sw-correlation-svg" },
@@ -24,7 +24,7 @@ for (const view of showcaseViews) {
     const svg = renderedView.locator(view.svg);
     const tableAlternative = renderedView.locator(".sw-accessible-table");
     await tableAlternative.locator("summary").click();
-    await page.locator(".demo-nav-secondary").filter({ hasText: "Appearance" }).locator("summary").click();
+    await openAppearance(page);
     const dataTable = tableAlternative.locator("table");
     await expect(dataTable).toBeVisible();
     await expect(dataTable.locator("tbody tr").first()).toBeVisible();

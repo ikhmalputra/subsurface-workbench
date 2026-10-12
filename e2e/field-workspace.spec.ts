@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { gotoApp } from "./support/app";
+import { gotoApp, openNavigation } from "./support/app";
 
 test("one Field project preserves selected wells, depth and tool settings through the workflow", async ({ page }) => {
   await gotoApp(page, "/map/");
@@ -21,6 +21,7 @@ test("one Field project preserves selected wells, depth and tool settings throug
   await expect(page.getByRole("combobox", { name: "Log response" })).toHaveValue("porosity");
   await page.getByRole("link", { name: "1 · Locate wells" }).click();
   await expect(page.getByTestId("gis-map")).toHaveAttribute("data-selected-well", "offshore-2");
+  await openNavigation(page);
   await page.getByRole("link", { name: "Well", exact: true }).click();
   await expect(page.getByTestId("workspace-context")).toContainText("Documented record");
 });

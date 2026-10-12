@@ -1,14 +1,13 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { Workbench } from "@ikhmalputra/subsurface-shell";
 import { useWorkspace } from "./workspace-provider";
 import { WorkspaceContextBar } from "./workspace-context-bar";
 import { WorkspaceNavigation } from "./workspace-navigation";
+import { FloatProvider, FloatingToolbar, useDockRegistry } from "./floating";
 import { wells } from "./wells-data";
-import { workspaceForRoute, workspaces } from "../lib/workspace-routes";
 
 /**
  * The application frame, mounted once by `layout.tsx` and never again.
@@ -23,14 +22,22 @@ import { workspaceForRoute, workspaces } from "../lib/workspace-routes";
  * making the frame a function of the route is `usePathname` — a client component inside the layout
  * does re-render on navigation, so the highlight follows while the frame stays put.
  *
- * The frame is the Adobe/AutoCAD one: a command bar with the brand and the appearance menu, a
- * document tab strip for the active workspace's views, the tool rail down the left, the drafting
- * canvas in the middle, and a status bar with a command line and the coordinate read-outs. The
- * chrome is graphite in every theme; the canvas and the panels take the theme.
+ * There is no header and no sidebar: the sheet is the window. The one strip of chrome is the
+ * status bar — a command line, the tray of closed panels, and the depth read-out. The workspace
+ * context (the well, its datum, the selection, the navigation toggle) is a toolbar floating over
+ * the sheet, and the navigation itself is a panel it opens.
  */
 export function WorkbenchFrame({ children }: { children: ReactNode }) {
-  const { well, theme, density } = useWorkspace();
   const pathname = usePathname();
+  const [layer, setLayer] = useState<HTMLElement | null>(null);
+  const [tray, setTray] = useState<HTMLElement | null>(null);
+  const registry = useDockRegistry();
+  // Docked panels cost the sheet their edge. The insets are CSS variables on the root so the
+  // sheet's padding and every default toolbar position can read them.
+  useEffect(() => {
+    const root = document.documentElement.style;
+    for (const side of ["left", "right", "top", "bottom"] as const) root.setProperty(`--dock-${side}`, `${registry.insets[side]}px`);
+  }, [registry.insets.left, registry.insets.right, registry.insets.top, registry.insets.bottom]);
   // One marker saying React is mounted and effects have run.
   //
   // Every route is prerendered, so the markup is interactive-looking before hydration attaches a
@@ -43,45 +50,36 @@ export function WorkbenchFrame({ children }: { children: ReactNode }) {
   // Routes are declared with trailing slashes (`trailingSlash: true`), so normalise rather than
   // letting the active-route highlight silently fail to match.
   const current = pathname === "/" || pathname.endsWith("/") ? pathname : `${pathname}/`;
-  const workspace = workspaceForRoute(current);
-  return <Workbench
-    brand={<Link href="/" className="demo-brand" aria-label="Subsurface Workbench showcase home">
-      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 2v20M7 6h10M8 11h8M9 16h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none" /></svg>
-      <span>Subsurface<small>WORKBENCH</small></span>
-    </Link>}
-    commands={<AppearanceMenu />}
-    sidebar={<WorkspaceNavigation current={current} />}
-    options={<>
-      {workspace && <DocumentTabs workspace={workspace} current={current} />}
-      <WorkspaceContextBar />
-    </>}
-    status={<>
+  return <FloatProvider value={{ layer, tray, registry }}>
+    <Workbench status={<>
       <CommandLine />
-      <span>Well <strong>{well.label}</strong></span>
-      <span>Source <strong>{well.design.provenance}</strong></span>
-      <span>Appearance <strong>{theme} · {density}</strong></span>
-    </>}
-  >
-    <div className="demo-page">{children}</div>
-  </Workbench>;
+      <div className="demo-tray" ref={setTray} role="group" aria-label="Panels" />
+      <WorkspaceContextBar part="readouts" />
+      <AppearanceMenu />
+    </>}>
+      <div className="demo-page">{children}</div>
+      <div className="demo-float-layer" ref={setLayer} />
+    </Workbench>
+    <FloatingToolbar id="workspace" label="workspace toolbar" defaultStyle={{ left: "calc(var(--dock-left, 0px) + 8px)", top: "calc(var(--dock-top, 0px) + 6px)" }} className="demo-workspace-toolbar">
+      <WorkspaceNavigation current={current} />
+      <WorkspaceContextBar part="picker" />
+    </FloatingToolbar>
+  </FloatProvider>;
 }
+
 
 /**
- * The active workspace's views as document tabs, the way an editor shows its open documents. They
- * are links, not buttons: each is a route, and the navigation's own list of the same views stays
- * in the DOM for the phone menu, hidden on wide screens so the two never both answer to a name.
+ * Theme and density as a menu on the status bar, where a CAD tool keeps its display toggles. It
+ * opens upward over the corner of the sheet and nothing else, so changing the theme never leaves
+ * a panel over the drawing. The click is handled rather than the toggle event: React restores a
+ * controlled `open` before the toggle event is dispatched, so a handler reading it there sees
+ * the old value.
  */
-function DocumentTabs({ workspace, current }: { readonly workspace: (typeof workspaces)[number]; readonly current: string }) {
-  return <nav className="demo-doc-tabs" aria-label={`${workspace.label} documents`}>
-    {workspace.views.map((view) => <Link key={view.href} href={view.href} aria-current={current === view.href ? "page" : undefined}>{view.label}</Link>)}
-  </nav>;
-}
-
-/** Theme and density, as a menu on the command bar rather than a disclosure at the foot of the navigation. */
 function AppearanceMenu() {
   const { theme, setTheme, density, setDensity } = useWorkspace();
-  return <details className="demo-nav-secondary demo-appearance">
-    <summary>Appearance</summary>
+  const [open, setOpen] = useState(false);
+  return <details className="demo-nav-secondary demo-appearance" open={open}>
+    <summary onClick={(event) => { event.preventDefault(); setOpen((value) => !value); }}>Appearance</summary>
     <div className="demo-appearance-controls" role="group" aria-label="Visualization appearance">
       <label>Theme <select value={theme} onChange={(event) => {
         const value = event.currentTarget.value;

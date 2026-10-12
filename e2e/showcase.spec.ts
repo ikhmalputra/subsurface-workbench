@@ -3,7 +3,7 @@ import type { Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { SCENE_READY, SOFTWARE_RENDERING } from "./support/timing";
 import { waitForScene } from "./support/scene";
-import { gotoApp, selectWellView } from "./support/app";
+import { gotoApp, openNavigation, selectWellView } from "./support/app";
 
 async function horizontalOverflow(page: Page) {
   return page.evaluate(() => Array.from(document.body.querySelectorAll<HTMLElement>("*"))
@@ -32,6 +32,7 @@ test("landing page links every capability to a working consumer example", async 
   await page.screenshot({ path: "output/playwright/showcase-home.png", fullPage: true });
   await cards.first().click();
   await expect(page).toHaveURL(/\/view-well\/$/);
+  await openNavigation(page);
   await expect(page.getByRole("link", { name: "View well" })).toHaveAttribute("aria-current", "page");
 });
 
@@ -54,7 +55,7 @@ test("view-well composes the adapter, 2.5D schematic and 3D cutaway directly", a
   await expect(page.locator(".sw-asm-scene")).not.toBeVisible();
   await page.getByRole("combobox", { name: "View", exact: true }).selectOption("split");
 
-  await page.getByRole("combobox", { name: "Well" }).selectOption("s-profile");
+  await page.getByRole("combobox", { name: "Well", exact: true }).selectOption("s-profile");
   await expect(page.locator(".sw-asm-item").first()).toBeVisible();
   expect(await page.locator(".sw-asm-item").count()).toBeGreaterThan(7);
   await page.getByRole("button", { name: "Components", exact: true }).click();
@@ -203,7 +204,7 @@ test("view-well follows the trajectory with the cited FORGE record and shares se
   await page.getByRole("combobox", { name: "View", exact: true }).selectOption("profile");
   await expect(page.getByRole("button", { name: "Well construction schematic", exact: true })).toHaveAttribute("aria-pressed", "true");
   await page.getByRole("button", { name: "Trajectory profile", exact: true }).click();
-  await page.getByRole("combobox", { name: "Well" }).selectOption("s-profile");
+  await page.getByRole("combobox", { name: "Well", exact: true }).selectOption("s-profile");
   await expect(page.getByTestId("schematic-track-trajectory")).toBeVisible();
   await noAxeViolations(page);
   await page.screenshot({ path: "output/playwright/showcase-view-well-curved.png", fullPage: true });
@@ -225,7 +226,7 @@ test("showcase pages fit a phone viewport", async ({ page }) => {
 
 test("view-well inventory searches every record and shares selection with the schematic", async ({ page }) => {
   await gotoApp(page, "/view-well/");
-  await page.getByRole("combobox", { name: "Well" }).selectOption("s-profile");
+  await page.getByRole("combobox", { name: "Well", exact: true }).selectOption("s-profile");
   // The inventory links selection to the straight schematic's drawing items.
   await page.getByRole("combobox", { name: "View", exact: true }).selectOption("schematic");
   await expect(page.getByRole("button", { name: "Components", exact: true })).toHaveCount(1);
@@ -292,7 +293,7 @@ test("view-well well file links history, runs and mud log to the construction by
   await noAxeViolations(page);
   await page.screenshot({ path: "output/playwright/showcase-view-well-file.png", fullPage: true });
 
-  await page.getByRole("combobox", { name: "Well" }).selectOption("s-profile");
+  await page.getByRole("combobox", { name: "Well", exact: true }).selectOption("s-profile");
   await expect(page.getByTestId("well-file-empty")).toContainText("Nothing is invented");
 });
 

@@ -1,13 +1,16 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { gotoApp } from "./support/app";
+import { gotoApp, openNavigation } from "./support/app";
 
 test("desktop opens a drawing-first workspace with a single ownership point for controls", async ({ page }) => {
   await gotoApp(page, "/view-well/");
   await expect(page.getByRole("combobox", { name: "Well", exact: true })).toHaveCount(1);
+  // The navigation is a floating panel; open it to count the workspaces, then put it away.
+  await openNavigation(page);
   const workspaces = page.getByRole("group", { name: "Workspaces", exact: true });
   await expect(workspaces.getByRole("link")).toHaveCount(4);
   for (const name of ["Well", "Design", "Field", "Analysis"]) await expect(workspaces.getByRole("link", { name, exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Close navigation" }).click();
   // The workspace opens on the well section — the schematic with the log and survey as tracks on
   // one depth axis — and no 3D canvas has been started for it.
   await expect(page.getByRole("combobox", { name: "View", exact: true })).toHaveValue("section");
@@ -30,9 +33,8 @@ test("desktop opens a drawing-first workspace with a single ownership point for 
   await expect(page.getByTestId("well-file")).toBeHidden();
   await expect(page.getByRole("combobox", { name: "Theme", exact: true })).toBeHidden();
 
-  const nav = (await page.getByRole("navigation", { name: "Workbench navigation" }).boundingBox())!;
+  // One sheet: the drawing is the window, the panels float over it.
   const drawing = (await page.getByRole("region", { name: "Curved well construction" }).boundingBox())!;
-  expect(nav.width).toBeLessThanOrEqual(224);
   expect(drawing.y).toBeLessThan(240);
   expect(drawing.width).toBeGreaterThan(750);
   expect(drawing.height).toBeGreaterThanOrEqual(700);
@@ -57,11 +59,14 @@ test("drawing tools locate exact depth, focus sourced intervals and reclaim insp
   await gotoApp(page, "/view-well/");
   await page.getByRole("button", { name: "Schematic", exact: true }).click();
   const drawing = page.getByRole("region", { name: "Construction schematic" });
+  // The inspector docks to the right by default and takes its column; hiding it gives the
+  // column back to the drawing.
   const width = (await drawing.boundingBox())!.width;
   await page.getByRole("button", { name: "Hide inspector", exact: true }).click();
   await expect(page.getByRole("complementary", { name: "Component inspector" })).toBeHidden();
-  expect((await drawing.boundingBox())!.width).toBeGreaterThan(width + 250);
+  await expect.poll(async () => (await drawing.boundingBox())!.width).toBeGreaterThan(width + 250);
   await page.getByRole("button", { name: "Show inspector", exact: true }).click();
+  await expect(page.getByRole("complementary", { name: "Component inspector" })).toBeVisible();
   await page.getByLabel("Go to MD", { exact: true }).fill("1500.5");
   await page.getByRole("button", { name: "Locate depth", exact: true }).click();
   await expect(page.getByTestId("workspace-context")).toContainText("Depth: 1,500.5 m MD");
@@ -102,6 +107,7 @@ test("phone navigation is deliberate, keyboard accessible and closes after chang
   await menu.focus();
   await menu.press("Enter");
   await expect(page.getByRole("button", { name: "Close navigation" })).toHaveAttribute("aria-expanded", "true");
+  await openNavigation(page);
   await page.getByRole("link", { name: "3D trajectory", exact: true }).click();
   await expect(page).toHaveURL(/\/trajectory\/$/);
   await expect(page.getByRole("button", { name: "Open navigation" })).toHaveAttribute("aria-expanded", "false");

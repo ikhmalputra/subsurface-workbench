@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { readFile } from "node:fs/promises";
-import { gotoApp, reloadApp } from "./support/app";
+import { gotoApp, reloadApp, openAppearance } from "./support/app";
 
 test("engineering study completes scope, QC, evidence, findings and durable export", async ({ page }) => {
   const renderingErrors: string[] = [];
@@ -78,7 +78,7 @@ test("operational evidence stays compact, keyboard accessible and themed on phon
   await page.getByRole("checkbox", { name: /I reviewed source units/ }).check();
   await page.getByRole("button", { name: "Review evidence", exact: true }).click();
   const records = page.getByRole("region", { name: "Operational evidence", exact: true });
-  await page.locator(".demo-nav-secondary").filter({ hasText: "Appearance" }).locator("summary").click();
+  await openAppearance(page);
   for (const theme of ["light", "dark", "high-contrast"]) {
     await page.getByRole("combobox", { name: "Theme", exact: true }).selectOption(theme);
     for (const name of [/^Runs/, /^Daily reports/]) {
@@ -146,7 +146,7 @@ test("blocked study writes report failure without claiming durable save", async 
 
 test("Analysis has honest missing-data state, storage errors and responsive themed workflow", async ({ page }) => {
   await gotoApp(page, "/analysis/");
-  await page.locator(".demo-nav-secondary").filter({ hasText: "Appearance" }).locator("summary").click();
+  await openAppearance(page);
   for (const theme of ["light", "dark", "high-contrast"]) {
     await page.getByRole("combobox", { name: "Theme", exact: true }).selectOption(theme);
     const result = await new AxeBuilder({ page }).analyze();

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { gotoApp } from "./support/app";
+import { gotoApp, openNavigation } from "./support/app";
 
 for (const route of ["/view-well/?well=s-profile", "/edit-well/?well=s-profile", "/builder/"]) {
   test(`${route} opens with a dominant curved canvas and immediate view controls`, async ({ page }) => {
@@ -175,7 +175,8 @@ test("the application frame survives navigation between routes", async ({ page }
   // element from an identical replacement: a re-rendered node keeps the attribute, a remounted one
   // cannot, because React created it after the stamp was written.
   await gotoApp(page, "/view-well/?well=s-profile");
-  const sidebar = page.getByTestId("workbench-sidebar");
+  // The frame's persistent parts: the workspace toolbar floating over the sheet and the status bar.
+  const sidebar = page.locator('[data-float="workspace"]');
   const status = page.getByTestId("workbench-status");
   await expect(sidebar).toBeVisible();
   await sidebar.evaluate((element) => element.setAttribute("data-mount-check", "same-frame"));
@@ -193,14 +194,18 @@ test("the application frame survives navigation between routes", async ({ page }
     { link: workspaces.getByRole("link", { name: /^Well\b/ }), url: /\/view-well\/$/ },
   ];
   for (const step of steps) {
+    await openNavigation(page);
     await step.link.click();
     await expect(page).toHaveURL(step.url);
     // The frame is the same element, and the navigation inside it still tracks the active route —
     // the thing that made the frame a function of the route in the first place.
     await expect(sidebar).toHaveAttribute("data-mount-check", "same-frame");
     await expect(status).toHaveAttribute("data-mount-check", "same-frame");
+    // The navigation closes on arrival; reopen it to read the highlight it carries.
+    await openNavigation(page);
     await expect(step.link).toHaveAttribute("aria-current", /page|true/);
   }
+  await openNavigation(page);
   await page.getByRole("link", { name: "Subsurface Workbench showcase home" }).click();
   await expect(sidebar).toHaveAttribute("data-mount-check", "same-frame");
   await expect(status).toHaveAttribute("data-mount-check", "same-frame");

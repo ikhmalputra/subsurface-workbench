@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { WorkspaceRoute } from "./workspace-route";
+export { UsagePanel } from "./usage-panel";
 
 export function DemoHeader({ eyebrow, title, lede, points, uses, code, children }: { eyebrow: string; title: string; lede: string; points: readonly string[]; uses: readonly string[]; code: string; children?: ReactNode }) {
   return <header className="demo-header">

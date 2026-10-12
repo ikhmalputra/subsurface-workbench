@@ -17,6 +17,7 @@ import { InteractiveViewport } from "@ikhmalputra/subsurface-react/viewport";
 import { TrajectoryLog, TrajectoryPlanView, TrajectorySectionView } from "@ikhmalputra/subsurface-react/trajectory";
 import { WellFile } from "./well-file";
 import { WellSection } from "./well-section";
+import { FloatingPanel, FloatingToolbar } from "./floating";
 import { WellSeismicSection, useSceneSeismic, useSegy, useWellOnSection } from "./well-seismic";
 import { RecordCard, useWell, wells } from "./wells";
 import { InterpretationControls } from "./interpretation-controls";
@@ -190,6 +191,8 @@ export function ViewWellDemo() {
   const highlighted = !picked ? null : assembly.items.some((item) => item.id === picked.id) ? picked.id : picked.parentId ?? null;
   const [exploded, setExploded] = useState(false);
   const [inspectorVisible, setInspectorVisible] = useState(true);
+  const [fileOpen, setFileOpen] = useState(false);
+  const [sceneOptionsOpen, setSceneOptionsOpen] = useState(false);
   const [inspectorTab, setInspectorTab] = useState<"properties" | "components" | "basis" | "tools">("tools");
   const [depthInput, setDepthInput] = useState("");
   const [commandError, setCommandError] = useState<string | null>(null);
@@ -224,14 +227,18 @@ export function ViewWellDemo() {
   // The section needs a plane to project onto; the closure azimuth is the one the survey implies.
   const sectionAzimuthDeg = useMemo(() => survey.length > 1 ? summarizeTrajectory(survey).closureAzimuthDeg : 0, [survey]);
 
-  return <section className="demo-stage demo-inspection" aria-label="View well example" onKeyDown={(event) => {
+  return <section className="demo-stage demo-inspection demo-fullbleed" aria-label="View well example" onKeyDown={(event) => {
     if (event.key === "Escape" && !(event.target as HTMLElement).closest("input, select, textarea")) {
       event.preventDefault();
       clearInspection();
     }
   }}>
-    {linkError && <p role="alert">The shared view link could not be applied: {linkError}</p>}
-    <div className="demo-toolbar">
+    <h1 className="sw-sr-only">View a well in 2.5D and 3D</h1>
+    {linkError && <p role="alert" className="demo-fullbleed-alert">The shared view link could not be applied: {linkError}</p>}
+    {/* The sheet is the window. The view tools float over it at the top left under the workspace
+        toolbar; the inspector and the well file are panels from the tray; the depth command line
+        floats at the foot. Everything can be dragged where it is useful. */}
+    <FloatingToolbar id="view-well-tools" label="view tools" defaultStyle={{ left: "calc(var(--dock-left, 0px) + 8px)", top: "calc(var(--dock-top, 0px) + 50px)" }} className="demo-toolbar">
       <div className="sw-asm-canvas-modes" role="group" aria-label="Canvas view">
         <CommandButton kind="selection" aria-pressed={layout === "section"} onClick={() => setLayout("section")}>Section</CommandButton>
         <CommandButton kind="selection" aria-pressed={layout === "curved"} onClick={() => setLayout("curved")}>Curved</CommandButton>
@@ -242,7 +249,10 @@ export function ViewWellDemo() {
       <CommandButton icon="link" type="button" className="demo-toggle" aria-pressed={link.linked} onClick={() => link.setLinked(!link.linked)} title="Zoom, pan and the depth cursor follow across the schematic, seismic section and mud log">{link.linked ? "Depth views linked" : "Depth views independent"}</CommandButton>
       <CommandButton icon="view" type="button" className="demo-tool-button" aria-expanded={inspectorVisible} aria-controls="well-inspector" onClick={() => setInspectorVisible(!inspectorVisible)}>{inspectorVisible ? "Hide inspector" : "Show inspector"}</CommandButton>
       <Link className="demo-edit-action" href={`/edit-well/?well=${encodeURIComponent(wellId)}${highlighted ? `&component=${encodeURIComponent(highlighted)}` : ""}`}>Edit well</Link>
-      {layout === "earth" && earth.volume && <details className="demo-scene-options"><summary>Volume &amp; interpretation tools</summary>
+      {/* The volume tools are a panel of their own, docked under the inspector by default: inside
+          the toolbar they unfolded over the scene's own controls. */}
+      {layout === "earth" && earth.volume && <FloatingPanel id="scene-options" title="Volume & interpretation tools" open={sceneOptionsOpen} onOpenChange={setSceneOptionsOpen} defaultDock="right" defaultStyle={{ left: "calc(var(--dock-left, 0px) + 12px)", top: 100, width: 360 }} className="demo-scene-options">
+        <div className="demo-scene-options-body">
         <InterpretationControls store={store} volume={earth.volume} curve={porosity} picking={picking} onPickingChange={setPicking} />
         <div className="demo-segment" role="group" aria-label="Seismic volume display">
           {([["solid", "Solid cube"], ["render", "Volume render"]] as const).map(([value, label]) => <CommandButton kind="selection" key={value} type="button" aria-pressed={volumeMode === value} onClick={() => setVolumeMode(value)}>{label}</CommandButton>)}
@@ -253,9 +263,10 @@ export function ViewWellDemo() {
           {volumeMode === "render" && <label>Transparent below<input type="range" min={0} max={95} value={threshold} onChange={(event) => setThreshold(Number(event.target.value))} /><output>{threshold}% amplitude</output></label>}
           <CommandButton icon="clear" type="button" className="demo-toggle" onClick={() => store.setSeismicSlices({ inline: null, crossline: null, time_depth: null }, "volume-controls")} disabled={cuts.along === 100 && cuts.offset === 100 && cuts.depth === 100}>Uncut</CommandButton>
         </div>
-      </details>}
-    </div>
-    <PaneGrid active={panes} className={`demo-view-grid demo-view-${layout}${inspectorVisible ? "" : " demo-inspector-hidden"}`}>
+        </div>
+      </FloatingPanel>}
+    </FloatingToolbar>
+    <PaneGrid active={panes} className={`demo-view-grid demo-view-fullbleed demo-view-${layout}`}>
       {/* The section has nothing to keep: its window, cursor and selection are the store's, and
           its data loads are cached. Keeping it mounted behind another preset would leave a second
           copy of the schematic in the document for anything that queries the page as a whole. */}
@@ -280,8 +291,9 @@ export function ViewWellDemo() {
         cursorMdM={link.linked ? link.cursorMdM : null} onCursorMdChange={link.linked ? link.setCursorMdM : undefined} mdWindow={link.linked ? link.window : null}
         markers={shoeMarkers} /></Pane>
       <Pane id="cutaway" className="demo-fill" deferUntilShown><AssemblyScene assembly={assembly} assetBaseUrl="/well-components" selectedId={highlighted} onSelect={(id) => setSelectedId(id)} exploded={exploded} onExplodedChange={setExploded} title="Construction cutaway" /></Pane>
-      <aside id="well-inspector" className="demo-side" aria-label="Component inspector" hidden={!inspectorVisible}>
-        <header className="demo-inspector-head"><span>INSPECTOR</span><small>{components.length} source records</small></header>
+    </PaneGrid>
+    <FloatingPanel id="inspector" title="Inspector" detail={`${components.length} source records`} open={inspectorVisible} onOpenChange={setInspectorVisible} defaultStyle={{ right: 12, top: 104, width: 320 }} defaultDock="right" className="demo-inspector-float">
+      <aside id="well-inspector" className="demo-side" aria-label="Component inspector">
         <div className="demo-inspector-tabs" role="group" aria-label="Inspector panels">
           {([["tools", "Tools"], ["properties", "Properties"], ["components", "Components"], ["basis", "Evidence"]] as const).map(([value, label]) => <CommandButton kind="selection" key={value} type="button" aria-pressed={inspectorTab === value} onClick={() => setInspectorTab(value)}>{label}</CommandButton>)}
         </div>
@@ -341,8 +353,8 @@ export function ViewWellDemo() {
           <p>Construction widths are exaggerated for readability. Unknown dimensions are not certified design values.</p>
         </section>
       </aside>
-    </PaneGrid>
-    <div className="demo-drawing-status">
+    </FloatingPanel>
+    <FloatingToolbar id="depth-line" label="depth command line" defaultStyle={{ left: "calc(var(--dock-left, 0px) + 12px)", bottom: "calc(var(--dock-bottom, 0px) + 40px)" }} className="demo-drawing-status">
       <form onSubmit={(event) => {
         event.preventDefault();
         const mdM = Number(depthInput);
@@ -358,11 +370,10 @@ export function ViewWellDemo() {
       </form>
       <output aria-live="polite">{link.pinnedMdM === null ? "No pinned depth" : `Pinned ${link.pinnedMdM.toLocaleString("en", { maximumFractionDigits: 1 })} m MD`}</output>
       <span>Widths exaggerated / Escape clears selection</span>
-    </div>
-    {commandError && <p className="demo-command-error" role="alert">{commandError}</p>}
-    <details className="demo-records-drawer">
-      <summary>Well file <span>{operations ? `${operations.days.length} daily reports / ${operations.runs.length} service runs / logs & survey` : "No operational records attached"}</span></summary>
+      {commandError && <p className="demo-command-error" role="alert">{commandError}</p>}
+    </FloatingToolbar>
+    <FloatingPanel id="well-file" title="Well file" detail={operations ? `${operations.days.length} daily reports / ${operations.runs.length} service runs / logs & survey` : "No operational records attached"} open={fileOpen} onOpenChange={setFileOpen} defaultDock="bottom" defaultStyle={{ left: "calc(var(--dock-left, 0px) + 12px)", bottom: "calc(var(--dock-bottom, 0px) + 84px)", width: "min(1120px, calc(100vw - 24px))" }} className="demo-records-drawer">
       <WellFile key={design.id} operations={operations} components={components} selected={picked} onSelectComponent={setSelectedId} logUrl={logUrl} survey={design.survey} formations={design.formations} seismic={seismic} link={link} />
-    </details>
+    </FloatingPanel>
   </section>;
 }

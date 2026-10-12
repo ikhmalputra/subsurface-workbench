@@ -3,7 +3,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { readFile } from "node:fs/promises";
 import { waitForScene } from "./support/scene";
 import { SCENE_READY } from "./support/timing";
-import { gotoApp, reloadApp } from "./support/app";
+import { gotoApp, reloadApp, openNavigation } from "./support/app";
 
 test("View well opens the selected record and uses edits as the active revision", async ({ page }) => {
   await gotoApp(page, "/view-well/");
@@ -114,6 +114,7 @@ test("full well edits recompute trajectory and reach construction, source record
   test.slow();
   await page.getByRole("combobox", { name: "View", exact: true }).selectOption("earth");
   await waitForScene(page);
+  await openNavigation(page);
   await page.getByRole("link", { name: "Well report", exact: true }).click();
   // Two separate things can go wrong leaving a software-rendered 3D route, and asserting the report
   // text alone cannot tell them apart: a navigation that has not completed and a report that has
@@ -126,6 +127,7 @@ test("full well edits recompute trajectory and reach construction, source record
   await expect(report).toContainText("Revised formation");
   await expect(report).toContainText("User revised hole record");
   await expect(report).not.toContainText("two FIT results");
+  await openNavigation(page);
   await page.getByRole("link", { name: "View well", exact: true }).click();
   await page.locator(".demo-toolbar").getByRole("link", { name: "Edit well", exact: true }).click();
   page.once("dialog", (dialog) => dialog.accept());

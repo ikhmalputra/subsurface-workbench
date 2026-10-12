@@ -3,7 +3,7 @@ import type { Locator, Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { readFile } from "node:fs/promises";
 import { SCENE_READY } from "./support/timing";
-import { gotoApp, reloadApp } from "./support/app";
+import { gotoApp, reloadApp, openAppearance } from "./support/app";
 
 const schematic = (page: Page) => page.locator(".sw-wd-canvas [data-testid='assembly-schematic']");
 const tile = (page: Page, id: string) => page.locator(`.sw-asm-tile[data-catalog-id="${id}"]`);
@@ -21,7 +21,7 @@ test("component filter has one control surface and filters the library without o
   await openBuilder(page);
   const search = page.getByRole("textbox", { name: "Filter components", exact: true });
   const field = page.locator(".sw-asm-search");
-  await page.locator(".demo-nav-secondary").filter({ hasText: "Appearance" }).locator("summary").click();
+  await openAppearance(page);
   for (const theme of ["light", "dark", "high-contrast"]) {
     await page.getByRole("combobox", { name: "Theme", exact: true }).selectOption(theme);
     for (const density of ["comfortable", "compact"]) {
