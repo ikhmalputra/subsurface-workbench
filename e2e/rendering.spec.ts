@@ -3,6 +3,7 @@ import type { Locator } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { GPU_PICK_DWELL, SCENE_READY, SOFTWARE_RENDERING } from "./support/timing";
 import { waitForScene } from "./support/scene";
+import { gotoApp, selectWellView } from "./support/app";
 
 /**
  * A GPU change is only observable once the renderer has presented a new frame. On a real GPU that
@@ -46,8 +47,8 @@ async function describeCanvas(canvas: Locator) {
 test("arbitrary slices rotate and translate inside the existing scene and restore through a shared URL", async ({ page }) => {
   const errors: string[] = [];
   page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
-  await page.goto("/view-well/");
-  await page.getByRole("combobox", { name: "View", exact: true }).selectOption("earth");
+  await gotoApp(page, "/view-well/");
+  await selectWellView(page, "earth", ["earth"]);
   // Wait for the scene before touching anything else. Selecting "earth" starts a software-rendered
   // build that occupies the main thread, and a click issued into that window waits on actionability
   // checks that cannot run — which is how a disclosure click consumed a whole test budget.
@@ -72,7 +73,7 @@ test("arbitrary slices rotate and translate inside the existing scene and restor
   await expect.poll(() => Number(new URL(page.url()).searchParams.get("sw.planeNormal")?.split(",")[2]).toFixed(4)).toBe(Math.cos(65 * Math.PI / 180).toFixed(4));
   const url = page.url(), normal = new URL(url).searchParams.get("sw.planeNormal");
   await page.reload();
-  await page.getByRole("combobox", { name: "View", exact: true }).selectOption("earth");
+  await selectWellView(page, "earth", ["earth"]);
   await waitForScene(page);
   await page.locator(".demo-scene-options > summary").click();
   await expect(scene).toHaveAttribute("data-slice-vertices", /^[3-6]$/);
@@ -89,8 +90,8 @@ test("log colour and display radius update co-axial geometry without rebuilding 
   // log mode survives in the URL. Two software-rendered scene builds plus the seismic decode do not
   // fit the default budget on a loaded runner, where a single build has been measured near 110 s.
   test.slow(SOFTWARE_RENDERING, "two software-rendered scene builds in one test");
-  await page.goto("/view-well/");
-  await page.getByRole("combobox", { name: "View", exact: true }).selectOption("earth");
+  await gotoApp(page, "/view-well/");
+  await selectWellView(page, "earth", ["earth"]);
   // Wait for the scene before touching anything else. Selecting "earth" starts a software-rendered
   // build that occupies the main thread, and a click issued into that window waits on actionability
   // checks that cannot run — which is how a disclosure click consumed a whole test budget.
@@ -104,7 +105,7 @@ test("log colour and display radius update co-axial geometry without rebuilding 
   await expect(scene).toHaveAttribute("data-camera", camera!);
   await expect.poll(() => new URL(page.url()).searchParams.get("sw.logMode")).toBe("radius");
   await page.reload();
-  await page.getByRole("combobox", { name: "View", exact: true }).selectOption("earth");
+  await selectWellView(page, "earth", ["earth"]);
   await waitForScene(page);
   await page.locator(".demo-scene-options > summary").click();
   await expect(page.getByLabel("Well log styling")).toHaveValue("radius");
@@ -114,7 +115,7 @@ test("log colour and display radius update co-axial geometry without rebuilding 
 });
 
 test("float GPU framebuffer reads exact surface coordinates and sampled amplitude, detects misses and restores state", async ({ page }) => {
-  await page.goto("/sandbox/");
+  await gotoApp(page, "/sandbox/");
   await page.getByRole("button", { name: "Open independent synthetic example" }).click();
   await page.getByRole("button", { name: "Run WebGL picking check" }).click();
   const result = page.getByTestId("gpu-check-result");
@@ -133,8 +134,8 @@ test("float GPU framebuffer reads exact surface coordinates and sampled amplitud
 test("GPU slice picking reads coordinates on the oblique plane and publishes the chosen XYZ", async ({ page }) => {
   test.slow(SOFTWARE_RENDERING, "up to 24 software-rendered GPU picks in one sweep");
   await page.setViewportSize({ width: 1600, height: 1400 });
-  await page.goto("/view-well/");
-  await page.getByRole("combobox", { name: "View", exact: true }).selectOption("earth");
+  await gotoApp(page, "/view-well/");
+  await selectWellView(page, "earth", ["earth"]);
   // Wait for the scene before touching anything else. Selecting "earth" starts a software-rendered
   // build that occupies the main thread, and a click issued into that window waits on actionability
   // checks that cannot run — which is how a disclosure click consumed a whole test budget.
@@ -177,7 +178,7 @@ test("GPU slice picking reads coordinates on the oblique plane and publishes the
 
 test("WebGPU is explicitly opt-in and unavailable browsers show an actionable error without a fake ready canvas", async ({ page }) => {
   await page.addInitScript(() => { Object.defineProperty(navigator, "gpu", { value: undefined, configurable: true }); });
-  await page.goto("/sandbox/");
+  await gotoApp(page, "/sandbox/");
   await page.getByRole("button", { name: "Open independent synthetic example" }).click();
   await expect(page.getByTestId("webgpu-viewer")).toHaveCount(0);
   await page.getByRole("button", { name: "Start WebGPU" }).click();
@@ -198,7 +199,7 @@ test("native WebGPU compiles and renders the synthetic volume and oblique plane"
   test.skip(browserName !== "chromium", "Native WebGPU verification runs in Chromium.");
   const errors: string[] = [];
   page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
-  await page.goto("/sandbox/");
+  await gotoApp(page, "/sandbox/");
   await page.getByRole("button", { name: "Open independent synthetic example" }).click();
   const supported = await page.evaluate(async () => {
     // Typed locally rather than by pulling @webgpu/types into the suite: this is the only WebGPU
@@ -260,7 +261,7 @@ test("native WebGPU compiles and renders the synthetic volume and oblique plane"
 
 test("sandbox controls fit a phone and have accessible names without starting a GPU", async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
-  await page.goto("/sandbox/");
+  await gotoApp(page, "/sandbox/");
   await page.getByRole("button", { name: "Open independent synthetic example" }).click();
   await expect(page.getByLabel("Voxel format", { exact: true })).toHaveValue("float32");
   await page.getByRole("button", { name: "Oblique slice", exact: true }).click();

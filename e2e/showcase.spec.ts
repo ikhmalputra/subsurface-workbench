@@ -1,9 +1,9 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { SCENE_READY } from "./support/timing";
+import { SCENE_READY, SOFTWARE_RENDERING } from "./support/timing";
 import { waitForScene } from "./support/scene";
-import { gotoApp } from "./support/app";
+import { gotoApp, selectWellView } from "./support/app";
 
 async function horizontalOverflow(page: Page) {
   return page.evaluate(() => Array.from(document.body.querySelectorAll<HTMLElement>("*"))
@@ -18,7 +18,7 @@ async function noAxeViolations(page: Page) {
 }
 
 test("landing page links every capability to a working consumer example", async ({ page }) => {
-  await page.goto("/");
+  await gotoApp(page, "/");
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Start with the well");
   const cards = page.getByTestId("capability-card");
   await expect(cards).toHaveCount(5);
@@ -33,7 +33,8 @@ test("landing page links every capability to a working consumer example", async 
 });
 
 test("view-well composes the adapter, 2.5D schematic and 3D cutaway directly", async ({ page }) => {
-  await page.goto("/view-well/");
+  test.slow(SOFTWARE_RENDERING, "software-rendered 3D cutaway");
+  await gotoApp(page, "/view-well/");
   // View well opens on the curved construction; this test is about the straight 2.5D schematic.
   await page.getByRole("combobox", { name: "View", exact: true }).selectOption("schematic");
   await expect(page.locator(".sw-asm-item")).toHaveCount(7);
@@ -63,7 +64,10 @@ test("view-well composes the adapter, 2.5D schematic and 3D cutaway directly", a
 });
 
 test("view-well selection is pronounced and both views explode into individual components", async ({ page }) => {
-  await page.goto("/view-well/");
+  // Mounts the 3D cutaway through software WebGL; a loaded runner has taken two minutes to get
+  // there, which left nothing for the rest of the test.
+  test.slow(SOFTWARE_RENDERING, "software-rendered 3D cutaway");
+  await gotoApp(page, "/view-well/");
   await page.getByRole("combobox", { name: "View", exact: true }).selectOption("split");
   const schematic = page.locator(".sw-asm-schematic-frame > svg");
   await expect(schematic).not.toHaveAttribute("data-has-selection", /.*/);
@@ -96,7 +100,7 @@ test("view-well selection is pronounced and both views explode into individual c
 });
 
 test("trajectory path click probes depth and selects the string at that depth", async ({ page }) => {
-  await page.goto("/trajectory/");
+  await gotoApp(page, "/trajectory/");
   const scene = page.getByTestId("interactive-well-scene");
   await expect(scene).toHaveAttribute("data-ready", "true", { timeout: SCENE_READY });
   const readout = page.getByTestId("well-scene-readout");
@@ -121,7 +125,7 @@ test("trajectory path click probes depth and selects the string at that depth", 
 });
 
 test("trajectory math is verified, the planner hits a dragged target and station edits recompute", async ({ page }) => {
-  await page.goto("/trajectory/");
+  await gotoApp(page, "/trajectory/");
   await waitForScene(page);
   await expect(page.getByTestId("trajectory-verification")).toContainText("422 stations");
   await expect(page.getByTestId("trajectory-summary")).toContainText("3,339.1 m");
@@ -161,7 +165,7 @@ test("trajectory math is verified, the planner hits a dragged target and station
 });
 
 test("view-well follows the trajectory with the cited FORGE record and shares selection", async ({ page }) => {
-  await page.goto("/view-well/");
+  await gotoApp(page, "/view-well/");
   await page.getByRole("combobox", { name: "View", exact: true }).selectOption("profile");
   await expect(page.locator(".sw-asm-scene, .sw-asm-schematic-frame")).not.toBeVisible();
   await expect(page.locator(".demo-toolbar").getByRole("button", { name: "Exploded view" })).toHaveCount(0);
@@ -204,12 +208,12 @@ test("showcase pages fit a phone viewport", async ({ page }) => {
     await page.waitForLoadState("networkidle");
     expect(await horizontalOverflow(page), path).toEqual([]);
   }
-  await page.goto("/");
+  await gotoApp(page, "/");
   await page.screenshot({ path: "output/playwright/showcase-home-mobile.png", fullPage: true });
 });
 
 test("view-well inventory searches every record and shares selection with the schematic", async ({ page }) => {
-  await page.goto("/view-well/");
+  await gotoApp(page, "/view-well/");
   await page.getByRole("combobox", { name: "Well" }).selectOption("s-profile");
   // The inventory links selection to the straight schematic's drawing items.
   await page.getByRole("combobox", { name: "View", exact: true }).selectOption("schematic");
@@ -243,7 +247,7 @@ test("view-well inventory searches every record and shares selection with the sc
 });
 
 test("view-well well file links history, runs and mud log to the construction by depth", async ({ page }) => {
-  await page.goto("/view-well/");
+  await gotoApp(page, "/view-well/");
   await page.locator(".demo-records-drawer > summary").click();
   const file = page.getByTestId("well-file");
   await expect(file).toContainText("76 daily reports · 54 service runs");
@@ -282,7 +286,7 @@ test("view-well well file links history, runs and mud log to the construction by
 });
 
 test("view-well seismic tab parses the FORGE SEG-Y and picks construction by depth on the section", async ({ page }) => {
-  await page.goto("/view-well/");
+  await gotoApp(page, "/view-well/");
   await page.locator(".demo-records-drawer > summary").click();
   const file = page.getByTestId("well-file");
   await file.getByRole("tab", { name: "Seismic (SEG-Y)" }).click();
@@ -325,7 +329,7 @@ test("view-well seismic tab parses the FORGE SEG-Y and picks construction by dep
 });
 
 test("view-well links seismic, schematic and mud log by depth, and can unlink them", async ({ page }) => {
-  await page.goto("/view-well/");
+  await gotoApp(page, "/view-well/");
   await page.getByRole("combobox", { name: "View", exact: true }).selectOption("seismic");
   const schematic = page.getByTestId("assembly-schematic");
   const header = page.getByRole("region", { name: "Construction schematic" }).locator("header small");
@@ -375,10 +379,12 @@ test("view-well links seismic, schematic and mud log by depth, and can unlink th
 
 test("view-well puts the well inside the full seismic volume beside the survey log in one linked 3D view @slow", async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1400 });
-  await page.goto("/view-well/");
-  await page.getByRole("combobox", { name: "View", exact: true }).selectOption("earth");
-  await page.locator(".demo-scene-options > summary").click();
+  await gotoApp(page, "/view-well/");
+  await selectWellView(page, "earth", ["earth", "survey"]);
+  // The scene first: selecting "earth" starts a software-rendered build that occupies the main
+  // thread, and a click issued into that window waits on actionability checks that cannot run.
   const scene = await waitForScene(page);
+  await page.locator(".demo-scene-options > summary").click();
   const legend = page.getByTestId("well-scene-section-legend");
   await expect(legend).toContainText("FORGE PSDM volume · 2.75 × 1.52 km");
   // The cube can be volume-rendered and cut open without rebuilding the scene.
@@ -435,7 +441,7 @@ test("static host keeps a strict CSP and loads nothing heavy before it is asked 
   const requests: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("request", (request) => requests.push(request.url()));
-  const response = await page.goto("/");
+  const response = await gotoApp(page, "/");
   await page.waitForLoadState("networkidle");
   const headers = response!.headers();
   expect(headers["content-security-policy"]).toContain("object-src 'none'");
@@ -448,7 +454,7 @@ test("static host keeps a strict CSP and loads nothing heavy before it is asked 
 });
 
 test("view-well presets are sets of panes that keep their state instead of being rebuilt", async ({ page }) => {
-  await page.goto("/view-well/");
+  await gotoApp(page, "/view-well/");
   const view = page.getByRole("combobox", { name: "View", exact: true });
 
   // Open every pane once so each is mounted, then stamp the live nodes. A stamp survives a

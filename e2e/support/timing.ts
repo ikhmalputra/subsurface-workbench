@@ -26,3 +26,13 @@ export const HEAVY_ASSET = SOFTWARE_RENDERING ? 90_000 : 60_000;
  * geometry it was written to test.
  */
 export const GPU_PICK_DWELL = SOFTWARE_RENDERING ? 2_000 : 200;
+
+/**
+ * A per-test budget, scaled for software rendering.
+ *
+ * The config scales the default timeout (30 s to 120 s) but a `test.setTimeout` call does not
+ * inherit that, so the specs that set their own budget were the only ones still sized for a real
+ * GPU. One axe pass over the well report in three themes exceeded a hard-coded 60 s on a loaded
+ * runner while taking 15 s locally — the test was not wrong, its budget was.
+ */
+export const budget = (localMs: number): number => localMs * (SOFTWARE_RENDERING ? 3 : 1);
