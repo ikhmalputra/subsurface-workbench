@@ -1,14 +1,10 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { DemoPage } from "../../components/showcase";
-import { EditWellDemo } from "../../components/edit-well-demo";
+import { ForwardToSheet } from "../../components/tools";
 
-export const metadata: Metadata = { title: "Edit well · Subsurface SDK" };
+export const metadata: Metadata = { title: "Subsurface Workbench" };
 
-export default function EditWellPage() {
-  return <DemoPage current="/edit-well/">
-    <Suspense fallback={<p role="status">Loading well editor...</p>}>
-      <EditWellDemo />
-    </Suspense>
-  </DemoPage>;
+/** This was a page; it is a document on the sheet now. The URL forwards there with its query. */
+export default function ForwardPage() {
+  return <Suspense fallback={null}><ForwardToSheet document="edit-well" /></Suspense>;
 }

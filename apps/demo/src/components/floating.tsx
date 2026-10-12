@@ -30,10 +30,11 @@ export const DOCK_SIZE: Readonly<Record<DockSide, number>> = { left: 320, right:
 /** Height of the status bar, the one strip of chrome under the sheet. */
 export const STATUS_PX = 28;
 
+export interface DockEntry { readonly dock: Dock; readonly size: number }
 export interface DockRegistry {
-  /** Open panels by id, with the side each is docked to (`float` for none). */
-  readonly docks: ReadonlyMap<string, Dock>;
-  readonly register: (id: string, dock: Dock | null) => void;
+  /** Open panels by id, with the side each is docked to (`float` for none) and its thickness. */
+  readonly docks: ReadonlyMap<string, DockEntry>;
+  readonly register: (id: string, dock: Dock | null, size?: number) => void;
   /** Docking needs room beside the sheet; on a phone every panel floats and the choice is kept for later. */
   readonly enabled: boolean;
 }
@@ -48,7 +49,7 @@ export const FloatProvider = FloatContext.Provider;
 
 /** The frame's dock registry: which open panels are docked where, and the insets they cost the sheet. */
 export function useDockRegistry(): DockRegistry & { readonly insets: Readonly<Record<DockSide, number>> } {
-  const [docks, setDocks] = useState<ReadonlyMap<string, Dock>>(() => new Map());
+  const [docks, setDocks] = useState<ReadonlyMap<string, DockEntry>>(() => new Map());
   const [enabled, setEnabled] = useState(true);
   useEffect(() => {
     const narrow = window.matchMedia("(max-width: 760px)");
@@ -57,14 +58,16 @@ export function useDockRegistry(): DockRegistry & { readonly insets: Readonly<Re
     narrow.addEventListener("change", update);
     return () => narrow.removeEventListener("change", update);
   }, []);
-  const register = (id: string, dock: Dock | null) => setDocks((current) => {
-    if ((dock === null && !current.has(id)) || current.get(id) === dock) return current;
+  const register = (id: string, dock: Dock | null, size?: number) => setDocks((current) => {
+    const entry = current.get(id);
+    const thickness = size ?? (dock && dock !== "float" && dock !== "fill" ? DOCK_SIZE[dock] : 0);
+    if ((dock === null && !entry) || (entry && entry.dock === dock && entry.size === thickness)) return current;
     const next = new Map(current);
-    if (dock === null) next.delete(id); else next.set(id, dock);
+    if (dock === null) next.delete(id); else next.set(id, { dock, size: thickness });
     return next;
   });
   const insets: Record<DockSide, number> = { left: 0, right: 0, top: 0, bottom: 0 };
-  if (enabled) for (const dock of docks.values()) if (dock !== "float" && dock !== "fill") insets[dock] = DOCK_SIZE[dock];
+  if (enabled) for (const { dock, size } of docks.values()) if (dock !== "float" && dock !== "fill") insets[dock] = Math.max(insets[dock], size);
   return { docks, register, insets, enabled };
 }
 
@@ -142,28 +145,30 @@ function useDrag(id: string, panel: () => HTMLElement | null, onEdge?: (side: Do
 }
 
 /** The rectangle of a docked panel: its share of the side it is docked to, between the other docks. */
-function dockedStyle(dock: DockSide | "fill", index: number, count: number, insets: Readonly<Record<DockSide, number>>): CSSProperties {
+function dockedStyle(dock: DockSide | "fill", index: number, count: number, insets: Readonly<Record<DockSide, number>>, size: number): CSSProperties {
   const height = `calc(100dvh - ${STATUS_PX}px)`;
   // Fill: the sheet's own rectangle between the docks — a tab over the drawing, in effect.
   if (dock === "fill") return { left: insets.left, top: insets.top, width: `calc(100vw - ${insets.left}px - ${insets.right}px)`, height: `calc(${height} - ${insets.top}px - ${insets.bottom}px)` };
   if (dock === "left" || dock === "right") {
     const share = `calc(${height} / ${count})`;
-    return { [dock]: 0, top: `calc(${share} * ${index})`, width: DOCK_SIZE[dock], height: share };
+    return { [dock]: 0, top: `calc(${share} * ${index})`, width: size, height: share };
   }
   const width = `calc(100vw - ${insets.left}px - ${insets.right}px)`;
   const share = `calc(${width} / ${count})`;
-  return { left: `calc(${insets.left}px + ${share} * ${index})`, width: share, height: DOCK_SIZE[dock], ...(dock === "top" ? { top: 0 } : { bottom: STATUS_PX }) };
+  return { left: `calc(${insets.left}px + ${share} * ${index})`, width: share, height: size, ...(dock === "top" ? { top: 0 } : { bottom: STATUS_PX }) };
 }
 
-function useDock(id: string, open: boolean, defaultDock: Dock) {
+function useDock(id: string, open: boolean, defaultDock: Dock, dockSize?: number) {
   const { registry } = useContext(FloatContext);
   const [dock, setDockState] = useState<Dock>(() => docksRemembered.get(id) ?? defaultDock);
   const setDock = (next: Dock) => { docksRemembered.set(id, next); setDockState(next); };
-  useEffect(() => { registry.register(id, open ? dock : null); return () => registry.register(id, null); }, [id, open, dock]);
-  const siblings = Array.from(registry.docks.entries()).filter(([, side]) => side === dock && dock !== "float" && dock !== "fill").map(([key]) => key);
+  useEffect(() => { registry.register(id, open ? dock : null, dockSize); return () => registry.register(id, null); }, [id, open, dock, dockSize]); // the registry's register is stable per frame
+  const siblings = Array.from(registry.docks.entries()).filter(([, entry]) => entry.dock === dock && dock !== "float" && dock !== "fill").map(([key]) => key);
   const insets: Record<DockSide, number> = { left: 0, right: 0, top: 0, bottom: 0 };
-  for (const side of registry.docks.values()) if (side !== "float" && side !== "fill") insets[side] = DOCK_SIZE[side];
-  const style = dock === "float" || !registry.enabled ? null : dockedStyle(dock, Math.max(0, siblings.indexOf(id)), Math.max(1, siblings.length), insets);
+  for (const entry of registry.docks.values()) if (entry.dock !== "float" && entry.dock !== "fill") insets[entry.dock] = Math.max(insets[entry.dock], entry.size);
+  const size = dock === "float" || dock === "fill" ? 0 : dockSize ?? DOCK_SIZE[dock];
+  // A phone disables the side docks, not the fill: the document still fills the sheet there.
+  const style = dock === "float" || (!registry.enabled && dock !== "fill") ? null : dockedStyle(dock, Math.max(0, siblings.indexOf(id)), Math.max(1, siblings.length), insets, size);
   return { dock, setDock, style };
 }
 
@@ -190,18 +195,24 @@ export interface FloatingPanelProps {
   readonly tray?: boolean;
   /** The body scrolls itself and is keyboard-reachable; otherwise the content manages its own scrolling. */
   readonly scrollable?: boolean;
+  /** Thickness when docked to a side — a column's width, a band's height — instead of the default. */
+  readonly dockSize?: number;
+  /** No title bar: the panel is the ground others sit on, and another document puts it away. */
+  readonly headless?: boolean;
 }
 
 /** A panel: a tab in the tray when closed; a window over the sheet, or a dock beside it, when open. */
-export function FloatingPanel({ id, title, detail, open, onOpenChange, defaultStyle, defaultDock = "float", className, children, tray = true, scrollable = false }: FloatingPanelProps) {
+export function FloatingPanel({ id, title, detail, open, onOpenChange, defaultStyle, defaultDock = "float", className, children, tray = true, scrollable = false, dockSize, headless = false }: FloatingPanelProps) {
   const host = useContext(FloatContext);
   const ref = useRef<HTMLElement>(null);
-  const { dock, setDock, style: docked } = useDock(id, open, defaultDock);
+  const { dock, setDock, style: docked } = useDock(id, open, defaultDock, dockSize);
   const { position, stack, handlers, raise } = useDrag(id, () => ref.current, setDock);
   // A panel comes to the front when it opens, not where its mount order left it: the navigation
   // is mounted with the frame, before any route's panels, and would otherwise open underneath them.
   useEffect(() => { if (open) raise(); }, [open]); // `raise` is recreated per render; depending on it would re-raise forever
-  const style: CSSProperties = open ? { ...(docked ?? (position ? { left: position.left, top: position.top } : defaultStyle)), zIndex: docked ? 20 : stack } : {};
+  // Stacking: a document filling the sheet is the ground everything else sits on; docked panels
+  // sit above it; windows and toolbars (whose stack starts above 10) sit above those.
+  const style: CSSProperties = open ? { ...(docked ?? (position ? { left: position.left, top: position.top } : defaultStyle)), zIndex: docked ? (dock === "fill" ? 5 : 10) : stack } : {};
   const classes = `demo-float${open ? " is-open" : ""}${docked ? ` is-docked is-docked-${dock}` : ""}${className ? ` ${className}` : ""}`;
   const body = <div className={`demo-float-body${scrollable ? " is-scrollable" : ""}`} tabIndex={scrollable ? 0 : undefined}>{children}</div>;
   // Closed: a tab in the tray, a `details` whose summary opens it. Open: a window — the same for
@@ -217,13 +228,13 @@ export function FloatingPanel({ id, title, detail, open, onOpenChange, defaultSt
   }
   if (!host.layer) return null;
   const { onKeyDown, ...pointer } = handlers;
-  return createPortal(<section ref={ref as never} className={classes} data-float={id} data-dock={dock} data-moved={position ? "true" : undefined} style={style} aria-label={`${title} panel`}>
-    <div className="demo-float-head" {...(docked ? {} : pointer)}>
+  return createPortal(<section ref={ref as never} className={`${classes}${headless ? " is-headless" : ""}`} data-float={id} data-dock={dock} data-moved={position ? "true" : undefined} style={style} aria-label={`${title} panel`}>
+    {!headless && <div className="demo-float-head" {...(docked ? {} : pointer)}>
       {!docked && <span className="demo-float-grip" tabIndex={0} role="button" aria-label={`Move the ${title.toLowerCase()} panel`} onKeyDown={onKeyDown} />}
-      <span className="demo-float-title">{title}</span>{detail && <span className="demo-float-sub">{detail}</span>}
+      <h2 className="demo-float-title">{title}</h2>{detail && <span className="demo-float-sub">{detail}</span>}
       <DockControl title={title} dock={dock} onChange={setDock} />
       <CommandButton icon="close" className="demo-float-close" aria-label={`Dismiss ${title.toLowerCase()} panel`} onClick={() => onOpenChange(false)} />
-    </div>
+    </div>}
     {body}
   </section>, host.layer);
 }

@@ -1,6 +1,10 @@
-import { DemoPage } from "../../components/showcase";
-import { FieldWorkspace } from "../../components/field-workspace";
-export const metadata = { title: "Equator field · Spatial section" };
-export default function CrossSectionPage() {
-  return <DemoPage current="/cross-section/"><FieldWorkspace tool="section" /></DemoPage>;
+import type { Metadata } from "next";
+import { Suspense } from "react";
+import { ForwardToSheet } from "../../components/tools";
+
+export const metadata: Metadata = { title: "Subsurface Workbench" };
+
+/** This was a page; it is a document on the sheet now. The URL forwards there with its query. */
+export default function ForwardPage() {
+  return <Suspense fallback={null}><ForwardToSheet document="cross-section" /></Suspense>;
 }

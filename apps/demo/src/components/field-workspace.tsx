@@ -36,9 +36,9 @@ export function FieldWorkspace({ tool }: { tool: FieldTool }) {
     <header className="demo-field-header"><div><h1>Equator field</h1><p>One project · four wells · shared selection and source stations</p></div><strong>SYNTHETIC ENGINEERING SCENARIO</strong></header>
     <p className="demo-gis-notice">Assumed UTM 50N locations, generated surveys/logs, synthetic casing and completion records, interpreted Sand R1 top/base and illustrative water depths. No measured bathymetry, production, pressure, saturation or reserves are supplied. Field selection is independent of the documented well workspace.</p>
     <nav aria-label="Field tools" className="demo-field-tools">
-      <Link href="/map/" aria-current={tool === "spatial" ? "page" : undefined}><CommandIcon name="locate" />1 · Locate wells</Link>
-      <Link href="/correlation/" aria-current={tool === "correlation" ? "page" : undefined}><CommandIcon name="layers" />2 · Compare intervals</Link>
-      <Link href="/cross-section/" aria-current={tool === "section" ? "page" : undefined}><CommandIcon name="view" />3 · Spatial section</Link>
+      <Link href="/view-well/?tool=field" aria-current={tool === "spatial" ? "page" : undefined}><CommandIcon name="locate" />1 · Locate wells</Link>
+      <Link href="/view-well/?tool=correlation" aria-current={tool === "correlation" ? "page" : undefined}><CommandIcon name="layers" />2 · Compare intervals</Link>
+      <Link href="/view-well/?tool=cross-section" aria-current={tool === "section" ? "page" : undefined}><CommandIcon name="view" />3 · Spatial section</Link>
     </nav>
     <div className="demo-field-register" role="group" aria-label="Field well selection">
       {project.records.map(({ well }) => <div key={well.id}>

@@ -8,8 +8,8 @@ import { WorkspaceContextBar } from "./workspace-context-bar";
 import { WorkspaceNavigation } from "./workspace-navigation";
 import { FloatProvider, FloatingToolbar, useDockRegistry } from "./floating";
 import { wells } from "./wells-data";
-import { ToolPanels, ToolsPalette, ToolsProvider, useTools } from "./tools";
-import { toolVerbs, type ToolVerb } from "../lib/tools";
+import { ToolPanels, ToolsPalette, ToolsProvider, ToolsRibbon, useTools } from "./tools";
+import { SHEET, toolVerbs, type ToolVerb } from "../lib/tools";
 import { CommandButton } from "@ikhmalputra/subsurface-react/ui";
 
 /**
@@ -52,8 +52,17 @@ export function WorkbenchFrame({ children }: { children: ReactNode }) {
   useEffect(() => { document.documentElement.dataset.swHydrated = "true"; }, []);
   // Routes are declared with trailing slashes (`trailingSlash: true`), so normalise rather than
   // letting the active-route highlight silently fail to match.
-  const current = pathname === "/" || pathname.endsWith("/") ? pathname : `${pathname}/`;
+  const path = pathname === "/" || pathname.endsWith("/") ? pathname : `${pathname}/`;
   return <FloatProvider value={{ layer, tray, registry }}><ToolsProvider>
+    <FrameBody path={path} setLayer={setLayer} setTray={setTray}>{children}</FrameBody>
+  </ToolsProvider></FloatProvider>;
+}
+
+/** The frame proper, inside the tools provider so the navigation can highlight the open document. */
+function FrameBody({ path, setLayer, setTray, children }: { readonly path: string; readonly setLayer: (element: HTMLElement | null) => void; readonly setTray: (element: HTMLElement | null) => void; readonly children: ReactNode }) {
+  const tools = useTools();
+  const current = path === SHEET && tools.document && tools.document !== "section" ? `${SHEET}?tool=${tools.document}` : path;
+  return <>
     <Workbench status={<>
       <CommandLine />
       <div className="demo-tray" ref={setTray} role="group" aria-label="Panels" />
@@ -68,9 +77,10 @@ export function WorkbenchFrame({ children }: { children: ReactNode }) {
       <ToolsToggle />
       <WorkspaceContextBar part="picker" />
     </FloatingToolbar>
+    <ToolsRibbon />
     <ToolsPalette />
     <ToolPanels />
-  </ToolsProvider></FloatProvider>;
+  </>;
 }
 
 

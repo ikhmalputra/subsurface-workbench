@@ -49,7 +49,7 @@ function defaultPlan(design: WellDesign): BuildHoldInput {
 
 export function TrajectoryDemo() {
   const { store, well } = useWorkspace();
-  if (!well.design.survey?.length) return <section className="demo-panel"><h1>Trajectory</h1><p>No survey is supplied for this well. Open Edit well and use the Trajectory planner to create one.</p><Link href={`/edit-well/?well=${encodeURIComponent(well.id)}`}>Edit well</Link></section>;
+  if (!well.design.survey?.length) return <section className="demo-panel"><h1>Trajectory</h1><p>No survey is supplied for this well. Open Edit well and use the Trajectory planner to create one.</p><Link href={`/view-well/?well=${encodeURIComponent(well.id)}&tool=edit-well`}>Edit well</Link></section>;
   return <TrajectoryWellDemo key={well.id} wellId={well.id} store={store} />;
 }
 

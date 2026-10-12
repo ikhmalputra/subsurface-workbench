@@ -4,8 +4,8 @@ import { getWellComponents } from "@ikhmalputra/subsurface-core";
 import { useSubsurfaceSelector } from "@ikhmalputra/subsurface-react/state";
 import { useWorkspace } from "./workspace-provider";
 import { WellPicker } from "./wells";
-import { usePathname } from "next/navigation";
 import { CommandButton } from "@ikhmalputra/subsurface-react/ui";
+import { useTools } from "./tools";
 
 /**
  * The workspace context in two parts: the well picker on the floating workspace toolbar, and the
@@ -13,8 +13,8 @@ import { CommandButton } from "@ikhmalputra/subsurface-react/ui";
  * coordinates. The Field routes have no picker; their read-outs describe the field.
  */
 export function WorkspaceContextBar({ part }: { readonly part: "picker" | "readouts" }) {
-  const pathname = usePathname();
-  const field = ["/map", "/correlation", "/cross-section"].includes(pathname.replace(/\/$/, ""));
+  const { document } = useTools();
+  const field = document === "field" || document === "correlation" || document === "cross-section";
   if (part === "picker") return field ? <strong className="demo-context-field">Equator field · synthetic</strong> : <WellPickerPart />;
   return field ? <FieldContextBar /> : <WellContextBar />;
 }

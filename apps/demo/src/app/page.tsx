@@ -41,7 +41,7 @@ export default function Home() {
         <p className="demo-lede">Open the construction schematic first, inspect its records and trajectory, then review the available report. Well, component, depth and appearance stay with you across compatible views. Separate synthetic analysis examples are explicitly isolated from your active well.</p>
         <div className="demo-cta">
           <Link className="demo-button demo-button-primary" href="/view-well/">Open well workspace</Link>
-          <Link className="demo-button" href="/builder/">Assemble one</Link>
+          <Link className="demo-button" href="/view-well/?tool=brief">Assemble one</Link>
         </div>
         <pre className="demo-install" tabIndex={0} aria-label="Install command"><code>pnpm add @ikhmalputra/subsurface-core @ikhmalputra/subsurface-react three</code></pre>
       </div>

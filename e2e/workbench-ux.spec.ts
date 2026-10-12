@@ -109,7 +109,7 @@ test("phone navigation is deliberate, keyboard accessible and closes after chang
   await expect(page.getByRole("button", { name: "Close navigation" })).toHaveAttribute("aria-expanded", "true");
   await openNavigation(page);
   await page.getByRole("link", { name: "3D trajectory", exact: true }).click();
-  await expect(page).toHaveURL(/\/trajectory\/$/);
+  await expect(page).toHaveURL(/tool=trajectory$/);
   await expect(page.getByRole("button", { name: "Open navigation" })).toHaveAttribute("aria-expanded", "false");
   await expect(page.getByRole("combobox", { name: "Well", exact: true })).toHaveCount(1);
   await page.screenshot({ path: "output/playwright/workbench-mobile.png" });

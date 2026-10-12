@@ -83,7 +83,7 @@ test("four workspaces expose contextual views without merging incompatible examp
   await expect(fieldViews.getByRole("link")).toHaveText(["Field workspace"]);
   await closeNavigation(page);
   await page.getByRole("link", { name: "2 · Compare intervals" }).click();
-  await expect(page).toHaveURL(/\/correlation\/$/);
+  await expect(page).toHaveURL(/tool=correlation$/);
   await expect(page.getByRole("heading", { name: "Equator field" })).toBeVisible();
   await openNavigation(page);
   await page.getByRole("link", { name: "Analysis", exact: true }).click();
@@ -91,7 +91,7 @@ test("four workspaces expose contextual views without merging incompatible examp
   const analysisViews = page.getByRole("group", { name: "Analysis views", exact: true });
   await expect(analysisViews.getByRole("link")).toHaveText(["Engineering studies"]);
   await closeNavigation(page);
-  await expect(page).toHaveURL(/\/analysis\/$/);
+  await expect(page).toHaveURL(/tool=study$/);
   await expect(page.getByRole("heading", { name: "Drilling performance review" })).toBeVisible();
   await openNavigation(page);
   await page.getByRole("link", { name: "Well", exact: true }).click();

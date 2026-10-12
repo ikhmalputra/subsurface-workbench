@@ -38,7 +38,7 @@ export function WorkspaceNavigation({ current }: { current?: string }) {
             {activeWorkspace.views.map((view) => <Link key={view.href} href={view.href} aria-current={current === view.href ? "page" : undefined} onClick={close}><CommandIcon name="view" />{view.label}</Link>)}
           </div>}
           <div className="demo-nav-secondary" role="group" aria-label="Outputs">
-            <Link href="/well-report/" aria-current={current === "/well-report/" ? "page" : undefined} onClick={close}><CommandIcon name="print" />Well report</Link>
+            <Link href="/view-well/?tool=report" aria-current={current === "/view-well/?tool=report" ? "page" : undefined} onClick={close}><CommandIcon name="print" />Well report</Link>
           </div>
           <details className="demo-nav-secondary demo-nav-dev" open={developerViews.some((view) => view.href === current)}>
             <summary><CommandIcon name="settings" />Developer examples</summary>

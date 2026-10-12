@@ -248,7 +248,7 @@ export function ViewWellDemo() {
       </div>
       <CommandButton icon="link" type="button" className="demo-toggle" aria-pressed={link.linked} onClick={() => link.setLinked(!link.linked)} title="Zoom, pan and the depth cursor follow across the schematic, seismic section and mud log">{link.linked ? "Depth views linked" : "Depth views independent"}</CommandButton>
       <CommandButton icon="view" type="button" className="demo-tool-button" aria-expanded={inspectorVisible} aria-controls="well-inspector" onClick={() => setInspectorVisible(!inspectorVisible)}>{inspectorVisible ? "Hide inspector" : "Show inspector"}</CommandButton>
-      <Link className="demo-edit-action" href={`/edit-well/?well=${encodeURIComponent(wellId)}${highlighted ? `&component=${encodeURIComponent(highlighted)}` : ""}`}>Edit well</Link>
+      <Link className="demo-edit-action" href={`/view-well/?well=${encodeURIComponent(wellId)}${highlighted ? `&component=${encodeURIComponent(highlighted)}` : ""}&tool=edit-well`}>Edit well</Link>
       {/* The volume tools are a panel of their own, docked under the inspector by default: inside
           the toolbar they unfolded over the scene's own controls. */}
       {layout === "earth" && earth.volume && <FloatingPanel id="scene-options" title="Volume & interpretation tools" open={sceneOptionsOpen} onOpenChange={setSceneOptionsOpen} defaultDock="right" defaultStyle={{ left: "calc(var(--dock-left, 0px) + 12px)", top: 100, width: 360 }} className="demo-scene-options">

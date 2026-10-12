@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
-import { DemoPage } from "../../components/showcase";
-import { AnalysisWorkspace } from "../../components/analysis-workspace";
+import { Suspense } from "react";
+import { ForwardToSheet } from "../../components/tools";
 
-export const metadata: Metadata = { title: "Analysis studies · Subsurface Workbench" };
+export const metadata: Metadata = { title: "Subsurface Workbench" };
 
-export default function AnalysisPage() {
-  return <DemoPage current="/analysis/"><AnalysisWorkspace /></DemoPage>;
+/** This was a page; it is a document on the sheet now. The URL forwards there with its query. */
+export default function ForwardPage() {
+  return <Suspense fallback={null}><ForwardToSheet document="study" /></Suspense>;
 }

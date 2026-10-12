@@ -8,9 +8,9 @@ import { FloatingPanel } from "./floating";
  * panel in the tray rather than a header above the sheet. Its tab carries the name the copy
  * always had, so the one way to reach it is the way it was always reached.
  */
-export function UsagePanel({ lede, points, uses, code }: { readonly lede: string; readonly points: readonly string[]; readonly uses: readonly string[]; readonly code: string }) {
+export function UsagePanel({ id = "usage", lede, points, uses, code }: { readonly id?: string; readonly lede: string; readonly points: readonly string[]; readonly uses: readonly string[]; readonly code: string }) {
   const [open, setOpen] = useState(false);
-  return <FloatingPanel id="usage" title="Usage and SDK details" open={open} onOpenChange={setOpen} defaultStyle={{ right: 12, bottom: 44, width: "min(760px, calc(100vw - 24px))" }} className="demo-usage-float" scrollable>
+  return <FloatingPanel id={id} title="Usage and SDK details" open={open} onOpenChange={setOpen} defaultStyle={{ right: 12, bottom: 44, width: "min(760px, calc(100vw - 24px))" }} className="demo-usage-float demo-workbench-usage" scrollable>
     <div className="demo-header-body">
       <div className="demo-header-copy">
         <p className="demo-lede">{lede}</p>

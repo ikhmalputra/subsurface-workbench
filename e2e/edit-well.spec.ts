@@ -10,7 +10,7 @@ test("View well opens the selected record and uses edits as the active revision"
   await page.getByRole("button", { name: /Production casing \/ 7 in/ }).first().focus();
   await page.keyboard.press("Enter");
   await page.locator(".demo-toolbar").getByRole("link", { name: "Edit well", exact: true }).click();
-  await expect(page).toHaveURL(/\/edit-well\/\?well=forge&component=production-casing/);
+  await expect(page).toHaveURL(/well=forge.*tool=edit-well.*component=production-casing|well=forge.*component=production-casing.*tool=edit-well/);
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Edit");
   const inspector = page.getByTestId("assembly-inspector");
   const label = inspector.getByLabel("Label", { exact: true });
@@ -27,13 +27,13 @@ test("View well opens the selected record and uses edits as the active revision"
   await page.getByRole("link", { name: "Back to View well" }).click();
   await expect(page.getByRole("combobox", { name: "View", exact: true })).toBeVisible();
   await page.getByRole("combobox", { name: "Well", exact: true }).selectOption("s-profile");
-  await expect(page.locator(".demo-toolbar").getByRole("link", { name: "Edit well", exact: true })).toHaveAttribute("href", "/edit-well/?well=s-profile");
+  await expect(page.locator(".demo-toolbar").getByRole("link", { name: "Edit well", exact: true })).toHaveAttribute("href", "/view-well/?well=s-profile&tool=edit-well");
   await page.locator(".demo-toolbar").getByRole("link", { name: "Edit well", exact: true }).click();
-  await expect(page).toHaveURL(/\/edit-well\/\?well=s-profile$/);
+  await expect(page).toHaveURL(/well=s-profile.*tool=edit-well$/);
   await expect(page.getByRole("heading", { level: 1 })).toContainText("S-profile");
   await page.getByRole("link", { name: "Back to View well" }).click();
   await expect(page.getByRole("combobox", { name: "Well", exact: true })).toHaveValue("s-profile");
-  await expect(page.locator(".demo-toolbar").getByRole("link", { name: "Edit well", exact: true })).toHaveAttribute("href", "/edit-well/?well=s-profile");
+  await expect(page.locator(".demo-toolbar").getByRole("link", { name: "Edit well", exact: true })).toHaveAttribute("href", "/view-well/?well=s-profile&tool=edit-well");
 });
 
 test("full well edits recompute trajectory and reach construction, source records, report and export", async ({ page }) => {
@@ -121,7 +121,7 @@ test("full well edits recompute trajectory and reach construction, source record
   // not rendered both present as an empty locator. So the URL is checked first, and the report gets
   // a scene-sized budget — this is the only step in the stretch after `waitForScene` that was still
   // on the default 15 s, and the assertion itself is unchanged.
-  await expect(page).toHaveURL(/\/well-report\/$/, { timeout: SCENE_READY });
+  await expect(page).toHaveURL(/tool=report$/, { timeout: SCENE_READY });
   const report = page.getByTestId("well-report");
   await expect(report, errors.join("\n")).toContainText("My FORGE revision", { timeout: SCENE_READY });
   await expect(report).toContainText("Revised formation");
@@ -169,13 +169,13 @@ test("active revision preserves edits and undo history across navigation while r
   await expect(page.getByRole("combobox", { name: "View", exact: true })).toBeVisible();
   await page.getByRole("combobox", { name: "Well", exact: true }).selectOption("s-profile");
   await expect(page.getByRole("combobox", { name: "Well", exact: true })).toHaveValue("s-profile");
-  await expect(page.locator(".demo-toolbar").getByRole("link", { name: "Edit well", exact: true })).toHaveAttribute("href", "/edit-well/?well=s-profile");
+  await expect(page.locator(".demo-toolbar").getByRole("link", { name: "Edit well", exact: true })).toHaveAttribute("href", "/view-well/?well=s-profile&tool=edit-well");
   await page.locator(".demo-toolbar").getByRole("link", { name: "Edit well", exact: true }).click();
   await expect(page.getByTestId("curved-assembly-schematic")).not.toContainText("Draft production casing");
   await page.getByRole("link", { name: "Back to View well" }).click();
   await expect(page.getByRole("combobox", { name: "View", exact: true })).toBeVisible();
   await page.getByRole("combobox", { name: "Well", exact: true }).selectOption("forge");
-  await expect(page.locator(".demo-toolbar").getByRole("link", { name: "Edit well", exact: true })).toHaveAttribute("href", "/edit-well/?well=forge");
+  await expect(page.locator(".demo-toolbar").getByRole("link", { name: "Edit well", exact: true })).toHaveAttribute("href", "/view-well/?well=forge&tool=edit-well");
   await page.locator(".demo-toolbar").getByRole("link", { name: "Edit well", exact: true }).click();
   await expect(label).toHaveValue("Draft production casing");
   await reloadApp(page);

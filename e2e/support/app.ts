@@ -20,8 +20,21 @@ export async function gotoApp(page: Page, url: string): Promise<Response | null>
   await expect(page.locator("html[data-sw-hydrated='true']"), "the application should hydrate before being driven")
     .toBeAttached({ timeout: SCENE_READY });
   await streamedBoundariesSettled(page);
+  await forwarded(page);
   await paintedFrame(page);
   return response;
+}
+
+/**
+ * The old routes forward to the sheet with `?tool=`: a test that opened `/builder/` is driven on
+ * the sheet with the design brief open. Wait for the forward and for the document to be there.
+ */
+async function forwarded(page: Page): Promise<void> {
+  await expect(page.locator("[data-forwarding]"), "a forwarding route should reach the sheet").toHaveCount(0, { timeout: SCENE_READY });
+  if (new URL(page.url()).pathname.replace(/\/$/, "") === "/view-well") {
+    const tool = new URL(page.url()).searchParams.get("tool") ?? "section";
+    await expect(page.locator(`.demo-tool-page[data-document="${tool}"]`), `the "${tool}" document should open on the sheet`).toBeAttached({ timeout: SCENE_READY });
+  }
 }
 
 /**
@@ -84,6 +97,7 @@ export async function reloadApp(page: Page): Promise<void> {
   await expect(page.locator("html[data-sw-hydrated='true']"), "the application should hydrate after a reload before being driven")
     .toBeAttached({ timeout: SCENE_READY });
   await streamedBoundariesSettled(page);
+  await forwarded(page);
   await paintedFrame(page);
 }
 

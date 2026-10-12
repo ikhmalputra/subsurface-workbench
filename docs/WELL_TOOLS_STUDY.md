@@ -215,7 +215,10 @@ the host has no data. The command line is the same list by name.
    line, none persisted by the SDK.
 6. **The gaps that are host data**: operations, seismic, report spec — tools that state what the
    host supplied and how to add more, with the citation they carry.
-7. **Delete the routes.** One page, the tools, the command line.
+7. ~~**Delete the routes.**~~ — done. `/view-well/` is the one page; every former route is a
+   document on it (`documents` in `apps/demo/src/lib/tools.ts`), opened by `?tool=<document>`,
+   and the route files are forwarders that carry their query to the sheet. One document is open
+   at a time; the well section is the default. Print renders the open document as the paper.
 
 ## 7. What this is not
 

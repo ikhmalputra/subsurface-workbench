@@ -13,7 +13,33 @@ export type ToolVerb = "view" | "create" | "edit" | "delete";
 export const toolVerbs: readonly ToolVerb[] = ["view", "create", "edit", "delete"];
 
 /** The panels tools open. Route workspaces become panels on the sheet; the rest already are. */
-export type ToolPanelId = "trajectory" | "study" | "brief" | "report" | "field" | "edit-well" | "inspector" | "well-file";
+export type ToolPanelId = "section" | "trajectory" | "study" | "brief" | "report" | "field" | "correlation" | "cross-section" | "edit-well" | "petrophysics" | "production" | "linked-data" | "sandbox" | "inspector" | "well-file" | "kick" | "cement" | "time" | "hydraulics";
+
+/**
+ * Documents: the workspaces that fill the sheet. One is open at a time, like the active drawing;
+ * opening another puts the current one away. Each had a route of its own; the route now forwards
+ * to the sheet with `?tool=<document>`, which is also the deep link.
+ */
+export const documents: readonly ToolPanelId[] = ["section", "trajectory", "study", "brief", "report", "field", "correlation", "cross-section", "edit-well", "petrophysics", "production", "linked-data", "sandbox"];
+export const documentLabels: Readonly<Record<string, string>> = {
+  section: "Well section", trajectory: "Survey", study: "Drilling study", brief: "Design brief", report: "Well report", field: "Field",
+  correlation: "Correlation", "cross-section": "Cross-section", "edit-well": "Edit well", petrophysics: "Petrophysics", production: "Production", "linked-data": "Linked data", sandbox: "WebGPU sandbox",
+};
+/** The route each document used to be, for the forwarders and for anything still linking there. */
+export const documentRoutes: Readonly<Record<string, string>> = {
+  section: "/view-well/", trajectory: "/trajectory/", study: "/analysis/", brief: "/builder/", report: "/well-report/", field: "/map/",
+  correlation: "/correlation/", "cross-section": "/cross-section/", "edit-well": "/edit-well/", petrophysics: "/petrophysics/", production: "/production/", "linked-data": "/linked-data/", sandbox: "/sandbox/",
+};
+export const SHEET = "/view-well/";
+/** The sheet URL that opens a document, keeping any query the caller carries (a well, a component). */
+export function documentHref(document: ToolPanelId, query?: Readonly<Record<string, string | undefined>>): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query ?? {})) if (value !== undefined && key !== "tool") params.set(key, value);
+  if (document !== "section") params.set("tool", document);
+  const search = params.toString();
+  return search ? `${SHEET}?${search}` : SHEET;
+}
+export function isDocument(id: string): id is ToolPanelId { return (documents as readonly string[]).includes(id); }
 
 export type ToolGroup = "identity" | "geometry" | "construction" | "geology" | "measurements" | "operations" | "design" | "evidence" | "field";
 export const toolGroupLabels: Readonly<Record<ToolGroup, string>> = {
@@ -112,4 +138,131 @@ export const toolObjects: readonly ToolObject[] = [
 export function findToolObject(name: string): ToolObject | undefined {
   const needle = name.trim().toLowerCase();
   return toolObjects.find((object) => object.id === needle || object.label.toLowerCase() === needle || object.aliases?.includes(needle));
+}
+
+/* ---------------------------------------------------------------------------
+   The sub-domain inventory — docs/SUBSURFACE_DOMAIN_STUDY.md as data
+   --------------------------------------------------------------------------- */
+
+export type SubDomain = "drilling" | "geology" | "geophysics" | "petrophysics" | "reservoir" | "completions" | "production" | "integrity" | "geomechanics" | "field";
+export const subDomains: readonly { readonly id: SubDomain; readonly label: string }[] = [
+  { id: "drilling", label: "Drilling" }, { id: "geology", label: "Geology" }, { id: "geophysics", label: "Geophysics" },
+  { id: "petrophysics", label: "Petrophysics" }, { id: "reservoir", label: "Reservoir" }, { id: "completions", label: "Completions" },
+  { id: "production", label: "Production" }, { id: "integrity", label: "Integrity" }, { id: "geomechanics", label: "Geomechanics" },
+  { id: "field", label: "Field & data" },
+];
+
+export type ToolStatus = "built" | "partial" | "planned";
+/** What a ribbon icon opens: a panel, the well sheet itself, or one of the well view's own panels. */
+export type ToolOpen = { readonly panel: ToolPanelId; readonly where?: string } | { readonly route: string; readonly where?: string };
+
+export interface DomainTool {
+  readonly id: string;
+  readonly label: string;
+  readonly domain: SubDomain;
+  readonly status: ToolStatus;
+  /** A lucide icon name from the ribbon's own set (see tools.tsx). */
+  readonly icon: string;
+  /** What it does, one line. */
+  readonly does: string;
+  /** What the host must supply; for a planned tool, why it is grey. */
+  readonly needs: string;
+  readonly open?: ToolOpen;
+}
+
+const T = (id: string, label: string, domain: SubDomain, status: ToolStatus, icon: string, does: string, needs: string, open?: ToolOpen): DomainTool => ({ id, label, domain, status, icon, does, needs, open });
+
+export const domainTools: readonly DomainTool[] = [
+  // Drilling engineering
+  T("section", "Well section", "drilling", "built", "Layers", "The schematic, the log and the survey on one depth axis", "components, survey, LAS", { panel: "section" }),
+  T("survey", "Survey", "drilling", "built", "Route", "Stations to positions by minimum curvature; plan, section and log views", "survey stations", { panel: "trajectory", where: "View survey" }),
+  T("planner", "Trajectory planner", "drilling", "built", "Target", "Build-and-hold design through a target with a DLS limit", "kick-off, target", { panel: "trajectory", where: "Plan build & hold" }),
+  T("stations", "Station editor", "drilling", "built", "ListOrdered", "Edit MD, inclination, azimuth; positions recomputed", "survey", { panel: "trajectory", where: "Edit stations" }),
+  T("anticollision", "Anti-collision", "drilling", "planned", "Crosshair", "Separation factor against offset wellbores", "offset surveys, tool error models"),
+  T("casing-design", "Casing design", "drilling", "built", "Cylinder", "Strings, setting depths, API 5C3 ratings with derating", "casing scheme, pressures", { panel: "brief", where: "Design · Casing" }),
+  T("pressure-window", "Pressure window", "drilling", "built", "Gauge", "Pore, fracture and mud weight vs TVD with provenance", "pressure data", { panel: "brief", where: "Plan · Geology & pressure" }),
+  T("kick-tolerance", "Kick tolerance", "drilling", "built", "Flame", "IADC kick tolerance below a shoe from the host's shoe and hole records and your gradient and mud weight", "shoe, hole size; fracture gradient and mud weight typed", { panel: "kick" }),
+  T("cement-design", "Cement volumes", "drilling", "built", "Container", "Annular cement volume per string from the host's diameters, split at the previous shoe", "casing and hole geometry; top of cement if not reported", { panel: "cement" }),
+  T("hydraulics", "Hydraulics", "drilling", "built", "Waves", "Annular velocity by section and bit hydraulics from typed flow, mud and nozzles", "hole sections; flow, mud and nozzles typed", { panel: "hydraulics" }),
+  T("torque-drag", "Torque and drag", "drilling", "planned", "Anchor", "Hookload and torque vs depth for the string in the hole", "string weights, friction factors"),
+  T("performance", "Drilling performance", "drilling", "built", "Activity", "ROP, WOB, RPM vs depth from the mud log", "LAS", { panel: "well-file", where: "Mud log" }),
+  T("days-depth", "Days vs depth", "drilling", "built", "Timer", "The time-depth curve with runs and trouble marked", "daily reports, runs", { panel: "well-file", where: "Daily history" }),
+  T("reports", "Daily reports", "drilling", "built", "ClipboardList", "The operational record with its citations", "daily reports", { panel: "well-file", where: "Daily history" }),
+  T("runs", "Runs and BHAs", "drilling", "built", "Wrench", "Run intervals, outcomes and footage", "runs", { panel: "well-file", where: "Service & BHA runs" }),
+  T("time", "Time breakdown", "drilling", "built", "Calendar", "Days by activity and per hole section from the daily reports; trouble from run outcomes", "daily reports, runs", { panel: "time" }),
+  T("study", "Drilling study", "drilling", "built", "FlaskConical", "Two intervals compared on evidence, with a finding and its uncertainty", "LAS, operations", { panel: "study" }),
+  // Geology
+  T("tops", "Formation tops", "geology", "built", "Mountain", "Tops and bases on TVD, drawn on every depth view", "formations", { panel: "edit-well", where: "Formations" }),
+  T("lithology", "Lithology column", "geology", "planned", "Columns3", "Lithology by interval beside the section", "lithology log"),
+  T("correlation", "Well correlation", "geology", "built", "GitBranch", "Wells side by side on a datum, tops linked", "several wells' tops", { panel: "correlation" }),
+  T("cross-section", "Cross-section", "geology", "built", "Split", "Wells on a spatial line with tops and the surface", "locations, tops, surface", { panel: "cross-section" }),
+  T("structure-map", "Structure map", "geology", "planned", "Map", "Contours of a top across the field", "tops at three or more wells"),
+  T("isopach", "Isopach map", "geology", "planned", "Grid3x3", "Thickness of an interval across the field", "tops at three or more wells"),
+  T("core", "Core description", "geology", "planned", "Box", "Core intervals and descriptions on depth", "core records"),
+  T("facies", "Facies", "geology", "planned", "Boxes", "Facies by interval from logs or core", "facies log"),
+  // Geophysics
+  T("seismic-section", "Seismic section", "geophysics", "built", "AudioWaveform", "SEG-Y along the well, the well projected on it, linked by depth", "SEG-Y, section geometry", { panel: "well-file", where: "Seismic (SEG-Y)" }),
+  T("seismic-volume", "Seismic volume", "geophysics", "built", "Box", "The cube around the well, cut along, across and by depth", "sub-volume", { panel: "section", where: "3D well + seismic + survey" }),
+  T("horizons", "Horizon interpretation", "geophysics", "partial", "Scan", "Pick and edit horizons on the section", "interpretation records", { panel: "section", where: "Volume & interpretation tools" }),
+  T("faults", "Fault picking", "geophysics", "planned", "Zap", "Fault sticks on the section", "fault records"),
+  T("seismic-tie", "Well-to-seismic tie", "geophysics", "planned", "Radio", "Synthetic seismogram matched to the trace", "sonic, density, wavelet"),
+  T("velocity", "Velocity model", "geophysics", "planned", "Sigma", "Two-way time to depth from checkshot or velocity", "checkshot / VSP"),
+  T("attributes", "Attributes", "geophysics", "planned", "Scale", "Amplitude, phase and frequency along a horizon", "volume and horizon"),
+  // Petrophysics
+  T("log-viewer", "Log viewer", "petrophysics", "built", "Rows3", "Curves on tracks by depth, templates and zones", "curves", { panel: "petrophysics" }),
+  T("depth-shift", "Depth shift and QC", "petrophysics", "planned", "Ruler", "Align runs and flag bad hole", "curves, caliper"),
+  T("vsh", "Shale volume", "petrophysics", "partial", "Droplets", "Vsh from gamma ray", "GR", { panel: "petrophysics" }),
+  T("porosity", "Porosity", "petrophysics", "partial", "Thermometer", "Density, neutron and sonic porosity", "RHOB, NPHI, DT", { panel: "petrophysics" }),
+  T("saturation", "Water saturation", "petrophysics", "partial", "Droplets", "Archie and variants with a, m, n and Rw", "RT, porosity, Rw", { panel: "petrophysics" }),
+  T("permeability", "Permeability", "petrophysics", "planned", "Compass", "From porosity transforms or core", "porosity, core"),
+  T("net-pay", "Net pay and cutoffs", "petrophysics", "partial", "Calculator", "Net to gross by cutoffs on Vsh, porosity and Sw", "computed curves", { panel: "petrophysics" }),
+  T("crossplot", "Crossplot and histogram", "petrophysics", "built", "Scatter", "Curve against curve, distributions, by zone", "curves", { panel: "petrophysics" }),
+  T("zonation", "Zonation", "petrophysics", "partial", "Rows3", "Zones from tops or picked on logs", "tops", { panel: "petrophysics" }),
+  // Reservoir engineering
+  T("volumetrics", "Volumetrics", "reservoir", "planned", "Calculator", "GRV × N/G × φ × (1−Sw) / Bo, each term with its source", "surfaces or GRV, petrophysical averages, PVT"),
+  T("pvt", "Fluid properties", "reservoir", "planned", "FlaskConical", "Bo, Rs and viscosity against pressure", "PVT report"),
+  T("material-balance", "Material balance", "reservoir", "planned", "Scale", "p/z and drive indices", "production, pressures, PVT"),
+  T("pta", "Well test analysis", "reservoir", "planned", "Activity", "Pressure transient diagnostics", "PTA data"),
+  T("decline", "Decline curve", "reservoir", "planned", "TrendingDown", "Arps fit and forecast on production", "production rates"),
+  T("pressure-history", "Pressure history", "reservoir", "planned", "Gauge", "Reservoir pressure against time by zone", "pressure surveys"),
+  // Completions and intervention
+  T("completion", "Completion schematic", "completions", "built", "Cylinder", "Tubing, packers, valves, nipples, mandrels and gauges on the section and in 3D", "completion components", { panel: "section" }),
+  T("completion-builder", "Completion builder", "completions", "built", "Hammer", "Parts from the catalogue with placement rules", "catalogue", { panel: "brief", where: "Add parts" }),
+  T("perforations", "Perforations", "completions", "planned", "Crosshair", "Perforated intervals with date, gun and shot density", "perforation records"),
+  T("sand-control", "Sand control", "completions", "planned", "Grid3x3", "Screens and gravel-pack intervals", "completion records"),
+  T("stimulation", "Stimulation", "completions", "planned", "Zap", "Fracture and acid treatments by stage", "treatment records"),
+  T("interventions", "Intervention history", "completions", "planned", "Wrench", "Workovers and interventions by date and depth", "intervention records"),
+  // Production and surveillance
+  T("production-history", "Production history", "production", "built", "Activity", "Rates, pressures and events over time", "surveillance document", { panel: "production" }),
+  T("well-tests", "Well tests", "production", "planned", "FlaskConical", "Rate and pressure tests over time", "test records"),
+  T("lift", "Artificial lift", "production", "planned", "Zap", "The lift system and its settings", "lift records"),
+  T("plt", "Production log", "production", "planned", "Rows3", "Flow contribution by depth", "PLT"),
+  T("injection", "Injection", "production", "planned", "Droplets", "Injection rates and pressures", "injection records"),
+  T("allocation", "Allocation", "production", "planned", "Sigma", "Well production allocated from measured streams", "allocation factors"),
+  // Well integrity
+  T("barriers", "Barrier schematic", "integrity", "planned", "ShieldCheck", "Primary and secondary barrier envelopes on the construction", "barrier definitions"),
+  T("annulus", "Annulus pressures", "integrity", "planned", "Gauge", "A, B and C annulus pressure history against limits", "annulus monitoring"),
+  T("cement-eval", "Cement evaluation", "integrity", "planned", "AudioWaveform", "Bond log on the section against cemented intervals", "cement bond log"),
+  T("casing-wear", "Casing wear and corrosion", "integrity", "planned", "Ruler", "Wall loss by depth from calipers", "caliper logs"),
+  T("integrity-status", "Integrity status", "integrity", "planned", "ClipboardList", "Current status and open anomalies", "integrity register"),
+  // Geomechanics
+  T("stress", "Stress regime", "geomechanics", "planned", "Compass", "Sv, SHmax and Shmin against depth", "density log, LOT/FIT, image logs"),
+  T("stability", "Wellbore stability", "geomechanics", "planned", "ShieldCheck", "Collapse and fracture mud weights along the trajectory", "stresses, rock strength"),
+  T("fracture-gradient", "Fracture gradient", "geomechanics", "partial", "Gauge", "LOT/FIT points and the fitted gradient", "LOT/FIT records", { panel: "brief", where: "Plan · Geology & pressure" }),
+  T("sand-risk", "Sand production risk", "geomechanics", "planned", "TrendingDown", "Critical drawdown by depth", "rock strength"),
+  // Field, data and reference
+  T("map", "Field map", "field", "built", "Map", "Wells on a map with layers, bathymetry and the offshore scene", "locations, layers", { panel: "field", where: "1 · Locate wells" }),
+  T("gis-import", "GIS import", "field", "built", "Download", "Vector and raster layers added to the field", "files", { panel: "field", where: "Layers" }),
+  T("offsets", "Offset wells", "field", "built", "Database", "Comparable wells, nine-factor match, adoption into a brief", "offset records", { panel: "brief", where: "Define · Offset wells" }),
+  T("reference", "Reference and datum", "field", "partial", "Globe", "CRS, depth datum, elevation and units", "reference metadata", { panel: "edit-well", where: "Well properties" }),
+  T("sources", "Data sources", "field", "partial", "Database", "Every dataset registered for the well with its provenance", "the host registry", { panel: "edit-well", where: "Records & data" }),
+  T("report", "Well report", "field", "built", "Printer", "The as-drilled report from sourced records", "report spec", { panel: "report" }),
+  T("export", "Export", "field", "built", "Download", "Brief, study or revision as JSON for the host", "—", { panel: "edit-well", where: "Export full well" }),
+  T("units", "Units", "field", "built", "Ruler", "Metres, both feet, pressure and density units", "—", { panel: "edit-well", where: "Well properties" }),
+];
+
+export function domainToolCounts(): Readonly<Record<SubDomain, Readonly<Record<ToolStatus, number>>>> {
+  const counts = Object.fromEntries(subDomains.map((domain) => [domain.id, { built: 0, partial: 0, planned: 0 }])) as Record<SubDomain, Record<ToolStatus, number>>;
+  for (const tool of domainTools) counts[tool.domain][tool.status] += 1;
+  return counts;
 }

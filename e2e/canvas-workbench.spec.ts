@@ -187,10 +187,10 @@ test("the application frame survives navigation between routes", async ({ page }
   // moves go through the Workspaces group — which is how someone actually leaves a workspace.
   const workspaces = page.getByRole("group", { name: "Workspaces" });
   const steps = [
-    { link: page.getByRole("link", { name: "3D trajectory", exact: true }), url: /\/trajectory\/$/ },
-    { link: workspaces.getByRole("link", { name: /^Field/ }), url: /\/map\/$/ },
-    { link: workspaces.getByRole("link", { name: /^Analysis/ }), url: /\/analysis\/$/ },
-    { link: page.getByRole("link", { name: "Well report", exact: true }), url: /\/well-report\/$/ },
+    { link: page.getByRole("link", { name: "3D trajectory", exact: true }), url: /tool=trajectory/ },
+    { link: workspaces.getByRole("link", { name: /^Field/ }), url: /tool=field/ },
+    { link: workspaces.getByRole("link", { name: /^Analysis/ }), url: /tool=study/ },
+    { link: page.getByRole("link", { name: "Well report", exact: true }), url: /tool=report/ },
     { link: workspaces.getByRole("link", { name: /^Well\b/ }), url: /\/view-well\/$/ },
   ];
   for (const step of steps) {

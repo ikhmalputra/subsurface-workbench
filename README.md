@@ -97,8 +97,13 @@ exported files; integrators can use their own static host and security headers.
   client navigation and well switches; it never replaces reported source data.
 - Host persistence is explicit through the compositions' change callbacks
 	(`onChange`, `onBriefChange`); the static demo has no product database.
-- The demo host is one sheet: no header, no sidebar — the drawing is the
-  window, and everything else is a floating panel. The only strip of chrome is
+- The demo host is one page, `/view-well/` — the sheet. There are no other
+  pages: the survey, the drilling study, the design brief, the report, the
+  field, the editor and the developer examples are *documents* that fill the
+  sheet, one at a time, opened from the ribbon, the palette, the command line
+  or `?tool=<document>` (the old routes forward there with their query). No
+  header, no sidebar — the drawing is the window, and everything else is a
+  panel. The only strip of chrome is
   the status bar: a command line (`go 1558`, `zoom in`, `well forge`,
   `theme dark`, `clear`; `help` lists them) that writes to the same store as
   the controls, the tray of closed panels, and the provenance, datum, selection
@@ -114,7 +119,12 @@ exported files; integrators can use their own static host and security headers.
   A docked panel takes its edge and the sheet gives it up, so nothing on the
   drawing is ever under it; panels docked to the same side share it, which is
   how two sit side by side and four sit on four sides. The inspector docks
-  right by default. Positions and docks are kept for the session. "Open tools"
+  right by default. Positions and docks are kept for the session. A ribbon
+  docked at the top carries the whole subsurface domain as icons — a tab per
+  sub-domain (drilling, geology, geophysics, petrophysics, reservoir,
+  completions, production, integrity, geomechanics, field and data) and an
+  icon per tool, live when built, amber when partial, greyed with what it
+  needs when planned (`docs/SUBSURFACE_DOMAIN_STUDY.md`). "Open tools"
   opens the tool palette: every object of the well (survey, casing, formations,
   logs, reports, design brief, study, report, field …) with what the host
   supplied and a view / create / edit / delete button each; a tool opens the
