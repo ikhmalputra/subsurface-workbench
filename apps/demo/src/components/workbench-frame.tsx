@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { Workbench } from "@ikhmalputra/subsurface-shell";
 import { useWorkspace } from "./workspace-provider";
 import { WorkspaceContextBar } from "./workspace-context-bar";
@@ -23,6 +23,15 @@ import { WorkspaceNavigation } from "./workspace-navigation";
 export function WorkbenchFrame({ children }: { children: ReactNode }) {
   const { well, theme, density } = useWorkspace();
   const pathname = usePathname();
+  // One marker saying React is mounted and effects have run.
+  //
+  // Every route is prerendered, so the markup is interactive-looking before hydration attaches a
+  // single handler: a control is present, visible and stable, and an interaction in that window is
+  // silently dropped. Controlled inputs make it worse — a <select> changed before hydration is
+  // reset to its React value afterwards, so the change does not fail, it disappears.
+  //
+  // This is for tests and diagnostics, not behaviour: nothing in the application reads it.
+  useEffect(() => { document.documentElement.dataset.swHydrated = "true"; }, []);
   // Routes are declared with trailing slashes (`trailingSlash: true`), so normalise rather than
   // letting the active-route highlight silently fail to match.
   const current = pathname === "/" || pathname.endsWith("/") ? pathname : `${pathname}/`;

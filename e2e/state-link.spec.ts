@@ -1,11 +1,13 @@
 import { expect, test } from "@playwright/test";
 import { HEAVY_ASSET, SCENE_READY } from "./support/timing";
 import { waitForScene } from "./support/scene";
+import { gotoApp } from "./support/app";
 
 test("shared selection is encoded in the URL and survives reload without losing host query/hash", async ({ page }) => {
-  await page.goto("/view-well/?theme=dark#inspect");
-  // The drawing is server-rendered before hydration attaches its handlers, so wait for
-  // it to become interactive before selecting.
+  await gotoApp(page, "/view-well/?theme=dark#inspect");
+  // `gotoApp` has waited for hydration; this only waits for the drawing itself. The previous
+  // comment here claimed visibility proved interactivity, which it does not — that is what
+  // `gotoApp` is for.
   await expect(page.getByTestId("curved-assembly-schematic")).toBeVisible();
   // The default curved drawing draws each tubular as two fill-less paths, so a
   // bounding-box-centre click falls through to the cement behind it. Select with the
@@ -31,7 +33,7 @@ test("shared selection is encoded in the URL and survives reload without losing 
 });
 
 test("shared link hydrates pinned MD and window; hovering does not write transient depth to the URL", async ({ page }) => {
-  await page.goto("/view-well/?sw.v=1&sw.well=forge&sw.md=1500&sw.window=500,2500&sw.component=production-casing");
+  await gotoApp(page, "/view-well/?sw.v=1&sw.well=forge&sw.md=1500&sw.window=500,2500&sw.component=production-casing");
   await page.getByRole("button", { name: "Schematic", exact: true }).click();
   await expect(page.getByTestId("demo-record")).toHaveAttribute("data-component-id", "production-casing");
   const cursor = page.getByTestId("assembly-cursor");
@@ -50,18 +52,18 @@ test("shared link hydrates pinned MD and window; hovering does not write transie
 });
 
 test("invalid and unknown asset links show explicit errors without replacing the current well", async ({ page }) => {
-  await page.goto("/view-well/?sw.v=1&sw.well=missing");
+  await gotoApp(page, "/view-well/?sw.v=1&sw.well=missing");
   await expect(page.getByRole("alert").filter({ hasText: "shared view link" })).toContainText("Unknown linked well");
   await expect(page.getByRole("combobox", { name: "Well", exact: true })).toHaveValue("forge");
-  await page.goto("/view-well/?sw.v=1&sw.well=forge&sw.component=missing");
+  await gotoApp(page, "/view-well/?sw.v=1&sw.well=forge&sw.component=missing");
   await expect(page.getByRole("alert").filter({ hasText: "shared view link" })).toContainText("Unknown linked component");
-  await page.goto("/view-well/?sw.v=1&sw.well=forge&sw.logCurve=missing&sw.logMode=color&sw.logDomain=0,1&sw.logRadius=1,2");
+  await gotoApp(page, "/view-well/?sw.v=1&sw.well=forge&sw.logCurve=missing&sw.logMode=color&sw.logDomain=0,1&sw.logRadius=1,2");
   await expect(page.getByRole("alert").filter({ hasText: "shared view link" })).toContainText("Unknown linked log");
   await expect(page.getByRole("combobox", { name: "Well", exact: true })).toHaveValue("forge");
-  await page.goto("/view-well/?sw.v=1&sw.well=forge&sw.md=-5");
+  await gotoApp(page, "/view-well/?sw.v=1&sw.well=forge&sw.md=-5");
   await expect(page.getByRole("alert").filter({ hasText: "shared view link" })).toContainText("non-negative");
   await expect(page.getByTestId("curved-assembly-schematic").locator("[data-item-id]")).toHaveCount(7);
-  await page.goto("/view-well/?theme=dark&sw.v=1&sw.retired=1");
+  await gotoApp(page, "/view-well/?theme=dark&sw.v=1&sw.retired=1");
   await expect(page.getByRole("alert").filter({ hasText: "shared view link" })).toContainText("Unknown state URL parameter");
   await page.getByRole("combobox", { name: "Well", exact: true }).selectOption("s-profile");
   await expect.poll(() => new URL(page.url()).searchParams.has("sw.retired")).toBe(false);
@@ -71,7 +73,7 @@ test("invalid and unknown asset links show explicit errors without replacing the
 });
 
 test("popstate restores a shared snapshot and legacy well links", async ({ page }) => {
-  await page.goto("/view-well/?well=s-profile&theme=dark");
+  await gotoApp(page, "/view-well/?well=s-profile&theme=dark");
   await expect(page.getByRole("combobox", { name: "Well", exact: true })).toHaveValue("s-profile");
   await page.evaluate(() => {
     window.history.pushState(window.history.state, "", "/view-well/?sw.v=1&sw.well=forge&sw.component=production-casing");
@@ -84,11 +86,19 @@ test("popstate restores a shared snapshot and legacy well links", async ({ page 
 });
 
 test("well-scene camera hydrates in metre coordinates and camera input updates the shared link @slow", async ({ page }) => {
-  await page.goto("/view-well/?sw.v=1&sw.well=forge&sw.camera=1000,1000,-1000&sw.target=0,0,1300&sw.zoom=1");
+  await gotoApp(page, "/view-well/?sw.v=1&sw.well=forge&sw.camera=1000,1000,-1000&sw.target=0,0,1300&sw.zoom=1");
   // The heaviest view in the suite: switching to it lazily imports Three and starts a 4.2 MB
   // volume fetch at the same time, and then renders through software WebGL on CI.
   test.slow();
-  await page.getByRole("combobox", { name: "View", exact: true }).selectOption("earth");
+  const view = page.getByRole("combobox", { name: "View", exact: true });
+  await view.selectOption("earth");
+  // Three different things can fail between asking for this view and the renderer appearing, and
+  // waiting straight for the scene cannot tell them apart: the selection may not have reached React,
+  // the pane may not have mounted, or the lazily imported renderer may not have attached. One CI
+  // shard spent two 90-second attempts on the third message while the page was still showing the
+  // curved drawing — which rules out the first two, and nothing in the evidence said so.
+  await expect(view, "the view selection should reach the application").toHaveValue("earth");
+  await expect(page.locator("[data-pane='earth'][data-mounted='true']"), "the earth pane should mount for its preset").toBeAttached({ timeout: SCENE_READY });
   const scene = await waitForScene(page);
   await expect(scene).toHaveAttribute("data-camera", /^10\.000,10\.000,-10\.000,/);
   await expect(scene).toHaveAttribute("data-target", "0.000,-13.000,0.000");
