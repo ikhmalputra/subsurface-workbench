@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { SiteNav } from "../components/showcase";
-import { DemoAppearance } from "../components/demo-appearance";
 
 export const metadata: Metadata = { title: "Subsurface SDK · showcase" };
 
@@ -35,52 +33,50 @@ const packages = [
 ] as const;
 
 export default function Home() {
-  return <DemoAppearance navigation={<SiteNav current="/" />}>
-    <div className="demo-home">
-      <section className="demo-hero">
-        <div>
-          <p className="demo-eyebrow">Open SDK · well engineering visuals</p>
-          <h1>Start with the well. Keep its context.</h1>
-          <p className="demo-lede">Open the construction schematic first, inspect its records and trajectory, then review the available report. Well, component, depth and appearance stay with you across compatible views. Separate synthetic analysis examples are explicitly isolated from your active well.</p>
-          <div className="demo-cta">
-            <Link className="demo-button demo-button-primary" href="/view-well/">Open well workspace</Link>
-            <Link className="demo-button" href="/builder/">Assemble one</Link>
-          </div>
-          <pre className="demo-install" tabIndex={0} aria-label="Install command"><code>pnpm add @ikhmalputra/subsurface-core @ikhmalputra/subsurface-react three</code></pre>
+  return <div className="demo-home">
+    <section className="demo-hero">
+      <div>
+        <p className="demo-eyebrow">Open SDK · well engineering visuals</p>
+        <h1>Start with the well. Keep its context.</h1>
+        <p className="demo-lede">Open the construction schematic first, inspect its records and trajectory, then review the available report. Well, component, depth and appearance stay with you across compatible views. Separate synthetic analysis examples are explicitly isolated from your active well.</p>
+        <div className="demo-cta">
+          <Link className="demo-button demo-button-primary" href="/view-well/">Open well workspace</Link>
+          <Link className="demo-button" href="/builder/">Assemble one</Link>
         </div>
-        <div className="demo-hero-parts" aria-label="Rendered component catalog">
-          {parts.map((part) => <figure key={part}>
-            <img src={`/well-components/${part}.png`} alt="" />
-            <figcaption>{part.replaceAll("-", " ")}</figcaption>
-          </figure>)}
-        </div>
-      </section>
+        <pre className="demo-install" tabIndex={0} aria-label="Install command"><code>pnpm add @ikhmalputra/subsurface-core @ikhmalputra/subsurface-react three</code></pre>
+      </div>
+      <div className="demo-hero-parts" aria-label="Rendered component catalog">
+        {parts.map((part) => <figure key={part}>
+          <img src={`/well-components/${part}.png`} alt="" />
+          <figcaption>{part.replaceAll("-", " ")}</figcaption>
+        </figure>)}
+      </div>
+    </section>
 
-      <section aria-labelledby="capabilities">
-        <h2 id="capabilities" className="demo-section-title">Capabilities</h2>
-        <ul className="demo-cards">
-          {capabilities.map((card) => <li key={card.href}>
-            <Link href={card.href} className="demo-card" data-testid="capability-card">
-              <img src={card.image} alt="" />
-              <span className="demo-card-tag">{card.tag}</span>
-              <span className="demo-card-title">{card.title}</span>
-              <span className="demo-card-body">{card.body}</span>
-              <span className="demo-card-imports">{card.imports.map((name) => <code key={name}>{name}</code>)}</span>
-              <span className="demo-card-go" aria-hidden="true">Open example →</span>
-            </Link>
-          </li>)}
-        </ul>
-      </section>
+    <section aria-labelledby="capabilities">
+      <h2 id="capabilities" className="demo-section-title">Capabilities</h2>
+      <ul className="demo-cards">
+        {capabilities.map((card) => <li key={card.href}>
+          <Link href={card.href} className="demo-card" data-testid="capability-card">
+            <img src={card.image} alt="" />
+            <span className="demo-card-tag">{card.tag}</span>
+            <span className="demo-card-title">{card.title}</span>
+            <span className="demo-card-body">{card.body}</span>
+            <span className="demo-card-imports">{card.imports.map((name) => <code key={name}>{name}</code>)}</span>
+            <span className="demo-card-go" aria-hidden="true">Open example →</span>
+          </Link>
+        </li>)}
+      </ul>
+    </section>
 
-      <section aria-labelledby="packages" className="demo-packages">
-        <h2 id="packages" className="demo-section-title">Entry points</h2>
-        <p className="demo-lede">Each entry point is tree-shakeable on its own; three.js is only pulled in by the two scene entries.</p>
-        <table>
-          <thead><tr><th scope="col">Import</th><th scope="col">Provides</th></tr></thead>
-          <tbody>{packages.map(([name, provides]) => <tr key={name}><td><code>{name}</code></td><td>{provides}</td></tr>)}</tbody>
-        </table>
-      </section>
-      <footer className="demo-foot">Synthetic examples are not engineering approval. FORGE 16A(78)-32 records cite public reports; nothing is invented.</footer>
-    </div>
-  </DemoAppearance>;
+    <section aria-labelledby="packages" className="demo-packages">
+      <h2 id="packages" className="demo-section-title">Entry points</h2>
+      <p className="demo-lede">Each entry point is tree-shakeable on its own; three.js is only pulled in by the two scene entries.</p>
+      <table>
+        <thead><tr><th scope="col">Import</th><th scope="col">Provides</th></tr></thead>
+        <tbody>{packages.map(([name, provides]) => <tr key={name}><td><code>{name}</code></td><td>{provides}</td></tr>)}</tbody>
+      </table>
+    </section>
+    <footer className="demo-foot">Synthetic examples are not engineering approval. FORGE 16A(78)-32 records cite public reports; nothing is invented.</footer>
+  </div>;
 }

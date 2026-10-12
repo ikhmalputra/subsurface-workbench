@@ -161,3 +161,40 @@ for (const width of [1440, 1024, 768, 390]) {
       await page.screenshot({ path: `output/playwright/design-dock-${width}.png`, fullPage: true });
     });
   }
+
+test("the application frame survives navigation between routes", async ({ page }) => {
+  // The frame used to be rendered inside every page and handed the route as a prop, so moving
+  // between destinations replaced it. Stamping the live DOM node is the only way to tell a surviving
+  // element from an identical replacement: a re-rendered node keeps the attribute, a remounted one
+  // cannot, because React created it after the stamp was written.
+  await page.goto("/view-well/?well=s-profile");
+  const sidebar = page.getByTestId("workbench-sidebar");
+  const status = page.getByTestId("workbench-status");
+  await expect(sidebar).toBeVisible();
+  await sidebar.evaluate((element) => element.setAttribute("data-mount-check", "same-frame"));
+  await status.evaluate((element) => element.setAttribute("data-mount-check", "same-frame"));
+
+  // Every kind of destination: a view inside the current workspace, three other workspaces, and
+  // the report. The navigation only lists the active workspace's own views, so the cross-workspace
+  // moves go through the Workspaces group — which is how someone actually leaves a workspace.
+  const workspaces = page.getByRole("group", { name: "Workspaces" });
+  const steps = [
+    { link: page.getByRole("link", { name: "3D trajectory", exact: true }), url: /\/trajectory\/$/ },
+    { link: workspaces.getByRole("link", { name: /^Field/ }), url: /\/map\/$/ },
+    { link: workspaces.getByRole("link", { name: /^Analysis/ }), url: /\/analysis\/$/ },
+    { link: page.getByRole("link", { name: "Well report", exact: true }), url: /\/well-report\/$/ },
+    { link: workspaces.getByRole("link", { name: /^Well\b/ }), url: /\/view-well\/$/ },
+  ];
+  for (const step of steps) {
+    await step.link.click();
+    await expect(page).toHaveURL(step.url);
+    // The frame is the same element, and the navigation inside it still tracks the active route —
+    // the thing that made the frame a function of the route in the first place.
+    await expect(sidebar).toHaveAttribute("data-mount-check", "same-frame");
+    await expect(status).toHaveAttribute("data-mount-check", "same-frame");
+    await expect(step.link).toHaveAttribute("aria-current", /page|true/);
+  }
+  await page.getByRole("link", { name: "Subsurface Workbench showcase home" }).click();
+  await expect(sidebar).toHaveAttribute("data-mount-check", "same-frame");
+  await expect(status).toHaveAttribute("data-mount-check", "same-frame");
+});

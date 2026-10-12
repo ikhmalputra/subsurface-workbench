@@ -1,11 +1,5 @@
 import type { ReactNode } from "react";
-import { DemoAppearance } from "./demo-appearance";
 import { WorkspaceRoute } from "./workspace-route";
-import { WorkspaceNavigation } from "./workspace-navigation";
-
-export function SiteNav({ current }: { current?: string }) {
-  return <WorkspaceNavigation current={current} />;
-}
 
 export function DemoHeader({ eyebrow, title, lede, points, uses, code, children }: { eyebrow: string; title: string; lede: string; points: readonly string[]; uses: readonly string[]; code: string; children?: ReactNode }) {
   return <header className="demo-header">
@@ -26,8 +20,10 @@ export function DemoHeader({ eyebrow, title, lede, points, uses, code, children 
   </header>;
 }
 
+/**
+ * One route's content. The frame around it lives in `layout.tsx` and is not rebuilt here, so this
+ * is only the part that genuinely changes: the availability gate and the route's own views.
+ */
 export function DemoPage({ current, children }: { current: string; children: ReactNode }) {
-  return <DemoAppearance navigation={<SiteNav current={current} />}>
-    <WorkspaceRoute key={current} current={current}>{children}</WorkspaceRoute>
-  </DemoAppearance>;
+  return <WorkspaceRoute key={current} current={current}>{children}</WorkspaceRoute>;
 }

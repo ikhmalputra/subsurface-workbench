@@ -8,6 +8,7 @@ import "@ikhmalputra/subsurface-react/gis.css";
 import "@ikhmalputra/subsurface-shell/shell.css";
 import "./showcase.css";
 import { WorkspaceProvider } from "../components/workspace-provider";
+import { WorkbenchFrame } from "../components/workbench-frame";
 
 export const metadata: Metadata = {
   title: "Subsurface SDK · showcase",
@@ -17,7 +18,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en">
-      <body><WorkspaceProvider>{children}</WorkspaceProvider></body>
+      {/* The frame is mounted here, not inside the pages: a layout is cached across navigation,
+          so the workbench, its navigation and its panel state outlive the route content. */}
+      <body><WorkspaceProvider><WorkbenchFrame>{children}</WorkbenchFrame></WorkspaceProvider></body>
     </html>
   );
 }

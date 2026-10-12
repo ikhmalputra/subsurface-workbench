@@ -141,7 +141,14 @@ interface is more honest than merging two depth references and hoping.
 1. **Project model** — wells with declared datasets; lift the two embedded fixtures. Unblocks
    everything, commits to no particular UI.
 2. **Load once** — one LAS parse, one SEG-Y parse, one computed survey per well, shared by panes.
-3. **Frame to `layout.tsx`** — make the no-remount claim true.
+3. ~~**Frame to `layout.tsx`**~~ — done. The frame was rendered inside every page and handed the
+   route as a prop, so it was part of each route's own tree and navigating replaced it; `Workbench`'s
+   claim that the canvas host "is never keyed off the route" was true of the component and false of
+   the application. It now mounts once in `layout.tsx` — Next caches a layout across navigation and
+   does not re-render it — and reads the active route through `usePathname` in a client component,
+   which does re-render, so the highlight follows while the frame stays put. Proved by an e2e test
+   that stamps the live sidebar and status nodes and walks five destinations; it fails against the
+   previous wiring on the first navigation.
 4. **Depth bridge** — metres store ↔ feet props, in one place.
 5. **Panes and presets** — the five well routes become one workspace.
 6. **Cursor props for the three blind views** — `AssemblyScene`, `CurvedAssemblySchematic`,
@@ -278,7 +285,14 @@ third state.)
 2. ~~**Load once**~~ — done (`apps/demo/src/lib/well-data.ts`, 5 tests): one LAS fetch and parse per
    well shared by three views, projections memoized per parse, minimum curvature once per station
    list, and `wells-data` reduced to a view of the project.
-3. **Frame to `layout.tsx`** — make the no-remount claim true.
+3. ~~**Frame to `layout.tsx`**~~ — done. The frame was rendered inside every page and handed the
+   route as a prop, so it was part of each route's own tree and navigating replaced it; `Workbench`'s
+   claim that the canvas host "is never keyed off the route" was true of the component and false of
+   the application. It now mounts once in `layout.tsx` — Next caches a layout across navigation and
+   does not re-render it — and reads the active route through `usePathname` in a client component,
+   which does re-render, so the highlight follows while the frame stays put. Proved by an e2e test
+   that stamps the live sidebar and status nodes and walks five destinations; it fails against the
+   previous wiring on the first navigation.
 4. **Depth bridge** — metres store ↔ feet props, in one place.
 5. **Panes and presets** — the five well routes become one workspace. Includes §9.3, because the
    Design preset cannot exist while the design panels have one mount site.
