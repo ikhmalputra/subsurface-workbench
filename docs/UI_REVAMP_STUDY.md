@@ -149,7 +149,15 @@ interface is more honest than merging two depth references and hoping.
    which does re-render, so the highlight follows while the frame stays put. Proved by an e2e test
    that stamps the live sidebar and status nodes and walks five destinations; it fails against the
    previous wiring on the first navigation.
-4. **Depth bridge** — metres store ↔ feet props, in one place.
+4. ~~**Depth bridge**~~ — done. `0.3048` was a bare literal at roughly two dozen call sites and five
+   private constants under four names; the store side stays metres and
+   `apps/demo/src/lib/depth.ts` is now the only thing that knows both units, with the two feet this
+   project's own data uses — international (0.3048) and US survey (1200/3937) — named in
+   `core/units.ts`. The audit found two live defects in `curved-schematic`, both from using
+   `provenance` as a unit: an edited FORGE well stated one component's extent as "8.5 m MD to
+   1,629 ft report MD", and a feet factor applied to `topTvdM` drew FORGE's granite reservoir in the
+   top quarter of a well it fills the bottom half of. Both fixed, both pinned by tests verified to
+   fail against the previous code.
 5. **Panes and presets** — the five well routes become one workspace.
 6. **Cursor props for the three blind views** — `AssemblyScene`, `CurvedAssemblySchematic`,
    `CurvedSchematic`.
@@ -293,7 +301,15 @@ third state.)
    which does re-render, so the highlight follows while the frame stays put. Proved by an e2e test
    that stamps the live sidebar and status nodes and walks five destinations; it fails against the
    previous wiring on the first navigation.
-4. **Depth bridge** — metres store ↔ feet props, in one place.
+4. ~~**Depth bridge**~~ — done. `0.3048` was a bare literal at roughly two dozen call sites and five
+   private constants under four names; the store side stays metres and
+   `apps/demo/src/lib/depth.ts` is now the only thing that knows both units, with the two feet this
+   project's own data uses — international (0.3048) and US survey (1200/3937) — named in
+   `core/units.ts`. The audit found two live defects in `curved-schematic`, both from using
+   `provenance` as a unit: an edited FORGE well stated one component's extent as "8.5 m MD to
+   1,629 ft report MD", and a feet factor applied to `topTvdM` drew FORGE's granite reservoir in the
+   top quarter of a well it fills the bottom half of. Both fixed, both pinned by tests verified to
+   fail against the previous code.
 5. **Panes and presets** — the five well routes become one workspace. Includes §9.3, because the
    Design preset cannot exist while the design panels have one mount site.
 6. **Cursor props for the blind views** — `AssemblyScene`, `CurvedAssemblySchematic`,

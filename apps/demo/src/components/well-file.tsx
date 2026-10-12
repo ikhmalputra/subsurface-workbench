@@ -1,18 +1,18 @@
 "use client";
 
 import { useId, useState } from "react";
-import { sectionAtDepth, type FormationLayer, type SurveyPoint, type WellComponent, type WellOperations } from "@ikhmalputra/subsurface-core";
+import { metresToFeet, sectionAtDepth, type FormationLayer, type SurveyPoint, type WellComponent, type WellOperations } from "@ikhmalputra/subsurface-core";
 import type { DepthLink } from "@ikhmalputra/subsurface-react";
-import { DaysVsDepthChart, HoleSectionLog, LogTracks, ServiceRunLog, WellHistoryLog, type DepthRange } from "@ikhmalputra/subsurface-react/records";
+import { DaysVsDepthChart, HoleSectionLog, LogTracks, ServiceRunLog, WellHistoryLog } from "@ikhmalputra/subsurface-react/records";
 import { SegyHeaderPanel } from "@ikhmalputra/subsurface-react/seismic";
 import { SurveyTable } from "@ikhmalputra/subsurface-react/trajectory";
 import { WellSeismicSection, useSegy, useWellOnSection, type WellSeismicSource } from "./well-seismic";
 import { InfoTip } from "@ikhmalputra/subsurface-react";
 import { CommandButton } from "@ikhmalputra/subsurface-react/ui";
 import { useLas } from "./use-las";
+import { depthBridge } from "../lib/depth";
 import { computedSurvey } from "../lib/well-data";
 
-const FT = 0.3048;
 const tabs = [
   { id: "history", label: "Daily history" },
   { id: "runs", label: "Service & BHA runs" },
@@ -51,8 +51,8 @@ export function WellFile({ operations, components, selected, onSelectComponent, 
   const [tab, setTab] = useState<Tab>("history");
   const [focusDate, setFocusDate] = useState<string | null>(null);
   const [focusRunId, setFocusRunId] = useState<string | null>(null);
-  const cursorFt = link.cursorMdM !== null ? link.cursorMdM / FT : null;
-  const setCursorFt = (depthFt: number | null) => link.pinCursor(depthFt === null ? null : depthFt * FT);
+  const bridge = depthBridge(link);
+  const { cursorFt } = bridge;
   const log = useLas(tab === "log" ? logUrl : undefined);
   const segy = useSegy(tab === "seismic" ? seismic?.url : undefined);
   const wellPath = useWellOnSection(survey, seismic);
@@ -64,8 +64,11 @@ export function WellFile({ operations, components, selected, onSelectComponent, 
   </section>;
 
   const ops = operations;
-  const range: DepthRange | null = selected ? { topFt: (selected.topDepthReported === false ? 0 : selected.topDepthM) / FT, baseFt: selected.bottomDepthM / FT } : null;
+  const range = bridge.rangeOf(selected);
   const selectAtDepth = (depthFt: number) => { const section = sectionAtDepth(ops, depthFt); if (section) onSelectComponent(section.holeComponentId); };
+  // Metre-indexed views (the survey table, the seismic section) pin and select through the bridge
+  // rather than converting at the call site.
+  const selectAtMetres = (mdM: number) => { bridge.pinFt(metresToFeet(mdM)); selectAtDepth(metresToFeet(mdM)); };
   const markers = components.filter((component) => component.kind === "Casing" && component.rawBottomDepthFt).map((component) => ({ depthFt: component.rawBottomDepthFt as number, label: `${component.name.split(" / ").pop()?.trim()} shoe` }));
   const intervals = ops.runs.filter((run) => run.topFt !== null && run.baseFt !== null && run.baseFt > run.topFt).map((run) => ({ id: run.id, label: `${run.id} · ${run.kind}`, topFt: run.topFt as number, baseFt: run.baseFt as number, tone: run.outcome === "completed" ? "neutral" as const : run.outcome }));
 
@@ -74,7 +77,7 @@ export function WellFile({ operations, components, selected, onSelectComponent, 
       <h2 className="demo-file-title">Well file</h2>
       <p className="demo-file-note">{ops.days.length} daily reports · {ops.runs.length} service runs · {ops.milestones.length} milestones{selected ? <> · linked to <strong>{selected.name}</strong> ({Math.round(range?.topFt ?? 0).toLocaleString("en-US")}–{Math.round(range?.baseFt ?? 0).toLocaleString("en-US")} ft)</> : null}</p>
     </div>
-    <HoleSectionLog operations={ops} selectedComponentId={selected?.id ?? null} onSelectSection={(section) => { onSelectComponent(section.holeComponentId); setCursorFt(null); }} title="Hole section log" />
+    <HoleSectionLog operations={ops} selectedComponentId={selected?.id ?? null} onSelectSection={(section) => { onSelectComponent(section.holeComponentId); bridge.pinFt(null); }} title="Hole section log" />
     <div className="demo-file-tabs" role="tablist" aria-label="Well file records">
       {tabs.map((item) => <CommandButton kind="selection" key={item.id} type="button" role="tab" id={`${id}-${item.id}-tab`} aria-controls={`${id}-${item.id}`} aria-selected={tab === item.id} tabIndex={tab === item.id ? 0 : -1} onClick={() => setTab(item.id)} onKeyDown={(event) => {
         if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
@@ -85,26 +88,26 @@ export function WellFile({ operations, components, selected, onSelectComponent, 
     </div>
     <div role="tabpanel" id={`${id}-${tab}`} aria-labelledby={`${id}-${tab}-tab`} className={`demo-file-panel is-${tab}`}>
       {tab === "history" && <>
-        <DaysVsDepthChart operations={ops} focusDate={focusDate} onSelectDay={(day) => { setFocusDate(day.date); if (day.mdFt !== null) { setCursorFt(day.mdFt); selectAtDepth(day.mdFt); } }} />
-        <WellHistoryLog operations={ops} selectedRange={range} focusDate={focusDate} onSelectDay={(day) => { setFocusDate(day.date); if (day.mdFt !== null) { setCursorFt(day.mdFt); selectAtDepth(day.mdFt); } }} />
+        <DaysVsDepthChart operations={ops} focusDate={focusDate} onSelectDay={(day) => { setFocusDate(day.date); if (day.mdFt !== null) { bridge.pinFt(day.mdFt); selectAtDepth(day.mdFt); } }} />
+        <WellHistoryLog operations={ops} selectedRange={range} focusDate={focusDate} onSelectDay={(day) => { setFocusDate(day.date); if (day.mdFt !== null) { bridge.pinFt(day.mdFt); selectAtDepth(day.mdFt); } }} />
       </>}
       {tab === "runs" && <ServiceRunLog operations={ops} selectedRange={range} focusRunId={focusRunId} onSelectRun={(run) => {
         setFocusRunId(run.id);
-        const depth = run.baseFt ?? run.topFt;
-        if (depth !== null) setCursorFt(depth);
+        const depthFt = run.baseFt ?? run.topFt;
+        if (depthFt !== null) bridge.pinFt(depthFt);
         const section = ops.sections.find((item) => item.id === run.holeSection);
         if (section) onSelectComponent(section.holeComponentId);
       }} />}
       {tab === "log" && (log.loaded ? <LogTracks las={log.loaded.las} tracks={tracks} markers={markers} intervals={intervals} selectedRange={range} cursorFt={cursorFt} title="Mud log · 10 ft means"
-        depthWindowFt={link.linked ? (link.window ? [link.window[0] / FT, link.window[1] / FT] : null) : undefined}
-        onDepthWindowChange={link.linked ? (next) => link.setWindow(next ? [Math.round(next[0] * FT), Math.round(next[1] * FT)] : null) : undefined}
-        onCursorChange={link.linked ? (depthFt) => link.setCursorMdM(depthFt === null ? null : depthFt * FT) : undefined} onSelectDepth={(depth) => {
-        setCursorFt(depth);
-        selectAtDepth(depth);
-        setFocusRunId(intervals.find((item) => depth >= item.topFt && depth <= item.baseFt)?.id ?? null);
+        depthWindowFt={link.linked ? bridge.windowFt : undefined}
+        onDepthWindowChange={link.linked ? bridge.setWindowFt : undefined}
+        onCursorChange={link.linked ? bridge.setCursorFt : undefined} onSelectDepth={(depthFt) => {
+        bridge.pinFt(depthFt);
+        selectAtDepth(depthFt);
+        setFocusRunId(intervals.find((item) => depthFt >= item.topFt && depthFt <= item.baseFt)?.id ?? null);
       }} /> : <p className="demo-file-empty" role="status">{log.error ? `Mud log could not be loaded (${log.error}).` : "Loading mud log…"}</p>)}
       {tab === "survey" && (stations.length ? <>
-        <SurveyTable survey={stations} selectedMdM={link.pinnedMdM} onSelectMd={(md) => { setCursorFt(md / FT); selectAtDepth(md / FT); }} maxHeight={420} />
+        <SurveyTable survey={stations} selectedMdM={link.pinnedMdM} onSelectMd={(md) => selectAtMetres(md)} maxHeight={420} />
         <p className="demo-tipline">{stations.length} stations · minimum curvature <InfoTip wide label="About the survey">{stations.length} stations, recomputed by minimum curvature from MD, inclination and azimuth (tied in at the first station). Read-only here; pass <code>onChange</code> to make the same table editable. Selecting a row pins the depth in every linked view.</InfoTip></p>
       </> : <p className="demo-file-empty">No directional survey is attached to this well.</p>)}
       {tab === "seismic" && (!seismic ? <p className="demo-file-empty">No seismic is attached to this well.</p> : segy?.file ? (() => {
@@ -116,7 +119,7 @@ export function WellFile({ operations, components, selected, onSelectComponent, 
         const maxOff = Math.max(0, ...wellPath.map((point) => Math.abs(point.offsetM)));
         return <>
           <WellSeismicSection file={file} meta={meta} wellPath={wellPath} components={components} formations={formations} survey={survey} selected={selected} cursorMdM={link.cursorMdM}
-            onSelectMd={(md) => { setCursorFt(md / FT); selectAtDepth(md / FT); }} onCursorMdChange={link.linked ? link.setCursorMdM : undefined}
+            onSelectMd={(md) => selectAtMetres(md)} onCursorMdChange={link.linked ? link.setCursorMdM : undefined}
             mdWindow={link.linked ? link.window : undefined} onMdWindowChange={link.linked ? link.setWindow : undefined} />
           <SegyHeaderPanel file={file} traceIndex={traceIndex} title={`SEG-Y headers · trace nearest ${Math.round(focusMd).toLocaleString("en-US")} m MD`} />
           <p className="demo-tipline">Datum {meta.seismicDatumElevationM} m ASL · well projected ≤ {Math.round(maxOff)} m <InfoTip wide label="About the seismic tie">Depth is metres below the {meta.seismicDatumElevationM} m ASL seismic datum; well TVD converts as TVD + {(meta.seismicDatumElevationM - meta.rkbElevationM).toFixed(2)} m (RKB {meta.rkbElevationM.toFixed(2)} m ASL). The well is projected onto a straight line through the wellhead and toe; stations sit at most {Math.round(maxOff)} m off it. Traces are unmodified nearest {meta.volume.binM} m bins of the source volume (grid fit residual {meta.volume.gridFitResidualM} m). PSDM depths are not tied to well check-shots. Source: <a className="demo-link" href="https://gdr.openei.org/submissions/1141" target="_blank" rel="noreferrer">{meta.source.title} ↗</a>, member <code>{meta.source.member.split("/").pop()}</code>, SHA-256 <code>{meta.source.sha256.slice(0, 12)}…</code>. {meta.attribution} {meta.license}.</InfoTip></p>

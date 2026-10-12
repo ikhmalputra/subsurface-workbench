@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useLayoutEffect, useMemo, useState } from "react";
-import { getWellComponents, positionAtMeasuredDepth, sectionAtDepth, validateWellboreTrajectory, wellComponentsToAssembly } from "@ikhmalputra/subsurface-core";
+import { getWellComponents, metresToFeet, positionAtMeasuredDepth, sectionAtDepth, validateWellboreTrajectory, wellComponentsToAssembly } from "@ikhmalputra/subsurface-core";
 import { designSurvey } from "../lib/well-data";
 import { createMockLogCurve } from "@ikhmalputra/subsurface-core/sandbox";
 import { createInitialSubsurfaceState } from "@ikhmalputra/subsurface-core/state";
@@ -169,7 +169,7 @@ export function ViewWellDemo() {
   }
 
   function selectAtMd(mdM: number) {
-    const section = operations ? sectionAtDepth(operations, mdM / 0.3048) : null;
+    const section = operations ? sectionAtDepth(operations, metresToFeet(mdM)) : null;
     if (section) setSelectedId(section.holeComponentId);
     link.pinCursor(mdM);
   }

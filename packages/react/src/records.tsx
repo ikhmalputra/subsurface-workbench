@@ -3,7 +3,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { scaleLinear } from "d3-scale";
-import { daysVsDepth, intervalsOverlap, lasCurve, type DayCategory, type HoleSectionRecord, type LasFile, type RunKind, type ServiceRun, type WellDay, type WellOperations } from "@ikhmalputra/subsurface-core";
+import { daysVsDepth, feetToMetres, intervalsOverlap, lasCurve, type DayCategory, type HoleSectionRecord, type LasFile, type RunKind, type ServiceRun, type WellDay, type WellOperations } from "@ikhmalputra/subsurface-core";
 import { AccessibleTable } from "./accessible-table.js";
 import { CommandButton } from "./ui.js";
 
@@ -13,10 +13,9 @@ export interface DepthRange {
   readonly baseFt: number;
 }
 
-const FT_TO_M = 0.3048;
 const int = (value: number) => value.toLocaleString("en-US", { maximumFractionDigits: 0 });
 const feet = (value: number | null | undefined) => (value === null || value === undefined ? "—" : `${int(value)} ft`);
-const dualDepth = (value: number) => `${int(value)} ft · ${int(value * FT_TO_M)} m`;
+const dualDepth = (value: number) => `${int(value)} ft · ${int(feetToMetres(value))} m`;
 const shortDate = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 const overlaps = (top: number, base: number, range: DepthRange) => intervalsOverlap(top, base, range.topFt, range.baseFt);
 const fractions: Record<string, string> = { "0.25": " 1/4", "0.5": " 1/2", "0.75": " 3/4" };
@@ -173,7 +172,7 @@ export function DaysVsDepthChart({ operations, focusDate = null, onSelectDay, ti
       })}
     </ul>
     <p className="sw-sr-only">{points.length} reported daily measured-depth values over {maxDay} days from spud. The chart uses measured depth in feet and omits days with unreported depth.</p>
-    <AccessibleTable label="daily depth progress" description="Reported days from spud and measured depths; days without reported depth are not plotted." columns={[{ label: "Date" }, { label: "Day from spud", unit: "days" }, { label: "Measured depth", unit: "ft" }, { label: "Measured depth", unit: "m" }]} rowCount={points.length} getRows={(start, end) => points.slice(start, end).map((point) => [point.date, point.day, point.mdFt, point.mdFt * FT_TO_M])} />
+    <AccessibleTable label="daily depth progress" description="Reported days from spud and measured depths; days without reported depth are not plotted." columns={[{ label: "Date" }, { label: "Day from spud", unit: "days" }, { label: "Measured depth", unit: "ft" }, { label: "Measured depth", unit: "m" }]} rowCount={points.length} getRows={(start, end) => points.slice(start, end).map((point) => [point.date, point.day, point.mdFt, feetToMetres(point.mdFt)])} />
   </figure>;
 }
 
@@ -449,7 +448,7 @@ export function LogTracks({ las, tracks, markers = [], intervals = [], selectedR
         const index = start + offset;
         return [
           Number.isFinite(depth) ? depth : null,
-          Number.isFinite(depth) ? depth * FT_TO_M : null,
+          Number.isFinite(depth) ? feetToMetres(depth) : null,
           ...resolved.map((track) => {
             const value = track.values[index];
             return value === null || value === undefined || !Number.isFinite(value) ? null : value;

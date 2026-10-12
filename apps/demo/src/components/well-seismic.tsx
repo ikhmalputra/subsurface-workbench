@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { parseSegy, projectOntoSection, seismicDepthToTvd, tvdToSeismicDepth, type FormationLayer, type ProjectedPoint, type SegyFile, type SegyTrace, type SeismicSectionMetadata, type SurveyPoint, type WellComponent } from "@ikhmalputra/subsurface-core";
+import { feetToMetres, parseSegy, projectOntoSection, seismicDepthToTvd, tvdToSeismicDepth, type FormationLayer, type ProjectedPoint, type SegyFile, type SegyTrace, type SeismicSectionMetadata, type SurveyPoint, type WellComponent } from "@ikhmalputra/subsurface-core";
 import { SeismicSection, type MdWindow } from "@ikhmalputra/subsurface-react/seismic";
 import type { SceneSeismicVolume } from "@ikhmalputra/subsurface-react/three";
 
-const FT = 0.3048;
 export interface WellSeismicSource { readonly url: string; readonly meta: SeismicSectionMetadata }
 
 const alongLine = (trace: SegyTrace) => trace.shotpoint;
@@ -102,7 +101,7 @@ export interface WellSeismicSectionProps {
 export function WellSeismicSection({ file, meta, wellPath, components, formations, survey, selected, onSelectMd, cursorMdM, onCursorMdChange, mdWindow, onMdWindowChange, title = "3D anisotropic PSDM · section along 16A(78)-32" }: WellSeismicSectionProps) {
   const casing = components.filter((component) => component.kind === "Casing").map((component) => ({ id: component.id, label: component.name, topMdM: component.topDepthReported === false ? 0 : component.topDepthM, baseMdM: component.bottomDepthM, color: "#2c3f7a" }));
   const intervals = selected && !casing.some((item) => item.id === selected.id) ? [...casing, { id: selected.id, label: selected.name, topMdM: selected.topDepthReported === false ? 0 : selected.topDepthM, baseMdM: selected.bottomDepthM }] : casing;
-  const shoes = components.filter((component) => component.kind === "Casing" && component.rawBottomDepthFt).map((component) => ({ mdM: (component.rawBottomDepthFt as number) * FT, label: `${component.name.split(" / ").pop()?.trim()} shoe` }));
+  const shoes = components.filter((component) => component.kind === "Casing" && component.rawBottomDepthFt).map((component) => ({ mdM: feetToMetres(component.rawBottomDepthFt as number), label: `${component.name.split(" / ").pop()?.trim()} shoe` }));
   const tops = formations.filter((layer) => layer.topTvdM > 50).flatMap((layer) => { const station = survey.find((point) => point.tvdM >= layer.topTvdM); return station ? [{ mdM: station.mdM, label: `${layer.name} top (well)` }] : []; });
   return <SeismicSection file={file} traceX={alongLine} xLabel={`Distance along section from wellhead (m) · azimuth ${meta.section.azimuthDeg.toFixed(1)}° grid`} depthStep={meta.volume.sampleIntervalM} depthLabel="m below datum" wellPath={wellPath} intervals={intervals} markers={[...shoes, ...tops]} selectedId={selected?.id ?? null} cursorMdM={cursorMdM} title={title} onSelectMd={onSelectMd} onCursorMdChange={onCursorMdChange} mdWindow={mdWindow} onMdWindowChange={onMdWindowChange} />;
 }

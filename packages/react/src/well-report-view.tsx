@@ -18,7 +18,7 @@ import type {
   WellReportTrajectorySection,
   WellReportValue,
 } from "@ikhmalputra/subsurface-core/contracts";
-import { getWellComponents, wellComponentsToAssembly } from "@ikhmalputra/subsurface-core";
+import { getWellComponents, metresToFeet, wellComponentsToAssembly } from "@ikhmalputra/subsurface-core";
 import type { WellComponent, WellDesign } from "@ikhmalputra/subsurface-core";
 import type { AssemblySceneProps } from "./assembly-scene.js";
 import { AccessibleTable } from "./accessible-table.js";
@@ -245,7 +245,7 @@ function ComponentRegister({ components, selectedId, onSelect }: {
             <tbody>{group.items.map((component) => <tr key={component.id} data-report-component={component.id} data-selected={component.id === selectedId}>
               <th scope="row">{component.name}</th>
               <td data-report-value>{component.outerDiameterMm === null ? "not reported" : numberFormat.format(component.outerDiameterMm / 25.4)}</td>
-              <td data-report-value>{`${numberFormat.format(Math.round(component.topDepthM / 0.3048))}–${numberFormat.format(component.rawBottomDepthFt ?? Math.round(component.bottomDepthM / 0.3048))}`}</td>
+              <td data-report-value>{`${numberFormat.format(Math.round(metresToFeet(component.topDepthM)))}–${numberFormat.format(component.rawBottomDepthFt ?? Math.round(metresToFeet(component.bottomDepthM)))}`}</td>
               <td><ComponentSource component={component} /></td>
               <td className="sw-well-report-action"><CommandButton icon="view" type="button" aria-pressed={component.id === selectedId} onClick={() => onSelect(component.id)}>View</CommandButton></td>
             </tr>)}</tbody>

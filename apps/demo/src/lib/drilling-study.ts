@@ -1,4 +1,4 @@
-import { parseLas, runsInInterval } from "@ikhmalputra/subsurface-core";
+import { METRES_PER_INTERNATIONAL_FOOT, feetToMetres, metresToFeet, parseLas, runsInInterval } from "@ikhmalputra/subsurface-core";
 import type { LasFile, WellOperations } from "@ikhmalputra/subsurface-core";
 
 export interface StudyScope { readonly topM: number; readonly baseM: number }
@@ -38,7 +38,7 @@ export function readDrillingLog(text: string): LasFile {
 export function checkDrillingLog(las: LasFile): LasFile {
   const depth = las.curves[0];
   if (!depth || depth.mnemonic !== "DEPTH" || !["ft", "m"].includes(depth.unit.toLowerCase())) throw new Error("The drilling log needs a first DEPTH curve in ft or m.");
-  const factor = depth.unit.toLowerCase() === "ft" ? 0.3048 : 1;
+  const factor = depth.unit.toLowerCase() === "ft" ? METRES_PER_INTERNATIONAL_FOOT : 1;
   let previous = -Infinity;
   for (const value of depth.values) {
     if (value === null || !Number.isFinite(value) || value * factor < 0 || value <= previous) throw new Error("Log depth must be finite, nonnegative and strictly increasing; depth-match the source before analysis.");
@@ -49,7 +49,7 @@ export function checkDrillingLog(las: LasFile): LasFile {
 
 export function intervalEvidence(las: LasFile, operations: WellOperations | null, scope: StudyScope) {
   const depth = las.curves[0]!;
-  const factor = depth.unit.toLowerCase() === "ft" ? 0.3048 : 1;
+  const factor = depth.unit.toLowerCase() === "ft" ? METRES_PER_INTERNATIONAL_FOOT : 1;
   const rows = depth.values.flatMap((value, index) => value !== null && value * factor >= scope.topM && value * factor < scope.baseM
     ? [{ id: `log:${index}`, mdM: value * factor, values: Object.fromEntries(las.curves.slice(1).map((curve) => [curve.mnemonic, curve.values[index] ?? null])) }] : []);
   const rop = las.curves.find((curve) => curve.mnemonic === "ROP");
@@ -59,8 +59,8 @@ export function intervalEvidence(las: LasFile, operations: WellOperations | null
     return typeof value === "number" && Number.isFinite(value) && value >= 0 ? [value] : [];
   }) : [];
   const mean = valid.length ? valid.reduce((sum, value) => sum + value, 0) / valid.length : null;
-  const runs = operations ? runsInInterval(operations, scope.topM / 0.3048, scope.baseM / 0.3048) : [];
-  const days = operations?.days.filter((day) => day.mdFt !== null && day.mdFt * 0.3048 >= scope.topM && day.mdFt * 0.3048 < scope.baseM) ?? [];
+  const runs = operations ? runsInInterval(operations, metresToFeet(scope.topM), metresToFeet(scope.baseM)) : [];
+  const days = operations?.days.filter((day) => day.mdFt !== null && feetToMetres(day.mdFt) >= scope.topM && feetToMetres(day.mdFt) < scope.baseM) ?? [];
   return { rows, mean, unit: rop?.unit ?? null, validCount: valid.length, excludedCount: rows.length - valid.length, runs, days };
 }
 

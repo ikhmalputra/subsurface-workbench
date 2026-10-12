@@ -3,11 +3,13 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { LogTracks } from "@ikhmalputra/subsurface-react/records";
+import { metresToFeet } from "@ikhmalputra/subsurface-core";
 import { CommandButton } from "@ikhmalputra/subsurface-react/ui";
 import { useDepthLink } from "@ikhmalputra/subsurface-react/state";
 import { useWorkspace } from "./workspace-provider";
 import { checkDrillingLog, intervalEvidence, parseStudies, studySignature, studyStorageKey, validateScope } from "../lib/drilling-study";
 import { lasAttempt } from "../lib/well-data";
+import { depthBridge, recordDepthToMetres } from "../lib/depth";
 import { useLas } from "./use-las";
 import type { DrillingStudy } from "../lib/drilling-study";
 
@@ -58,6 +60,7 @@ function WellStudy() {
   const [storageReady, setStorageReady] = useState(false);
   const logUrl = well.logUrl;
   const source = useLas(logUrl);
+  const bridge = depthBridge(link);
   useEffect(() => {
     try { const saved = localStorage.getItem(studyStorageKey); setStudies(saved ? parseStudies(saved) : []); setStorageReady(true); }
     catch (caught) { setError(`Saved studies could not be loaded: ${caught instanceof Error ? caught.message : String(caught)}`); }
@@ -84,7 +87,7 @@ function WellStudy() {
   const focused = evaluation?.[evidenceWindow];
   const focusedScope = evidenceWindow === "target" ? scope : comparison;
   const previewBasis = `${basis}:${evidenceWindow}`;
-  const previewWindowFt = preview?.basis === previewBasis ? preview.windowFt : [focusedScope.topM / 0.3048, focusedScope.baseM / 0.3048] as const;
+  const previewWindowFt = preview?.basis === previewBasis ? preview.windowFt : [metresToFeet(focusedScope.topM), metresToFeet(focusedScope.baseM)] as const;
   const change = evaluation?.target.mean !== null && evaluation?.comparison.mean !== null && evaluation ? evaluation.target.mean! - evaluation.comparison.mean! : null;
   function attach(id: string, mdM?: number) {
     setEvidenceIds((ids) => ids.includes(id) ? ids.filter((value) => value !== id) : [...ids, id]);
@@ -158,7 +161,7 @@ function WellStudy() {
             if (value === "target" || value === "comparison") { setEvidenceWindow(value); setSamplePage(0); }
           }}><option value="target">Target interval</option><option value="comparison">Comparison interval</option></select></label>
           <p className="demo-edit-hint">Log zoom changes the preview only. Calculations and attached samples remain scoped to the selected study interval.</p>
-          <LogTracks title={`${evidenceWindow === "target" ? "Target" : "Comparison"} drilling evidence`} las={{ ...activeLog.las, curves: activeLog.las.curves.map((curve, index) => index === 0 && curve.unit.toLowerCase() === "m" ? { ...curve, unit: "ft", values: curve.values.map((value) => value === null ? null : value / 0.3048) } : curve) }} tracks={tracks.filter((track) => activeLog.las.curves.some((curve) => curve.mnemonic === track.mnemonic))} selectedRange={{ topFt: focusedScope.topM / 0.3048, baseFt: focusedScope.baseM / 0.3048 }} depthWindowFt={previewWindowFt} onDepthWindowChange={(windowFt) => setPreview({ basis: previewBasis, windowFt })} cursorFt={link.pinnedMdM === null ? null : link.pinnedMdM / 0.3048} onSelectDepth={(depth) => link.pinCursor(depth * 0.3048)} />
+          <LogTracks title={`${evidenceWindow === "target" ? "Target" : "Comparison"} drilling evidence`} las={{ ...activeLog.las, curves: activeLog.las.curves.map((curve, index) => index === 0 && curve.unit.toLowerCase() === "m" ? { ...curve, unit: "ft", values: curve.values.map((value) => value === null ? null : metresToFeet(value)) } : curve) }} tracks={tracks.filter((track) => activeLog.las.curves.some((curve) => curve.mnemonic === track.mnemonic))} selectedRange={{ topFt: metresToFeet(focusedScope.topM), baseFt: metresToFeet(focusedScope.baseM) }} depthWindowFt={previewWindowFt} onDepthWindowChange={(windowFt) => setPreview({ basis: previewBasis, windowFt })} cursorFt={bridge.pinnedFt} onSelectDepth={bridge.pinFt} />
           <details><summary>Inspect and attach exact log samples</summary><div className="demo-study-table"><table><caption>{evidenceWindow} log samples · source units retained</caption><thead><tr><th>MD (m)</th><th>ROP ({focused.unit})</th><th>ROP quality</th><th>Evidence</th></tr></thead><tbody>{focused.rows.slice(samplePage * 20, (samplePage + 1) * 20).map((row) => <tr key={row.id}><td>{row.mdM.toFixed(2)}</td><td>{row.values.ROP ?? "Missing"}</td><td>{row.values.ROP === null || row.values.ROP === undefined ? "Missing" : row.values.ROP < 0 ? "Excluded: negative" : "Included"}</td><td><CommandButton icon="add" aria-label={`Attach sample ${row.mdM.toFixed(2)} m`} aria-pressed={evidenceIds.includes(row.id)} onClick={() => attach(row.id, row.mdM)} /></td></tr>)}</tbody></table></div><div className="demo-edit-actions"><CommandButton icon="previous" disabled={samplePage === 0} onClick={() => setSamplePage(samplePage - 1)}>Previous samples</CommandButton><span>Page {samplePage + 1}</span><CommandButton icon="next" disabled={(samplePage + 1) * 20 >= focused.rows.length} onClick={() => setSamplePage(samplePage + 1)}>Next samples</CommandButton></div></details>
           <section className="demo-study-context" aria-label="Operational evidence">
             <header className="demo-study-context-header">
@@ -180,7 +183,7 @@ function WellStudy() {
                   return <tr key={id} data-attached={attached || undefined}>
                     <th scope="row">{run.id}</th><td className="demo-study-depth" data-label="ft MD">{run.topFt ?? "?"}–{run.baseFt ?? "?"}</td>
                     <td><details><summary>{run.kind} · {run.outcome}</summary><p>{run.summary}</p></details></td><td>{run.page}</td>
-                    <td><CommandButton icon={attached ? "apply" : "add"} aria-label={`${attached ? "Detach" : "Attach"} run ${run.id}`} aria-pressed={attached} onClick={() => attach(id, depthFt == null ? undefined : depthFt * 0.3048)}>{attached ? "Attached" : "Attach"}</CommandButton></td>
+                    <td><CommandButton icon={attached ? "apply" : "add"} aria-label={`${attached ? "Detach" : "Attach"} run ${run.id}`} aria-pressed={attached} onClick={() => attach(id, recordDepthToMetres(depthFt))}>{attached ? "Attached" : "Attach"}</CommandButton></td>
                   </tr>;
                 })}{!focused.runs.length && <tr><td colSpan={5}>No overlapping run intervals reported.</td></tr>}</tbody>
               </table> : <table>
@@ -192,7 +195,7 @@ function WellStudy() {
                   return <tr key={id} data-attached={attached || undefined}>
                     <th scope="row">{day.date}</th><td className="demo-study-depth" data-label="End MD (ft)">{day.mdFt}</td>
                     <td><details><summary>{day.category}</summary><p>{day.headline}</p></details></td><td>{day.page}</td>
-                    <td><CommandButton icon={attached ? "apply" : "add"} aria-label={`${attached ? "Detach" : "Attach"} daily report ${day.date}`} aria-pressed={attached} onClick={() => attach(id, day.mdFt === null ? undefined : day.mdFt * 0.3048)}>{attached ? "Attached" : "Attach"}</CommandButton></td>
+                    <td><CommandButton icon={attached ? "apply" : "add"} aria-label={`${attached ? "Detach" : "Attach"} daily report ${day.date}`} aria-pressed={attached} onClick={() => attach(id, recordDepthToMetres(day.mdFt))}>{attached ? "Attached" : "Attach"}</CommandButton></td>
                   </tr>;
                 })}{!focused.days.length && <tr><td colSpan={5}>No reported end-of-day MD in this interval.</td></tr>}</tbody>
               </table>}

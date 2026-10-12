@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { InfoTip } from "./info-tip.js";
-import { positionAtMeasuredDepth } from "@ikhmalputra/subsurface-core";
+import { metresToFeet, positionAtMeasuredDepth } from "@ikhmalputra/subsurface-core";
 import type { ComponentId, ComponentKind, WellComponent, WellDesign } from "@ikhmalputra/subsurface-core";
 import { scaleLinear } from "d3-scale";
 import { CommandButton } from "./ui.js";
@@ -14,16 +14,41 @@ const kindColor: Record<ComponentKind, string> = {
   "Landing nipple": "#8b6840",
 };
 
+/**
+ * Whether this well's own source states its depths in feet.
+ *
+ * Every depth in a `WellDesign` is held in metres; this only decides which unit the drawing quotes
+ * back, because showing a reader a number their source document does not contain is a misquotation
+ * even when the conversion is exact.
+ *
+ * It used to be `provenance === "documented"`, which is not a unit. Two consequences, both live:
+ * editing the FORGE well set its provenance to "user-authored" and silently switched this drawing
+ * from feet to metres — while the interval's own base depth kept using `rawBottomDepthFt` — so one
+ * component's extent was stated as "8.5 m MD to 1,629 ft report MD", two units 3.28x apart in one
+ * sentence. And the feet-only branch carried a conversion factor into the geology track that had no
+ * business there; see the TVD projection below.
+ *
+ * The question is answered by the data that makes it answerable: a design carrying a reported total
+ * depth in feet is one whose source reported feet, whoever has edited it since.
+ */
+function reportsDepthInFeet(design: WellDesign): boolean {
+  return design.reportedTotalDepthFt != null;
+}
+
+/** A design-space depth in metres, expressed in the unit this well's source reports. */
+function reportedDepth(mdM: number, design: WellDesign): number {
+  return reportsDepthInFeet(design) ? metresToFeet(mdM) : mdM;
+}
+
 function sourceDepthText(component: WellComponent, design: WellDesign): string {
   if (component.kind === "Wellhead" || component.kind === "Valve") return "Depth not reported / surface location marker only";
-  const unit = design.provenance === "documented" ? "ft report MD" : "m MD";
-  const divisor = design.provenance === "documented" ? 0.3048 : 1;
+  const unit = reportsDepthInFeet(design) ? "ft report MD" : "m MD";
   const top = component.topDepthReported
-    ? `${number(component.topDepthM / divisor)} ${unit}`
-    : design.provenance === "documented" ? "Top unreported (plotted at 0)" : `${number(component.topDepthM)} m planned MD`;
+    ? `${number(reportedDepth(component.topDepthM, design))} ${unit}`
+    : reportsDepthInFeet(design) ? "Top unreported (plotted at 0)" : `${number(component.topDepthM)} m planned MD`;
   const bottom = component.rawBottomDepthFt != null
     ? `${number(component.rawBottomDepthFt)} ft report MD`
-    : `${number(component.bottomDepthM / divisor)} ${unit}`;
+    : `${number(reportedDepth(component.bottomDepthM, design))} ${unit}`;
   return `${top} to ${bottom}`;
 }
 
@@ -33,17 +58,17 @@ function sourceLink(component: WellComponent, design: WellDesign): string {
 }
 
 function intervalDomain(design: WellDesign): number {
-  if (design.provenance === "documented") return Math.max(design.reportedTotalDepthFt ?? 0, design.surveyCoverageFt ?? 0, 1);
+  if (reportsDepthInFeet(design)) return Math.max(design.reportedTotalDepthFt ?? 0, design.surveyCoverageFt ?? 0, 1);
   return Math.max(design.totalDepthM, 1);
 }
 
 function intervalStart(component: WellComponent, design: WellDesign): number {
-  return design.provenance === "documented" ? component.topDepthM / 0.3048 : component.topDepthM;
+  return reportedDepth(component.topDepthM, design);
 }
 
 function intervalEnd(component: WellComponent, design: WellDesign): number {
-  if (design.provenance === "documented" && component.rawBottomDepthFt != null) return component.rawBottomDepthFt;
-  return design.provenance === "documented" ? component.bottomDepthM / 0.3048 : component.bottomDepthM;
+  if (reportsDepthInFeet(design) && component.rawBottomDepthFt != null) return component.rawBottomDepthFt;
+  return reportedDepth(component.bottomDepthM, design);
 }
 
 function TrajectoryProfile({ design, selected, layersVisible, onSelect }: { design: WellDesign; selected?: WellComponent; layersVisible: boolean; onSelect: (id: ComponentId) => void }) {
@@ -137,11 +162,11 @@ function DepthProgram({ design, components, selectedId, onSelect }: { design: We
   }
 
   return <section className="sw-depth-program" data-testid="schematic-depth-program" aria-label="Vertical well construction and casing shoe schematic">
-    <div className="sw-depth-program-heading"><div><span>WELLBORE PROFILE / NOT TO SCALE</span><h3 className="sw-title">Measured-depth schematic<InfoTip label="About the depth schematic">Track width shows relative reported OD only. IDs, wall thickness, cement annulus geometry and unreported tops are not inferred. Select a shoe to open its source details.</InfoTip></h3></div><small>{design.provenance === "documented" ? "REPORT MD / FT" : "PLANNED MD / M"}</small></div>
+    <div className="sw-depth-program-heading"><div><span>WELLBORE PROFILE / NOT TO SCALE</span><h3 className="sw-title">Measured-depth schematic<InfoTip label="About the depth schematic">Track width shows relative reported OD only. IDs, wall thickness, cement annulus geometry and unreported tops are not inferred. Select a shoe to open its source details.</InfoTip></h3></div><small>{reportsDepthInFeet(design) ? "REPORT MD / FT" : "PLANNED MD / M"}</small></div>
     <div className="sw-depth-program-grid">
-      <div className="sw-depth-axis"><span className="sw-depth-axis-title">{design.provenance === "documented" ? "MD / ft" : "MD / m"}</span><div className="sw-depth-axis-body">{ticks.map((tick) => <span key={tick} style={{ top: `${vertical(tick)}px` }}>{number(tick)}</span>)}</div></div>
+      <div className="sw-depth-axis"><span className="sw-depth-axis-title">{reportsDepthInFeet(design) ? "MD / ft" : "MD / m"}</span><div className="sw-depth-axis-body">{ticks.map((tick) => <span key={tick} style={{ top: `${vertical(tick)}px` }}>{number(tick)}</span>)}</div></div>
       <div className="sw-depth-program-track" data-testid="schematic-track-hole" aria-label={`Hole diameters: ${holes.map((item) => item.name).join(", ")}`}><h4>HOLE</h4><div className="sw-depth-track-body">{ticks.map((tick) => <i key={tick} className="sw-depth-gridline" style={{ top: `${vertical(tick)}px` }} />)}{holes.map((component) => intervalBar(component, "hole"))}</div></div>
-      <div className="sw-depth-program-track" data-testid="schematic-track-casing" aria-label={`Casing strings: ${casings.map((item) => `${item.name}, ${number(item.rawBottomDepthFt ?? intervalEnd(item, design))} ${design.provenance === "documented" ? "ft report MD" : "m MD"}`).join(", ")}`}><h4>CASING / OD</h4><div className="sw-depth-track-body">{ticks.map((tick) => <i key={tick} className="sw-depth-gridline" style={{ top: `${vertical(tick)}px` }} />)}{casings.map((component) => intervalBar(component, "casing"))}</div></div>
+      <div className="sw-depth-program-track" data-testid="schematic-track-casing" aria-label={`Casing strings: ${casings.map((item) => `${item.name}, ${number(item.rawBottomDepthFt ?? intervalEnd(item, design))} ${reportsDepthInFeet(design) ? "ft report MD" : "m MD"}`).join(", ")}`}><h4>CASING / OD</h4><div className="sw-depth-track-body">{ticks.map((tick) => <i key={tick} className="sw-depth-gridline" style={{ top: `${vertical(tick)}px` }} />)}{casings.map((component) => intervalBar(component, "casing"))}</div></div>
       <div className="sw-depth-program-track" data-testid="schematic-track-cement" aria-label={`Cement records: ${cement.map((item) => item.name).join(", ")}`}><h4>CEMENT</h4><div className="sw-depth-track-body">{ticks.map((tick) => <i key={tick} className="sw-depth-gridline" style={{ top: `${vertical(tick)}px` }} />)}{cement.map((component) => intervalBar(component, "cement"))}</div></div>
       <div className="sw-depth-shoe-list"><h4>SHOES / SOURCE DEPTHS</h4>{casings.map((component) => <CommandButton kind="selection" key={component.id} aria-pressed={component.id === selectedId} onClick={() => onSelect(component.id)}><i style={{ background: kindColor.Casing }} /><span><strong>{component.name}</strong><small>{component.rawBottomDepthFt?.toLocaleString("en-US")} ft MD / report p.{component.sourcePage}</small></span></CommandButton>)}{cement.map((component) => <CommandButton kind="selection" key={component.id} aria-pressed={component.id === selectedId} onClick={() => onSelect(component.id)}><i style={{ background: kindColor.Cement }} /><span><strong>{component.name}</strong><small>{component.rawBottomDepthFt?.toLocaleString("en-US")} ft MD / outer bound not reported</small></span></CommandButton>)}{surface.map((component) => <CommandButton kind="selection" key={component.id} aria-pressed={component.id === selectedId} onClick={() => onSelect(component.id)}><i style={{ background: kindColor.Wellhead }} /><span><strong>{component.name}</strong><small>Surface marker / geometry not reported</small></span></CommandButton>)}</div>
     </div>
@@ -178,16 +203,16 @@ function ConstructionSection({ design, components, selectedId, onSelect, layersV
     const stations = design.survey ?? [];
     const upperIndex = stations.findIndex((station) => station.tvdM >= tvdM);
     if (upperIndex < 0) return domain;
-    if (upperIndex === 0) return stations[0]!.mdM / (design.provenance === "documented" ? 0.3048 : 1);
+    if (upperIndex === 0) return reportedDepth(stations[0]!.mdM, design);
     const upper = stations[upperIndex]!;
     const lower = stations[upperIndex - 1]!;
     const fraction = (tvdM - lower.tvdM) / (upper.tvdM - lower.tvdM);
     const mdM = lower.mdM + fraction * (upper.mdM - lower.mdM);
-    return mdM / (design.provenance === "documented" ? 0.3048 : 1);
+    return reportedDepth(mdM, design);
   }
   const records = [...components].sort((left, right) => topDepth(left) - topDepth(right));
   return <section className="sw-construction-section" data-testid="component-section-schematic" aria-labelledby="sw-construction-title">
-    <div className="sw-schematic-panel-heading"><div><span>DEPTH-ALIGNED WELLBORE / INTERACTIVE</span><h2 id="sw-construction-title">Well construction</h2></div><small>{design.provenance === "documented" ? "REPORT MD / ft" : "PLANNED MD / m"} / conceptual widths</small></div>
+    <div className="sw-schematic-panel-heading"><div><span>DEPTH-ALIGNED WELLBORE / INTERACTIVE</span><h2 id="sw-construction-title">Well construction</h2></div><small>{reportsDepthInFeet(design) ? "REPORT MD / ft" : "PLANNED MD / m"} / conceptual widths</small></div>
     <div className="sw-construction-layout">
       <div className="sw-wellbore-figure"><svg className="sw-wellbore-svg" viewBox="0 0 320 740" role="group" aria-label="Interactive depth-aligned wellbore, hole, casing and cement intervals">
       <defs>
@@ -200,16 +225,20 @@ function ConstructionSection({ design, components, selectedId, onSelect, layersV
       <text x="290" y="31" textAnchor="middle" className="sw-construction-track-head">CEMENT</text>
       <rect x="72" y="104" width="28" height="594" fill="#f4f7f4" stroke="#dce4df" />
       {layersVisible && (design.formations ?? []).map((layer) => {
-        const factor = design.provenance === "documented" ? 0.3048 : 1;
-        const top = y(Math.max(0, Math.min(domain, mdAtTvd(layer.topTvdM * factor))));
-        const bottom = y(Math.max(0, Math.min(domain, mdAtTvd(layer.bottomTvdM * factor))));
+        // `mdAtTvd` takes TVD in metres, which is what `topTvdM` is. A feet factor was applied
+        // here, scaling FORGE's layer depths to 0.3048 of themselves: the granite reservoir top was
+        // drawn at ~1,433 ft when the survey puts it at ~4,700 ft, and its base at ~2,609 ft rather
+        // than the 10,955 ft survey end — the reservoir in the top quarter of a well it fills the
+        // bottom half of. Invisible on the synthetic wells, where the factor was 1.
+        const top = y(Math.max(0, Math.min(domain, mdAtTvd(layer.topTvdM))));
+        const bottom = y(Math.max(0, Math.min(domain, mdAtTvd(layer.bottomTvdM))));
         return <rect key={layer.id} x="73" y={top} width="26" height={Math.max(2, bottom - top)} fill={layer.color} opacity="0.78"><title>{`${layer.name} / depth projected from TVD`}</title></rect>;
       })}
       <rect x="117" y="104" width="72" height="594" fill="#f7f9f7" stroke="#dce4df" />
       <rect x="195" y="104" width="58" height="594" fill="#f7f9f7" stroke="#dce4df" />
       <rect x="277" y="104" width="26" height="594" fill="#f7f9f7" stroke="#dce4df" />
       {ticks.map((tick) => <g key={tick}><line x1="58" x2="305" y1={y(tick)} y2={y(tick)} stroke="#dce4df" strokeDasharray="3 5" /><text x="52" y={y(tick) + 3} textAnchor="end" className="sw-construction-tick">{number(tick)}</text></g>)}
-      <text x="7" y="81" className="sw-construction-note">{design.provenance === "documented" ? "MD / ft" : "MD / m"}</text>
+      <text x="7" y="81" className="sw-construction-note">{reportsDepthInFeet(design) ? "MD / ft" : "MD / m"}</text>
       <g data-testid="schematic-track-hole" aria-label={`Nominal borehole diameters: ${holes.map((component) => component.name).join(", ")}`}>
         {holes.map((component) => {
           const extent = interval(component);

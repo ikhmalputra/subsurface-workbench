@@ -1,5 +1,6 @@
 import forgeData from "./forge-data.json" with { type: "json" };
 import { forgeOperations } from "./records.ts";
+import { feetToMetres } from "./units.ts";
 import {
   analyzeSection,
   defaultDesignBasis,
@@ -17,7 +18,6 @@ import {
 } from "./well-design.ts";
 
 const PPG_PER_SG = 8.345;
-const FT = 0.3048;
 const round1 = (value: number) => Math.round(value * 10) / 10;
 const round2 = (value: number) => Math.round(value * 100) / 100;
 const ppgToSg = (ppg: number) => round2(ppg / PPG_PER_SG);
@@ -68,7 +68,7 @@ function forgeBrief(): WellDesignBrief {
   const survey = forgeData.survey.map((station) => ({ mdM: station.mdM, inclinationDeg: station.inclinationDeg, azimuthDeg: station.azimuthDeg }));
   const [sediments, granite] = forgeData.formations;
   const shoe = (id: string) => forgeData.components.find((component) => component.id === id)!.bottomDepthM;
-  const fit = (ppg: number, mdFt: number, page: number): IntegrityTest => ({ kind: "FIT", tvdM: round1(mdFt * FT), emwSg: ppgToSg(ppg), reachedLeakOff: false, source: `16A(78)-32 FIT ${ppg} ppg at ${mdFt.toLocaleString("en-US")} ft MD, ${pageRef("daily", page)}` });
+  const fit = (ppg: number, mdFt: number, page: number): IntegrityTest => ({ kind: "FIT", tvdM: round1(feetToMetres(mdFt)), emwSg: ppgToSg(ppg), reachedLeakOff: false, source: `16A(78)-32 FIT ${ppg} ppg at ${mdFt.toLocaleString("en-US")} ft MD, ${pageRef("daily", page)}` });
   const estimated: InputSource = "estimated";
   const pore = "Not reported; hydrostatic assumed — 8.5–9.1 ppg mud drilled the whole well without an influx, so pore pressure stays below ≈1.07 SG.";
   const frac = "Estimated regional stress gradient; FITs (lower bounds) and three failed XLOT attempts give no leak-off value for this well.";
@@ -88,7 +88,7 @@ function forgeBrief(): WellDesignBrief {
         { tvdM: round1(granite!.bottomTvdM), porePressureSg: 1.0, fractureGradientSg: 1.69, poreSource: "assumed", fractureSource: estimated, note: frac },
       ],
       surfaceTemperatureC: 10,
-      geothermalGradientCPerKm: round1((161 - 10) / (tvdAtMd({ trajectory: survey }, 10987 * FT) / 1000)),
+      geothermalGradientCPerKm: round1((161 - 10) / (tvdAtMd({ trajectory: survey }, feetToMetres(10987)) / 1000)),
       temperatureSource: "measured",
       temperatureNote: `Log BHT 322 °F (161 °C) near TD (10,987 ft MD) after circulating to cool (${pageRef("daily", 17)}) — understates static temperature. Surface 10 °C assumed.`,
       integrityTests: [fit(9.5, 1644, 5), fit(9.6, 5125, 9)],
@@ -112,12 +112,12 @@ function forgeAsDrilled(): readonly OffsetSectionRecord[] {
   const extra: Record<string, OffsetEvent[]> = {
     surface: [],
     intermediate: [
-      { kind: "integrity-test", text: "FIT 9.5 ppg (1.14 SG) below the 13-3/8\" shoe — held, no leak-off.", mdM: round1(1644 * FT), date: "2020-11-05", source: pageRef("daily", 5) },
-      { kind: "losses", text: "9 bbl seepage in 6 h at the granodiorite contact drilling with 9.1 ppg.", mdM: round1(4552 * FT), date: "2020-11-07", source: pageRef("daily", 6) },
+      { kind: "integrity-test", text: "FIT 9.5 ppg (1.14 SG) below the 13-3/8\" shoe — held, no leak-off.", mdM: round1(feetToMetres(1644)), date: "2020-11-05", source: pageRef("daily", 5) },
+      { kind: "losses", text: "9 bbl seepage in 6 h at the granodiorite contact drilling with 9.1 ppg.", mdM: round1(feetToMetres(4552)), date: "2020-11-07", source: pageRef("daily", 6) },
     ],
     production: [
-      { kind: "integrity-test", text: "FIT 9.6 ppg (1.15 SG) below the 9-5/8\" shoe — held, no leak-off.", mdM: round1(5125 * FT), date: "2020-11-15", source: pageRef("daily", 9) },
-      { kind: "temperature", text: "Log BHT 322 °F (161 °C) after circulating to cool; static temperature is higher.", mdM: round1(10987 * FT), date: "2020-12-27", source: pageRef("daily", 17) },
+      { kind: "integrity-test", text: "FIT 9.6 ppg (1.15 SG) below the 9-5/8\" shoe — held, no leak-off.", mdM: round1(feetToMetres(5125)), date: "2020-11-15", source: pageRef("daily", 9) },
+      { kind: "temperature", text: "Log BHT 322 °F (161 °C) after circulating to cool; static temperature is higher.", mdM: round1(feetToMetres(10987)), date: "2020-12-27", source: pageRef("daily", 17) },
     ],
   };
   return Object.freeze(forgeOperations.sections.map((section) => {
@@ -133,7 +133,7 @@ function forgeAsDrilled(): readonly OffsetSectionRecord[] {
       runCount: section.runCount,
       problemRuns: section.problemRuns,
       mudWeightSg: muds.length ? { min: ppgToSg(Math.min(...muds)), max: ppgToSg(Math.max(...muds)) } : null,
-      avgRopMPerH: section.avgRopFph ? round1(section.avgRopFph * FT) : null,
+      avgRopMPerH: section.avgRopFph ? round1(feetToMetres(section.avgRopFph)) : null,
       events: Object.freeze([...(extra[section.id] ?? []), ...problemRuns].sort((a, b) => (a.mdM ?? 0) - (b.mdM ?? 0))),
     });
   }));

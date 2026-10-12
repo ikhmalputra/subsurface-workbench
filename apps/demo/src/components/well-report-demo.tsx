@@ -5,7 +5,9 @@ import {
   forgeDesign,
   forgeOperations,
   getWellComponents,
+  feetToMetres,
   lasCurve,
+  metresToFeet,
   validateWellReportSpec,
 } from "@ikhmalputra/subsurface-core";
 import type { WellReportDrillingSection, WellReportHighlight, WellReportLogCurve, WellReportSpec, WellReportStudy, WellReportStudyTable, WellReportTableColumn, WellReportTableRow } from "@ikhmalputra/subsurface-core/contracts";
@@ -16,7 +18,6 @@ import type { LasFile, WellDesign, WellOperations } from "@ikhmalputra/subsurfac
 import { lasAttempt } from "../lib/well-data";
 import { useLas } from "./use-las";
 
-const FOOT_TO_METRE = 0.3048;
 const reportNumberFormat = new Intl.NumberFormat("en-US", { maximumFractionDigits: 3 });
 const reportPercentFormat = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
 const logDefinitions = [
@@ -45,7 +46,7 @@ function toReportLogs(las: LasFile): MudLogReportData {
   const depthsMdM: number[] = [];
   depthCurve.values.forEach((depthFt, index) => {
     if (depthFt === null) return;
-    const mdM = depthFt * FOOT_TO_METRE;
+    const mdM = feetToMetres(depthFt);
     const previous = depthsMdM.at(-1);
     if (previous !== undefined && mdM <= previous) throw new RangeError(`Mud-log MD is not strictly increasing at sample ${index}.`);
     sourceIndexes.push(index);
@@ -142,7 +143,7 @@ function reportHighlights(): WellReportHighlight[] {
     {
       id: "survey-coverage-gap",
       title: "Trajectory coverage does not reach reported TD",
-      value: `${reportNumberFormat.format(unsurveyedFt)} ft / ${reportPercentFormat.format(unsurveyedFt * FOOT_TO_METRE)} m`,
+      value: `${reportNumberFormat.format(unsurveyedFt)} ft / ${reportPercentFormat.format(feetToMetres(unsurveyedFt))} m`,
       detail: `The daily report gives drilled TD as ${reportNumberFormat.format(reportedTdFt)} ft MD; the observed survey ends at ${reportNumberFormat.format(surveyEndFt)} ft MD across ${forgeDesign.survey?.length ?? 0} stations. The final ${reportNumberFormat.format(unsurveyedFt)} ft have no observed trajectory and are not extrapolated.`,
       tone: "attention",
       evidence: [
@@ -257,8 +258,8 @@ function reportStudies(): WellReportStudy[] {
         { key: "emw", label: "Reported test EMW", unit: "ppg" },
         { key: "basis", label: "Depth / outcome basis", unit: null },
       ], [
-        { id: "surface-fit", mdM: 1644 * FOOT_TO_METRE, values: [surfaceFit.date, 1644, 9.5, "Exact location and target EMW stated in daily report."] },
-        { id: "production-fit", mdM: (5113 + 12) * FOOT_TO_METRE, values: [productionFit.date, "≈5,125 (derived)", 9.6, "Daily report records 12 ft of new formation before FIT; shoe reference is 5,113 ft MD."] },
+        { id: "surface-fit", mdM: feetToMetres(1644), values: [surfaceFit.date, 1644, 9.5, "Exact location and target EMW stated in daily report."] },
+        { id: "production-fit", mdM: feetToMetres(5113 + 12), values: [productionFit.date, "≈5,125 (derived)", 9.6, "Daily report records 12 ft of new formation before FIT; shoe reference is 5,113 ft MD."] },
       ]),
       limitations: [
         "Raw pressure/volume charts, leak-off points, and explicit test acceptance statements are not included.",
@@ -289,7 +290,7 @@ function reportStudies(): WellReportStudy[] {
         { key: "page", label: "Service-run source page", unit: null },
       ], xlotRuns.map((run) => ({
         id: run.id.toLowerCase().replaceAll(" ", "-"),
-        mdM: run.baseFt === null ? null : run.baseFt * FOOT_TO_METRE,
+        mdM: run.baseFt === null ? null : feetToMetres(run.baseFt),
         values: [run.sourceHeading, run.baseFt, run.summary, run.page],
       }))),
       limitations: [
@@ -335,7 +336,7 @@ function reportStudies(): WellReportStudy[] {
       category: "drilling-performance",
       status: "reported",
       date: productionFit.date,
-      depthMdM: 5200 * FOOT_TO_METRE,
+      depthMdM: feetToMetres(5200),
       summary: "The daily record reports three five-minute WOB steps with corresponding ROP. Differential pressure, flow and rotary speed by step are not provided.",
       method: "Source-reported field step test; no fitted response curve or interpolated values are added.",
       inputs: [],
@@ -358,7 +359,7 @@ function reportStudies(): WellReportStudy[] {
       category: "temperature",
       status: "incomplete",
       date: temperatureSurvey.date,
-      depthMdM: 5499 * FOOT_TO_METRE,
+      depthMdM: feetToMetres(5499),
       summary: "The source records a 12-hour shut-in temperature survey and later logs MWD/tool temperatures. UBI and through-bit formation-evaluation logging runs are documented, but the temperature trace, image, and processed formation curves are not in the supplied digital pack.",
       method: "Acquisition details and spot readings transcribed from daily reports; measurements from different tools, depths, and operating conditions are kept distinct.",
       inputs: [datum("Temperature build-up duration", 12, "h"), datum("Temperature tool depth", 5499, "ft MD")],
@@ -580,7 +581,7 @@ function makeReport(logData: MudLogReportData): WellReportSpec {
           id: event.id,
           date: event.date,
           label: event.label,
-          mdM: event.mdFt === null ? null : event.mdFt * FOOT_TO_METRE,
+          mdM: event.mdFt === null ? null : feetToMetres(event.mdFt),
           sourceId: event.source in forgeOperations.sources ? event.source : null,
           sourcePage: event.page,
         })),
@@ -629,7 +630,7 @@ function makeReport(logData: MudLogReportData): WellReportSpec {
           { id: "components", mdM: null, values: ["Construction records", "3 drilled hole sections · 3 casing strings · 2 cement records · 2 wellhead items", components.length] },
           { id: "operations", mdM: null, values: ["Operations milestones", `${forgeOperations.milestones.length} events`, forgeOperations.milestones.length] },
           { id: "daily", mdM: null, values: ["Daily operations reports", forgeOperations.days.length ? `${forgeOperations.days[0]!.date} to ${forgeOperations.days.at(-1)!.date}` : null, forgeOperations.days.length] },
-          { id: "mudlog", mdM: null, values: ["Mud log", logData.mdStartM === null || logData.mdEndM === null ? null : `${(logData.mdStartM / FOOT_TO_METRE).toFixed(0)}–${(logData.mdEndM / FOOT_TO_METRE).toFixed(0)} ft MD`, logs.length] },
+          { id: "mudlog", mdM: null, values: ["Mud log", logData.mdStartM === null || logData.mdEndM === null ? null : `${metresToFeet(logData.mdStartM).toFixed(0)}–${metresToFeet(logData.mdEndM).toFixed(0)} ft MD`, logs.length] },
           { id: "pressure-tests", mdM: null, values: ["FIT, BOP/casing pressure tests and XLOT attempts", "2 FIT tests · 2 BOP/casing tests · 3 XLOT attempts", 7] },
           { id: "drilling-step-tests", mdM: null, values: ["WOB / ROP step tests", "Two source-reported field tests; first stopped at 15 klbf after bit balling", 2] },
           { id: "temperature-and-image-logs", mdM: null, values: ["Temperature buildup, UBI and through-bit log acquisitions", "Acquisition events reported; raw temperature / image / formation evaluation curves not in this pack", null] },
@@ -776,7 +777,7 @@ function revisionReport(design: WellDesign, operations: WellOperations | null, l
         columns: [{ key: "name", label: "Formation", unit: null }, { key: "lithology", label: "Lithology", unit: null }, { key: "top", label: "Top", unit: "m TVD" }, { key: "base", label: "Base", unit: "m TVD" }, { key: "density", label: "Density", unit: "kg/m3" }, { key: "porosity", label: "Porosity", unit: "%" }],
         rows: (design.formations ?? []).map((layer) => ({ id: layer.id, mdM: null, values: [layer.name, layer.lithology, layer.topTvdM, layer.bottomTvdM, layer.densityKgM3, layer.porosityPct] })) },
       { id: "logs", title: "Linked mud-log curves", kind: "logs", sourceId: null, curves: logs.curves },
-      { id: "operations", title: "Operational milestones", kind: "operations", events: (operations?.milestones ?? []).map((milestone) => ({ id: milestone.id, date: milestone.date, label: milestone.label, mdM: milestone.mdFt === null ? null : milestone.mdFt * FOOT_TO_METRE, sourceId: null, sourcePage: milestone.page })) },
+      { id: "operations", title: "Operational milestones", kind: "operations", events: (operations?.milestones ?? []).map((milestone) => ({ id: milestone.id, date: milestone.date, label: milestone.label, mdM: milestone.mdFt === null ? null : feetToMetres(milestone.mdFt), sourceId: null, sourcePage: milestone.page })) },
       { id: "offsets", title: "Offset-well data", kind: "offsets", sourceId: null, columns: [{ key: "well", label: "Well", unit: null }], rows: [] },
       { id: "coverage", title: "Data coverage", kind: "data-coverage", sourceId: null, columns: [{ key: "type", label: "Record type", unit: null }, { key: "count", label: "Records", unit: null }], rows: [
         { id: "survey", mdM: null, values: ["Survey stations", design.survey?.length ?? 0] },

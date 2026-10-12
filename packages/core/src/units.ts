@@ -26,7 +26,40 @@ export type Pressure = Pascals | Kilopascals | Megapascals | PoundsPerSquareInch
 export type Density = KilogramsPerCubicMetre | SpecificGravity | PoundsPerGallon;
 export type Duration = Seconds | Minutes | Hours | Days;
 
-const FEET_PER_METRE = 1 / 0.3048;
+/**
+ * Two feet, and the difference matters because this repository's own data uses both.
+ *
+ * The FORGE survey workbook declares **US survey feet** (exactly 1200/3937 m) and its stations were
+ * ingested with that factor; the drilling report labels its depths **feet** and they were converted
+ * with the international foot (exactly 0.3048 m) and preserved verbatim. `forgeDesign.sourceUnits`
+ * says so, and `index.test.ts` pins both to 1e-9.
+ *
+ * The two differ by 2 parts per million — about 7 mm at the 10,955 ft survey end. That is far below
+ * any surveying uncertainty, so it is never a real disagreement about where the well is; but
+ * converting with the wrong one and then displaying the result as the source's own number is a
+ * misquotation, and this SDK's whole claim is that units are explicit. So both factors are named,
+ * and a caller has to say which foot it means.
+ */
+export const METRES_PER_INTERNATIONAL_FOOT = 0.3048;
+export const METRES_PER_US_SURVEY_FOOT = 1200 / 3937;
+
+const FEET_PER_METRE = 1 / METRES_PER_INTERNATIONAL_FOOT;
+
+/**
+ * Depth in metres from a depth in international feet, and back.
+ *
+ * Unboxed on purpose. The boxed `Quantity` API above is the right thing for a value crossing a
+ * contract boundary, where carrying its unit is the point; it is the wrong thing for converting a
+ * log curve sample by sample, and the cost of not offering this is what the application actually
+ * did instead — a bare `0.3048` literal repeated at some two dozen call sites, in five private
+ * constants under four different names, with no way to grep for a conversion that was forgotten.
+ */
+export const feetToMetres = (valueFt: number): number => finite(valueFt, "depth in feet") * METRES_PER_INTERNATIONAL_FOOT;
+export const metresToFeet = (valueM: number): number => finite(valueM, "depth in metres") / METRES_PER_INTERNATIONAL_FOOT;
+
+/** The same pair for US survey feet, which is how survey coordinates were ingested. */
+export const usSurveyFeetToMetres = (valueFt: number): number => finite(valueFt, "depth in US survey feet") * METRES_PER_US_SURVEY_FOOT;
+export const metresToUsSurveyFeet = (valueM: number): number => finite(valueM, "depth in metres") / METRES_PER_US_SURVEY_FOOT;
 const PASCALS_PER_PSI = 6_894.757293168;
 const KILOGRAMS_PER_CUBIC_METRE_PER_PPG = 0.45359237 / 0.003785411784;
 const WATER_DENSITY_KG_PER_CUBIC_METRE = 1_000;
