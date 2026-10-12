@@ -1,0 +1,18 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run demo app",
+			"type": "shell",
+			"command": "corepack",
+			"args": [
+				"pnpm",
+				"--filter",
+				"demo",
+				"dev"
+			],
+			"isBackground": true,
+			"problemMatcher": []
+		}
+	]
+}

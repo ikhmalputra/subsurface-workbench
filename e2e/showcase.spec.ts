@@ -524,3 +524,29 @@ test("the active well's trajectory is a preset of its own workspace, sharing one
   await expect(page.getByTestId("curved-assembly-schematic")).toBeVisible();
   await expect(pinned).toContainText("2,000 m MD");
 });
+
+test("the days-vs-depth chart shares the one depth cursor with the construction and the mud log", async ({ page }) => {
+  await gotoApp(page, "/view-well/");
+  await page.locator(".demo-records-drawer > summary").click();
+  const chart = page.getByTestId("days-vs-depth");
+  await expect(chart).toBeVisible();
+
+  // Nine runs did not complete. Five report a base depth and no top, so they are lines rather than
+  // intervals — a band would have to invent the top.
+  await expect(chart.locator(".sw-dvd-trouble")).toHaveCount(9);
+  await expect(chart.locator(".sw-dvd-trouble[data-top-reported='false']")).toHaveCount(5);
+
+  // Pinning a depth anywhere puts the cursor on the chart: this was the only view on the drill
+  // stage's own axis that could not follow a depth at all.
+  await expect(chart.locator(".sw-dvd-depth-cursor")).toHaveCount(0);
+  await page.getByRole("spinbutton", { name: "Go to MD" }).fill("1500");
+  await page.getByRole("button", { name: "Locate depth" }).click();
+  await expect(chart.locator(".sw-dvd-depth-cursor")).toHaveCount(1);
+  await expect(chart.locator(".sw-dvd-depth-cursor")).toHaveAttribute("data-cursor-ft", "4921.3");
+
+  // And the mud log, in the same drawer, draws its own cursor from the same shared depth — one
+  // store value, two views, two units.
+  const file = page.getByTestId("well-file");
+  await file.getByRole("tab", { name: "Mud log" }).click();
+  await expect(file.getByTestId("log-tracks").locator(".sw-logs-cursor")).toHaveCount(1);
+});

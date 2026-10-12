@@ -1214,6 +1214,14 @@ line.sw-wd-grid { stroke: #e7ece9; stroke-width: 1; }
 .sw-dvd-line { fill: none; stroke: var(--sw-accent); stroke-width: 2.4; stroke-linejoin: round; }
 .sw-dvd-milestone { fill: var(--sw-surface); stroke: var(--sw-ink); stroke-width: 1.6; }
 .sw-dvd-focus line { stroke: var(--sw-select, #ff6a00); stroke-width: 1.6; stroke-dasharray: 4 3; }
+/* Runs that did not complete, at their reported depths. #d55e00 is the qualitative palette's
+   orange, so the mark reads the same in every theme and for colour-vision deficiency; the shape
+   (a full-width depth band) and the legend carry the meaning, not the hue alone. */
+.sw-dvd-trouble rect { fill: #d55e00; opacity: .12; }
+.sw-dvd-trouble[data-outcome="failed"] rect { opacity: .2; }
+.sw-dvd-depth-cursor line { stroke: var(--sw-select, #ff6a00); stroke-width: 1.4; }
+.sw-dvd-legend { margin: 0; font: 9.5px "IBM Plex Mono", monospace; color: var(--sw-muted); display: flex; gap: var(--sw-space-3); flex-wrap: wrap; align-items: center; }
+.sw-dvd-legend i { display: inline-block; width: 18px; height: 8px; background: #d55e00; opacity: .2; margin-inline-end: 4px; vertical-align: middle; }
 .sw-dvd-focus circle { fill: var(--sw-select, #ff6a00); stroke: var(--sw-surface); stroke-width: 2; }
 .sw-dvd-events { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--sw-space-2); }
 .sw-dvd-events button { display: grid; gap: 1px; padding: 5px 9px; border: 1px solid var(--sw-line); border-radius: var(--sw-radius-control); background: var(--sw-surface); color: var(--sw-ink); text-align: left; cursor: pointer; font: inherit; }

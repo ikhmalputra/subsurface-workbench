@@ -3,7 +3,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { scaleLinear } from "d3-scale";
-import { daysVsDepth, feetToMetres, intervalsOverlap, lasCurve, type DayCategory, type HoleSectionRecord, type LasFile, type RunKind, type ServiceRun, type WellDay, type WellOperations } from "@ikhmalputra/subsurface-core";
+import { daysVsDepth, feetToMetres, intervalsOverlap, lasCurve, metresToFeet, type DayCategory, type HoleSectionRecord, type LasFile, type RunKind, type ServiceRun, type WellDay, type WellOperations } from "@ikhmalputra/subsurface-core";
 import { AccessibleTable } from "./accessible-table.js";
 import { CommandButton } from "./ui.js";
 
@@ -119,12 +119,24 @@ export interface DaysVsDepthChartProps {
   readonly focusDate?: string | null;
   readonly onSelectDay?: (day: WellDay) => void;
   readonly title?: string;
+  /**
+   * Shared measured-depth cursor, in metres.
+   *
+   * This is the only view in the application on the axis the drilling stage actually reasons on —
+   * date and measured depth together — and it could neither accept a depth nor emit one, so the
+   * question "why did this interval take so long" was answered by reading four views in sequence
+   * and holding the depth in your head. The Y axis is already measured depth, so the cursor is an
+   * exact horizontal line and nothing is interpolated to draw it.
+   */
+  readonly cursorMdM?: number | null;
+  /** Emitted with the depth under the pointer, alongside `onSelectDay` for the day under it. */
+  readonly onSelectMd?: (mdM: number) => void;
 }
 
 const sectionFill = ["#eef4f0", "#e6eef6", "#f6efe4", "#efe9f5"];
 
 /** Classic drilling days-versus-depth curve with hole sections, milestones and a selectable day cursor. */
-export function DaysVsDepthChart({ operations, focusDate = null, onSelectDay, title = "Days vs depth" }: DaysVsDepthChartProps) {
+export function DaysVsDepthChart({ operations, focusDate = null, onSelectDay, title = "Days vs depth", cursorMdM = null, onSelectMd }: DaysVsDepthChartProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const points = daysVsDepth(operations);
   const width = 560, height = 340, margin = { top: 16, right: 18, bottom: 34, left: 58 };
@@ -136,17 +148,31 @@ export function DaysVsDepthChart({ operations, focusDate = null, onSelectDay, ti
   const focus = operations.days.find((day) => day.date === focusDate);
   const byDay = new Map(operations.days.map((day) => [day.dayFromSpud, day]));
 
+  // Runs that did not complete, on the only axis they have. The records carry depths and an outcome
+  // but no dates, so they are drawn across the plot at their depths rather than placed on the day
+  // axis — inventing a date for them would be inventing evidence.
+  //
+  // Five of FORGE's nine report a base depth and no top. Those are drawn as a line at the base
+  // rather than a band, because a band would have to invent a top; a run with neither depth is not
+  // drawn at all and the legend says how many.
+  const troubleRuns = operations.runs.filter((run) => run.outcome !== "completed");
+  const placedRuns = troubleRuns.filter((run) => run.baseFt !== null);
+  const cursorFt = cursorMdM === null ? null : metresToFeet(cursorMdM);
+
   function pick(event: PointerEvent<SVGSVGElement>) {
     const box = svgRef.current?.getBoundingClientRect();
-    if (!box || !onSelectDay) return;
+    if (!box) return;
     const day = Math.round(x.invert(((event.clientX - box.left) / box.width) * width));
     const hit = byDay.get(Math.max(0, Math.min(maxDay, day)));
-    if (hit) onSelectDay(hit);
+    if (hit) onSelectDay?.(hit);
+    // The pointer carries a depth as well as a day, and the depth is what every other view reads.
+    const depthFt = y.invert(((event.clientY - box.top) / box.height) * height);
+    if (onSelectMd && depthFt >= 0 && depthFt <= maxMd) onSelectMd(feetToMetres(depthFt));
   }
 
   return <figure className="sw-rec sw-dvd" data-testid="days-vs-depth">
     <figcaption className="sw-rec-head"><h3>{title}</h3><span>{maxDay} days spud → last report · TD {feet(maxMd)}</span></figcaption>
-    <svg ref={svgRef} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${title}: ${points.length} daily depths from spud to ${feet(points.at(-1)?.mdFt)}. Click to select a day.`} onPointerDown={pick}>
+    <svg ref={svgRef} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${title}: ${points.length} daily depths from spud to ${feet(points.at(-1)?.mdFt)}. ${placedRuns.length} of ${troubleRuns.length} runs that ended with a problem or failure are marked at their reported depths. Click to select a day and a depth.`} onPointerDown={pick}>
       {operations.sections.map((section, index) => <g key={section.id}>
         <rect x={margin.left} y={y(section.topFt)} width={width - margin.left - margin.right} height={Math.max(0, y(section.baseFt) - y(section.topFt))} fill={sectionFill[index % sectionFill.length]} />
         <text x={width - margin.right - 6} y={y(section.topFt) + 13} textAnchor="end" className="sw-dvd-band">{section.name} · {bitSize(section.bitSizeIn)}</text>
@@ -160,11 +186,26 @@ export function DaysVsDepthChart({ operations, focusDate = null, onSelectDay, ti
         const day = operations.days.find((item) => item.date === event.date)?.dayFromSpud ?? 0;
         return <circle key={event.id} cx={x(Math.max(0, day))} cy={y(event.mdFt as number)} r={4.5} className="sw-dvd-milestone"><title>{`${event.label} · ${shortDate(event.date)} · ${feet(event.mdFt)}`}</title></circle>;
       })}
+      {placedRuns.map((run) => {
+        const base = run.baseFt as number;
+        const topReported = run.topFt !== null;
+        return <g key={run.id} className="sw-dvd-trouble" data-run-id={run.id} data-outcome={run.outcome} data-top-reported={String(topReported)}>
+          {topReported
+            ? <rect x={margin.left} y={y(run.topFt as number)} width={width - margin.left - margin.right} height={Math.max(2, y(base) - y(run.topFt as number))} />
+            : <line x1={margin.left} x2={width - margin.right} y1={y(base)} y2={y(base)} />}
+          <title>{`${run.id} · ${runKindLabels[run.kind]} · ${run.outcome} · ${topReported ? `${feet(run.topFt)}–${feet(base)}` : `base ${feet(base)}, top not reported`} · ${run.summary}`}</title>
+        </g>;
+      })}
+      {cursorFt !== null && cursorFt >= 0 && cursorFt <= maxMd && <g className="sw-dvd-depth-cursor" data-cursor-ft={cursorFt.toFixed(1)}>
+        <line x1={margin.left} x2={width - margin.right} y1={y(cursorFt)} y2={y(cursorFt)} />
+        <text x={margin.left + 4} y={y(cursorFt) - 4} className="sw-dvd-tick">{feet(cursorFt)}</text>
+      </g>}
       {focus && focus.dayFromSpud >= 0 && <g className="sw-dvd-focus">
         <line x1={x(focus.dayFromSpud)} x2={x(focus.dayFromSpud)} y1={margin.top} y2={height - margin.bottom} />
         {focus.mdFt !== null && <circle cx={x(focus.dayFromSpud)} cy={y(focus.mdFt)} r={6} />}
       </g>}
     </svg>
+    {troubleRuns.length > 0 && <p className="sw-dvd-legend"><span><i aria-hidden="true" />{troubleRuns.length} of {operations.runs.length} runs ended with a problem or failure. {placedRuns.length} report a depth and are marked{placedRuns.length !== troubleRuns.length ? `; ${troubleRuns.length - placedRuns.length} report none` : ""}. {placedRuns.filter((run) => run.topFt === null).length} report a base and no top, drawn as a line rather than an interval. The records carry no dates, so none is placed on the day axis.</span></p>}
     <ul className="sw-dvd-events" aria-label="Milestones">
       {operations.milestones.map((event) => {
         const day = operations.days.find((item) => item.date === event.date);

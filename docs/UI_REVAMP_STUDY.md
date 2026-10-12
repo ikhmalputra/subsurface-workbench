@@ -260,8 +260,14 @@ decide whether this is a visualization or a fabrication:
   `tripping` 16, `rig` 12, `casing` 9, `circulating` 7, `logging` 6, `coring` 6, `testing` 3,
   `repair` 1, `other` 1. That is enough to colour the curve by what was actually happening, which is
   the thing a drilling engineer reads first.
-- **9 of 54 service runs** ended `problem` or `failed`, and each has a depth interval and dates — real
-  trouble markers, placeable on both axes.
+- **9 of 54 service runs** ended `problem` or `failed`. **Correction:** this first said "each has a
+  depth interval and dates". The records carry neither dates nor, in five of the nine cases, a top
+  depth — they report a base and nothing above it. So they are placeable on the depth axis only, and
+  five of them as a line rather than an interval, because a band would have to invent the top. All
+  nine are now marked, with the legend stating which is which. The same check killed a second idea:
+  colouring the curve by whether a day made hole looked attractive until the data showed 37 days
+  reporting footage and **39 reporting none at all** — so that colouring would have shown reporting
+  completeness while claiming to show progress.
 - **66 of 76 days carry a mud weight**, so the weight actually used can be drawn against the designed
   pressure window, with the other 10 days shown as not reported.
 
@@ -342,7 +348,9 @@ third state.)
    - Still to do: the remaining well routes as presets, and §9.3 as corrected above — a host-facing
      composition of the design panels, and phases as pane sets.
 6. **Cursor props for the blind views** — `AssemblyScene`, `CurvedAssemblySchematic`,
-   `CurvedSchematic`, and now `DaysVsDepthChart` (§9.2).
+   `CurvedSchematic`. `DaysVsDepthChart` is **done**: it takes `cursorMdM` and emits `onSelectMd`,
+   so the one view on the drill stage's own axis finally joins the shared depth. Its Y axis was
+   already measured depth, so the cursor is exact.
 7. **Retire the route gates** in favour of capability checks.
 8. **Shared sample selection** (§9.1) — additive to the store's existing `dataInteraction`, and the
    thing that makes Evaluate a workspace rather than a page.

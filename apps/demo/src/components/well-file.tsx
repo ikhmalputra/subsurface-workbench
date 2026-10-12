@@ -88,7 +88,12 @@ export function WellFile({ operations, components, selected, onSelectComponent, 
     </div>
     <div role="tabpanel" id={`${id}-${tab}`} aria-labelledby={`${id}-${tab}-tab`} className={`demo-file-panel is-${tab}`}>
       {tab === "history" && <>
-        <DaysVsDepthChart operations={ops} focusDate={focusDate} onSelectDay={(day) => { setFocusDate(day.date); if (day.mdFt !== null) { bridge.pinFt(day.mdFt); selectAtDepth(day.mdFt); } }} />
+        <DaysVsDepthChart operations={ops} focusDate={focusDate} cursorMdM={link.cursorMdM}
+          onSelectDay={(day) => { setFocusDate(day.date); if (day.mdFt !== null) { bridge.pinFt(day.mdFt); selectAtDepth(day.mdFt); } }}
+          /* A pointer pick carries a depth as well as a day, and it is applied after the day, so
+             picking in the plot pins where the pointer is while the milestone buttons — which have
+             no pointer position — pin the day's own reported depth. */
+          onSelectMd={link.pinCursor} />
         <WellHistoryLog operations={ops} selectedRange={range} focusDate={focusDate} onSelectDay={(day) => { setFocusDate(day.date); if (day.mdFt !== null) { bridge.pinFt(day.mdFt); selectAtDepth(day.mdFt); } }} />
       </>}
       {tab === "runs" && <ServiceRunLog operations={ops} selectedRange={range} focusRunId={focusRunId} onSelectRun={(run) => {
