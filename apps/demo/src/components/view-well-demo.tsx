@@ -3,7 +3,8 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useLayoutEffect, useMemo, useState } from "react";
-import { computeMinimumCurvature, getWellComponents, positionAtMeasuredDepth, sectionAtDepth, validateWellboreTrajectory, wellComponentsToAssembly } from "@ikhmalputra/subsurface-core";
+import { getWellComponents, positionAtMeasuredDepth, sectionAtDepth, validateWellboreTrajectory, wellComponentsToAssembly } from "@ikhmalputra/subsurface-core";
+import { designSurvey } from "../lib/well-data";
 import { createMockLogCurve } from "@ikhmalputra/subsurface-core/sandbox";
 import { createInitialSubsurfaceState } from "@ikhmalputra/subsurface-core/state";
 import { browserStateUrlHost, syncStateToUrl } from "@ikhmalputra/subsurface-core/state-url";
@@ -125,7 +126,7 @@ export function ViewWellDemo() {
     offsetM: [earth.volume.offsetStartM, cutAt(earth.volume.offsetStartM, earth.volume.offsetEndM, cuts.offset)] as const,
     tvdM: [design.groundTvdM ?? 0, cutAt(design.groundTvdM ?? 0, earth.volume.baseTvdM, cuts.depth)] as const,
   } : undefined, [earth.volume, volumeMode, threshold, cuts, design.groundTvdM]);
-  const survey = useMemo(() => { const stations = design.survey ?? []; return stations.length > 1 ? computeMinimumCurvature(stations, { tieIn: stations[0] }) : []; }, [design]);
+  const survey = designSurvey(design);
   const porosity = useMemo(() => {
     const stations = design.survey?.length ? design.survey : [positionAtMeasuredDepth(design, 0), positionAtMeasuredDepth(design, design.totalDepthM)];
     const path = validateWellboreTrajectory({

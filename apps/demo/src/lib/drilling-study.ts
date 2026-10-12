@@ -23,8 +23,19 @@ export function validateScope(scope: StudyScope, tdM: number): void {
   if (!Number.isFinite(scope.topM) || !Number.isFinite(scope.baseM) || scope.topM < 0 || scope.baseM <= scope.topM || scope.baseM > tdM) throw new Error(`Use an increasing MD interval within 0–${tdM.toFixed(1)} m.`);
 }
 
+/** Parse and check in one step. Kept for callers that hold only the source text. */
 export function readDrillingLog(text: string): LasFile {
-  const las = parseLas(text);
+  return checkDrillingLog(parseLas(text));
+}
+
+/**
+ * The study's own admission check on an already-parsed log.
+ *
+ * Separate from parsing so the study can share the one parse every other view uses and still
+ * refuse a file it cannot analyse — a log whose depths are not strictly increasing has not been
+ * depth-matched, and averaging over it would report a number for an interval it does not cover.
+ */
+export function checkDrillingLog(las: LasFile): LasFile {
   const depth = las.curves[0];
   if (!depth || depth.mnemonic !== "DEPTH" || !["ft", "m"].includes(depth.unit.toLowerCase())) throw new Error("The drilling log needs a first DEPTH curve in ft or m.");
   const factor = depth.unit.toLowerCase() === "ft" ? 0.3048 : 1;

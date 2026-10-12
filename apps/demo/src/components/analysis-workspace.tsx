@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import type { LasFile } from "@ikhmalputra/subsurface-core";
 import { LogTracks } from "@ikhmalputra/subsurface-react/records";
 import { CommandButton } from "@ikhmalputra/subsurface-react/ui";
 import { useDepthLink } from "@ikhmalputra/subsurface-react/state";
 import { useWorkspace } from "./workspace-provider";
-import { intervalEvidence, parseStudies, readDrillingLog, studySignature, studyStorageKey, validateScope } from "../lib/drilling-study";
+import { checkDrillingLog, intervalEvidence, parseStudies, studySignature, studyStorageKey, validateScope } from "../lib/drilling-study";
+import { lasAttempt } from "../lib/well-data";
+import { useLas } from "./use-las";
 import type { DrillingStudy } from "../lib/drilling-study";
 
 const phases = ["Scope", "Check inputs", "Review evidence", "Findings"] as const;
@@ -55,25 +56,17 @@ function WellStudy() {
   const [notice, setNotice] = useState("Define the investigation before reviewing evidence.");
   const [error, setError] = useState<string | null>(null);
   const [storageReady, setStorageReady] = useState(false);
-  const [log, setLog] = useState<{ url: string; text: string; las: LasFile } | null>(null);
-  const [logError, setLogError] = useState<string | null>(null);
   const logUrl = well.logUrl;
+  const source = useLas(logUrl);
   useEffect(() => {
     try { const saved = localStorage.getItem(studyStorageKey); setStudies(saved ? parseStudies(saved) : []); setStorageReady(true); }
     catch (caught) { setError(`Saved studies could not be loaded: ${caught instanceof Error ? caught.message : String(caught)}`); }
   }, []);
-  useEffect(() => {
-    if (!logUrl) return;
-    const controller = new AbortController();
-    setLogError(null);
-    fetch(logUrl, { signal: controller.signal }).then((response) => {
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return response.text();
-    }).then((text) => { if (!controller.signal.aborted) setLog({ url: logUrl, text, las: readDrillingLog(text) }); })
-      .catch((caught: unknown) => { if (!controller.signal.aborted) setLogError(caught instanceof Error ? caught.message : String(caught)); });
-    return () => controller.abort();
-  }, [logUrl]);
-  const activeLog = log?.url === logUrl ? log : null;
+  // The study insists on a depth-matched log, so it reads the shared parse through its own
+  // validation rather than re-fetching: same file, same bytes, one extra check that is memoized.
+  const checked = source.loaded ? lasAttempt(source.loaded.las, "drilling-study", checkDrillingLog) : null;
+  const activeLog = checked?.ok && source.loaded ? { url: source.loaded.url, text: source.loaded.text, las: checked.value } : null;
+  const logError = source.error ?? (checked && !checked.ok ? checked.error : null);
   const scope = { topM: top.trim() ? Number(top) : NaN, baseM: base.trim() ? Number(base) : NaN };
   const comparison = { topM: compareTop.trim() ? Number(compareTop) : NaN, baseM: compareBase.trim() ? Number(compareBase) : NaN };
   let scopeError: string | null = null;

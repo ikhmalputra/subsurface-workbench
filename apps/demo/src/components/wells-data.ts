@@ -1,8 +1,13 @@
-import { forgeDesign, forgeOperations, forgeSeismicSection, researchDesign, sProfileDesign } from "@ikhmalputra/subsurface-core";
-import type { SeismicSectionMetadata, WellDesign, WellOperations } from "@ikhmalputra/subsurface-core";
+import { projectWells } from "../lib/project";
+import type { ProjectWell } from "../lib/project";
 
-export const wells: readonly { id: string; label: string; design: WellDesign; operations?: WellOperations; logUrl?: string; seismic?: { url: string; meta: SeismicSectionMetadata } }[] = [
-  { id: "forge", label: "Utah FORGE 16A(78)-32 · documented", design: forgeDesign, operations: forgeOperations, logUrl: "/data/forge-16a-mudlog-10ft.las", seismic: { url: `/data/${forgeSeismicSection.section.file}`, meta: forgeSeismicSection } },
-  { id: "s-profile", label: "S-profile completion · synthetic", design: sProfileDesign },
-  { id: "research", label: "Open research reference · synthetic", design: researchDesign },
-];
+/**
+ * The workspace's well list, which is now a view of the project rather than a second copy of it.
+ *
+ * This file used to declare its own three wells, so a well's datasets were described twice and the
+ * petrophysics and production fixtures were described nowhere — they lived inside route components.
+ * `projectWells` is the one declaration; this shape stays because the workspace reads it widely,
+ * and keeping it narrow makes clear that the workspace does not care what else a well carries.
+ */
+export const wells: readonly ProjectWell[] = projectWells;
+export type { ProjectWell };

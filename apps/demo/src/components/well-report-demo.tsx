@@ -1,19 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
   forgeDesign,
   forgeOperations,
   getWellComponents,
   lasCurve,
-  parseLas,
   validateWellReportSpec,
 } from "@ikhmalputra/subsurface-core";
 import type { WellReportDrillingSection, WellReportHighlight, WellReportLogCurve, WellReportSpec, WellReportStudy, WellReportStudyTable, WellReportTableColumn, WellReportTableRow } from "@ikhmalputra/subsurface-core/contracts";
 import { useDepthLink, useSubsurfaceSelector, WellReportView } from "@ikhmalputra/subsurface-react/2d";
 import { useWorkspace } from "./workspace-provider";
 import { useWell } from "./wells";
-import type { WellDesign, WellOperations } from "@ikhmalputra/subsurface-core";
+import type { LasFile, WellDesign, WellOperations } from "@ikhmalputra/subsurface-core";
+import { lasAttempt } from "../lib/well-data";
+import { useLas } from "./use-las";
 
 const FOOT_TO_METRE = 0.3048;
 const reportNumberFormat = new Intl.NumberFormat("en-US", { maximumFractionDigits: 3 });
@@ -28,14 +29,16 @@ const logDefinitions = [
   { mnemonic: "TEMPOUT", color: "#a13d72" },
 ] as const;
 
+const emptyMudLog: MudLogReportData = { curves: [], mdStartM: null, mdEndM: null };
+
 interface MudLogReportData {
   readonly curves: readonly WellReportLogCurve[];
   readonly mdStartM: number | null;
   readonly mdEndM: number | null;
 }
 
-function toReportLogs(lasText: string): MudLogReportData {
-  const las = parseLas(lasText);
+/** A projection of the shared parse into metre-indexed report curves; see `lasProjection`. */
+function toReportLogs(las: LasFile): MudLogReportData {
   const depthCurve = lasCurve(las, "DEPTH");
   if (!depthCurve) throw new Error("The mud log has no DEPTH curve; report log depths cannot be linked safely.");
   const sourceIndexes: number[] = [];
@@ -801,31 +804,17 @@ export function WellReportDemo() {
   const selectedComponentId = useSubsurfaceSelector(store, (state) => state.activeAsset.componentId);
   const link = useDepthLink(true, store);
   const window = useSubsurfaceSelector(store, (state) => state.depthLink.window);
-  const [logState, setLogState] = useState<{ readonly status: "loading" | "ready" | "error"; readonly data: MudLogReportData; readonly error: string | null }>({
-    status: "loading", data: { curves: [], mdStartM: null, mdEndM: null }, error: null,
-  });
+  const source = useLas(logUrl);
   const schematicComponents = useMemo(() => getWellComponents(design), [design]);
-  useEffect(() => {
-    let active = true;
-    if (!logUrl) {
-      setLogState({ status: "ready", data: { curves: [], mdStartM: null, mdEndM: null }, error: null });
-      return;
-    }
-    setLogState({ status: "loading", data: { curves: [], mdStartM: null, mdEndM: null }, error: null });
-    fetch(logUrl)
-      .then((response) => {
-        if (!response.ok) throw new Error(`Could not load mud log: HTTP ${response.status}`);
-        return response.text();
-      })
-      .then((text) => {
-        const data = toReportLogs(text);
-        if (active) setLogState({ status: "ready", data, error: null });
-      })
-      .catch((error: unknown) => {
-        if (active) setLogState({ status: "error", data: { curves: [], mdStartM: null, mdEndM: null }, error: error instanceof Error ? error.message : String(error) });
-      });
-    return () => { active = false; };
-  }, [logUrl]);
+  // One parse, projected to the report's metre-indexed curves. The projection can refuse a file it
+  // cannot link safely (no DEPTH curve, depths not increasing), which is a fact about the data and
+  // is reported as such rather than thrown through the workspace.
+  const projected = source.loaded ? lasAttempt(source.loaded.las, "report-logs", toReportLogs) : null;
+  const logState = {
+    status: !logUrl ? "ready" as const : source.status === "error" || (projected && !projected.ok) ? "error" as const : projected?.ok ? "ready" as const : "loading" as const,
+    data: projected?.ok ? projected.value : emptyMudLog,
+    error: source.error ?? (projected && !projected.ok ? projected.error : null),
+  };
   const report = useMemo(() => design === forgeDesign ? makeReport(logState.data) : revisionReport(design, operations, logState.data), [design, operations, logState.data]);
   return <div className="demo-well-report-workspace">
     <p className="demo-correlation-status" role="status" data-testid="well-report-link-status">

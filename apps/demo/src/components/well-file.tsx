@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useId, useMemo, useState } from "react";
-import { computeMinimumCurvature, parseLas, sectionAtDepth, type FormationLayer, type LasFile, type SurveyPoint, type WellComponent, type WellOperations } from "@ikhmalputra/subsurface-core";
+import { useId, useState } from "react";
+import { sectionAtDepth, type FormationLayer, type SurveyPoint, type WellComponent, type WellOperations } from "@ikhmalputra/subsurface-core";
 import type { DepthLink } from "@ikhmalputra/subsurface-react";
 import { DaysVsDepthChart, HoleSectionLog, LogTracks, ServiceRunLog, WellHistoryLog, type DepthRange } from "@ikhmalputra/subsurface-react/records";
 import { SegyHeaderPanel } from "@ikhmalputra/subsurface-react/seismic";
@@ -9,6 +9,8 @@ import { SurveyTable } from "@ikhmalputra/subsurface-react/trajectory";
 import { WellSeismicSection, useSegy, useWellOnSection, type WellSeismicSource } from "./well-seismic";
 import { InfoTip } from "@ikhmalputra/subsurface-react";
 import { CommandButton } from "@ikhmalputra/subsurface-react/ui";
+import { useLas } from "./use-las";
+import { computedSurvey } from "../lib/well-data";
 
 const FT = 0.3048;
 const tabs = [
@@ -43,19 +45,6 @@ export interface WellFileProps {
   readonly link: DepthLink;
 }
 
-function useLas(url: string | undefined) {
-  const [state, setState] = useState<{ url: string; las: LasFile | null; error: string | null } | null>(null);
-  useEffect(() => {
-    if (!url) return;
-    let live = true;
-    fetch(url).then((response) => { if (!response.ok) throw new Error(`HTTP ${response.status}`); return response.text(); })
-      .then((text) => { if (live) setState({ url, las: parseLas(text), error: null }); })
-      .catch((error: unknown) => { if (live) setState({ url, las: null, error: error instanceof Error ? error.message : String(error) }); });
-    return () => { live = false; };
-  }, [url]);
-  return state?.url === url ? state : null;
-}
-
 /** Operational well file: hole sections, daily history, runs and mud log, all linked to the construction selection by depth. */
 export function WellFile({ operations, components, selected, onSelectComponent, logUrl, survey = [], formations = [], seismic, link }: WellFileProps) {
   const id = useId();
@@ -67,7 +56,7 @@ export function WellFile({ operations, components, selected, onSelectComponent, 
   const log = useLas(tab === "log" ? logUrl : undefined);
   const segy = useSegy(tab === "seismic" ? seismic?.url : undefined);
   const wellPath = useWellOnSection(survey, seismic);
-  const stations = useMemo(() => survey.length > 1 ? computeMinimumCurvature(survey, { tieIn: survey[0] }) : [], [survey]);
+  const stations = computedSurvey(survey);
 
   if (!operations) return <section className="demo-file" aria-label="Well file" data-testid="well-file">
     <h2 className="demo-file-title">Well file</h2>
@@ -106,14 +95,14 @@ export function WellFile({ operations, components, selected, onSelectComponent, 
         const section = ops.sections.find((item) => item.id === run.holeSection);
         if (section) onSelectComponent(section.holeComponentId);
       }} />}
-      {tab === "log" && (log?.las ? <LogTracks las={log.las} tracks={tracks} markers={markers} intervals={intervals} selectedRange={range} cursorFt={cursorFt} title="Mud log · 10 ft means"
+      {tab === "log" && (log.loaded ? <LogTracks las={log.loaded.las} tracks={tracks} markers={markers} intervals={intervals} selectedRange={range} cursorFt={cursorFt} title="Mud log · 10 ft means"
         depthWindowFt={link.linked ? (link.window ? [link.window[0] / FT, link.window[1] / FT] : null) : undefined}
         onDepthWindowChange={link.linked ? (next) => link.setWindow(next ? [Math.round(next[0] * FT), Math.round(next[1] * FT)] : null) : undefined}
         onCursorChange={link.linked ? (depthFt) => link.setCursorMdM(depthFt === null ? null : depthFt * FT) : undefined} onSelectDepth={(depth) => {
         setCursorFt(depth);
         selectAtDepth(depth);
         setFocusRunId(intervals.find((item) => depth >= item.topFt && depth <= item.baseFt)?.id ?? null);
-      }} /> : <p className="demo-file-empty" role="status">{log?.error ? `Mud log could not be loaded (${log.error}).` : "Loading mud log…"}</p>)}
+      }} /> : <p className="demo-file-empty" role="status">{log.error ? `Mud log could not be loaded (${log.error}).` : "Loading mud log…"}</p>)}
       {tab === "survey" && (stations.length ? <>
         <SurveyTable survey={stations} selectedMdM={link.pinnedMdM} onSelectMd={(md) => { setCursorFt(md / FT); selectAtDepth(md / FT); }} maxHeight={420} />
         <p className="demo-tipline">{stations.length} stations · minimum curvature <InfoTip wide label="About the survey">{stations.length} stations, recomputed by minimum curvature from MD, inclination and azimuth (tied in at the first station). Read-only here; pass <code>onChange</code> to make the same table editable. Selecting a row pins the depth in every linked view.</InfoTip></p>
