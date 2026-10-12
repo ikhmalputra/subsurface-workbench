@@ -107,7 +107,11 @@ exported files; integrators can use their own static host and security headers.
   the schematic as a track beside the mud log and the survey on one depth axis,
   so a depth picked anywhere is drawn on all of them — without loading a 3D
   canvas; its View selector exposes cutaway, comparison, curved and subsurface
-  projections. The well file docks under the canvas instead of below the fold. The inspector starts without an assumed
+  projections. The section's toolbar zooms the shared depth window (buttons or
+  ⌘/Ctrl + wheel about the pointer depth) and shows or hides tracks; the strip
+  never renders below a readable scale, scrolling inside its box with the ruler
+  and track heads pinned when a dock or a short window leaves it less room.
+  The well file docks under the canvas instead of below the fold. The inspector starts without an assumed
   component. Properties, the searchable component register and drawing evidence
   are inspector panels. The inspector can be hidden to reclaim drawing width;
   sourced component intervals can be focused, exact MD can be located numerically,

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { CommandButton } from "@ikhmalputra/subsurface-react/ui";
 import { metresToFeet } from "@ikhmalputra/subsurface-core";
 import type { ComputedStation, FormationLayer, SurveyPoint, WellAssembly, WellComponent, WellOperations } from "@ikhmalputra/subsurface-core";
 import type { DepthLink } from "@ikhmalputra/subsurface-react";
@@ -48,6 +49,18 @@ function niceTicks(domain: readonly [number, number], count: number): number[] {
   return ticks;
 }
 const HEAD_PX = 36;
+const TOOLBAR_PX = 32;
+/**
+ * The tracks never render shorter than this. A section that fits whatever height it is given
+ * squashes the moment a dock opens or the window shrinks — 3,339 m into 280px is 0.08 px/m, and
+ * every casing becomes a line. Below this the strip keeps its scale and scrolls inside its box,
+ * with the ruler and the track heads pinned, which is how a well-log viewer behaves.
+ */
+const MIN_TRACK_PX = 560;
+const MIN_SPAN_M = 20;
+const ZOOM_STEP = 0.6;
+type TrackId = "construction" | "log" | "survey";
+const fmtM = (value: number) => Math.round(value).toLocaleString("en-US");
 
 /**
  * Two drilling curves by default. Each log track is 120px wide, and at 1440px with the inspector
@@ -87,7 +100,10 @@ export interface WellSectionProps {
 
 export function WellSection({ assembly, components, survey, stations, formations = [], totalDepthM, operations, logUrl, selectedId, onSelect, onSelectMd, link, showFormations = true, markers = [], dlsLimitDegPer30m, highlights = [] }: WellSectionProps) {
   const host = useRef<HTMLDivElement>(null);
+  const scroller = useRef<HTMLDivElement>(null);
+  const rulerSvg = useRef<SVGSVGElement>(null);
   const [height, setHeight] = useState(640);
+  const [shown, setShown] = useState<Record<TrackId, boolean>>({ construction: true, log: true, survey: true });
   useEffect(() => {
     const element = host.current;
     if (!element) return;
@@ -100,9 +116,25 @@ export function WellSection({ assembly, components, survey, stations, formations
   // the same for every track, so the tallest requirement wins for all of them.
   const surfaceCount = assembly.items.filter((item) => item.topM <= 0 && item.bottomM <= 0).length;
   const frame = useMemo(() => ({ ...FRAME, top: Math.max(96, surfaceCount * 22 + 24) }), [surfaceCount]);
-  const trackHeight = Math.max(240, height - HEAD_PX);
+  const trackHeight = Math.max(MIN_TRACK_PX, height - HEAD_PX - TOOLBAR_PX);
 
   const windowM = link.window ?? ([0, totalDepthM] as const);
+  const span = windowM[1] - windowM[0];
+  const zoomed = link.window !== null && span < totalDepthM - 1e-6;
+  /**
+   * Zoom is a change of the shared depth window, so the log preview, the 3D scene and every other
+   * linked view follow it; the anchor stays where it was on screen, like a map. Zooming out past
+   * the whole well clears the window rather than clamping it, which is what "whole well" means
+   * to every other consumer of the link.
+   */
+  const zoomBy = (factor: number, anchorMdM?: number) => {
+    const next = Math.min(totalDepthM, Math.max(MIN_SPAN_M, span * factor));
+    if (next >= totalDepthM) { link.setWindow(null); return; }
+    const pivot = anchorMdM ?? link.cursorMdM ?? link.pinnedMdM ?? windowM[0] + span / 2;
+    const ratio = Math.min(1, Math.max(0, (pivot - windowM[0]) / span));
+    const start = Math.min(Math.max(0, pivot - ratio * next), totalDepthM - next);
+    link.setWindow([start, start + next]);
+  };
   const bridge = depthBridge(link);
   const log = useLas(logUrl);
   const y = linearScale([windowM[0], windowM[1]], [frame.top, trackHeight - frame.bottom]);
@@ -126,30 +158,71 @@ export function WellSection({ assembly, components, survey, stations, formations
     .filter((band) => Number.isFinite(band.topM) && Number.isFinite(band.baseM) && band.baseM > band.topM && band.baseM > windowM[0] && band.topM < windowM[1])
     .map((band) => { const top = y(Math.max(windowM[0], band.topM)); const base = y(Math.min(windowM[1], band.baseM)); return { ...band, top, height: Math.max(1, base - top) }; });
 
+  // Ctrl/⌘ + wheel zooms about the depth under the pointer; a plain wheel scrolls the strip when
+  // it is taller than its box and pans the window when it is not. The schematic track keeps its
+  // own wheel handling, which does the same two things, so its events are left alone.
+  useEffect(() => {
+    const element = scroller.current;
+    if (!element) return;
+    const onWheel = (event: WheelEvent) => {
+      if (event.target instanceof Element && event.target.closest(".sw-asm-schematic")) return;
+      if (event.ctrlKey || event.metaKey) {
+        event.preventDefault();
+        const rect = rulerSvg.current?.getBoundingClientRect();
+        const plot = trackHeight - frame.top - frame.bottom;
+        const anchor = rect ? windowM[0] + ((event.clientY - rect.top - frame.top) / plot) * span : undefined;
+        zoomBy(Math.exp(event.deltaY * 0.004), anchor);
+      } else if (zoomed && element.scrollHeight <= element.clientHeight + 1) {
+        const start = Math.min(Math.max(0, windowM[0] + event.deltaY * span / 900), totalDepthM - span);
+        if (start !== windowM[0]) { event.preventDefault(); link.setWindow([start, start + span]); }
+      }
+    };
+    element.addEventListener("wheel", onWheel, { passive: false });
+    return () => element.removeEventListener("wheel", onWheel);
+  });
+
+  const trackToggles: { id: TrackId; label: string; available: boolean }[] = [
+    { id: "construction", label: "Construction", available: true },
+    { id: "log", label: "Mud log", available: !!logUrl },
+    { id: "survey", label: "Survey", available: survey.length > 1 },
+  ];
   const ticks = niceTicks(windowM, Math.max(4, Math.round(trackHeight / 70)));
   return <div ref={host} className="demo-section" data-testid="well-section" data-window={`${Math.round(windowM[0])},${Math.round(windowM[1])}`}>
+    <div className="demo-section-toolbar" role="toolbar" aria-label="Section tools">
+      <div className="demo-section-zoom" role="group" aria-label="Depth window">
+        <CommandButton kind="selection" icon="zoomIn" aria-label="Zoom in section" onClick={() => zoomBy(ZOOM_STEP)} disabled={span <= MIN_SPAN_M + 1e-6} />
+        <CommandButton kind="selection" icon="zoomOut" aria-label="Zoom out section" onClick={() => zoomBy(1 / ZOOM_STEP)} disabled={!zoomed} />
+        <CommandButton kind="selection" icon="fit" aria-label="Fit whole well in section" onClick={() => link.setWindow(null)} disabled={!zoomed} />
+        <span className="demo-section-window">{fmtM(windowM[0])}–{fmtM(windowM[1])} m MD{zoomed ? "" : " · whole well"} · ⌘/Ctrl + wheel to zoom</span>
+      </div>
+      <div className="demo-section-toggles" role="group" aria-label="Tracks">
+        {trackToggles.filter((track) => track.available).map((track) => <CommandButton key={track.id} kind="selection" aria-label={`${track.label} track`} aria-pressed={shown[track.id]} onClick={() => setShown((current) => ({ ...current, [track.id]: !current[track.id] }))}>{track.label}</CommandButton>)}
+      </div>
+    </div>
+    <div ref={scroller} className="demo-section-scroll">
+    <div className="demo-section-strip">
     {bands.length > 0 && <div className="demo-section-bands" aria-hidden="true">
       {bands.map((band) => <div key={band.id} className="demo-section-band" data-highlight={band.id} data-focused={band.focused || undefined} style={{ top: HEAD_PX + band.top, height: band.height }}><span>{band.label}</span></div>)}
     </div>}
     <div className="demo-section-track demo-section-ruler" aria-hidden="true">
       <div className="demo-track-head"><span>MD</span><small>m</small></div>
-      <svg width={56} height={trackHeight} viewBox={`0 0 56 ${trackHeight}`}>
+      <svg ref={rulerSvg} width={56} height={trackHeight} viewBox={`0 0 56 ${trackHeight}`}>
         {bands.map((band) => <rect key={band.id} className="demo-ruler-band" data-highlight={band.id} data-focused={band.focused || undefined} x={0} y={band.top} width={56} height={band.height}><title>{band.label}</title></rect>)}
         {ticks.map((tick) => <g key={tick}><line x1={44} x2={56} y1={y(tick)} y2={y(tick)} className="demo-ruler-tick" /><text x={40} y={y(tick) + 3} textAnchor="end" className="demo-ruler-label">{tick.toLocaleString("en-US")}</text></g>)}
         {cursorY !== null && <g className="demo-ruler-cursor" data-cursor-md={Math.round(link.cursorMdM!)}><line x1={0} x2={56} y1={cursorY} y2={cursorY} /><rect x={2} y={cursorY - 17} width={44} height={14} rx={3} /><text x={24} y={cursorY - 6} textAnchor="middle">{Math.round(link.cursorMdM!).toLocaleString("en-US")}</text></g>}
       </svg>
     </div>
 
-    <div className="demo-section-track demo-section-construction">
+    {shown.construction && <div className="demo-section-track demo-section-construction">
       <div className="demo-track-head"><span>Construction</span><small>{components.length} records</small></div>
       <div className="demo-track-body" style={{ height: trackHeight }}>
         <AssemblySchematic assembly={assembly} survey={stations} formations={showFormations ? formations : undefined} assetBaseUrl="/well-components"
           selectedId={selectedId} onSelect={onSelect} frame={frame}
           depthWindow={link.window} onDepthWindowChange={link.setWindow} cursorDepthM={link.cursorMdM} onCursorDepthChange={link.setCursorMdM} />
       </div>
-    </div>
+    </div>}
 
-    {logUrl && <div className="demo-section-track demo-section-log">
+    {logUrl && shown.log && <div className="demo-section-track demo-section-log">
       <div className="demo-track-head"><span>Mud log</span><small>{log.loaded ? "ROP · WOB · 10 ft means · ft" : log.status === "error" ? "unavailable" : "loading"}</small></div>
       <div className="demo-track-body" style={{ height: trackHeight }}>
         {log.loaded
@@ -161,7 +234,7 @@ export function WellSection({ assembly, components, survey, stations, formations
       </div>
     </div>}
 
-    {survey.length > 1 && <div className="demo-section-track demo-section-survey">
+    {survey.length > 1 && shown.survey && <div className="demo-section-track demo-section-survey">
       <div className="demo-track-head"><span>Survey</span><small>{survey.length} stations · inc / azi / DLS</small></div>
       <div className="demo-track-body" style={{ height: trackHeight }}>
         <TrajectoryLog survey={survey} height={trackHeight} frame={frame} domainMdM={windowM} mdWindow={null}
@@ -169,5 +242,7 @@ export function WellSection({ assembly, components, survey, stations, formations
           markers={[...shoes.map(({ mdM, label }) => ({ mdM, label })), ...markers]} dlsLimitDegPer30m={dlsLimitDegPer30m} />
       </div>
     </div>}
+    </div>
+    </div>
   </div>;
 }

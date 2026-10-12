@@ -880,15 +880,34 @@ body { margin: 0; background: var(--sw-paper); color: var(--sw-ink); font-family
    ========================================================================== */
 .demo-section-pane { padding: 0; }
 .demo-section {
-  display: flex; align-items: stretch; height: 100%; min-height: 0;
-  overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain;
-  background: var(--sw-surface);
+  display: flex; flex-direction: column; height: 100%; min-height: 0;
+  overflow: hidden; background: var(--sw-surface);
 }
+/* The strip keeps its scale and scrolls inside its box in both directions; the ruler stays at
+   the left edge and every track head at the top, so a scrolled section still reads. */
+.demo-section-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.demo-section-strip { position: relative; display: flex; align-items: stretch; min-width: 100%; width: max-content; }
+.demo-section-toolbar {
+  flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: var(--sw-space-3);
+  height: 32px; padding: 0 8px; border-bottom: 1px solid var(--sw-line); background: var(--sw-paper); overflow: hidden;
+}
+.demo-section-toolbar [role="group"] { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.demo-section-toolbar button[data-ui-kind="selection"] {
+  min-height: 24px; padding: 2px 8px; border: 1px solid transparent; border-radius: 3px; background: transparent;
+  color: var(--sw-ink); font: inherit; font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;
+}
+.demo-section-toolbar button[data-ui-kind="selection"][data-icon-only] { width: 26px; padding: 2px; justify-content: center; }
+.demo-section-toolbar button[data-ui-kind="selection"]:hover:enabled { background: var(--sw-hover); border-color: var(--sw-line); }
+.demo-section-toolbar button[data-ui-kind="selection"][aria-pressed="true"] { background: var(--sw-selected); border-color: var(--sw-line); font-weight: 600; }
+.demo-section-toolbar button[data-ui-kind="selection"]:disabled { opacity: .45; cursor: not-allowed; }
+.demo-section-toolbar button[data-ui-kind="selection"]:focus-visible { outline: 2px solid var(--sw-focus); outline-offset: 1px; }
+.demo-section-window { margin-left: 6px; font: 10.5px "IBM Plex Mono", monospace; color: var(--sw-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .demo-section-track { flex: 0 0 auto; display: grid; grid-template-rows: 36px 1fr; min-width: 0; border-right: 1px solid var(--sw-line); }
 .demo-section-track:last-child { border-right: 0; }
 .demo-section-construction { flex: 1 1 360px; min-width: 320px; max-width: 480px; }
-.demo-section-ruler { position: sticky; left: 0; z-index: 2; background: var(--sw-surface); }
+.demo-section-ruler { position: sticky; left: 0; z-index: 4; background: var(--sw-surface); }
 .demo-track-head {
+  position: sticky; top: 0; z-index: 3;
   display: flex; align-items: baseline; gap: var(--sw-space-2); padding: 0 10px;
   border-bottom: 1px solid var(--sw-line); background: var(--sw-paper);
   font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden;
@@ -923,7 +942,7 @@ body { margin: 0; background: var(--sw-paper); color: var(--sw-ink); font-family
 .demo-section-track { flex: 0 0 auto; }
 /* The construction column takes the room it can get and never shrinks below 300px: its labels
    sit to the right of the bore and clip before that. The survey is the track that scrolls. */
-.demo-section-construction { flex: 1 0 300px; min-width: 300px; max-width: 480px; }
+.demo-section-construction { flex: 1 0 400px; min-width: 400px; max-width: 520px; }
 .demo-track-body > .sw-rec, .demo-track-body > .sw-traj-plot { display: block; overflow: hidden; height: 100%; }
 .demo-track-body .sw-logs-readout {
   position: absolute; left: 0; right: 0; bottom: 0; height: 26px; margin: 0; padding: 4px 8px;
@@ -997,6 +1016,7 @@ body { margin: 0; background: var(--sw-paper); color: var(--sw-ink); font-family
    392px and the whole page scrolled sideways — measured, after the phone check had been passing
    on the curved default for months. */
 @media (max-width: 1180px) { .demo-view-traj, .demo-view-section { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 720px) { .demo-section-window { display: none; } .demo-section-construction { flex-basis: 320px; min-width: 320px; } }
 /* The docked seven-curve log renders at its natural width, so its 200px height is 200px on screen
    and the dock shows it whole; stretched to the dock's width it was 320px tall and the lower half
    sat below the dock's scroll edge. */
@@ -1051,23 +1071,26 @@ body { margin: 0; background: var(--sw-paper); color: var(--sw-ink); font-family
 .demo-ruler-band { fill: var(--sw-accent); opacity: .16; }
 .demo-ruler-band[data-highlight="comparison"] { fill: var(--sw-ink); opacity: .1; }
 /* The evidence dock: the log beside the registers, both at the dock's height. */
-.demo-records-drawer .demo-study-evidence { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sw-space-3); align-items: start; height: 340px; max-height: 340px; overflow: hidden; }
+/* The dock's height follows the window's: 340px at 980px tall, 220px at 800px, so a short window
+   shares its height between the section and the evidence instead of giving the dock all of it. */
+.demo-analysis { --demo-dock: clamp(220px, calc(100dvh - 640px), 340px); }
+.demo-records-drawer .demo-study-evidence { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sw-space-3); align-items: start; height: var(--demo-dock); max-height: var(--demo-dock); overflow: hidden; }
 /* Each column scrolls on its own, so the registers' header never leaves with the log. */
-.demo-study-evidence-log { display: grid; align-content: start; gap: var(--sw-space-2); min-width: 0; max-height: 320px; overflow-y: auto; scrollbar-width: thin; }
+.demo-study-evidence-log { display: grid; align-content: start; gap: var(--sw-space-2); min-width: 0; max-height: calc(var(--demo-dock) - 20px); overflow-y: auto; scrollbar-width: thin; }
 .demo-study-evidence-log:focus-visible { outline: 3px solid var(--sw-focus); outline-offset: -3px; }
 .demo-study-evidence-log .sw-logs-frame svg { width: auto; }
 .demo-study-evidence-log .sw-accessible-table, .demo-study-evidence-log .sw-sr-only + details { display: none; }
 .demo-study-evidence-log .sw-rec { border: 0; padding: 0; background: transparent; }
 .demo-study-evidence-log > details > summary { font-size: 12px; cursor: pointer; padding: var(--sw-space-2) 0; }
 .demo-study-evidence .demo-study-context { border-radius: var(--sw-radius-control); }
-.demo-study-evidence .demo-study-context-table { max-height: 240px; }
+.demo-study-evidence .demo-study-context-table { max-height: calc(var(--demo-dock) - 100px); }
 /* Measured at a 980px window: 158px of chrome above the canvas, the 370px dock and the 60px
    status line below it. The first budget borrowed View well's 298px and left 90px unused. */
 .demo-analysis:has(.demo-records-drawer[open]) .demo-fill,
-.demo-analysis:has(.demo-records-drawer[open]) .demo-view-grid > .demo-side { height: calc(100dvh - 615px); min-height: 280px; }
+.demo-analysis:has(.demo-records-drawer[open]) .demo-view-grid > .demo-side { height: calc(100dvh - 275px - var(--demo-dock)); min-height: 280px; }
 /* Zones across the section: a translucent fill over every track, labelled at its top edge. */
 .demo-section { position: relative; }
-.demo-section-bands { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+.demo-section-bands { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
 /* The fill is translucent through color-mix, not opacity: opacity would fade the label with it. */
 .demo-section-band { position: absolute; left: 0; right: 0; background: color-mix(in srgb, var(--sw-accent) 10%, transparent); border-top: 1px solid var(--sw-accent); border-bottom: 1px solid var(--sw-accent); }
 .demo-section-band[data-highlight="comparison"] { background: color-mix(in srgb, var(--sw-ink) 7%, transparent); border-color: var(--sw-muted); }
