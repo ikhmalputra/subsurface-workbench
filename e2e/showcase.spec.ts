@@ -550,3 +550,32 @@ test("the days-vs-depth chart shares the one depth cursor with the construction 
   await file.getByRole("tab", { name: "Mud log" }).click();
   await expect(file.getByTestId("log-tracks").locator(".sw-logs-cursor")).toHaveCount(1);
 });
+
+test("the well section puts construction, log and survey on one depth axis in one viewport", async ({ page }) => {
+  await gotoApp(page, "/view-well/");
+  await selectWellView(page, "section", ["wellsection"]);
+  const section = page.getByTestId("well-section");
+  await expect(section).toBeVisible();
+  for (const testId of ["assembly-schematic", "log-tracks", "trajectory-log"]) await expect(section.getByTestId(testId)).toBeAttached();
+
+  // No scrolling to see linked things: the section sits inside the viewport, and so does the
+  // depth command line under it.
+  const box = (await section.boundingBox())!;
+  expect(box.y).toBeGreaterThan(0);
+  expect(box.y + box.height).toBeLessThanOrEqual(1000);
+
+  // Pin a depth; every track draws its cursor at the same pixel row. Within a pixel, because the
+  // three components compute the mapping independently and the test is that they agree.
+  await page.getByRole("spinbutton", { name: "Go to MD" }).fill("1558");
+  await page.getByRole("button", { name: "Locate depth" }).click();
+  const rows = await Promise.all([
+    section.locator(".demo-ruler-cursor line"),
+    section.locator(".sw-logs-cursor"),
+    section.locator("[data-testid='traj-cursor'] line").first(),
+  ].map(async (locator) => { await expect(locator).toBeAttached(); return (await locator.boundingBox())!.y; }));
+  for (const row of rows) expect(Math.abs(row - rows[0]!)).toBeLessThanOrEqual(1);
+  await expect(section.locator(".demo-ruler-cursor")).toHaveAttribute("data-cursor-md", "1558");
+
+  // And the selection reached the record the depth falls in, with no second click anywhere.
+  await expect(page.getByTestId("demo-record")).toHaveAttribute("data-component-id", "intermediate-hole");
+});

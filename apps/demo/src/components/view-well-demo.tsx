@@ -16,6 +16,7 @@ import { CurvedSchematic } from "@ikhmalputra/subsurface-react/schematic";
 import { InteractiveViewport } from "@ikhmalputra/subsurface-react/viewport";
 import { TrajectoryLog, TrajectoryPlanView, TrajectorySectionView } from "@ikhmalputra/subsurface-react/trajectory";
 import { WellFile } from "./well-file";
+import { WellSection } from "./well-section";
 import { WellSeismicSection, useSceneSeismic, useSegy, useWellOnSection } from "./well-seismic";
 import { RecordCard, useWell, wells } from "./wells";
 import { InterpretationControls } from "./interpretation-controls";
@@ -31,10 +32,10 @@ interface VolumeCuts { readonly along: number; readonly offset: number; readonly
 const FULL_VOLUME: VolumeCuts = { along: 100, offset: 100, depth: 100 };
 const cutAt = (start: number, end: number, percent: number) => start + (end - start) * Math.max(percent, 2) / 100;
 
-type Layout = "split" | "seismic" | "earth" | "schematic" | "scene" | "curved" | "profile" | "trajectory";
+type Layout = "section" | "split" | "seismic" | "earth" | "schematic" | "scene" | "curved" | "profile" | "trajectory";
 
 /** The seven panes this route can show. A preset is a set of them, not an alternative to them. */
-type PaneId = "curved" | "profile" | "schematic" | "seismic" | "earth" | "survey" | "cutaway" | "plan" | "section";
+type PaneId = "wellsection" | "curved" | "profile" | "schematic" | "seismic" | "earth" | "survey" | "cutaway" | "plan" | "section";
 
 /**
  * Which panes each preset shows.
@@ -45,6 +46,9 @@ type PaneId = "curved" | "profile" | "schematic" | "seismic" | "earth" | "survey
  * is two panes — the interface just could not say so.
  */
 const panesFor: Readonly<Record<Layout, readonly PaneId[]>> = {
+  // One depth axis with the construction, the mud log and the survey as tracks on it. The other
+  // presets are alternatives; this is the one where the depth link can actually be seen.
+  section: ["wellsection"],
   curved: ["curved"],
   profile: ["profile"],
   schematic: ["schematic"],
@@ -59,6 +63,7 @@ const panesFor: Readonly<Record<Layout, readonly PaneId[]>> = {
 };
 
 const layouts: readonly { value: Layout; label: string }[] = [
+  { value: "section", label: "Well section · construction, log & survey" },
   { value: "split", label: "2.5D + 3D" },
   { value: "seismic", label: "2.5D + seismic" },
   { value: "earth", label: "3D well + seismic + survey" },
@@ -247,6 +252,10 @@ export function ViewWellDemo() {
       </details>}
     </div>
     <PaneGrid active={panes} className={`demo-view-grid demo-view-${layout}${inspectorVisible ? "" : " demo-inspector-hidden"}`}>
+      <Pane id="wellsection" deferUntilShown className="demo-fill demo-section-pane">
+        <WellSection assembly={assembly} components={components} survey={survey} stations={design.survey} formations={design.formations} totalDepthM={design.totalDepthM}
+          operations={operations} logUrl={logUrl} selectedId={highlighted ?? null} onSelect={(id) => setSelectedId(id)} onSelectMd={selectAtMd} link={link} showFormations={showFormations} />
+      </Pane>
       <Pane id="curved" deferUntilShown className="demo-fill demo-section-view"><CurvedAssemblySchematic assembly={assembly} survey={design.survey} formations={showFormations ? design.formations : undefined} assetBaseUrl="/well-components" selectedId={highlighted} onSelect={setSelectedId} /></Pane>
       <Pane id="profile" deferUntilShown className="demo-fill demo-section-view"><InteractiveViewport name="Curved well section"><CurvedSchematic key={design.id} design={design} components={components} selectedId={picked?.id ?? ""} onSelect={setSelectedId} mode={sectionMode} onModeChange={setSectionMode} layersVisible /></InteractiveViewport></Pane>
       <Pane id="schematic" deferUntilShown className="demo-fill"><AssemblySchematic assembly={assembly} survey={design.survey} formations={showFormations ? design.formations : undefined} assetBaseUrl="/well-components" selectedId={highlighted} onSelect={(id) => setSelectedId(id)} exploded={exploded} onExplodedChange={setExploded} title="Construction schematic" {...schematicLink} /></Pane>
@@ -293,7 +302,8 @@ export function ViewWellDemo() {
             <div><dt>Depth datum</dt><dd>{design.depthDatum ?? "Not reported"}</dd></div>
           </dl>
           <h2>This view</h2>
-          <p>{layout === "earth" ? "3D well, seismic volume and trajectory survey share the selected well and depth."
+          <p>{layout === "section" ? "One depth axis. The construction, the mud log and the survey are tracks on it: hover anywhere for the depth cursor across all of them, pick a component or a depth in any one and the others follow."
+            : layout === "earth" ? "3D well, seismic volume and trajectory survey share the selected well and depth."
             : layout === "seismic" ? "Compare the construction schematic with the seismic section along this well."
             : layout === "trajectory" ? "Plan view and vertical section of the surveyed path, marking every casing shoe."
             : layout === "profile" ? "Interval tracks beside the measured-depth schematic."

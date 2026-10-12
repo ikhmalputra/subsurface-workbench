@@ -11,6 +11,9 @@ import { formatDepth, formatInches } from "./assembly-format.js";
 import { ExplodedParts } from "./assembly-exploded.js";
 import { CommandButton } from "./ui.js";
 
+/** Plot inset for a view drawn as a track on a shared depth axis. */
+export interface TrackFrame { readonly top: number; readonly bottom: number; readonly chromeless?: boolean }
+
 export interface AssemblySchematicProps {
   readonly assembly: WellAssembly;
   readonly assetBaseUrl: string;
@@ -35,6 +38,16 @@ export interface AssemblySchematicProps {
   readonly onDepthWindowChange?: (window: readonly [number, number] | null) => void;
   /** Measured depth drawn as a cursor line, e.g. the pointer depth in a linked seismic section or log. */
   readonly cursorDepthM?: number | null;
+  /**
+   * Render as a track on a shared depth axis.
+   *
+   * `top` and `bottom` fix the plot inset in pixels, so a container laying several depth views side
+   * by side can give every one the same mapping from depth to pixel; `chromeless` drops the panel's
+   * own header and toolbar so the container can supply one header row for all tracks. Without it
+   * the schematic picks its own inset from the surface-equipment stack and grows taller than its
+   * box when annotations need room — right for a standalone panel, wrong beside other tracks.
+   */
+  readonly frame?: TrackFrame;
   /** Reports the measured depth under the pointer, `null` when it leaves. */
   readonly onCursorDepthChange?: (depthM: number | null) => void;
 }
@@ -71,7 +84,7 @@ function itemSummary(item: AssemblyItem) {
   return `${formatInches(item.odIn)} · ${formatDepth(item.topM)}`;
 }
 
-export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, issues = [], onSelect, onDropComponent, onMoveComponent, onRemoveComponent, title = "Well construction schematic", formations = [], survey, exploded: explodedProp, defaultExploded = false, onExplodedChange, depthWindow: depthWindowProp, onDepthWindowChange, cursorDepthM = null, onCursorDepthChange }: AssemblySchematicProps) {
+export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, issues = [], onSelect, onDropComponent, onMoveComponent, onRemoveComponent, title = "Well construction schematic", formations = [], survey, exploded: explodedProp, defaultExploded = false, onExplodedChange, depthWindow: depthWindowProp, onDepthWindowChange, cursorDepthM = null, onCursorDepthChange, frame: trackFrame }: AssemblySchematicProps) {
   const [explodedState, setExplodedState] = useState(defaultExploded);
   const exploded = explodedProp ?? explodedState;
   const toggleExploded = () => { const next = !exploded; if (explodedProp === undefined) setExplodedState(next); onExplodedChange?.(next); };
@@ -102,9 +115,11 @@ export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, i
   const zoomed = bottom - top < td - 0.5;
   const annotatedCount = shown.items.filter((item) => slot(item) !== "surface" && (zoomed || ["casing", "liner", "tubing", "sandface"].includes(slot(item)) || item.id === selectedId) && anchorDepth(item) >= top && anchorDepth(item) <= bottom).length;
   const surfaceCount = shown.items.filter((item) => slot(item) === "surface").length;
-  const Y0 = Math.max(90, surfaceCount * 22 + 12);
-  const H = Math.max(size.height, annotatedCount * (zoomed ? 78 : 60) + 40);
-  const Y1 = H - 32;
+  // As a track, the inset is dictated and the height is the box: a schematic that grew to fit
+  // its annotations would stop sharing a scale with the tracks beside it.
+  const Y0 = trackFrame ? trackFrame.top : Math.max(90, surfaceCount * 22 + 12);
+  const H = trackFrame ? size.height : Math.max(size.height, annotatedCount * (zoomed ? 78 : 60) + 40);
+  const Y1 = H - (trackFrame ? trackFrame.bottom : 32);
   const y = useMemo(() => scaleLinear().domain([top, bottom]).range([Y0, Y1]), [top, bottom, Y0, Y1]);
   const errors = new Set(issues.filter((issue) => issue.severity === "error" && issue.itemId).map((issue) => issue.itemId!));
   const warnings = new Set(issues.filter((issue) => issue.severity === "warning" && issue.itemId).map((issue) => issue.itemId!));
@@ -114,11 +129,14 @@ export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, i
     if (!element || typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(([entry]) => {
       const { width, height } = entry!.contentRect;
-      if (width > 0 && height > 0) setSize({ width: Math.max(900, width), height });
+      // Standalone, the drawing keeps a 900px floor and scrolls inside its frame so labels have
+      // room. As a track it has to fit the column it was given — a 900px drawing in a 320px
+      // track shows the middle third and nothing else.
+      if (width > 0 && height > 0) setSize({ width: trackFrame ? width : Math.max(900, width), height });
     });
     observer.observe(element);
     return () => observer.disconnect();
-  }, [exploded]);
+  }, [exploded, trackFrame]);
 
   useEffect(() => {
     if (frame.current) frame.current.scrollLeft = Math.max(0, (W - frame.current.clientWidth) / 2);
@@ -482,7 +500,7 @@ export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, i
   return <section className="sw-asm-schematic" aria-label={title} onKeyDown={(event) => {
     if (event.key === "Escape") { event.preventDefault(); drag.current = null; setPreview(null); onSelect?.(null); }
   }}>
-    <header className="sw-asm-panel-head">
+    {!trackFrame?.chromeless && <header className="sw-asm-panel-head">
       <div><h2>{title}</h2><small>{zoomed ? `${formatDepth(top)} – ${formatDepth(bottom)} MD` : `0 – ${formatDepth(td)} MD · TD`}</small></div>
       <div className="sw-asm-tools" role="toolbar" aria-label="Schematic view">
         <CommandButton type="button" onClick={() => zoom(0.5)} aria-label="Zoom depth in" disabled={exploded}><ZoomIn size={15} /></CommandButton>
@@ -491,7 +509,7 @@ export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, i
         <CommandButton type="button" className="sw-asm-mode" onClick={() => zoom(0.05)} disabled={exploded || !selectedItem || slot(selectedItem) === "surface"} aria-label="Inspect selected depth"><ZoomIn size={15} /><span>Detail</span></CommandButton>
         <CommandButton type="button" className="sw-asm-mode" onClick={toggleExploded} aria-pressed={exploded} aria-label="Exploded view" title="Exploded view: every component on its own"><Boxes size={15} /><span>Exploded</span></CommandButton>
       </div>
-    </header>
+    </header>}
     {exploded ? <ExplodedParts assembly={assembly} assetBaseUrl={assetBaseUrl} selectedId={selectedId} onSelect={onSelect} issues={issues} /> :
     <div ref={frame} className="sw-asm-schematic-frame" tabIndex={0} role="region" aria-label="Engineering schematic drawing" data-dropping={preview?.kind === "drop" ? (preview.valid ? "valid" : "invalid") : undefined}>
       <svg ref={svg} style={{ width: W, height: H }} viewBox={`0 0 ${W} ${H}`} role="group" aria-label={`${title}. ${items.length} components. ${onDropComponent ? "Drop catalog components to place them at the pointer depth." : ""}`} data-testid="assembly-schematic" data-revision={assembly.revision} data-has-selection={selectedItem ? "true" : undefined}
@@ -528,8 +546,8 @@ export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, i
           </g>;
         })}
         <g className="sw-asm-ruler" aria-hidden>
-          {ticks.map((tick) => <g key={tick}><line x1={RULER_X - 10} x2={RULER_X} y1={y(tick)} y2={y(tick)} /><line x1={RULER_X} x2={LABEL_X - 20} y1={y(tick)} y2={y(tick)} className="sw-asm-gridline" /><text x={RULER_X - 14} y={y(tick) + 3.5} textAnchor="end">{tick.toLocaleString("en-US")}</text></g>)}
-          <text x={RULER_X - 52} y={Y0 - 10} className="sw-asm-axis-title">MD (m)</text>
+          {ticks.map((tick) => <g key={tick}><line x1={RULER_X - 10} x2={RULER_X} y1={y(tick)} y2={y(tick)} /><line x1={RULER_X} x2={LABEL_X - 20} y1={y(tick)} y2={y(tick)} className="sw-asm-gridline" />{!trackFrame && <text x={RULER_X - 14} y={y(tick) + 3.5} textAnchor="end">{tick.toLocaleString("en-US")}</text>}</g>)}
+          {!trackFrame && <text x={RULER_X - 52} y={Y0 - 10} className="sw-asm-axis-title">MD (m)</text>}
         </g>
         {top <= 0 && <line x1={RULER_X} x2={LABEL_X - 20} y1={Y0} y2={Y0} className="sw-asm-ground" />}
         <g className="sw-asm-surface" aria-label="Surface equipment">
@@ -608,6 +626,6 @@ export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, i
         </g>}
       </svg>
     </div>}
-    <p className="sw-asm-scale-note">{zoomed ? "Depth detail" : "Engineering overview"} · Linear MD · Actual component lengths · Diameters proportional, exaggerated relative to depth. Select a short tool, then Detail.</p>
+    {!trackFrame?.chromeless && <p className="sw-asm-scale-note">{zoomed ? "Depth detail" : "Engineering overview"} · Linear MD · Actual component lengths · Diameters proportional, exaggerated relative to depth. Select a short tool, then Detail.</p>}
   </section>;
 }

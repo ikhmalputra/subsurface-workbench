@@ -343,7 +343,16 @@ export interface LogTracksProps {
   readonly onDepthWindowChange?: (window: readonly [number, number] | null) => void;
   readonly height?: number;
   readonly title?: string;
+  /**
+   * Render as a track on a shared depth axis: a fixed plot inset so the container can align every
+   * track's depth scale, the window taken as given rather than clamped to the log's own extent
+   * (empty space beyond the data is correct when the axis is shared), and no header of its own.
+   */
+  readonly frame?: TrackFrame;
 }
+
+/** Plot inset for a view drawn as a track on a shared depth axis. */
+export interface TrackFrame { readonly top: number; readonly bottom: number; readonly chromeless?: boolean }
 
 function percentile(values: readonly number[], p: number) {
   if (!values.length) return 1;
@@ -352,7 +361,7 @@ function percentile(values: readonly number[], p: number) {
 }
 
 /** Multi-track depth log (LAS) with casing markers, an interval column, hover readout and click-to-depth. */
-export function LogTracks({ las, tracks, markers = [], intervals = [], selectedRange = null, cursorFt = null, onSelectDepth, onCursorChange, depthWindowFt, onDepthWindowChange, height = 620, title = "Depth log" }: LogTracksProps) {
+export function LogTracks({ las, tracks, markers = [], intervals = [], selectedRange = null, cursorFt = null, onSelectDepth, onCursorChange, depthWindowFt, onDepthWindowChange, height = 620, title = "Depth log", frame: trackFrame }: LogTracksProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const index = las.curves[0];
   const depths = useMemo(() => (index?.values ?? []).map((value) => value ?? Number.NaN), [index]);
@@ -368,7 +377,11 @@ export function LogTracks({ las, tracks, markers = [], intervals = [], selectedR
     const start = Math.min(Math.max(first, top), last - span);
     return { top: start, base: start + span };
   };
-  const view = depthWin && depthWin[1] > first && depthWin[0] < last ? clampWindow(depthWin[0], depthWin[1]) : { top: first, base: last };
+  // A framed track obeys the shared scale even where it has no samples; clamping to the log's
+  // own extent would shift its mapping by the first sample depth and misalign it with every
+  // track beside it.
+  const view = trackFrame && depthWin ? { top: depthWin[0], base: depthWin[1] }
+    : depthWin && depthWin[1] > first && depthWin[0] < last ? clampWindow(depthWin[0], depthWin[1]) : { top: first, base: last };
   const zoomed = view.base - view.top < last - first - 0.5;
   const setWindow = (next: readonly [number, number] | null) => {
     const value = next ? (() => { const c = clampWindow(next[0], next[1]); return c.base - c.top >= last - first - 0.5 ? null : [Math.round(c.top), Math.round(c.base)] as const; })() : null;
@@ -385,7 +398,7 @@ export function LogTracks({ las, tracks, markers = [], intervals = [], selectedR
   });
   const headerH = 46, depthW = 62, intervalW = intervals.length ? 30 : 0, trackW = 120;
   const width = depthW + intervalW + resolved.length * trackW;
-  const y = scaleLinear().domain([view.top, view.base]).range([headerH + 4, height - 6]);
+  const y = scaleLinear().domain([view.top, view.base]).range(trackFrame ? [trackFrame.top, height - trackFrame.bottom] : [headerH + 4, height - 6]);
   const visible = depths.map((depth, i) => [depth, i] as const).filter(([depth]) => depth >= view.top - step && depth <= view.base + step);
   const nearest = (depth: number) => visible.reduce((best, item) => (Math.abs(item[0] - depth) < Math.abs(best[0] - depth) ? item : best), visible[0] ?? ([first, 0] as const));
   const shown = hover ?? cursorFt;
@@ -433,18 +446,19 @@ export function LogTracks({ las, tracks, markers = [], intervals = [], selectedR
     if (event.key === "Enter" && hover !== null) onSelectDepth?.(hover);
   }
 
-  return <section className="sw-rec sw-logs" aria-label={title} data-testid="log-tracks">
-    <header className="sw-rec-head">
+  const readout = <div className="sw-logs-readout" aria-live="polite" data-testid="log-readout">
+      {sample ? <><strong>{dualDepth(sample[0])}</strong>{resolved.map((track) => { const value = track.values[sample[1]]; return <span key={track.mnemonic}><i style={{ background: track.color ?? "#147a65" }} />{track.label ?? track.mnemonic} {value === null || value === undefined ? "—" : `${Math.round(value * 10) / 10} ${track.curve?.unit ?? ""}`}</span>; })}{intervals.filter((item) => sample[0] >= item.topFt && sample[0] <= item.baseFt).map((item) => <span key={item.id} className="sw-logs-run">{item.label}</span>)}</> : <span>Hover or use ↑/↓ on the log to read values; click or Enter selects that depth. Ctrl/⌘ + wheel or +/− zooms, wheel pans.</span>}
+    </div>;
+  return <section className="sw-rec sw-logs" aria-label={title} data-testid="log-tracks" data-track={trackFrame ? "true" : undefined}>
+    {!trackFrame?.chromeless && <header className="sw-rec-head">
       <h3>{title}</h3>
       <div className="sw-logs-tools">
         <span>{int(view.top)}–{int(view.base)} ft</span>
         <CommandButton icon="fit" type="button" aria-pressed={!zoomed} onClick={() => setWindow(null)}>Full log</CommandButton>
         <CommandButton kind="selection" type="button" disabled={!selectionWindow} onClick={() => selectionWindow && setWindow(selectionWindow)}>Zoom to selection</CommandButton>
       </div>
-    </header>
-    <div className="sw-logs-readout" aria-live="polite" data-testid="log-readout">
-      {sample ? <><strong>{dualDepth(sample[0])}</strong>{resolved.map((track) => { const value = track.values[sample[1]]; return <span key={track.mnemonic}><i style={{ background: track.color ?? "#147a65" }} />{track.label ?? track.mnemonic} {value === null || value === undefined ? "—" : `${Math.round(value * 10) / 10} ${track.curve?.unit ?? ""}`}</span>; })}{intervals.filter((item) => sample[0] >= item.topFt && sample[0] <= item.baseFt).map((item) => <span key={item.id} className="sw-logs-run">{item.label}</span>)}</> : <span>Hover or use ↑/↓ on the log to read values; click or Enter selects that depth. Ctrl/⌘ + wheel or +/− zooms, wheel pans.</span>}
-    </div>
+    </header>}
+    {!trackFrame?.chromeless && readout}
     <div className="sw-logs-frame" tabIndex={0} role="group" aria-label={`${title}. Arrow keys move the depth cursor, Shift for larger steps, Enter selects the depth. Plus and minus zoom, 0 shows the full log.`} onKeyDown={onKey} onBlur={() => setHover(null)}>
       <svg ref={svgRef} viewBox={`0 0 ${width} ${height}`} style={{ height, minWidth: width }} aria-hidden onPointerMove={(event) => setHover(depthAt(event))} onPointerLeave={() => setHover(null)} onPointerDown={(event) => { const depth = depthAt(event); if (depth !== null) onSelectDepth?.(depth); }}>
         <text x={depthW / 2} y={18} textAnchor="middle" className="sw-logs-label">MD</text>
@@ -479,6 +493,9 @@ export function LogTracks({ las, tracks, markers = [], intervals = [], selectedR
         {hover !== null && <line x1={depthW} x2={width} y1={y(hover)} y2={y(hover)} className="sw-logs-hover" />}
       </svg>
     </div>
+    {/* As a track the readout sits under the plot, so the plot's top edge is the panel's top edge
+        and lines up with the tracks beside it. */}
+    {trackFrame?.chromeless && readout}
     <p className="sw-sr-only">{resolved.length} log tracks and {depths.length} samples from {int(first)} to {int(last)} ft measured depth. Null or invalid samples are reported as not reported in the table.</p>
     <AccessibleTable
       label={`${title} samples`}

@@ -864,3 +864,63 @@ body { margin: 0; background: var(--sw-paper); color: var(--sw-ink); font-family
 /* Section prose above a chart: smaller, quieter, out of the way of the data. */
 .demo-field-workspace > section > h2 { font-size: 13px; font-weight: 600; margin: 0 0 4px; }
 .demo-field-workspace > section > p { font-size: 11.5px; line-height: 1.5; color: var(--sw-muted); margin: 0 0 var(--sw-space-2); }
+
+/* ============================================================================
+   Well section — one depth axis, tracks beside it
+   ========================================================================== */
+.demo-section-pane { padding: 0; }
+.demo-section {
+  display: flex; align-items: stretch; height: 100%; min-height: 0;
+  overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain;
+  background: var(--sw-surface);
+}
+.demo-section-track { flex: 0 0 auto; display: grid; grid-template-rows: 36px 1fr; min-width: 0; border-right: 1px solid var(--sw-line); }
+.demo-section-track:last-child { border-right: 0; }
+.demo-section-construction { flex: 1 1 360px; min-width: 320px; max-width: 480px; }
+.demo-section-ruler { position: sticky; left: 0; z-index: 2; background: var(--sw-surface); }
+.demo-track-head {
+  display: flex; align-items: baseline; gap: var(--sw-space-2); padding: 0 10px;
+  border-bottom: 1px solid var(--sw-line); background: var(--sw-paper);
+  font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden;
+}
+.demo-track-head small { font: 10.5px "IBM Plex Mono", monospace; color: var(--sw-muted); font-weight: 400; }
+.demo-track-body { position: relative; min-height: 0; overflow: hidden; }
+.demo-track-body > .sw-asm-schematic, .demo-track-body > .sw-rec, .demo-track-body > .sw-traj-plot {
+  height: 100%; border: 0; border-radius: 0; padding: 0; background: transparent;
+}
+.demo-track-body > .sw-rec { display: block; }
+.demo-track-body > .sw-rec > .sw-logs-frame { height: 100%; }
+.demo-track-body .sw-asm-schematic-frame { padding: 0; }
+.demo-track-empty { margin: 0; padding: 14px; font-size: 12px; color: var(--sw-muted); }
+.demo-ruler-tick { stroke: var(--sw-line); }
+.demo-ruler-label { font: 10px "IBM Plex Mono", monospace; fill: var(--sw-muted); }
+.demo-ruler-cursor line { stroke: var(--sw-cursor, #1d4ed8); stroke-width: 1.5; stroke-dasharray: 5 3; }
+.demo-ruler-cursor text { font: 600 10px "IBM Plex Mono", monospace; fill: var(--sw-cursor, #1d4ed8); }
+.demo-view-section { grid-template-columns: minmax(0, 1fr) 300px; }
+.demo-view-section.demo-inspector-hidden { grid-template-columns: minmax(0, 1fr); }
+/* Track SVGs render at their natural width, not stretched to the flex item: a stretched SVG with
+   a viewBox letterboxes its content (uniform scale, centred), which read as the log being offset
+   175px from its own column. The survey's intrinsic width is its viewBox width. */
+.demo-section-log .sw-logs-frame { overflow: visible; border: 0; border-radius: 0; height: 100%; }
+.demo-section-log .sw-logs-frame svg { width: auto; }
+.demo-section-survey .sw-traj-plot svg { width: 420px; height: auto; }
+.demo-section-track { max-width: none; }
+/* A track's column is its plot. Anything a component renders under its SVG — the log's hover
+   readout, the stations table toggle — must not widen the column or squeeze the plot: the readout
+   moves into the track's bottom inset as a footer line, and the data-table toggles (available in
+   the full views one preset away) are not shown in this one. The survey figure stops being a flex
+   column so its SVG keeps the shared height instead of yielding 56px to a footer. */
+.demo-section-track { flex: 0 0 auto; }
+/* The construction column takes the room it can get and never shrinks below 300px: its labels
+   sit to the right of the bore and clip before that. The survey is the track that scrolls. */
+.demo-section-construction { flex: 1 0 300px; min-width: 300px; max-width: 480px; }
+.demo-track-body > .sw-rec, .demo-track-body > .sw-traj-plot { display: block; overflow: hidden; height: 100%; }
+.demo-track-body .sw-logs-readout {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 26px; margin: 0; padding: 4px 8px;
+  display: flex; gap: var(--sw-space-2); align-items: center; white-space: nowrap; overflow: hidden;
+  font: 10.5px "IBM Plex Mono", monospace; background: var(--sw-paper); border-top: 1px solid var(--sw-line);
+}
+.demo-track-body .sw-accessible-table, .demo-track-body .sw-sr-only + details, .demo-track-body .sw-traj-plot > :not(svg) { display: none; }
+/* The ruler's cursor readout is a pill over the scale, not a label fighting the nearest tick. */
+.demo-ruler-cursor rect { fill: var(--sw-cursor, #1d4ed8); }
+.demo-ruler-cursor text { fill: var(--sw-surface); }

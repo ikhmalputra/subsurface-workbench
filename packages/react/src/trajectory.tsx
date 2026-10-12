@@ -262,6 +262,15 @@ export interface TrajectoryLogProps extends Pick<TrajectoryPlotProps, "survey" |
   readonly onCursorMdChange?: (mdM: number | null) => void;
   /** Linked MD window, shaded across the tracks. */
   readonly mdWindow?: readonly [number, number] | null;
+  /**
+   * The depth range the tracks span, when it is not the whole survey. `mdWindow` only shades a band;
+   * a container aligning this log with other depth views needs the scale itself to follow the
+   * shared window, which is a different thing and gets its own prop so existing callers keep the
+   * band they rely on.
+   */
+  readonly domainMdM?: readonly [number, number] | null;
+  /** Render as a track on a shared depth axis: fixed plot inset, no caption of its own. */
+  readonly frame?: { readonly top: number; readonly bottom: number; readonly chromeless?: boolean };
 }
 
 /** Survey values at an MD, linearly interpolated between stations (DLS taken from the interval that contains it). */
@@ -273,18 +282,18 @@ function stationAt(survey: readonly ComputedStation[], mdM: number) {
   return { mdM, inclinationDeg: a.inclinationDeg + (b.inclinationDeg - a.inclinationDeg) * t, azimuthDeg: (a.azimuthDeg + turn * t + 360) % 360, dlsDegPer30m: b.dlsDegPer30m };
 }
 
-export function TrajectoryLog({ survey, selectedMdM, onSelectMd, dlsLimitDegPer30m, markers, height = 380, cursorMdM = null, onCursorMdChange, mdWindow = null }: TrajectoryLogProps) {
+export function TrajectoryLog({ survey, selectedMdM, onSelectMd, dlsLimitDegPer30m, markers, height = 380, cursorMdM = null, onCursorMdChange, mdWindow = null, domainMdM = null, frame: trackFrame }: TrajectoryLogProps) {
   const svg = useRef<SVGSVGElement>(null);
   const [keyboardMdM, setKeyboardMdM] = useState<number | null>(null);
   const width = 420;
-  const top = 40;
-  const bottom = height - 26;
+  const top = trackFrame ? trackFrame.top : 40;
+  const bottom = height - (trackFrame ? trackFrame.bottom : 26);
   const tracks = [
     { key: "inc", title: "INC / °", left: 64, width: 108 },
     { key: "azi", title: "AZI / °", left: 182, width: 108 },
     { key: "dls", title: "DLS / °/30 m", left: 300, width: 108 },
   ] as const;
-  const md = scaleLinear().domain([survey[0]?.mdM ?? 0, survey.at(-1)?.mdM ?? 1]).range([top, bottom]);
+  const md = scaleLinear().domain(domainMdM ?? [survey[0]?.mdM ?? 0, survey.at(-1)?.mdM ?? 1]).range([top, bottom]);
   const maxInc = Math.max(90, ...survey.map((station) => station.inclinationDeg));
   const maxDls = Math.max((dlsLimitDegPer30m ?? 0) * 1.4, 1, ...survey.map((station) => station.dlsDegPer30m)) * 1.05;
   const scales = { inc: scaleLinear().domain([0, maxInc]), azi: scaleLinear().domain([0, 360]), dls: scaleLinear().domain([0, maxDls]) };
@@ -313,8 +322,8 @@ export function TrajectoryLog({ survey, selectedMdM, onSelectMd, dlsLimitDegPer3
     setKeyboardMdM(nextMdM);
     onCursorMdChange?.(nextMdM);
   }
-  return <figure className="sw-traj-plot" data-testid="trajectory-log" data-cursor-md={cursor ? cursor.mdM.toFixed(1) : undefined}>
-    <figcaption><strong className="sw-title">Survey log<InfoTip label="About the survey log">Inclination, azimuth and dogleg severity (DLS) against measured depth. DLS bars past the limit line are drawn red.</InfoTip></strong>{dlsLimitDegPer30m !== undefined && <span>DLS limit {dlsLimitDegPer30m}°/30 m</span>}</figcaption>
+  return <figure className="sw-traj-plot" data-testid="trajectory-log" data-cursor-md={cursor ? cursor.mdM.toFixed(1) : undefined} data-track={trackFrame ? "true" : undefined}>
+    {!trackFrame?.chromeless && <figcaption><strong className="sw-title">Survey log<InfoTip label="About the survey log">Inclination, azimuth and dogleg severity (DLS) against measured depth. DLS bars past the limit line are drawn red.</InfoTip></strong>{dlsLimitDegPer30m !== undefined && <span>DLS limit {dlsLimitDegPer30m}°/30 m</span>}</figcaption>}
     <svg ref={svg} viewBox={`0 0 ${width} ${height}`} role="group" tabIndex={0} aria-label="Inclination, azimuth and dogleg severity against measured depth. Use arrow keys to move by station, Home and End for first and last, Enter to select." onKeyDown={onKeyDown} onClick={(event) => { if (!onSelectMd || !svg.current) return; const point = svgPoint(event, svg.current); if (point.y >= top && point.y <= bottom) onSelectMd(md.invert(point.y)); }} onPointerMove={onCursorMdChange ? (event) => onCursorMdChange(pointerMd(event)) : undefined} onPointerLeave={onCursorMdChange ? () => onCursorMdChange(null) : undefined}>
       <g className="sw-traj-grid" pointerEvents="none">
         {md.ticks(8).map((tick) => <g key={tick}><line x1={tracks[0].left} x2={tracks[2].left + tracks[2].width} y1={md(tick)} y2={md(tick)} /><text x={tracks[0].left - 6} y={md(tick) + 3} textAnchor="end" className="sw-axis-value">{tick.toLocaleString("en-US")}</text></g>)}
