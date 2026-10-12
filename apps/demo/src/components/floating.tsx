@@ -23,8 +23,8 @@ import { CommandButton } from "@ikhmalputra/subsurface-react/ui";
  * everything on the page.
  */
 export type DockSide = "left" | "right" | "top" | "bottom";
-export type Dock = DockSide | "float";
-export const DOCK_LABELS: Readonly<Record<Dock, string>> = { float: "Floating", left: "Dock left", right: "Dock right", top: "Dock top", bottom: "Dock bottom" };
+export type Dock = DockSide | "float" | "fill";
+export const DOCK_LABELS: Readonly<Record<Dock, string>> = { float: "Floating", fill: "Fill the sheet", left: "Dock left", right: "Dock right", top: "Dock top", bottom: "Dock bottom" };
 /** Width of a side column and height of a top or bottom band, when docked. */
 export const DOCK_SIZE: Readonly<Record<DockSide, number>> = { left: 320, right: 320, top: 280, bottom: 300 };
 /** Height of the status bar, the one strip of chrome under the sheet. */
@@ -64,7 +64,7 @@ export function useDockRegistry(): DockRegistry & { readonly insets: Readonly<Re
     return next;
   });
   const insets: Record<DockSide, number> = { left: 0, right: 0, top: 0, bottom: 0 };
-  if (enabled) for (const dock of docks.values()) if (dock !== "float") insets[dock] = DOCK_SIZE[dock];
+  if (enabled) for (const dock of docks.values()) if (dock !== "float" && dock !== "fill") insets[dock] = DOCK_SIZE[dock];
   return { docks, register, insets, enabled };
 }
 
@@ -142,8 +142,10 @@ function useDrag(id: string, panel: () => HTMLElement | null, onEdge?: (side: Do
 }
 
 /** The rectangle of a docked panel: its share of the side it is docked to, between the other docks. */
-function dockedStyle(dock: DockSide, index: number, count: number, insets: Readonly<Record<DockSide, number>>): CSSProperties {
+function dockedStyle(dock: DockSide | "fill", index: number, count: number, insets: Readonly<Record<DockSide, number>>): CSSProperties {
   const height = `calc(100dvh - ${STATUS_PX}px)`;
+  // Fill: the sheet's own rectangle between the docks — a tab over the drawing, in effect.
+  if (dock === "fill") return { left: insets.left, top: insets.top, width: `calc(100vw - ${insets.left}px - ${insets.right}px)`, height: `calc(${height} - ${insets.top}px - ${insets.bottom}px)` };
   if (dock === "left" || dock === "right") {
     const share = `calc(${height} / ${count})`;
     return { [dock]: 0, top: `calc(${share} * ${index})`, width: DOCK_SIZE[dock], height: share };
@@ -158,9 +160,9 @@ function useDock(id: string, open: boolean, defaultDock: Dock) {
   const [dock, setDockState] = useState<Dock>(() => docksRemembered.get(id) ?? defaultDock);
   const setDock = (next: Dock) => { docksRemembered.set(id, next); setDockState(next); };
   useEffect(() => { registry.register(id, open ? dock : null); return () => registry.register(id, null); }, [id, open, dock]);
-  const siblings = Array.from(registry.docks.entries()).filter(([, side]) => side === dock && dock !== "float").map(([key]) => key);
+  const siblings = Array.from(registry.docks.entries()).filter(([, side]) => side === dock && dock !== "float" && dock !== "fill").map(([key]) => key);
   const insets: Record<DockSide, number> = { left: 0, right: 0, top: 0, bottom: 0 };
-  for (const side of registry.docks.values()) if (side !== "float") insets[side] = DOCK_SIZE[side];
+  for (const side of registry.docks.values()) if (side !== "float" && side !== "fill") insets[side] = DOCK_SIZE[side];
   const style = dock === "float" || !registry.enabled ? null : dockedStyle(dock, Math.max(0, siblings.indexOf(id)), Math.max(1, siblings.length), insets);
   return { dock, setDock, style };
 }

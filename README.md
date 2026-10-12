@@ -114,8 +114,14 @@ exported files; integrators can use their own static host and security headers.
   A docked panel takes its edge and the sheet gives it up, so nothing on the
   drawing is ever under it; panels docked to the same side share it, which is
   how two sit side by side and four sit on four sides. The inspector docks
-  right by default. Positions and docks are kept for the session. Graphite
-  chrome in every theme, 32px controls, 3px corners.
+  right by default. Positions and docks are kept for the session. "Open tools"
+  opens the tool palette: every object of the well (survey, casing, formations,
+  logs, reports, design brief, study, report, field …) with what the host
+  supplied and a view / create / edit / delete button each; a tool opens the
+  object's data as a panel that fills the sheet between the docks, and the
+  command line runs the same tools by name (`view survey`, `create study`).
+  See `docs/WELL_TOOLS_STUDY.md`. Graphite chrome in every theme, 32px
+  controls, 3px corners.
   Report is an output action, not a fifth workspace. Legacy route URLs remain supported. Route ownership
   and independent-example availability come from one host registry.
   Appearance and developer

@@ -195,13 +195,16 @@ the host has no data. The command line is the same list by name.
 
 ## 6. Build order
 
-1. **Tool registry** (`apps/demo/src/lib/tools.ts`): `{ id, object, verb, label, exists(well), open(host) }`
-   for every row in §3, with `exists` reading the well's registered data. The command line's verbs
-   dispatch through it; the palette renders it. No new tools yet — the registry wraps what exists.
-2. **Palette panel** on the sheet, replacing the navigation's workspaces: objects × verbs, with
-   the "not supplied" state visible. Routes become `open` handlers that mount the existing route
-   component in a panel (trajectory, analysis, builder, report, field each become a tool panel).
-   This is the point at which `/trajectory/` and `/analysis/` stop being pages.
+1. ~~**Tool registry**~~ — done (`apps/demo/src/lib/tools.ts`): every object of §2 with its
+   group, aliases, `supply(well)` (supplied / derived / missing, with the host's own counts) and
+   the panel each verb opens. The command line's `view | create | edit | delete <object>` dispatch
+   through it (`apps/demo/src/components/tools.tsx`, `ToolsProvider.run`).
+2. ~~**Palette panel**~~ — done: "Open tools" on the workspace toolbar opens the palette (docked
+   left by default), objects by group with ● supplied / ◐ derived / ○ not supplied and a button
+   per verb, greyed where the verb has no tool or the data is missing. The route workspaces —
+   survey, study, design brief, report, field, editor — open as panels that fill the sheet between
+   the docks (dock "Fill the sheet"), or dock to a side, or float. The routes still exist; the
+   navigation panel still lists them. Deleting them is step 7.
 3. **Depth-axis views as section tracks**: survey, log and operations already are; the study's
    evidence and the pressure window join them (pressure on TVD through the survey).
 4. **Editors docked right**: survey station editor, builder properties and formation editor as

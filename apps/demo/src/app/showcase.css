@@ -1466,3 +1466,27 @@ body { background: var(--swc-bg-2); }
 .demo-float.is-docked.demo-records-drawer .demo-file { max-height: none; height: 100%; }
 .demo-scene-options-body { display: grid; gap: var(--sw-space-3); padding: 10px 12px; }
 .demo-float.demo-scene-options .demo-float-body { overflow: auto; }
+
+/* ---- tools: the palette and the route workspaces as panels ---- */
+.demo-workspace-toolbar .demo-tools-toggle[data-ui-kind="command"][type] { min-height: var(--sw-control-height); padding: 0 10px; border-color: var(--swc-line); background: transparent; color: var(--swc-ink); font-size: 12px; }
+.demo-workspace-toolbar .demo-tools-toggle[data-ui-kind="command"][type]:hover { background: var(--swc-hover); }
+.demo-tools { display: grid; gap: var(--sw-space-3); padding: 8px 10px 10px; }
+.demo-tools-group { display: grid; gap: 2px; }
+.demo-tools-group h3 { margin: 6px 0 2px; font: 600 10px "IBM Plex Mono", monospace; letter-spacing: .12em; text-transform: uppercase; color: var(--sw-muted); }
+.demo-tools-row { display: flex; align-items: center; gap: var(--sw-space-2); padding: 3px 4px; border-radius: 3px; }
+.demo-tools-row:hover { background: var(--sw-hover); }
+.demo-tools-name { flex: 1 1 auto; min-width: 0; display: grid; gap: 1px; }
+.demo-tools-name span { font-size: 12.5px; font-weight: 500; }
+.demo-tools-name small { font: 10.5px "IBM Plex Mono", monospace; color: var(--sw-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.demo-tools-row[data-supply="missing"] .demo-tools-name small { color: var(--sw-warning); }
+.demo-tools-row[data-supply="missing"] .demo-tools-name small::before { content: "○ "; }
+.demo-tools-row[data-supply="supplied"] .demo-tools-name small::before { content: "● "; color: var(--sw-accent); }
+.demo-tools-row[data-supply="derived"] .demo-tools-name small::before { content: "◐ "; }
+.demo-tools-verbs { display: flex; gap: 2px; flex: 0 0 auto; }
+.demo-tools-verbs button[data-ui-kind="command"][type] { width: 32px; padding: 0; border-color: transparent; background: transparent; }
+.demo-tools-verbs button[data-ui-kind="command"][type]:hover:enabled { background: var(--sw-selected); border-color: var(--sw-line); }
+.demo-tools-verbs button[data-ui-kind="command"][type]:disabled { opacity: .28; }
+.demo-tools-echo { margin: 4px 0 0; padding: 8px 10px; border-top: 1px solid var(--sw-line); font: 11px "IBM Plex Mono", monospace; color: var(--sw-muted); line-height: 1.5; }
+.demo-float.is-docked-fill { border: 0; }
+.demo-tool-panel .demo-float-body { background: var(--sw-paper); }
+.demo-tool-page { height: auto; min-height: 100%; }

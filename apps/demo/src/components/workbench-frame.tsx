@@ -8,6 +8,9 @@ import { WorkspaceContextBar } from "./workspace-context-bar";
 import { WorkspaceNavigation } from "./workspace-navigation";
 import { FloatProvider, FloatingToolbar, useDockRegistry } from "./floating";
 import { wells } from "./wells-data";
+import { ToolPanels, ToolsPalette, ToolsProvider, useTools } from "./tools";
+import { toolVerbs, type ToolVerb } from "../lib/tools";
+import { CommandButton } from "@ikhmalputra/subsurface-react/ui";
 
 /**
  * The application frame, mounted once by `layout.tsx` and never again.
@@ -50,7 +53,7 @@ export function WorkbenchFrame({ children }: { children: ReactNode }) {
   // Routes are declared with trailing slashes (`trailingSlash: true`), so normalise rather than
   // letting the active-route highlight silently fail to match.
   const current = pathname === "/" || pathname.endsWith("/") ? pathname : `${pathname}/`;
-  return <FloatProvider value={{ layer, tray, registry }}>
+  return <FloatProvider value={{ layer, tray, registry }}><ToolsProvider>
     <Workbench status={<>
       <CommandLine />
       <div className="demo-tray" ref={setTray} role="group" aria-label="Panels" />
@@ -62,11 +65,19 @@ export function WorkbenchFrame({ children }: { children: ReactNode }) {
     </Workbench>
     <FloatingToolbar id="workspace" label="workspace toolbar" defaultStyle={{ left: "calc(var(--dock-left, 0px) + 8px)", top: "calc(var(--dock-top, 0px) + 6px)" }} className="demo-workspace-toolbar">
       <WorkspaceNavigation current={current} />
+      <ToolsToggle />
       <WorkspaceContextBar part="picker" />
     </FloatingToolbar>
-  </FloatProvider>;
+    <ToolsPalette />
+    <ToolPanels />
+  </ToolsProvider></FloatProvider>;
 }
 
+
+function ToolsToggle() {
+  const tools = useTools();
+  return <CommandButton icon="layers" className="demo-tools-toggle" aria-expanded={tools.paletteOpen} onClick={() => tools.setPaletteOpen(!tools.paletteOpen)}>{tools.paletteOpen ? "Close tools" : "Open tools"}</CommandButton>;
+}
 
 /**
  * Theme and density as a menu on the status bar, where a CAD tool keeps its display toggles. It
@@ -97,7 +108,7 @@ function AppearanceMenu() {
   </details>;
 }
 
-const HELP = "go <m MD> · zoom in | out | fit · well <name> · theme light | dark | high-contrast · density compact | comfortable · clear";
+const HELP = "view | create | edit | delete <object> · go <m MD> · zoom in | out | fit · well <name> · theme light | dark | high-contrast · density compact | comfortable · clear";
 
 /**
  * The command line, as AutoCAD has it: every verb here is something the interface also does with a
@@ -107,6 +118,7 @@ const HELP = "go <m MD> · zoom in | out | fit · well <name> · theme light | d
  */
 function CommandLine() {
   const { store, well, chooseWell, setTheme, setDensity } = useWorkspace();
+  const tools = useTools();
   const [text, setText] = useState("");
   const [echo, setEcho] = useState("Command line · type help");
   function run(line: string): string {
@@ -118,6 +130,7 @@ function CommandLine() {
     try {
       if (!v) return "";
       if (v === "help" || v === "?") return HELP;
+      if ((toolVerbs as readonly string[]).includes(v)) return tools.run(v as ToolVerb, arg);
       if (v === "go" || v === "md") {
         const md = Number(arg);
         if (!arg || !Number.isFinite(md) || md < 0 || md > td) throw new Error(`GO needs an MD between 0 and ${fmt(td)} m`);
