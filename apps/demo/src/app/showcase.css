@@ -771,3 +771,96 @@ body { margin: 0; background: var(--sw-paper); color: var(--sw-ink); font-family
 .demo-nav-group a small { margin-top: 2px; font-size: 9.5px; line-height: 1.35; }
 .demo-nav-views a, .demo-nav-secondary a { padding: 6px 9px; }
 .demo-nav-content { gap: var(--sw-space-4); }
+
+/* ============================================================================
+   Page-level pass: the same language on every route
+   ----------------------------------------------------------------------------
+   Measured on /petrophysics/ at 1440x980: an availability banner, a title, a
+   status line and a control row put the first pixel of data at y=470 — more
+   than half the viewport spent before the thing the page is for. /analysis/ has
+   the opposite failure: its panel stops at 55% and leaves 280px of bare paper.
+
+   The fixes are the same four everywhere, so they live here rather than being
+   redesigned per route.
+   ========================================================================== */
+
+/* 1. The page fills the window, so the ground under a short route is the page
+      rather than a visible edge partway down.
+
+      It does not stretch its children to do it. Making the workspace grids grow
+      cost two regressions in one build — a provenance notice squeezed to a
+      sliver, and the GIS map overflowing its panel far enough to swallow the
+      pointer events of the tool beside it — because those grids size their own
+      rows and panels against their content, not against the window. */
+.demo-page { min-height: calc(100dvh - 54px); padding-bottom: var(--sw-space-5); }
+
+/* 2. The availability notice is a strip, not a 230px card. It says one thing —
+      this module's data is not your active well's — which is a line, not an
+      essay, and the detail stays available to a reader who wants it. */
+.demo-workspace-availability {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sw-space-2) var(--sw-space-3);
+  margin-bottom: var(--sw-space-3); padding: 8px 12px;
+  border-left-width: 3px; border-radius: var(--sw-radius-control);
+  background: var(--sw-warning-surface, #fff5d9); font-size: 12px; line-height: 1.45;
+}
+.demo-workspace-availability h2 { font-size: 12.5px; font-weight: 600; margin: 0; }
+.demo-workspace-availability p { margin: 0; flex: 1 1 320px; color: var(--sw-ink); }
+.demo-workspace-availability button { min-height: 32px; padding: 4px 10px; font-size: 12px; }
+.demo-workspace-availability a { font-size: 12px; }
+
+/* 3. A loose control row becomes an instrument strip, the same one the well
+      workspace uses, wherever a route puts controls above its data. */
+.demo-template-row, .demo-field-controls, .demo-gis-toolbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sw-space-2) var(--sw-space-3);
+  padding: 7px 10px; background: var(--sw-surface);
+  border: 1px solid var(--sw-line); border-radius: var(--sw-radius-panel, 8px);
+  box-shadow: 0 1px 0 rgb(0 0 0 / .03);
+}
+
+/* 4. Status lines are chrome, so they read as chrome: one line, quiet, no box
+      competing with the panels around it. */
+.demo-correlation-status {
+  padding: 4px 2px; border: 0; background: none;
+  color: var(--sw-muted); font: 11px "IBM Plex Mono", monospace;
+}
+.demo-template-row > :is(label, .sw-petro-template-select) { display: flex; align-items: center; gap: var(--sw-space-2); margin: 0; font-size: 12px; }
+.demo-template-row > details { margin-left: auto; font-size: 12px; }
+.demo-template-row > details > summary { cursor: pointer; color: var(--sw-accent); font: 11.5px "IBM Plex Mono", monospace; }
+.demo-template-row > details > pre { flex-basis: 100%; max-height: 240px; overflow: auto; margin: var(--sw-space-2) 0 0; font-size: 11px; }
+.demo-petro-workspace { display: grid; gap: var(--sw-space-3); align-content: start; }
+
+/* The Field header and well register cost 400px before the first chart: a 24px
+   headline, a five-line notice, and four cards carrying one checkbox and one
+   button each. The same controls in one strip are 56px. */
+.demo-field-header { align-items: baseline; }
+.demo-field-header h1 { font-size: 15px; font-weight: 600; }
+.demo-field-header > div { display: flex; align-items: baseline; gap: var(--sw-space-3); flex-wrap: wrap; }
+.demo-field-header p { font-size: 11.5px; }
+
+/* Provenance notices get quieter, not shorter. Clamping them was the wrong
+   instinct for a repository whose argument is that the limits of the data are
+   stated plainly: hiding that behind a hover makes the page look better by
+   making it less honest. Smaller and muted keeps every word on screen while
+   letting the data outrank it. */
+.demo-gis-notice {
+  padding: 7px 10px; border-left-width: 3px; border-radius: var(--sw-radius-control);
+  font-size: 11.5px; line-height: 1.5; color: var(--sw-muted);
+}
+
+/* Four selection cards become four chips with an inspect affordance. */
+.demo-field-register {
+  display: flex; flex-wrap: wrap; gap: var(--sw-space-2);
+  grid-template-columns: none;
+  padding: 7px 10px; background: var(--sw-surface);
+  border: 1px solid var(--sw-line); border-radius: var(--sw-radius-panel, 8px);
+}
+.demo-field-register > div {
+  display: flex; align-items: center; gap: var(--sw-space-2);
+  padding: 3px 4px 3px 9px; border-radius: 999px; background: var(--sw-paper);
+}
+.demo-field-register label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; white-space: nowrap; }
+.demo-field-register button { min-height: 28px; padding: 4px 10px; border-radius: 999px; font-size: 11.5px; }
+
+/* Section prose above a chart: smaller, quieter, out of the way of the data. */
+.demo-field-workspace > section > h2 { font-size: 13px; font-weight: 600; margin: 0 0 4px; }
+.demo-field-workspace > section > p { font-size: 11.5px; line-height: 1.5; color: var(--sw-muted); margin: 0 0 var(--sw-space-2); }

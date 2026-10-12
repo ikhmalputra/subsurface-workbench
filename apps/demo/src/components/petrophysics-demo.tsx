@@ -133,8 +133,12 @@ export function PetrophysicsDemo() {
       {wellId ? `Linked well: ${wellId}` : "Depth link is not focused"}{range ? ` · brushed ${range[0].toFixed(1)}–${range[1].toFixed(1)} m MD` : " · no depth range"}
       {link.cursorMdM !== null ? ` · cursor ${link.cursorMdM.toFixed(1)} m MD` : ""}
     </p>
-    <PetrophysicsTemplateSelect templates={trackTemplates} value={templateId} onChange={setTemplateId} />
-    <details className="sw-petro-template-json"><summary>View or copy this JSON track template</summary><pre tabIndex={0}>{JSON.stringify(selectedTemplate, null, 2)}</pre></details>
+    {/* Controls above the data belong in one strip, the same one the well workspace uses, rather
+        than stacking as three loose rows that push the log down the page. */}
+    <div className="demo-template-row">
+      <PetrophysicsTemplateSelect templates={trackTemplates} value={templateId} onChange={setTemplateId} />
+      <details className="sw-petro-template-json"><summary>View or copy this JSON track template</summary><pre tabIndex={0}>{JSON.stringify(selectedTemplate, null, 2)}</pre></details>
+    </div>
     <PetrophysicsLogView
       well={calculationWell}
       tracks={tracks}
