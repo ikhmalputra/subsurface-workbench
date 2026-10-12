@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { readFile } from "node:fs/promises";
 import { waitForScene } from "./support/scene";
+import { SCENE_READY } from "./support/timing";
 
 test("View well opens the selected record and uses edits as the active revision", async ({ page }) => {
   await page.goto("/view-well/");
@@ -113,10 +114,17 @@ test("full well edits recompute trajectory and reach construction, source record
   await page.getByRole("combobox", { name: "View", exact: true }).selectOption("earth");
   await waitForScene(page);
   await page.getByRole("link", { name: "Well report", exact: true }).click();
-  await expect(page.getByTestId("well-report"), errors.join("\n")).toContainText("My FORGE revision");
-  await expect(page.getByTestId("well-report")).toContainText("Revised formation");
-  await expect(page.getByTestId("well-report")).toContainText("User revised hole record");
-  await expect(page.getByTestId("well-report")).not.toContainText("two FIT results");
+  // Two separate things can go wrong leaving a software-rendered 3D route, and asserting the report
+  // text alone cannot tell them apart: a navigation that has not completed and a report that has
+  // not rendered both present as an empty locator. So the URL is checked first, and the report gets
+  // a scene-sized budget — this is the only step in the stretch after `waitForScene` that was still
+  // on the default 15 s, and the assertion itself is unchanged.
+  await expect(page).toHaveURL(/\/well-report\/$/, { timeout: SCENE_READY });
+  const report = page.getByTestId("well-report");
+  await expect(report, errors.join("\n")).toContainText("My FORGE revision", { timeout: SCENE_READY });
+  await expect(report).toContainText("Revised formation");
+  await expect(report).toContainText("User revised hole record");
+  await expect(report).not.toContainText("two FIT results");
   await page.getByRole("link", { name: "View well", exact: true }).click();
   await page.locator(".demo-toolbar").getByRole("link", { name: "Edit well", exact: true }).click();
   page.once("dialog", (dialog) => dialog.accept());

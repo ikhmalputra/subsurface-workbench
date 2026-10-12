@@ -64,7 +64,13 @@ jobs:
         if: always()
         with:
           name: e2e-evidence-${{ matrix.shard }}
-          path: output/
+          # test-results/ carries the trace and the DOM snapshot for a failure. Without it a shard
+          # failure that does not reproduce locally cannot be diagnosed at all — only the assertion
+          # text survives, and that says which locator was empty, not what the page was showing.
+          # The webgpu job already uploaded both; the shards did not.
+          path: |
+            output/
+            test-results/
 
   # Requires a working adapter and asserts rendered-pixel changes, so it stays its own job rather
   # than sharing a shard's budget.
