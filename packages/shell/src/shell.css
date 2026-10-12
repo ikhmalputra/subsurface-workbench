@@ -167,6 +167,12 @@
 /* Grid overlay keeps every mode in flow at the same cell; `hidden` chooses which one paints. */
 .swb-canvas-layer { grid-area: 1 / 1; min-width: 0; min-height: 0; overflow: auto; }
 
+/* A hidden pane must not occupy space, and `hidden` alone does not guarantee that: the UA rule
+   `[hidden] { display: none }` loses to any class that sets `display`, and host pane classes do.
+   One of them (`display: grid` on a 3D view) kept a 700px pane in flow while invisible, pushing the
+   depth controls below the fold. The shell owns these attributes, so it can own the guarantee. */
+[data-pane][hidden], [data-layer][hidden] { display: none !important; }
+
 /* ============================ dock ============================ */
 .swb-dock {
   flex: 0 0 var(--swb-dock);

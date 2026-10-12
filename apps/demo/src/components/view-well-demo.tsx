@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useLayoutEffect, useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { getWellComponents, metresToFeet, positionAtMeasuredDepth, sectionAtDepth, validateWellboreTrajectory, wellComponentsToAssembly } from "@ikhmalputra/subsurface-core";
 import { designSurvey } from "../lib/well-data";
 import { createMockLogCurve } from "@ikhmalputra/subsurface-core/sandbox";
@@ -21,6 +21,7 @@ import { RecordCard, useWell, wells } from "./wells";
 import { InterpretationControls } from "./interpretation-controls";
 import { useWorkspace } from "./workspace-provider";
 import { CommandButton } from "@ikhmalputra/subsurface-react/ui";
+import { Pane, PaneGrid } from "@ikhmalputra/subsurface-shell";
 
 const AssemblyScene = dynamic(() => import("@ikhmalputra/subsurface-react/assembly-three"), { ssr: false, loading: () => <div className="sw-scene-loading">Loading Blender assembly…</div> });
 const WellScene = dynamic(() => import("@ikhmalputra/subsurface-react/three"), { ssr: false, loading: () => <div className="sw-scene-loading">Loading 3D well…</div> });
@@ -31,6 +32,27 @@ const FULL_VOLUME: VolumeCuts = { along: 100, offset: 100, depth: 100 };
 const cutAt = (start: number, end: number, percent: number) => start + (end - start) * Math.max(percent, 2) / 100;
 
 type Layout = "split" | "seismic" | "earth" | "schematic" | "scene" | "curved" | "profile";
+
+/** The seven panes this route can show. A preset is a set of them, not an alternative to them. */
+type PaneId = "curved" | "profile" | "schematic" | "seismic" | "earth" | "survey" | "cutaway";
+
+/**
+ * Which panes each preset shows.
+ *
+ * These were seven mutually exclusive `&&` branches, so every change of view unmounted the drawing,
+ * the 3D scene and the seismic section and rebuilt them: zoom, depth window, camera and the lazily
+ * imported renderer all discarded, and the SEG-Y refetched. The sets were always sets — "2.5D + 3D"
+ * is two panes — the interface just could not say so.
+ */
+const panesFor: Readonly<Record<Layout, readonly PaneId[]>> = {
+  curved: ["curved"],
+  profile: ["profile"],
+  schematic: ["schematic"],
+  split: ["schematic", "cutaway"],
+  seismic: ["schematic", "seismic"],
+  earth: ["earth", "survey"],
+  scene: ["cutaway"],
+};
 
 const layouts: readonly { value: Layout; label: string }[] = [
   { value: "split", label: "2.5D + 3D" },
@@ -104,9 +126,16 @@ export function ViewWellDemo() {
   const { design, components, operations, logUrl, seismic } = useWell(wellId);
   const layout: Layout = (layoutChoice === "seismic" || layoutChoice === "earth") && !seismic ? "schematic" : layoutChoice;
   const link = useDepthLink(true, store);
-  const segy = useSegy(layout === "seismic" ? seismic?.url : undefined);
+  const panes = panesFor[layout];
+  // A pane that has been opened keeps its data as well as its DOM: the fetch gates stay open once
+  // a pane has been shown, so returning to it does not put it back into a loading state. The loads
+  // are cached per URL, so this costs nothing after the first time.
+  const opened = useRef(new Set<PaneId>());
+  for (const pane of panes) opened.current.add(pane);
+  const everOpened = (pane: PaneId) => opened.current.has(pane);
+  const segy = useSegy(everOpened("seismic") ? seismic?.url : undefined);
   const wellPath = useWellOnSection(design.survey ?? [], seismic);
-  const earth = useSceneSeismic(seismic, layout === "earth");
+  const earth = useSceneSeismic(seismic, everOpened("earth"));
   const [volumeMode, setVolumeMode] = useState<"solid" | "render">("solid");
   const cuts: VolumeCuts = useMemo(() => {
     const volume = earth.volume;
@@ -205,22 +234,22 @@ export function ViewWellDemo() {
         </div>
       </details>}
     </div>
-    <div className={`demo-view-grid demo-view-${layout}${inspectorVisible ? "" : " demo-inspector-hidden"}`}>
-      {layout === "curved" && <div className="demo-fill demo-section-view"><CurvedAssemblySchematic assembly={assembly} survey={design.survey} formations={showFormations ? design.formations : undefined} assetBaseUrl="/well-components" selectedId={highlighted} onSelect={setSelectedId} /></div>}
-      {layout === "profile" && <div className="demo-fill demo-section-view"><InteractiveViewport name="Curved well section"><CurvedSchematic key={design.id} design={design} components={components} selectedId={picked?.id ?? ""} onSelect={setSelectedId} mode={sectionMode} onModeChange={setSectionMode} layersVisible /></InteractiveViewport></div>}
-      {(layout === "split" || layout === "schematic" || layout === "seismic") && <div className="demo-fill"><AssemblySchematic assembly={assembly} survey={design.survey} formations={showFormations ? design.formations : undefined} assetBaseUrl="/well-components" selectedId={highlighted} onSelect={(id) => setSelectedId(id)} exploded={exploded} onExplodedChange={setExploded} title="Construction schematic" {...schematicLink} /></div>}
-      {layout === "seismic" && seismic && <div className="demo-fill demo-seismic-view">{segy?.file ? <WellSeismicSection file={segy.file} meta={seismic.meta} wellPath={wellPath} components={components} formations={design.formations ?? []} survey={design.survey ?? []} selected={picked}
+    <PaneGrid active={panes} className={`demo-view-grid demo-view-${layout}${inspectorVisible ? "" : " demo-inspector-hidden"}`}>
+      <Pane id="curved" deferUntilShown className="demo-fill demo-section-view"><CurvedAssemblySchematic assembly={assembly} survey={design.survey} formations={showFormations ? design.formations : undefined} assetBaseUrl="/well-components" selectedId={highlighted} onSelect={setSelectedId} /></Pane>
+      <Pane id="profile" deferUntilShown className="demo-fill demo-section-view"><InteractiveViewport name="Curved well section"><CurvedSchematic key={design.id} design={design} components={components} selectedId={picked?.id ?? ""} onSelect={setSelectedId} mode={sectionMode} onModeChange={setSectionMode} layersVisible /></InteractiveViewport></Pane>
+      <Pane id="schematic" deferUntilShown className="demo-fill"><AssemblySchematic assembly={assembly} survey={design.survey} formations={showFormations ? design.formations : undefined} assetBaseUrl="/well-components" selectedId={highlighted} onSelect={(id) => setSelectedId(id)} exploded={exploded} onExplodedChange={setExploded} title="Construction schematic" {...schematicLink} /></Pane>
+      <Pane id="seismic" className="demo-fill demo-seismic-view" deferUntilShown>{seismic && (segy?.file ? <WellSeismicSection file={segy.file} meta={seismic.meta} wellPath={wellPath} components={components} formations={design.formations ?? []} survey={design.survey ?? []} selected={picked}
         onSelectMd={selectAtMd} cursorMdM={link.cursorMdM} onCursorMdChange={link.linked ? link.setCursorMdM : undefined} mdWindow={link.linked ? link.window : undefined} onMdWindowChange={link.linked ? link.setWindow : undefined} title="Seismic along the well · FORGE 3D PSDM" />
-        : <p className="sw-scene-loading" role="status">{segy?.error ? `SEG-Y could not be loaded (${segy.error}).` : "Loading SEG-Y…"}</p>}</div>}
-      {layout === "earth" && <div className="demo-fill demo-earth-view">{earth.error && <p className="sw-scene-loading" role="status">Seismic could not be loaded ({earth.error}); the well is shown without it.</p>}
+        : <p className="sw-scene-loading" role="status">{segy?.error ? `SEG-Y could not be loaded (${segy.error}).` : "Loading SEG-Y…"}</p>)}</Pane>
+      <Pane id="earth" className="demo-fill demo-earth-view" deferUntilShown>{earth.error && <p className="sw-scene-loading" role="status">Seismic could not be loaded ({earth.error}); the well is shown without it.</p>}
         <WellScene design={design} selectedId={picked?.id ?? ""} onSelect={setSelectedId} volume={earth.volume} volumeView={volumeView} colorBy="dls" dlsLimitDegPer30m={3} probeMdM={link.pinnedMdM} onProbe={selectAtMd}
           slicePlane={interpretation?.slicePlane ?? null} onSlicePlaneChange={(plane) => store.setSlicePlane(plane, "plane-gizmo")} picking={picking} logCurve={porosity} logStyle={interpretation?.logStyle ?? null}
           cameraView={cameraIsAutomatic ? null : camera} onCameraViewChange={(view) => store.setViewState(view, "well-scene")} onSpatialPick={(xyz) => store.triggerSpatialPick(xyz, "well-scene")}
-          cursorMdM={link.linked ? link.cursorMdM : null} onCursorMdChange={link.linked ? link.setCursorMdM : undefined} mdWindow={link.linked ? link.window : null} /></div>}
-      {layout === "earth" && <div className="demo-fill demo-survey-view"><TrajectoryLog survey={survey} selectedMdM={link.pinnedMdM} onSelectMd={selectAtMd} height={900}
+          cursorMdM={link.linked ? link.cursorMdM : null} onCursorMdChange={link.linked ? link.setCursorMdM : undefined} mdWindow={link.linked ? link.window : null} /></Pane>
+      <Pane id="survey" deferUntilShown className="demo-fill demo-survey-view"><TrajectoryLog survey={survey} selectedMdM={link.pinnedMdM} onSelectMd={selectAtMd} height={900}
         cursorMdM={link.linked ? link.cursorMdM : null} onCursorMdChange={link.linked ? link.setCursorMdM : undefined} mdWindow={link.linked ? link.window : null}
-        markers={components.filter((component) => component.kind === "Casing").map((component) => ({ mdM: component.bottomDepthM, label: `${component.name.split(" / ").pop()?.trim()} shoe` }))} /></div>}
-      {(layout === "split" || layout === "scene") && <div className="demo-fill"><AssemblyScene assembly={assembly} assetBaseUrl="/well-components" selectedId={highlighted} onSelect={(id) => setSelectedId(id)} exploded={exploded} onExplodedChange={setExploded} title="Construction cutaway" /></div>}
+        markers={components.filter((component) => component.kind === "Casing").map((component) => ({ mdM: component.bottomDepthM, label: `${component.name.split(" / ").pop()?.trim()} shoe` }))} /></Pane>
+      <Pane id="cutaway" className="demo-fill" deferUntilShown><AssemblyScene assembly={assembly} assetBaseUrl="/well-components" selectedId={highlighted} onSelect={(id) => setSelectedId(id)} exploded={exploded} onExplodedChange={setExploded} title="Construction cutaway" /></Pane>
       <aside id="well-inspector" className="demo-side" aria-label="Component inspector" hidden={!inspectorVisible}>
         <header className="demo-inspector-head"><span>INSPECTOR</span><small>{components.length} source records</small></header>
         <div className="demo-inspector-tabs" role="group" aria-label="Inspector panels">
@@ -259,7 +288,7 @@ export function ViewWellDemo() {
           <p>Construction widths are exaggerated for readability. Unknown dimensions are not certified design values.</p>
         </section>
       </aside>
-    </div>
+    </PaneGrid>
     <div className="demo-drawing-status">
       <form onSubmit={(event) => {
         event.preventDefault();

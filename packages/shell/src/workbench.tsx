@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 import { PanelDock, PanelHostProvider, usePanelHost, type PanelRegistry } from "./panel-host.js";
 import { CommandButton, type CommandIconName } from "./ui.js";
 
@@ -97,23 +97,72 @@ export function Workbench({
   </PanelHostProvider>;
 }
 
-const CanvasStackContext = createContext<string | null>(null);
+const CanvasStackContext = createContext<readonly string[] | null>(null);
 
 /**
  * Keeps every canvas mode mounted and toggles visibility instead of swapping elements. Switching modes
  * in the current demo remounts and silently discards zoom, depth window and camera; this does not.
+ *
+ * `active` is a set, not a single id, because the facets of a well are not alternatives: a reader
+ * comparing a construction drawing with the seismic section along the same well needs both at once,
+ * and making that a choice between them is what turns one workspace into several pages.
  */
-export function CanvasStack({ active, children }: { readonly active: string; readonly children: ReactNode }) {
-  return <CanvasStackContext.Provider value={active}>
-    <div className="swb-canvas-stack" data-active-layer={active}>{children}</div>
+export function CanvasStack({ active, children }: { readonly active: string | readonly string[]; readonly children: ReactNode }) {
+  const ids = typeof active === "string" ? [active] : active;
+  return <CanvasStackContext.Provider value={ids}>
+    <div className="swb-canvas-stack" data-active-layer={ids.join(" ")} data-layer-count={ids.length}>{children}</div>
   </CanvasStackContext.Provider>;
 }
 
-export function CanvasLayer({ id, children }: { readonly id: string; readonly children: ReactNode }) {
+/**
+ * Membership of a keep-alive group: is this pane shown, and has it ever been?
+ *
+ * `deferUntilShown` is for a pane whose mount is expensive — a lazily imported 3D renderer, a
+ * multi-megabyte volume fetch. It is not rendered until it is first shown, and then it stays
+ * mounted: the saving is on first paint, and the state is kept for every switch after that. Panes
+ * without it mount immediately, which is what a cheap 2D view should do.
+ */
+function useKeepAlive(id: string, deferUntilShown: boolean, child: string, parent: string) {
   const active = useContext(CanvasStackContext);
-  if (active === null) throw new Error("<CanvasLayer> must be rendered inside <CanvasStack>.");
-  const shown = active === id;
-  return <div className="swb-canvas-layer" data-layer={id} data-active={shown || undefined} hidden={!shown}>{children}</div>;
+  // Naming the parent matters: the failure is always a missing wrapper, and the fix is to add that one.
+  if (active === null) throw new Error(`<${child}> must be rendered inside <${parent}>.`);
+  const shown = active.includes(id);
+  const [mounted, setMounted] = useState(!deferUntilShown || shown);
+  if (shown && !mounted) setMounted(true);
+  return { shown, mounted };
+}
+
+/** One pane of an overlay stack: every mode in the same cell, `hidden` choosing which paints. */
+export function CanvasLayer({ id, children, deferUntilShown = false }: { readonly id: string; readonly children: ReactNode; readonly deferUntilShown?: boolean }) {
+  const { shown, mounted } = useKeepAlive(id, deferUntilShown, "CanvasLayer", "CanvasStack");
+  return <div className="swb-canvas-layer" data-layer={id} data-active={shown || undefined} data-mounted={mounted || undefined} hidden={!shown}>
+    {mounted ? children : null}
+  </div>;
+}
+
+/**
+ * A keep-alive group whose layout belongs to the host.
+ *
+ * `CanvasStack` overlays its layers in one cell, which is right for alternative renderings of the
+ * same thing and wrong for panes meant to sit beside each other. A `PaneGrid` keeps the same
+ * membership semantics — a set of shown panes, each mounted once and kept — and imposes no geometry:
+ * the host supplies the class, so an application's existing grid keeps working while its panes stop
+ * being destroyed every time the reader changes what they are looking at.
+ *
+ * Children that are not panes (an inspector, a toolbar) pass through untouched.
+ */
+export function PaneGrid({ active, className, children }: { readonly active: string | readonly string[]; readonly className?: string; readonly children: ReactNode }) {
+  const ids = typeof active === "string" ? [active] : active;
+  return <CanvasStackContext.Provider value={ids}>
+    <div className={className} data-active-panes={ids.join(" ")}>{children}</div>
+  </CanvasStackContext.Provider>;
+}
+
+export function Pane({ id, className, children, deferUntilShown = false }: { readonly id: string; readonly className?: string; readonly children: ReactNode; readonly deferUntilShown?: boolean }) {
+  const { shown, mounted } = useKeepAlive(id, deferUntilShown, "Pane", "PaneGrid");
+  return <div className={className} data-pane={id} data-active={shown || undefined} data-mounted={mounted || undefined} hidden={!shown}>
+    {mounted ? children : null}
+  </div>;
 }
 
 export type { PanelRegistry };

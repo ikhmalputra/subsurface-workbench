@@ -312,6 +312,16 @@ third state.)
    fail against the previous code.
 5. **Panes and presets** — the five well routes become one workspace. Includes §9.3, because the
    Design preset cannot exist while the design panels have one mount site.
+   - **5a done.** `/view-well/`'s seven mutually exclusive `&&` branches are now a keep-alive pane
+     group: `PaneGrid`/`Pane` in the shell hold the membership and the host keeps its own geometry.
+     The sets were always sets — "2.5D + 3D" is two panes — the interface just could not say so, and
+     every change of view destroyed the drawing, the 3D scene and the section, discarding zoom,
+     camera and the lazily imported renderer and refetching the SEG-Y. Panes now mount on first use
+     and are kept. Proved by a test that stamps the live nodes and cycles five presets; it fails
+     against the previous wiring. Found while doing it: `hidden` does not guarantee a pane takes no
+     space — the UA rule loses to any class that sets `display`, and a 3D pane's `display: grid` kept
+     a 700px invisible pane in flow, pushing the depth controls below the fold.
+   - Still to do: the remaining well routes as presets, and §9.3.
 6. **Cursor props for the blind views** — `AssemblyScene`, `CurvedAssemblySchematic`,
    `CurvedSchematic`, and now `DaysVsDepthChart` (§9.2).
 7. **Retire the route gates** in favour of capability checks.

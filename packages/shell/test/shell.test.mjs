@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { CanvasLayer, CanvasStack, LayerManager } from "../dist/index.js";
+import { CanvasLayer, CanvasStack, LayerManager, Pane, PaneGrid } from "../dist/index.js";
 
 const layers = [
   { id: "casing", label: "Casing & liners", visible: true, provenance: "documented", count: 3, toggleable: false, toggleHint: "Not separable yet." },
@@ -60,4 +60,55 @@ test("every canvas mode stays mounted and only the active one is shown", () => {
 
 test("a canvas layer outside a stack fails loudly instead of rendering nowhere", () => {
   assert.throws(() => renderToStaticMarkup(h(CanvasLayer, { id: "orphan" }, "x")), /CanvasStack/);
+});
+
+test("a stack can show several panes at once, so facets are not alternatives", () => {
+  const html = renderToStaticMarkup(h(CanvasStack, { active: ["schematic", "seismic"] },
+    h(CanvasLayer, { id: "schematic" }, "SCHEMATIC"),
+    h(CanvasLayer, { id: "seismic" }, "SEISMIC"),
+    h(CanvasLayer, { id: "cutaway" }, "CUTAWAY")));
+
+  assert.match(html, /data-layer="schematic" data-active="true"/);
+  assert.match(html, /data-layer="seismic" data-active="true"/);
+  assert.match(html, /data-layer="cutaway"[^>]*hidden=""/);
+  assert.match(html, /data-layer-count="2"/);
+});
+
+test("an expensive pane waits for its first showing, and is kept once mounted", () => {
+  // Rendered while hidden: the cost of a lazily imported renderer or a volume fetch is not paid
+  // for a pane nobody has opened.
+  const hidden = renderToStaticMarkup(h(CanvasStack, { active: "schematic" },
+    h(CanvasLayer, { id: "schematic" }, "SCHEMATIC"),
+    h(CanvasLayer, { id: "earth", deferUntilShown: true }, "EARTH")));
+  assert.match(hidden, /data-layer="earth"/);
+  assert.doesNotMatch(hidden, /EARTH/);
+  assert.doesNotMatch(hidden, /data-layer="earth"[^>]*data-mounted/);
+
+  // Shown: it mounts. A pane without the flag renders either way, which is what a cheap 2D view
+  // should do — it is instantly available on the first switch to it.
+  const shown = renderToStaticMarkup(h(CanvasStack, { active: ["schematic", "earth"] },
+    h(CanvasLayer, { id: "schematic" }, "SCHEMATIC"),
+    h(CanvasLayer, { id: "earth", deferUntilShown: true }, "EARTH")));
+  assert.match(shown, /EARTH/);
+  assert.match(shown, /data-layer="earth"[^>]*data-mounted="true"/);
+});
+
+test("a pane grid keeps the host's layout and the group's keep-alive semantics", () => {
+  const html = renderToStaticMarkup(h(PaneGrid, { active: ["schematic", "seismic"], className: "demo-view-grid demo-view-seismic" },
+    h(Pane, { id: "schematic", className: "demo-fill" }, "SCHEMATIC"),
+    h(Pane, { id: "seismic", className: "demo-fill demo-seismic-view" }, "SEISMIC"),
+    h(Pane, { id: "earth", className: "demo-fill", deferUntilShown: true }, "EARTH"),
+    h("aside", { className: "demo-side" }, "INSPECTOR")));
+
+  // The host's classes survive, so an application's existing geometry keeps working.
+  assert.match(html, /class="demo-view-grid demo-view-seismic" data-active-panes="schematic seismic"/);
+  assert.match(html, /class="demo-fill demo-seismic-view" data-pane="seismic" data-active="true"/);
+  // A pane that is not shown is hidden rather than discarded, and an expensive one is not mounted.
+  assert.doesNotMatch(html, /EARTH/);
+  // Children that are not panes pass through untouched.
+  assert.match(html, /<aside class="demo-side">INSPECTOR<\/aside>/);
+});
+
+test("a pane outside a grid names the wrapper it needs", () => {
+  assert.throws(() => renderToStaticMarkup(h(Pane, { id: "orphan" }, "x")), /<Pane> must be rendered inside <PaneGrid>/);
 });

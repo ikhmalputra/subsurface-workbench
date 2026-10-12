@@ -36,7 +36,9 @@ test("view-well composes the adapter, 2.5D schematic and 3D cutaway directly", a
   // View well opens on the curved construction; this test is about the straight 2.5D schematic.
   await page.getByRole("combobox", { name: "View", exact: true }).selectOption("schematic");
   await expect(page.locator(".sw-asm-item")).toHaveCount(7);
-  await expect(page.locator(".sw-asm-scene")).toHaveCount(0);
+  // Hidden, not destroyed: a preset the 3D cutaway is not part of no longer throws the scene away.
+  // It is mounted on first use and kept, so returning to "split" does not rebuild it.
+  await expect(page.locator(".sw-asm-scene")).not.toBeVisible();
   await page.getByRole("combobox", { name: "View", exact: true }).selectOption("split");
   await expect(page.locator(".sw-asm-scene canvas")).toBeVisible();
   await page.getByRole("button", { name: /Production casing \/ 7 in/ }).first().click();
@@ -44,7 +46,7 @@ test("view-well composes the adapter, 2.5D schematic and 3D cutaway directly", a
   await expect(page.getByTestId("demo-record")).toContainText("Source · page 67");
 
   await page.getByRole("combobox", { name: "View", exact: true }).selectOption("schematic");
-  await expect(page.locator(".sw-asm-scene")).toHaveCount(0);
+  await expect(page.locator(".sw-asm-scene")).not.toBeVisible();
   await page.getByRole("combobox", { name: "View", exact: true }).selectOption("split");
 
   await page.getByRole("combobox", { name: "Well" }).selectOption("s-profile");
@@ -160,7 +162,7 @@ test("trajectory math is verified, the planner hits a dragged target and station
 test("view-well follows the trajectory with the cited FORGE record and shares selection", async ({ page }) => {
   await page.goto("/view-well/");
   await page.getByRole("combobox", { name: "View", exact: true }).selectOption("profile");
-  await expect(page.locator(".sw-asm-scene, .sw-asm-schematic-frame")).toHaveCount(0);
+  await expect(page.locator(".sw-asm-scene, .sw-asm-schematic-frame")).not.toBeVisible();
   await expect(page.locator(".demo-toolbar").getByRole("button", { name: "Exploded view" })).toHaveCount(0);
   const viewport = page.getByTestId("Curved well section-viewport");
   await expect(viewport).toHaveAttribute("data-scale", "1");
@@ -442,4 +444,43 @@ test("static host keeps a strict CSP and loads nothing heavy before it is asked 
   expect(requests.every((url) => url.startsWith("http://127.0.0.1:3101/"))).toBe(true);
   expect(requests.filter((url) => /three|wasm|pyodide/i.test(url))).toEqual([]);
   await expect(page.locator("canvas")).toHaveCount(0);
+});
+
+test("view-well presets are sets of panes that keep their state instead of being rebuilt", async ({ page }) => {
+  await page.goto("/view-well/");
+  const view = page.getByRole("combobox", { name: "View", exact: true });
+
+  // Open every pane once so each is mounted, then stamp the live nodes. A stamp survives a
+  // re-render and cannot survive a remount, which is the only way to tell them apart.
+  for (const preset of ["schematic", "split", "profile", "curved"]) await view.selectOption(preset);
+  const schematic = page.getByTestId("assembly-schematic");
+  const cutaway = page.getByTestId("assembly-scene");
+  const viewport = page.getByTestId("Curved well section-viewport");
+  for (const pane of [schematic, cutaway, viewport]) {
+    await expect(pane).toBeAttached();
+    await pane.evaluate((element) => element.setAttribute("data-mount-check", "same-pane"));
+  }
+
+  // Zoom the curved section, so there is view state a rebuild would lose.
+  await view.selectOption("profile");
+  await page.getByRole("button", { name: "Zoom in Curved well section" }).click();
+  const zoomed = Number(await viewport.getAttribute("data-scale"));
+  expect(zoomed).toBeGreaterThan(1);
+
+  for (const preset of ["schematic", "split", "seismic", "curved", "profile"]) {
+    await view.selectOption(preset);
+    for (const pane of [schematic, cutaway, viewport]) {
+      await expect(pane).toHaveAttribute("data-mount-check", "same-pane");
+    }
+  }
+
+  // Back on the preset that shows it, the section is still where the reader left it.
+  await expect(viewport).toHaveAttribute("data-scale", String(zoomed));
+
+  // And a preset is a set: "2.5D + seismic" shows the construction drawing and the section at once,
+  // which is what makes them comparable rather than sequential.
+  await view.selectOption("seismic");
+  await expect(schematic).toBeVisible();
+  await expect(page.getByTestId("seismic-section")).toBeVisible();
+  await expect(cutaway).not.toBeVisible();
 });
