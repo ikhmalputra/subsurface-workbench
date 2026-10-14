@@ -19,6 +19,12 @@ by the authors or University is implied. The fixture data is not relicensed MIT.
 Source hashes, provenance and attribution remain in the distributed JSON and
 core package README; see docs/FORGE_SOURCE_RECORD.md for evidence boundaries.
 
+The offline world basemap `packages/react/assets/gis/world-50m.json` is built by
+`tools/build-world.mjs` from Natural Earth 1:50m land and country boundaries
+(public domain, https://www.naturalearthdata.com/), as packaged in world-atlas
+2.0.2 (ISC). Coordinates are rounded to 0.001°. Country boundaries are Natural
+Earth's de facto lines and carry no position on disputed borders.
+
 Runtime packages include Next.js/React (MIT), D3 Scale (ISC), Lucide (ISC),
 and IBM Plex font files (SIL Open Font License 1.1). Their full license notices
 remain in the installed dependency packages; retain them when redistributing

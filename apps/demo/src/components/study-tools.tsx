@@ -10,7 +10,7 @@ import { useWorkspace } from "./workspace-provider";
 import { useTools } from "./tools";
 import { checkDrillingLog, intervalEvidence, parseStudies, studySignature, studyStorageKey, validateScope } from "../lib/drilling-study";
 import { lasAttempt } from "../lib/well-data";
-import { depthBridge, recordDepthToMetres } from "../lib/depth";
+import { depthBridge, recordDepthToMetres } from "@ikhmalputra/subsurface-react/state";
 import { useLas } from "./use-las";
 import { continueStudy, newStudyDraft, restartStudy, studyPhases, type StudyDraft } from "../lib/study-draft";
 import type { DrillingStudy } from "../lib/drilling-study";

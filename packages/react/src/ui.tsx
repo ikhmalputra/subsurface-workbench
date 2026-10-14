@@ -1,6 +1,6 @@
 import type { ButtonHTMLAttributes } from "react";
 import { Children, isValidElement } from "react";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, Crosshair, Download, Eraser, Eye, FilePlus2, Focus, Layers, Link2, Maximize2, Menu, Minus, Pencil, Play, Plus, Printer, RotateCcw, Save, Search, Settings2, Square, Trash2, X, ZoomIn, ZoomOut } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Box, Check, Crosshair, Download, Eraser, Eye, FilePlus2, Focus, Globe2, Layers, Link2, Maximize2, Menu, Minus, Pencil, Play, Plus, Printer, RotateCcw, Save, Search, Settings2, Square, Trash2, X, ZoomIn, ZoomOut } from "lucide-react";
 
 const commandIcons = {
   add: Plus, remove: Trash2, clear: Eraser, reset: RotateCcw, apply: Check,
@@ -9,7 +9,7 @@ const commandIcons = {
   view: Eye, layers: Layers, link: Link2, settings: Settings2, menu: Menu,
   edit: Pencil, create: FilePlus2, save: Save, download: Download,
   print: Printer, play: Play, stop: Square, close: X, minus: Minus,
-  zoomIn: ZoomIn, zoomOut: ZoomOut,
+  zoomIn: ZoomIn, zoomOut: ZoomOut, globe: Globe2, model: Box,
 } as const;
 
 export type CommandIconName = keyof typeof commandIcons;

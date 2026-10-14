@@ -97,7 +97,10 @@
   "dependencies": {
     "@ikhmalputra/subsurface-core": "workspace:*",
     "@types/geojson": "7946.0.16",
+    "d3-brush": "3.0.0",
     "d3-scale": "4.0.2",
+    "d3-selection": "3.0.0",
+    "d3-zoom": "3.0.0",
     "lucide-react": "1.52.0",
     "maplibre-gl": "6.14.0",
     "react-zoom-pan-pinch": "4.2.0"

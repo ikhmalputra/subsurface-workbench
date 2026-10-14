@@ -5,7 +5,6 @@ import "@fontsource/ibm-plex-sans/600.css";
 import "@fontsource/ibm-plex-mono/400.css";
 import "@ikhmalputra/subsurface-react/styles.css";
 import "@ikhmalputra/subsurface-react/gis.css";
-import "@ikhmalputra/subsurface-shell/shell.css";
 import "./showcase.css";
 import { WorkspaceProvider } from "../components/workspace-provider";
 import { WorkbenchFrame } from "../components/workbench-frame";

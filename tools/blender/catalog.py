@@ -159,8 +159,8 @@ def cylinder(name, radius, depth, location, finish, rotation=(0, 0, 0), vertices
     return obj
 
 
-def torus(name, major, minor, location, finish, rotation=(0, 0, 0)):
-    bpy.ops.mesh.primitive_torus_add(major_radius=major, minor_radius=minor, location=location, rotation=rotation, major_segments=48, minor_segments=12)
+def torus(name, major, minor, location, finish, rotation=(0, 0, 0), minor_segments=12):
+    bpy.ops.mesh.primitive_torus_add(major_radius=major, minor_radius=minor, location=location, rotation=rotation, major_segments=48, minor_segments=minor_segments)
     obj = bpy.context.object
     obj.name = name
     obj.data.materials.append(finish)
@@ -628,7 +628,9 @@ def build_wire_wrap_screen(m):
     parts = [sleeve("Screen base pipe", 0.55, 0.42, 0.2, -4.7, m["steel"]), sleeve("End ring top", 0.76, 0.56, -0.05, -0.3, m["dark"], cut=False), sleeve("End ring bottom", 0.76, 0.56, -4.2, -4.45, m["dark"], cut=False)]
     for i in range(32):
         z = -0.4 - i * 0.115
-        parts.append(torus("Wire wrap", 0.64, 0.012, (0, 0, z), m["steel"]))
+        # A 12 mm wire reads as round with five sides at any size the viewer draws it; twelve sides
+        # put 37,000 of the screen's 44,000 triangles into wire nobody can see the facets of.
+        parts.append(torus("Wire wrap", 0.64, 0.012, (0, 0, z), m["steel"], minor_segments=5))
     return parts
 
 

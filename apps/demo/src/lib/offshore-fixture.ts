@@ -3,7 +3,9 @@ import { prepareGisDocument, reprojectGisXY } from "@ikhmalputra/subsurface-core
 import type { SubsurfaceWellboreTrajectory } from "@ikhmalputra/subsurface-core/contracts";
 
 export function makeOffshoreFixture() {
-  const origin = reprojectGisXY([114.2, 0.4], "EPSG:4326", "EPSG:32650");
+  // An assumed location in open water in the Makassar Strait, inside UTM zone 50N. It used to sit
+  // inland on Borneo, which a basemap made plain; the field is synthetic either way.
+  const origin = reprojectGisXY([118.7, 0.4], "EPSG:4326", "EPSG:32650");
   const offsets = [[-1800, -1000], [1200, 800], [-1000, 1800], [2400, -1600]] as const;
   const waterDepthsM: Record<string, number> = {};
   const surveys: Record<string, SubsurfaceWellboreTrajectory> = {};

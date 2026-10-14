@@ -7,7 +7,7 @@ import type { CommandIconName } from "@ikhmalputra/subsurface-react/ui";
 import { Activity, Anchor, AudioWaveform, Box, Boxes, Calculator, Calendar, ClipboardList, Columns3, Compass, Container, Crosshair, Cylinder, Database, Download, Droplets, FlaskConical, Flame, Gauge, GitBranch, Globe, Grid3x3, Hammer, Layers, ListOrdered, Map, Mountain, Printer, Radio, Route, Rows3, Ruler, Scale, Scan, ScatterChart, ShieldCheck, Sigma, Split, Target, Thermometer, Timer, TrendingDown, Waves, Wrench, Zap, type LucideIcon } from "lucide-react";
 import { FloatingPanel } from "./floating";
 import { useWorkspace } from "./workspace-provider";
-import { SHEET, documentHref, documentLabels, documentRoutes, domainTools, findToolObject, isDocument, ribbonDomains, ribbonGroups, subDomains, toolGroupLabels, toolObjects, toolVerbs, type DomainTool, type SubDomain, type ToolGroup, type ToolPanelId, type ToolVerb } from "../lib/tools";
+import { SHEET, documentHref, documentLabels, documentRoutes, findToolObject, isDocument, toolGroupLabels, toolObjects, toolVerbs, type DomainTool, type ToolGroup, type ToolPanelId, type ToolVerb } from "../lib/tools";
 import { ViewWellDemo } from "./view-well-demo";
 import { ViewWellUsage } from "./view-well-usage";
 import { PetrophysicsDemo } from "./petrophysics-demo";
@@ -16,7 +16,7 @@ import { LinkedDataDemo } from "./linked-data-demo";
 import { WebGpuSandbox } from "./webgpu-sandbox";
 import { WorkspaceRoute } from "./workspace-route";
 
-const ribbonIcons: Readonly<Record<string, LucideIcon>> = {
+export const ribbonIcons: Readonly<Record<string, LucideIcon>> = {
   Activity, Anchor, AudioWaveform, Box, Boxes, Calculator, Calendar, ClipboardList, Columns3, Compass, Container, Crosshair, Cylinder, Database, Download, Droplets,
   FlaskConical, Flame, Gauge, GitBranch, Globe, Grid3x3, Hammer, Layers, ListOrdered, Map, Mountain, Printer, Radio, Route, Rows3, Ruler, Scale, Scan, Scatter: ScatterChart,
   ShieldCheck, Sigma, Split, Target, Thermometer, Timer, TrendingDown, Waves, Wrench, Zap,
@@ -24,6 +24,7 @@ const ribbonIcons: Readonly<Record<string, LucideIcon>> = {
 import { EvidenceTool, StudyTool } from "./study-tools";
 import { WellReportDemo } from "./well-report-demo";
 import { FieldWorkspace } from "./field-workspace";
+import { WellsMapDocument } from "./wells-map-document";
 import { ComponentRecordsTool, ConstructionTool, FormationsTool, RecordsDataTool, WellPropertiesTool } from "./edit-tools";
 import { FieldRegisterTool, FieldTrajectoryTool } from "./field-tools";
 import { DesignTool } from "./design-tools";
@@ -60,6 +61,9 @@ interface ToolsState {
   /** Where the design workflow portals its tools: the Design brief tool's body while it is open. */
   readonly designHost: HTMLElement | null;
   readonly setDesignHost: (element: HTMLElement | null) => void;
+  /** Where the open document puts the controls that say what the sheet is showing: a slot on the top bar. */
+  readonly barHost: HTMLElement | null;
+  readonly setBarHost: (element: HTMLElement | null) => void;
   readonly setRibbonOpen: (open: boolean) => void;
   /** Open a sub-domain tool from the ribbon; returns the line to echo. */
   readonly launch: (tool: DomainTool) => string;
@@ -77,7 +81,8 @@ export function useTools(): ToolsState {
 
 /** The calculators and editors dock beside the inspector, the station table under the sheet; the documents fill it. */
 const sidePanels: ReadonlySet<ToolPanelId> = new Set(["kick", "cement", "time", "hydraulics", "planner", "stations", "survey-summary", "study", "evidence", "construction", "well-properties", "component-records", "formations", "records-data", "field-register", "field-trajectory", "design"]);
-const bottomPanels: ReadonlySet<ToolPanelId> = new Set(["stations", "evidence"]);
+/** Registers, tables and charts: they need width, not the selection. These go to the shelf. */
+const bottomPanels: ReadonlySet<ToolPanelId> = new Set(["stations", "evidence", "time", "component-records"]);
 /** Side tools that need more than the inspector's width. */
 const dockSizes: Readonly<Partial<Record<ToolPanelId, number>>> = { study: 380, construction: 380, "well-properties": 360, "component-records": 360, formations: 360, "records-data": 380, "field-register": 320, "field-trajectory": 400, design: 460 };
 
@@ -90,6 +95,7 @@ export function ToolsProvider({ children }: { readonly children: ReactNode }) {
   const [link, setLink] = useState<string | null>(null);
   const [constructionHost, setConstructionHost] = useState<HTMLElement | null>(null);
   const [designHost, setDesignHost] = useState<HTMLElement | null>(null);
+  const [barHost, setBarHost] = useState<HTMLElement | null>(null);
   const router = useRouter();
   // A phone has no room for a docked ribbon; it starts as a tray tab there, and the frame keeps
   // the workspace bar out of the ribbon's title row for as long as the viewport stays that narrow.
@@ -144,7 +150,7 @@ export function ToolsProvider({ children }: { readonly children: ReactNode }) {
     for (const extra of tool.open.also ?? []) openPanel(extra);
     return `${tool.label}${tool.open.where ? ` · ${tool.open.where}` : ""}${tool.status === "partial" ? " · partial" : ""}`;
   };
-  return <ToolsContext.Provider value={{ open, document, link, setLink, requests, paletteOpen, setPaletteOpen, ribbonOpen, setRibbonOpen, phone, constructionHost, setConstructionHost, designHost, setDesignHost, launch, openPanel, closePanel, run }}>
+  return <ToolsContext.Provider value={{ open, document, link, setLink, requests, paletteOpen, setPaletteOpen, ribbonOpen, setRibbonOpen, phone, constructionHost, setConstructionHost, designHost, setDesignHost, barHost, setBarHost, launch, openPanel, closePanel, run }}>
     <Suspense fallback={null}><ToolDeepLink /></Suspense>
     {children}
   </ToolsContext.Provider>;
@@ -175,8 +181,8 @@ function ToolDeepLink() {
     if (tools.document !== wanted) tools.openPanel(wanted);
     // The field's documents come with the field's tools: the register and the trajectory inspector.
     // The correlation and the cross-section keep their width for the plots; the trajectory inspector stays a ribbon tool there.
-    if (wanted === "field" || wanted === "correlation" || wanted === "cross-section") tools.openPanel("field-register");
-    if (wanted === "field") tools.openPanel("field-trajectory");
+    if (wanted === "field-gis" || wanted === "correlation" || wanted === "cross-section") tools.openPanel("field-register");
+    if (wanted === "field-gis") tools.openPanel("field-trajectory");
   }, [pathname, tool]); // tools.openPanel is stable per provider
   return null;
 }
@@ -197,6 +203,28 @@ export function ForwardToSheet({ document }: { readonly document: string }) {
 }
 
 const verbIcons: Readonly<Record<ToolVerb, CommandIconName>> = { view: "view", create: "add", edit: "edit", delete: "remove" };
+
+const panelTitles: Readonly<Record<ToolPanelId, string>> = {
+  ...documentLabels as Record<ToolPanelId, string>,
+  inspector: "Inspector", "well-file": "Well file",
+  kick: "Kick tolerance", cement: "Cement volumes", time: "Time breakdown", hydraulics: "Hydraulics",
+};
+
+function DocumentBody({ document }: { readonly document: ToolPanelId }) {
+  switch (document) {
+    case "section": return <><ViewWellDemo /><ViewWellUsage /></>;
+    case "report": return <WorkspaceRoute current="/well-report/"><WellReportDemo /></WorkspaceRoute>;
+    case "field": return <WellsMapDocument />;
+    case "field-gis": return <FieldWorkspace tool="spatial" />;
+    case "correlation": return <FieldWorkspace tool="correlation" />;
+    case "cross-section": return <FieldWorkspace tool="section" />;
+    case "petrophysics": return <WorkspaceRoute current="/petrophysics/"><PetrophysicsDemo /></WorkspaceRoute>;
+    case "production": return <WorkspaceRoute current="/production/"><ProductionSurveillanceDemo /></WorkspaceRoute>;
+    case "linked-data": return <WorkspaceRoute current="/linked-data/"><LinkedDataDemo /></WorkspaceRoute>;
+    case "sandbox": return <WorkspaceRoute current="/sandbox/"><WebGpuSandbox /></WorkspaceRoute>;
+    default: return null;
+  }
+}
 
 /** The palette: objects by group, the host's supply of each, and a button per verb. */
 export function ToolsPalette() {
@@ -229,74 +257,6 @@ export function ToolsPalette() {
   </FloatingPanel>;
 }
 
-/**
- * The ribbon: a tab per sub-domain, an icon per tool. Built tools open; partial tools open the
- * nearest thing they have and say so; planned tools are greyed with what they need as the tooltip,
- * so the whole scope of docs/SUBSURFACE_DOMAIN_STUDY.md is on the sheet, not in a document.
- */
-export function ToolsRibbon({ headExtra }: { readonly headExtra?: ReactNode }) {
-  const tools = useTools();
-  const [domain, setDomain] = useState<SubDomain>("drilling");
-  const [echo, setEcho] = useState<string | null>(null);
-  // Only working tools are buttons. What is not built yet is a count with its needs in the study,
-  // not a greyed button that opens nothing.
-  const visible = domainTools.filter((tool) => tool.domain === domain && tool.status !== "planned");
-  const planned = domainTools.filter((tool) => tool.domain === domain && tool.status === "planned").length;
-  const domainLabel = subDomains.find((entry) => entry.id === domain)?.label.toLowerCase();
-  return <FloatingPanel id="ribbon" title="Tool ribbon" detail={echo ?? `${visible.length} ${domainLabel} tools${planned ? ` · ${planned} planned` : ""}`} open={tools.ribbonOpen} onOpenChange={tools.setRibbonOpen} defaultDock="top" dockSize={138} defaultStyle={{ left: "calc(var(--dock-left, 0px) + 12px)", top: "calc(var(--dock-top, 0px) + 100px)", width: "min(1100px, calc(100vw - 24px))" }} className="demo-ribbon-float" headExtra={headExtra}>
-    <div className="demo-ribbon" data-testid="tool-ribbon">
-      <div className="demo-ribbon-tabs" role="tablist" aria-label="Sub-domains">
-        {ribbonDomains.map((entry) => <CommandButton key={entry.id} kind="selection" role="tab" aria-selected={domain === entry.id} className="demo-ribbon-tab" onClick={() => setDomain(entry.id)}>{entry.label}</CommandButton>)}
-      </div>
-      <div className="demo-ribbon-tools" role="group" aria-label={`${subDomains.find((entry) => entry.id === domain)?.label} tools`}>
-        {visible.reduce<{ name: string; members: DomainTool[] }[]>((groups, tool) => {
-          // `Map` is the lucide icon here; the clusters are a plain ordered list.
-          const name = ribbonGroups[tool.id] ?? subDomains.find((entry) => entry.id === domain)?.label ?? "Tools";
-          const group = groups.find((entry) => entry.name === name);
-          if (group) group.members.push(tool); else groups.push({ name, members: [tool] });
-          return groups;
-        }, []).map(({ name, members }) => <div key={name} className="demo-ribbon-group" role="group" aria-label={`${name} tools`}>
-          <div className="demo-ribbon-group-tools">
-            {members.map((tool) => {
-              const Icon = ribbonIcons[tool.icon] ?? Layers;
-              // The visible label is short under its group caption; the accessible name carries the
-              // group so "Section" here is never the sheet's "Section" view button.
-              return <CommandButton key={tool.id} kind="selection" className="demo-ribbon-tool" data-status={tool.status} aria-label={`${name} · ${tool.label}`}
-                title={`${tool.does}${tool.status === "partial" ? " (partial)" : ""}`} onClick={() => setEcho(tools.launch(tool))}>
-                <span className="demo-ribbon-icon"><Icon size={20} strokeWidth={1.6} aria-hidden="true" /></span>
-                <span>{tool.label}</span>
-              </CommandButton>;
-            })}
-          </div>
-          <span className="demo-ribbon-group-caption" aria-hidden="true">{name}</span>
-        </div>)}
-      </div>
-    </div>
-  </FloatingPanel>;
-}
-
-const panelTitles: Readonly<Record<ToolPanelId, string>> = {
-  ...documentLabels as Record<ToolPanelId, string>,
-  inspector: "Inspector", "well-file": "Well file",
-  kick: "Kick tolerance", cement: "Cement volumes", time: "Time breakdown", hydraulics: "Hydraulics",
-};
-
-function DocumentBody({ document }: { readonly document: ToolPanelId }) {
-  switch (document) {
-    case "section": return <><ViewWellDemo /><ViewWellUsage /></>;
-    case "report": return <WorkspaceRoute current="/well-report/"><WellReportDemo /></WorkspaceRoute>;
-    case "field": return <FieldWorkspace tool="spatial" />;
-    case "correlation": return <FieldWorkspace tool="correlation" />;
-    case "cross-section": return <FieldWorkspace tool="section" />;
-    case "petrophysics": return <WorkspaceRoute current="/petrophysics/"><PetrophysicsDemo /></WorkspaceRoute>;
-    case "production": return <WorkspaceRoute current="/production/"><ProductionSurveillanceDemo /></WorkspaceRoute>;
-    case "linked-data": return <WorkspaceRoute current="/linked-data/"><LinkedDataDemo /></WorkspaceRoute>;
-    case "sandbox": return <WorkspaceRoute current="/sandbox/"><WebGpuSandbox /></WorkspaceRoute>;
-    default: return null;
-  }
-}
-
-/** The documents and calculators as panels, mounted when a tool opens them. */
 export function ToolPanels() {
   const tools = useTools();
   const panels = Array.from(tools.open);

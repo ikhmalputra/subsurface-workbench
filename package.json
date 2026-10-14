@@ -7,32 +7,43 @@
     "node": "24.21.0"
   },
   "scripts": {
-    "build": "pnpm --filter @ikhmalputra/subsurface-core build && pnpm --filter @ikhmalputra/subsurface-react build && pnpm --filter @ikhmalputra/subsurface-shell build && pnpm --filter demo build",
+    "build": "pnpm --filter @ikhmalputra/subsurface-kernel build && pnpm --filter @ikhmalputra/subsurface-fixtures build && pnpm --filter @ikhmalputra/subsurface-calc build && pnpm --filter @ikhmalputra/subsurface-scene build && pnpm --filter @ikhmalputra/subsurface-render build && pnpm --filter @ikhmalputra/subsurface-views build && pnpm --filter @ikhmalputra/subsurface-core build && pnpm --filter @ikhmalputra/subsurface-react build && pnpm --filter demo build",
+    "design": "node tools/design-shots.mjs",
     "dev": "pnpm --filter demo dev",
-    "lint": "eslint apps/demo/src packages e2e playwright.config.ts --max-warnings 0",
-    "render:catalog": "blender --background --python tools/blender/catalog.py",
-    "test": "node --test packages/core/src/*.test.ts",
+    "lint": "eslint apps/demo/src packages --max-warnings 0",
+    "render:catalog": "blender --background --python tools/blender/catalog.py && node tools/compress-models.mjs",
+    "compress:models": "node tools/compress-models.mjs",
+    "build:world": "node tools/build-world.mjs",
+    "test": "node --test packages/core/src/*.test.ts packages/kernel/src/*.test.ts packages/calc/src/*.test.ts packages/scene/src/*.test.ts packages/render/src/*.test.ts",
     "test:asset": "node --test tools/asset.test.mjs",
     "test:demo-library": "node --test apps/demo/test/*.test.ts",
-    "test:e2e": "playwright test",
-    "test:e2e:fast": "playwright test --grep-invert \"@slow\"",
     "test:packages": "node tools/verify-packages.mjs",
-    "test:render-adapters": "node --test packages/react/test/*.test.mjs packages/shell/test/*.test.mjs",
-    "typecheck": "pnpm --filter @ikhmalputra/subsurface-core build && pnpm --filter @ikhmalputra/subsurface-react build && pnpm --filter demo exec tsc --noEmit && pnpm exec tsc -p tsconfig.e2e.json"
+    "test:render-adapters": "node --test packages/react/test/*.test.mjs",
+    "test:views": "node --test packages/views/test/*.test.mjs",
+    "typecheck": "pnpm --filter @ikhmalputra/subsurface-core build && pnpm --filter @ikhmalputra/subsurface-react build && pnpm --filter demo exec tsc --noEmit"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
     "@eslint/js": "10.0.1",
+    "@gltf-transform/core": "4.5.1",
+    "@gltf-transform/extensions": "4.5.1",
+    "@gltf-transform/functions": "4.5.1",
     "@playwright/test": "1.63.0",
+    "@types/d3-brush": "3.0.6",
     "@types/d3-scale": "4.0.9",
+    "@types/d3-selection": "3.0.12",
+    "@types/d3-zoom": "3.0.9",
     "@types/node": "24.10.1",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@types/three": "0.186.0",
     "eslint": "10.0.1",
+    "meshoptimizer": "1.3.0",
     "parse5": "8.0.1",
     "three": "0.186.1",
+    "topojson-client": "3.1.0",
     "typescript": "5.9.3",
-    "typescript-eslint": "8.71.0"
+    "typescript-eslint": "8.71.0",
+    "world-atlas": "2.0.2"
   }
 }

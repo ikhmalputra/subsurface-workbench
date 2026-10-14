@@ -24,7 +24,7 @@ export function FieldRegisterTool() {
     <header className="demo-field-tool-head"><h3>Well register</h3><p>One project · four wells · shared selection and source stations</p><strong>SYNTHETIC ENGINEERING SCENARIO</strong></header>
     <p className="demo-gis-notice">Assumed UTM 50N locations, generated surveys/logs, synthetic casing and completion records, interpreted Sand R1 top/base and illustrative water depths. No measured bathymetry, production, pressure, saturation or reserves are supplied. Field selection is independent of the documented well workspace.</p>
     <nav aria-label="Field tools" className="demo-field-tools">
-      <Link href="/view-well/?tool=field" aria-current={current === "field" ? "page" : undefined}><CommandIcon name="locate" />1 · Locate wells</Link>
+      <Link href="/view-well/?tool=field-gis" aria-current={current === "field-gis" ? "page" : undefined}><CommandIcon name="locate" />1 · Locate wells</Link>
       <Link href="/view-well/?tool=correlation" aria-current={current === "correlation" ? "page" : undefined}><CommandIcon name="layers" />2 · Compare intervals</Link>
       <Link href="/view-well/?tool=cross-section" aria-current={current === "cross-section" ? "page" : undefined}><CommandIcon name="view" />3 · Spatial section</Link>
     </nav>

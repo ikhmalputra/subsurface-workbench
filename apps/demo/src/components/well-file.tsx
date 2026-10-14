@@ -10,17 +10,18 @@ import { WellSeismicSection, useSegy, useWellOnSection, type WellSeismicSource }
 import { InfoTip } from "@ikhmalputra/subsurface-react";
 import { CommandButton } from "@ikhmalputra/subsurface-react/ui";
 import { useLas } from "./use-las";
-import { depthBridge } from "../lib/depth";
+import { depthBridge } from "@ikhmalputra/subsurface-react/state";
 import { computedSurvey } from "../lib/well-data";
 
-const tabs = [
+export const wellFileTabs = [
   { id: "history", label: "Daily history" },
   { id: "runs", label: "Service & BHA runs" },
   { id: "log", label: "Mud log" },
   { id: "survey", label: "Directional survey" },
   { id: "seismic", label: "Seismic (SEG-Y)" },
 ] as const;
-type Tab = (typeof tabs)[number]["id"];
+export type WellFileTab = (typeof wellFileTabs)[number]["id"];
+type Tab = WellFileTab;
 
 const tracks = [
   { mnemonic: "ROP", label: "ROP", color: "#147a65" },
@@ -45,16 +46,19 @@ export interface WellFileProps {
   readonly link: DepthLink;
   /** A tool asked for a tab; a new nonce per request so the same tab can be asked for twice. */
   readonly openTab?: { readonly tab?: string; readonly nonce: number } | null;
+  /** The tab now showing, so the host can name the panel after it. */
+  readonly onTabChange?: (tab: WellFileTab) => void;
 }
 
 /** Operational well file: hole sections, daily history, runs and mud log, all linked to the construction selection by depth. */
-export function WellFile({ operations, components, selected, onSelectComponent, logUrl, survey = [], formations = [], seismic, link, openTab = null }: WellFileProps) {
+export function WellFile({ operations, components, selected, onSelectComponent, logUrl, survey = [], formations = [], seismic, link, openTab = null, onTabChange }: WellFileProps) {
   const id = useId();
   const [tab, setTab] = useState<Tab>("history");
   useEffect(() => {
     if (!openTab?.tab) return;
-    if (tabs.some((item) => item.id === openTab.tab)) setTab(openTab.tab as Tab);
+    if (wellFileTabs.some((item) => item.id === openTab.tab)) setTab(openTab.tab as Tab);
   }, [openTab]);
+  useEffect(() => { onTabChange?.(tab); }, [tab]); // the title follows the tab, however it changed
   const [focusDate, setFocusDate] = useState<string | null>(null);
   const [focusRunId, setFocusRunId] = useState<string | null>(null);
   const bridge = depthBridge(link);
@@ -86,10 +90,10 @@ export function WellFile({ operations, components, selected, onSelectComponent, 
       <p className="demo-file-note">{ops.days.length} daily reports · {ops.runs.length} service runs · {ops.milestones.length} milestones{selected ? <> · linked to <strong>{selected.name}</strong> ({Math.round(range?.topFt ?? 0).toLocaleString("en-US")}–{Math.round(range?.baseFt ?? 0).toLocaleString("en-US")} ft)</> : null}</p>
     </div>
     <HoleSectionLog operations={ops} selectedComponentId={selected?.id ?? null} onSelectSection={(section) => { onSelectComponent(section.holeComponentId); bridge.pinFt(null); }} title="Hole section log" />
-    <div className="demo-file-tabs" role="tablist" aria-label="Well file records">
-      {tabs.map((item) => <CommandButton kind="selection" key={item.id} type="button" role="tab" id={`${id}-${item.id}-tab`} aria-controls={`${id}-${item.id}`} aria-selected={tab === item.id} tabIndex={tab === item.id ? 0 : -1} onClick={() => setTab(item.id)} onKeyDown={(event) => {
+    <div className="demo-file-wellFileTabs" role="tablist" aria-label="Well file records">
+      {wellFileTabs.map((item) => <CommandButton kind="selection" key={item.id} type="button" role="tab" id={`${id}-${item.id}-tab`} aria-controls={`${id}-${item.id}`} aria-selected={tab === item.id} tabIndex={tab === item.id ? 0 : -1} onClick={() => setTab(item.id)} onKeyDown={(event) => {
         if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
-        const next = tabs[(tabs.findIndex((value) => value.id === tab) + (event.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length]!;
+        const next = wellFileTabs[(wellFileTabs.findIndex((value) => value.id === tab) + (event.key === "ArrowRight" ? 1 : wellFileTabs.length - 1)) % wellFileTabs.length]!;
         setTab(next.id);
         document.getElementById(`${id}-${next.id}-tab`)?.focus();
       }}>{item.label}</CommandButton>)}

@@ -14,9 +14,18 @@ import { useTools } from "./tools";
  */
 export function WorkspaceContextBar({ part }: { readonly part: "picker" | "readouts" }) {
   const { document } = useTools();
-  const field = document === "field" || document === "correlation" || document === "cross-section";
+  if (document === "field") return part === "picker" ? <strong className="demo-context-field">Wells map</strong> : <MapContextBar />;
+  const field = document === "field-gis" || document === "correlation" || document === "cross-section";
   if (part === "picker") return field ? <strong className="demo-context-field">Equator field · synthetic</strong> : <WellPickerPart />;
   return field ? <FieldContextBar /> : <WellContextBar />;
+}
+
+function MapContextBar() {
+  return <section className="demo-workspace-context" aria-label="Map context" data-testid="workspace-context">
+    <span>Map: WGS84, globe or Web Mercator</span>
+    <span>Basemap: Natural Earth 1:50m, offline</span>
+    <span>Site depths in each site's own datum</span>
+  </section>;
 }
 
 function WellPickerPart() {

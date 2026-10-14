@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { forgeDesign, forgeOperations, getWellComponents, sProfileDesign, wellComponentsToAssembly } from "@ikhmalputra/subsurface-core";
-import { assertWellDesign, assertWellOperations, authoredRevision, editTrajectory, mergeAssembly, parseWellRevision } from "../src/lib/well-revision.ts";
+import { designWithTrajectory, forgeDesign, forgeOperations, getWellComponents, sProfileDesign, wellComponentsToAssembly } from "@ikhmalputra/subsurface-core";
+import { assertWellDesign, assertWellOperations, authoredRevision, editTrajectory, mergeAssembly, parseWellRevision, previewTrajectory } from "../src/lib/well-revision.ts";
 
 test("source wells and operational records are valid editable baselines", () => {
   assertWellDesign(forgeDesign);
@@ -57,4 +57,33 @@ test("assembly rename retains unknown dimensions and deleting a host removes omi
   const withChild = { ...source, components: [...source.components, { ...source.components[0]!, id: "omitted-joint", kind: "Casing joint" as const, parentId: "production-casing" }] };
   const removed = mergeAssembly(withChild, assembly, { ...assembly, items: assembly.items.filter((item) => item.id !== "production-casing" && item.hostId !== "production-casing") });
   assert.equal(removed.components!.some((item) => item.id === "omitted-joint"), false);
+});
+
+test("the previewed trajectory is the one that gets applied", () => {
+  // The sheet drew the draft with one function and applied it with another. Trimming eighty
+  // stations off FORGE previewed a well 938 m shallower than applying it produced, and the
+  // preview also dropped the source tie-in and trimmed components the edit never touched.
+  const stations = (forgeDesign.survey ?? []).map(({ mdM, inclinationDeg, azimuthDeg }) => ({ mdM, inclinationDeg, azimuthDeg }));
+  const trimmed = stations.slice(0, -80);
+  const preview = previewTrajectory(forgeDesign, trimmed, { name: "Edited stations", note: "preview" });
+  const applied = editTrajectory(forgeDesign, trimmed);
+  assert.equal(preview.totalDepthM, applied.totalDepthM, "the preview must show the depth the revision will have");
+  assert.equal(preview.components?.length, applied.components?.length);
+  assert.deepEqual(preview.survey, applied.survey, "the preview must show the positions the revision will have");
+  assert.equal(preview.id, applied.id);
+  // Trimming the survey does not shorten the well: coverage and total depth are separate facts.
+  assert.equal(applied.totalDepthM, forgeDesign.totalDepthM);
+  assert.equal(applied.components?.length, forgeDesign.components?.length);
+  // The core helper the sheet used to call answers differently on the same input. It is a valid
+  // operation — fork a planned design from stations — but it is not what applying an edit does,
+  // and this is the gap that put a well 938 m shallower on screen than the one being saved.
+  const forked = designWithTrajectory(forgeDesign, trimmed);
+  assert.notEqual(forked.totalDepthM, applied.totalDepthM);
+  assert.ok(applied.totalDepthM - forked.totalDepthM > 900);
+});
+
+test("a draft that could not be applied draws the source, not an impossible well", () => {
+  const broken = [{ mdM: 0, inclinationDeg: 0, azimuthDeg: 0 }];
+  assert.throws(() => editTrajectory(forgeDesign, broken), /at least two/);
+  assert.equal(previewTrajectory(forgeDesign, broken), forgeDesign);
 });

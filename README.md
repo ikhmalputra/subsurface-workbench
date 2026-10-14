@@ -360,18 +360,45 @@ diameters are exaggerated, and the Blender models are nominal geometry. Ratings
 and checks are textbook calculations without professional approval. No package
 has been published.
 
-The WebGL well scene now supports arbitrary-angle GPU-textured intersection
-planes, optional float-framebuffer surface/amplitude picking and log-driven
-co-axial colour/display-radius styling. CPU ray picking remains the default.
-Plane and log settings share the reactive store and deep links; the demo log is
+The 3D scenes (well, assembly, offshore field) draw through three.js's WebGPU
+renderer. It uses WebGPU where the browser has it and falls back to WebGL 2 on
+its own; the backend in use is written to the scene's `data-backend` attribute.
+Shaders are written once in TSL, so both backends run the same seismic, slice
+and picking code. The seismic volume is uploaded as unsigned bytes holding each
+signed count + 128 and decoded in the shader. Every scene has a view cube with
+26 views and a section plane with capped cuts. The assembly scene adds live
+ambient occlusion. The volume render reads slightly lighter on WebGPU than on
+WebGL 2; the solid block, slices and picked amplitudes match. CPU ray picking
+remains the default; GPU picking returns the visible surface and its sampled
+amplitude, not a buried reflector inside a ray-marched volume. The demo log is
 explicitly synthetic, not measured FORGE porosity.
 
+Component models are meshopt-compressed glTF. Their decoder is WebAssembly, so
+a host with a Content Security Policy must allow `'wasm-unsafe-eval'` in
+`script-src`, as `tools/serve.mjs` does. `pnpm render:catalog` re-renders the
+models in Blender and compresses them; `pnpm compress:models` compresses only.
+
+The Map button in the top bar opens the wells map (`WellsMap`, in the `/gis`
+entry): every well with a declared location on an offline globe, drawn over
+Natural Earth 1:50m land and borders built by `pnpm build:world`. Choosing a
+site flies to it and opens it in 3D beside the map (`SiteScene`, in the `/3d`
+entry). Its wells, horizons, datum levels and seismic slices share one east,
+north and depth frame inside a labelled axes box. FORGE is placed from its own
+NAD83 / UTM 12N wellhead, with NAD83 taken as WGS84 to within about 2 m. Its
+granite top is drawn as the record states it: planar at the well's contact,
+with its extent conceptual. The synthetic Equator field's R1 surfaces are
+triangulated between its four wells' picks and labelled as interpolated. Wells
+without a location are listed, not placed. The well scene uses the same page-text
+labels and axes frame, and its seismic uses the 2D section's grey map and clip.
+
+Depth views (the well section, construction schematic and log tracks) and the
+seismic section share one set of d3-zoom gestures: Ctrl/⌘ + wheel zooms about
+the pointer, a wheel or a drag pans, Shift + drag zooms to a box, and a click
+that does not move still selects.
+
 The separate, experimental `/webgpu` entry renders generic Float32/Uint8 cubes
-as ray-marched volumes or oblique slices with native WebGPU. Try it at
-`/sandbox/`; it never silently downgrades to WebGL. It is not full WebGPU parity
-for well construction, Blender surfaces or GPU picking. The existing WebGL
-well scene still uses its specialized int8 seismic protocol. Picking finds the
-visible surface/boundary, not a buried reflector inside a ray-marched volume.
+as ray-marched volumes or oblique slices with native WebGPU only. Try it at
+`/sandbox/`; it never downgrades to WebGL.
 Fence diagrams and a drag/drop data workspace are not implemented. The Blender
 loader maps attributes but does not choose geological shader materials.
 

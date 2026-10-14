@@ -18,12 +18,15 @@ import { editTrajectory } from "../lib/well-revision";
 const fmt = (value: number, digits = 2) => value.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
 
 /** The survey the tools work on: the draft when there is one, the host's record otherwise. */
-export function useWorkingSurvey() {
+function useWorkingSurvey() {
   const { well, trajectoryDrafts, updateTrajectoryDraft, applyRevision } = useWorkspace();
   const reference = well.design;
   const draft = trajectoryDrafts[reference.id];
   const stations = useMemo(() => draft?.stations ?? stationInputs(reference.survey ?? []), [draft, reference]);
-  const survey = useMemo(() => computeMinimumCurvature(stations, { tieIn: draft?.mode === "plan" ? undefined : reference.survey?.[0] }), [stations, draft?.mode, reference]);
+  // One tie-in rule everywhere: the table, the sheet and the applied revision all tie to the
+  // well's own first station. Plan mode used to drop it here while applying kept it, so the
+  // positions in this table could differ from the positions that were saved.
+  const survey = useMemo(() => computeMinimumCurvature(stations, { tieIn: reference.survey?.[0] }), [stations, reference]);
   const summary = useMemo(() => summarizeTrajectory(survey), [survey]);
   const dlsLimit = draft?.dlsLimitDegPer30m ?? 3;
   const issues = useMemo(() => validateSurveyStations(stations, { maxDlsDegPer30m: dlsLimit }), [stations, dlsLimit]);

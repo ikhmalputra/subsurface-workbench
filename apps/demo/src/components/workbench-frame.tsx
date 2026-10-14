@@ -1,17 +1,13 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
-import { Workbench } from "@ikhmalputra/subsurface-shell";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { useWorkspace } from "./workspace-provider";
-import { WorkspaceContextBar } from "./workspace-context-bar";
-import { WorkspaceNavigation } from "./workspace-navigation";
-import { DepthCommand } from "./depth-command";
-import { FloatProvider, FloatingToolbar, useDockRegistry } from "./floating";
+import { FloatProvider, useDockRegistry, useDocks } from "./floating";
 import { wells } from "./wells-data";
-import { ToolPanels, ToolsPalette, ToolsProvider, ToolsRibbon, useTools } from "./tools";
+import { ToolPanels, ToolsPalette, ToolsProvider, useTools } from "./tools";
+import { InspectorColumn, Shelf, StatusLine, TopBar, WellBrowser } from "./workstation";
 import { SHEET, toolVerbs, type ToolVerb } from "../lib/tools";
-import { CommandButton } from "@ikhmalputra/subsurface-react/ui";
 
 /**
  * The application frame, mounted once by `layout.tsx` and never again.
@@ -35,6 +31,8 @@ export function WorkbenchFrame({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [layer, setLayer] = useState<HTMLElement | null>(null);
   const [tray, setTray] = useState<HTMLElement | null>(null);
+  const [column, setColumn] = useState<HTMLElement | null>(null);
+  const [shelf, setShelf] = useState<HTMLElement | null>(null);
   const registry = useDockRegistry();
   // Docked panels cost the sheet their edge. The insets are CSS variables on the root so the
   // sheet's padding and every default toolbar position can read them.
@@ -54,85 +52,48 @@ export function WorkbenchFrame({ children }: { children: ReactNode }) {
   // Routes are declared with trailing slashes (`trailingSlash: true`), so normalise rather than
   // letting the active-route highlight silently fail to match.
   const path = pathname === "/" || pathname.endsWith("/") ? pathname : `${pathname}/`;
-  return <FloatProvider value={{ layer, tray, registry }}><ToolsProvider>
-    <FrameBody path={path} setLayer={setLayer} setTray={setTray}>{children}</FrameBody>
+  return <FloatProvider value={{ layer, tray, column, shelf, registry }}><ToolsProvider>
+    <FrameBody path={path} setLayer={setLayer} setTray={setTray} setColumn={setColumn} setShelf={setShelf}>{children}</FrameBody>
   </ToolsProvider></FloatProvider>;
 }
 
-/** The frame proper, inside the tools provider so the navigation can highlight the open document. */
-function FrameBody({ path, setLayer, setTray, children }: { readonly path: string; readonly setLayer: (element: HTMLElement | null) => void; readonly setTray: (element: HTMLElement | null) => void; readonly children: ReactNode }) {
+/** The frame proper, inside the tools provider so the browser can mark the open tool. */
+function FrameBody({ path, setLayer, setTray, setColumn, setShelf, children }: { readonly path: string; readonly setLayer: (element: HTMLElement | null) => void; readonly setTray: (element: HTMLElement | null) => void; readonly setColumn: (element: HTMLElement | null) => void; readonly setShelf: (element: HTMLElement | null) => void; readonly children: ReactNode }) {
   const tools = useTools();
-  const current = path === SHEET && tools.link ? `${SHEET}?tool=${tools.link}` : path;
-  // The landing page is a page, not the sheet: it gets the navigation and nothing else of the chrome.
+  const registry = useDocks();
+  const [rail, setRail] = useState(true);
+  // The landing page is a page, not the workstation: it gets the bar and the status line, and the
+  // browser and inspector collapse to nothing.
   const onSheet = path === SHEET;
-  const barInRibbon = onSheet && tools.ribbonOpen && !tools.phone;
+  // An empty region is no region: the drawing takes the space back rather than framing a blank
+  // panel. Counted per side, because a register on the shelf must not open an empty inspector.
+  const docked = Array.from(registry.docks.values()).filter((entry) => entry.dock !== "float" && entry.dock !== "fill");
+  const inspector = docked.some((entry) => entry.dock !== "bottom");
+  const shelfHolds = docked.some((entry) => entry.dock === "bottom");
+  // Tools declare the width they need — the design brief asks for 460px for its casing step — and
+  // the column ignored every one of them in favour of a fixed 304. The widest open tool sets it.
+  const inspWidth = Math.max(304, ...docked.filter((entry) => entry.dock !== "bottom").map((entry) => entry.size));
   return <>
-    <Workbench status={<>
-      <CommandLine />
-      <div className="demo-tray" ref={setTray} role="group" aria-label="Panels" />
-      <WorkspaceContextBar part="readouts" />
-      <AppearanceMenu />
-    </>}>
-      {/* `data-ribbon` lets the sheet's band and the view toolbars size to one row or two in CSS. */}
-      <div className="demo-frame-body" data-ribbon={tools.ribbonOpen ? "open" : "closed"}>
+    <div className="swx" data-plain={onSheet ? undefined : "true"} data-testid="workstation"
+      data-rail={onSheet && rail ? "open" : "closed"} data-inspector={inspector ? "open" : "closed"} data-shelf={shelfHolds ? "open" : "closed"} style={{ "--swx-insp": `${inspWidth}px` } as CSSProperties}>
+      <TopBar onFind={() => tools.setPaletteOpen(!tools.paletteOpen)} rail={rail} onRail={() => setRail((value) => !value)} />
+      {onSheet && <WellBrowser />}
+      <main className="swx-sheet">
         <div className="demo-page">{children}</div>
         <div className="demo-float-layer" ref={setLayer} />
-      </div>
-    </Workbench>
-    {/* The workspace bar — navigation, tools, the well, go-to-depth — rides on the ribbon's title
-        row, so it costs the sheet nothing; with the ribbon put away it floats over the sheet. */}
-    {!barInRibbon && <FloatingToolbar id="workspace" label="workspace toolbar" defaultStyle={{ left: "calc(var(--dock-left, 0px) + 8px)", top: "calc(var(--dock-top, 0px) + 6px)" }} className="demo-workspace-toolbar">
-      {onSheet ? <WorkspaceBar current={current} /> : <WorkspaceNavigation current={current} />}
-    </FloatingToolbar>}
-    {onSheet && <ToolsRibbon headExtra={barInRibbon ? <div className="demo-workspace-toolbar demo-workspace-bar"><WorkspaceBar current={current} /></div> : undefined} />}
+      </main>
+      {onSheet && <InspectorColumn setHost={setColumn} />}
+      {onSheet && <Shelf setHost={setShelf} />}
+      <StatusLine command={<>
+        <CommandLine />
+        <div className="demo-tray" ref={setTray} role="group" aria-label="Panels" />
+      </>} />
+    </div>
     <ToolsPalette />
     <ToolPanels />
   </>;
 }
 
-
-function WorkspaceBar({ current }: { readonly current: string }) {
-  return <>
-    <WorkspaceNavigation current={current} />
-    <ToolsToggle />
-    <WorkspaceContextBar part="picker" />
-    <DepthCommand />
-  </>;
-}
-
-function ToolsToggle() {
-  const tools = useTools();
-  return <CommandButton icon="layers" className="demo-tools-toggle" aria-expanded={tools.paletteOpen} onClick={() => tools.setPaletteOpen(!tools.paletteOpen)}>{tools.paletteOpen ? "Close finder" : "Find a tool"}</CommandButton>;
-}
-
-/**
- * Theme and density as a menu on the status bar, where a CAD tool keeps its display toggles. It
- * opens upward over the corner of the sheet and nothing else, so changing the theme never leaves
- * a panel over the drawing. The click is handled rather than the toggle event: React restores a
- * controlled `open` before the toggle event is dispatched, so a handler reading it there sees
- * the old value.
- */
-function AppearanceMenu() {
-  const { theme, setTheme, density, setDensity } = useWorkspace();
-  const [open, setOpen] = useState(false);
-  return <details className="demo-nav-secondary demo-appearance" open={open}>
-    <summary onClick={(event) => { event.preventDefault(); setOpen((value) => !value); }}>Appearance</summary>
-    <div className="demo-appearance-controls" role="group" aria-label="Visualization appearance">
-      <label>Theme <select value={theme} onChange={(event) => {
-        const value = event.currentTarget.value;
-        if (value === "light" || value === "dark" || value === "high-contrast") setTheme(value);
-      }}>
-        <option value="light">Light</option><option value="dark">Dark</option><option value="high-contrast">High contrast</option>
-      </select></label>
-      <label>Density <select value={density} onChange={(event) => {
-        const value = event.currentTarget.value;
-        if (value === "compact" || value === "comfortable") setDensity(value);
-      }}>
-        <option value="comfortable">Comfortable</option><option value="compact">Compact</option>
-      </select></label>
-    </div>
-  </details>;
-}
 
 const HELP = "view | create | edit | delete <object> · go <m MD> · zoom in | out | fit · well <name> · theme light | dark | high-contrast · density compact | comfortable · clear";
 

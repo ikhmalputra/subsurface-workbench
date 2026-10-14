@@ -44,7 +44,9 @@ createServer(async (request, response) => {
       "X-Content-Type-Options": "nosniff",
       "Referrer-Policy": "no-referrer",
       "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
-      "Content-Security-Policy": `default-src 'self'; script-src 'self' ${hashes.join(" ")}; worker-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'`,
+      // wasm-unsafe-eval: the meshopt decoder for the component models is WebAssembly. It allows
+      // compiling wasm only; JavaScript eval stays blocked.
+      "Content-Security-Policy": `default-src 'self'; script-src 'self' 'wasm-unsafe-eval' ${hashes.join(" ")}; worker-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'`,
       "Cache-Control": "no-store",
     });
     response.end(request.method === "HEAD" ? undefined : data);

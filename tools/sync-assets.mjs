@@ -26,5 +26,7 @@ for (const app of ["demo"]) {
     rmSync(gisTarget, { recursive: true, force: true });
     mkdirSync(gisTarget, { recursive: true });
     cpSync(worker, join(gisTarget, "maplibre-gl-worker.mjs"));
+    // The offline world basemap (Natural Earth land and borders), built by tools/build-world.mjs.
+    cpSync(join(root, "packages/react/assets/gis"), gisTarget, { recursive: true });
   }
 }

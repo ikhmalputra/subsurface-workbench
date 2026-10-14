@@ -6,6 +6,11 @@ import { seabedDepthAt } from "./offshore-environment.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import type { GeographicGisModel } from "@ikhmalputra/subsurface-core/gis";
 import { CommandButton } from "./ui.js";
+import { createSceneRenderer } from "./scene-renderer.js";
+import type { SceneRenderer } from "./scene-renderer.js";
+import { COMPASS_FACES, ViewCube } from "./view-cube.js";
+import type { NamedView } from "./view-cube.js";
+import { SceneViewKeys } from "./scene-tools.js";
 
 export interface OffshoreSceneProps {
   readonly model: GeographicGisModel;
@@ -23,6 +28,7 @@ export function OffshoreScene({ model, origin, waterDepthsM, selectedWellId, onS
   const layers = useRef<(water: boolean, seabed: boolean) => void>(() => undefined);
   const zoom = useRef<(factor: number) => void>(() => undefined);
   const orbit = useRef<(angle: number) => void>(() => undefined);
+  const look = useRef<(view: NamedView) => void>(() => undefined);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [water, setWater] = useState(true);
@@ -34,18 +40,19 @@ export function OffshoreScene({ model, origin, waterDepthsM, selectedWellId, onS
   useEffect(() => {
     if (!host.current) return;
     const element = host.current;
-    let renderer: THREE.WebGLRenderer;
+    let started: SceneRenderer;
     try {
       const crs = model.wells[0]!.well.crs;
       if (!origin.every(Number.isFinite)) throw new TypeError("Offshore scene origin must contain finite projected metre coordinates.");
       if (model.wells.some(({ well }) => well.crs !== crs || !Number.isFinite(waterDepthsM[well.id]) || waterDepthsM[well.id]! <= 0)) throw new TypeError("Offshore wells require one shared projected CRS and positive water depths.");
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+      // WebGPU where the browser has it, WebGL 2 where not; no tone mapping, as the field was always drawn.
+      started = createSceneRenderer({ alpha: false, toneMapping: THREE.NoToneMapping });
     } catch (cause) {
       setError(`Offshore 3D could not start: ${cause instanceof Error ? cause.message : String(cause)}`);
       return;
     }
     setError(null);
-    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    const { renderer } = started;
     renderer.setClearColor("#071a2d");
     element.appendChild(renderer.domElement);
     const scene = new THREE.Scene();
@@ -167,6 +174,8 @@ export function OffshoreScene({ model, origin, waterDepthsM, selectedWellId, onS
       if (hit) { const id = String(hit.object.userData.wellId); focus.current(id); select(id); }
     };
     const cancelFlight = () => { transition = null; setFlying(false); };
+    const cube = new ViewCube(view, controls, element, { labels: COMPASS_FACES, compass: true, home: new THREE.Vector3(8500, 8600, 9500), onStart: cancelFlight, onChange: () => undefined, onSettled: () => report() });
+    look.current = (named) => cube.look(named);
     controls.addEventListener("start", cancelFlight);
     controls.addEventListener("end", report);
     renderer.domElement.addEventListener("pointerdown", pointerDown);
@@ -184,11 +193,15 @@ export function OffshoreScene({ model, origin, waterDepthsM, selectedWellId, onS
         controls.target.lerpVectors(transition.targetFrom, transition.targetTo, eased);
         if (t === 1) { transition = null; setFlying(false); report(); }
       }
-      controls.update(); renderer.render(scene, view); reportHeads(); animation = requestAnimationFrame(render);
+      cube.update();
+      if (!cube.swinging) controls.update();
+      if (started.draws()) renderer.render(scene, view);
+      reportHeads(); animation = requestAnimationFrame(render);
     }
-    animation = requestAnimationFrame(render); setReady(true);
+    animation = requestAnimationFrame(render);
+    started.ready.then((backend) => { element.dataset.backend = backend; setReady(true); }, (cause) => setError(`Offshore 3D could not start: ${cause instanceof Error ? cause.message : String(cause)}`));
     return () => {
-      cancelAnimationFrame(animation); resize.disconnect(); controls.dispose();
+      cancelAnimationFrame(animation); resize.disconnect(); cube.dispose(); controls.dispose(); look.current = () => undefined;
       renderer.domElement.removeEventListener("pointerdown", pointerDown); renderer.domElement.removeEventListener("pointerup", pointerUp);
       scene.traverse((object) => {
         if (object instanceof THREE.Mesh || object instanceof THREE.Line || object instanceof THREE.Sprite) {
@@ -197,7 +210,7 @@ export function OffshoreScene({ model, origin, waterDepthsM, selectedWellId, onS
           for (const material of list) { if ("map" in material && material.map instanceof THREE.Texture) material.map.dispose(); material.dispose(); }
         }
       });
-      renderer.dispose(); renderer.domElement.remove(); focus.current = () => undefined; layers.current = () => undefined; zoom.current = () => undefined; orbit.current = () => undefined;
+      started.dispose(); renderer.domElement.remove(); focus.current = () => undefined; layers.current = () => undefined; zoom.current = () => undefined; orbit.current = () => undefined;
     };
   }, [model, origin, waterDepthsM]);
 
@@ -213,7 +226,7 @@ export function OffshoreScene({ model, origin, waterDepthsM, selectedWellId, onS
       <label><input type="checkbox" checked={seabed} onChange={(event) => setSeabed(event.target.checked)} />Illustrative seabed</label>
     </div>
     {error && <p role="alert">{error}</p>}
-    <div ref={host} className="sw-offshore-canvas" />
+    <div ref={host} className="sw-offshore-canvas"><SceneViewKeys labels={COMPASS_FACES} onView={(named) => look.current(named)} /></div>
     <div className="sw-offshore-wells" role="group" aria-label="Select offshore well">{model.wells.map(({ well }) => <CommandButton kind="selection" key={well.id} aria-pressed={selectedWellId === well.id} onClick={() => { focus.current(well.id); onSelectWell(well.id); }}>{well.label}</CommandButton>)}</div>
     <p className="sw-offshore-caption">Synthetic near-equatorial field · projected metres · 500 m surface grid · north = −scene Z · tube diameters exaggerated for visibility · dashed lines = illustrative surface ties, not reported risers · seabed interpolated from illustrative wellhead water depths</p>
     <output className="sw-sr-only" aria-live="polite">Camera east / elevation / south: {camera} metres</output>

@@ -1,5 +1,7 @@
 "use client";
 
+export { WellSection } from "./well-section.js";
+export type { WellSectionProps, WellSectionHighlight } from "./well-section.js";
 export { CurvedSchematic } from "./curved-schematic.js";
 export { AssemblySchematic } from "./assembly-schematic.js";
 export type { AssemblySchematicProps } from "./assembly-schematic.js";

@@ -12,6 +12,8 @@ import type { GisTrajectory3d, makeGisTrajectoryLayer } from "./gis-trajectories
 import type { OffshoreEnvironmentLayers } from "./offshore-environment.js";
 export type { GisTrajectory3d } from "./gis-trajectories.js";
 import { GisTools } from "./gis-tools.js";
+export { WellsMap } from "./wells-map.js";
+export type { WellsMapProps, WellsMapSite, WellsMapWell } from "./wells-map.js";
 import { CommandButton } from "./ui.js";
 
 export interface GisMapProps {

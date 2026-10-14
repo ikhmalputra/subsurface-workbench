@@ -57,8 +57,8 @@ function useInt8(url: string | undefined) {
   return state?.url === url ? state : null;
 }
 
-/** Colour saturates at p99 / SCENE_GAIN, the same clip as the 2D section, so reflectors stay bold in 3D. */
-const SCENE_GAIN = 2;
+/** Colour saturates at the 2D section's clip (p99 at gain 1), so a reflector reads the same in 2D, the well scene and the site scene. */
+const SCENE_GAIN = 1;
 
 /** The well-centred FORGE sub-volume as a 3D scene volume: well-local metres, TVD below RKB. Fetched only when enabled. */
 export function useSceneSeismic(seismic: WellSeismicSource | undefined, enabled: boolean) {

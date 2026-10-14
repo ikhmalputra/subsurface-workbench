@@ -30,6 +30,26 @@ export interface TrajectoryPlotProps {
   readonly dlsLimitDegPer30m?: number;
   readonly markers?: readonly TrajectoryMarker[];
   readonly height?: number;
+  /**
+   * Draw at the element's own pixel size instead of scaling a fixed drawing: text stays at its set
+   * size and the plot uses the whole pane. The host's CSS must size the SVG (e.g. height: 100%).
+   */
+  readonly fill?: boolean;
+}
+
+function usePlotSize(svg: RefObject<SVGSVGElement | null>, fill: boolean, width: number, height: number) {
+  const [size, setSize] = useState<{ readonly width: number; readonly height: number } | null>(null);
+  useEffect(() => {
+    const element = svg.current;
+    if (!fill || !element || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => {
+      const box = entry!.contentRect;
+      if (box.width > 120 && box.height > 120) setSize({ width: Math.round(box.width), height: Math.round(box.height) });
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [fill, svg]);
+  return fill && size ? size : { width, height };
 }
 
 const PATH = "#147a65";
@@ -164,8 +184,22 @@ function PathSegments({ points, survey, limit }: { points: readonly { x: number;
   return <g pointerEvents="none"><polyline points={points.map((point) => `${point.x},${point.y}`).join(" ")} fill="none" stroke="#fff" strokeWidth="7" strokeLinejoin="round" />{segments}</g>;
 }
 
-function Markers({ points, markers }: { points: readonly { x: number; y: number; mdM: number }[]; markers?: readonly TrajectoryMarker[] }) {
-  return <g pointerEvents="none">{markers?.map((marker) => { const point = pointAtMd(points, marker.mdM); return point && <g key={marker.label} className="sw-traj-marker"><circle cx={point.x} cy={point.y} r="4.5" /><text x={point.x + 8} y={point.y - 6}>{marker.label}</text></g>; })}</g>;
+/**
+ * Station markers with their names. Names that would land on one already written (shoes stacked
+ * on a vertical hole, in plan) are stacked below it; a name near the right edge is set to the left
+ * of its marker so it is not cut off.
+ */
+function Markers({ points, markers, right = Infinity }: { points: readonly { x: number; y: number; mdM: number }[]; markers?: readonly TrajectoryMarker[]; right?: number }) {
+  const written: { x: number; y: number }[] = [];
+  return <g pointerEvents="none">{markers?.map((marker) => {
+    const point = pointAtMd(points, marker.mdM);
+    if (!point) return null;
+    const flip = point.x + 8 + marker.label.length * 6.4 > right;
+    let y = point.y - 6;
+    while (written.some((other) => Math.abs(other.x - point.x) < 90 && Math.abs(other.y - y) < 13)) y += 13;
+    written.push({ x: point.x, y });
+    return <g key={marker.label} className="sw-traj-marker"><circle cx={point.x} cy={point.y} r="4.5" /><text x={flip ? point.x - 8 : point.x + 8} y={y} textAnchor={flip ? "end" : "start"}>{marker.label}</text></g>;
+  })}</g>;
 }
 
 function SelectedMark({ points, mdM }: { points: readonly { x: number; y: number; mdM: number }[]; mdM?: number | null }) {
@@ -186,11 +220,11 @@ function TargetHandle({ x, y, invalid, label, interactive, handlers, onKeyDown }
 }
 
 /** Plan (top-down) view: easting to the right, northing up, true scale with a north arrow. */
-export function TrajectoryPlanView({ survey, selectedMdM, onSelectMd, target, targetInvalid, onTargetChange, onTargetCommit, dlsLimitDegPer30m, markers, height = 340 }: TrajectoryPlotProps) {
+export function TrajectoryPlanView({ survey, selectedMdM, onSelectMd, target, targetInvalid, onTargetChange, onTargetCommit, dlsLimitDegPer30m, markers, height: preferredHeight = 340, fill = false }: TrajectoryPlotProps) {
   const svg = useRef<SVGSVGElement>(null);
-  const width = 460;
+  const { width, height } = usePlotSize(svg, fill, 460, preferredHeight);
   const box = { left: 58, top: 28, width: width - 78, height: height - 66 };
-  const live = useMemo(() => trueScaleFrame([...survey.map((station) => station.eastingM), ...(target ? [target.eastingM] : [])], [...survey.map((station) => -station.northingM), ...(target ? [-target.northingM] : [])], box), [survey, target, height]);
+  const live = useMemo(() => trueScaleFrame([...survey.map((station) => station.eastingM), ...(target ? [target.eastingM] : [])], [...survey.map((station) => -station.northingM), ...(target ? [-target.northingM] : [])], box), [survey, target, width, height]);
   const { frame, handlers } = useTargetDrag(svg, live, (view, x, y) => target ? { ...target, eastingM: Math.round(view.invertX(x)), northingM: Math.round(-view.invertY(y)) } : null, onTargetChange, onTargetCommit);
   const points = survey.map((station) => ({ x: frame.x(station.eastingM), y: frame.y(-station.northingM), mdM: station.mdM }));
   const last = survey.at(-1);
@@ -204,7 +238,7 @@ export function TrajectoryPlanView({ survey, selectedMdM, onSelectMd, target, ta
       {target && <line x1={frame.x(0)} y1={frame.y(0)} x2={frame.x(target.eastingM)} y2={frame.y(-target.northingM)} className="sw-traj-aim" />}
       <PathSegments points={points} survey={survey} limit={dlsLimitDegPer30m} />
       <circle cx={frame.x(survey[0]?.eastingM ?? 0)} cy={frame.y(-(survey[0]?.northingM ?? 0))} r="5" className="sw-traj-wellhead" />
-      <Markers points={points} markers={markers} />
+      <Markers points={points} markers={markers} right={box.left + box.width} />
       <SelectedMark points={points} mdM={selectedMdM} />
       {target && <TargetHandle x={frame.x(target.eastingM)} y={frame.y(-target.northingM)} invalid={targetInvalid} interactive={!!onTargetChange} handlers={handlers} label={`Target ${metres(target.northingM, 0)} m N, ${metres(target.eastingM, 0)} m E`} onKeyDown={(event) => nudge(event, (dx, dy) => onTargetChange?.({ ...target, eastingM: target.eastingM + dx, northingM: target.northingM - dy }), onTargetCommit)} />}
     </svg>
@@ -221,14 +255,14 @@ function niceLength(scale: number) {
 }
 
 /** Vertical section: horizontal departure projected on the section azimuth against TVD, true scale. */
-export function TrajectorySectionView({ survey, selectedMdM, onSelectMd, target, targetInvalid, onTargetChange, onTargetCommit, dlsLimitDegPer30m, markers, height = 380, verticalSectionAzimuthDeg, formations }: TrajectoryPlotProps & { readonly verticalSectionAzimuthDeg: number; readonly formations?: readonly FormationLayer[] }) {
+export function TrajectorySectionView({ survey, selectedMdM, onSelectMd, target, targetInvalid, onTargetChange, onTargetCommit, dlsLimitDegPer30m, markers, height: preferredHeight = 380, verticalSectionAzimuthDeg, formations, fill = false }: TrajectoryPlotProps & { readonly verticalSectionAzimuthDeg: number; readonly formations?: readonly FormationLayer[] }) {
   const svg = useRef<SVGSVGElement>(null);
-  const width = 640;
+  const { width, height } = usePlotSize(svg, fill, 640, preferredHeight);
   const box = { left: 64, top: 28, width: width - 86, height: height - 66 };
   const sectionCos = Math.cos(verticalSectionAzimuthDeg * Math.PI / 180);
   const sectionSin = Math.sin(verticalSectionAzimuthDeg * Math.PI / 180);
   const sectionOf = (point: { northingM: number; eastingM: number }) => point.northingM * sectionCos + point.eastingM * sectionSin;
-  const live = useMemo(() => trueScaleFrame([0, ...survey.map(sectionOf), ...(target ? [sectionOf(target)] : [])], [0, ...survey.map((station) => station.tvdM), ...(target ? [target.tvdM] : [])], box), [survey, target, verticalSectionAzimuthDeg, height]);
+  const live = useMemo(() => trueScaleFrame([0, ...survey.map(sectionOf), ...(target ? [sectionOf(target)] : [])], [0, ...survey.map((station) => station.tvdM), ...(target ? [target.tvdM] : [])], box), [survey, target, verticalSectionAzimuthDeg, width, height]);
   const { frame, handlers } = useTargetDrag(svg, live, (view, x, y) => {
     if (!target) return null;
     const section = view.invertX(x);
@@ -245,7 +279,7 @@ export function TrajectorySectionView({ survey, selectedMdM, onSelectMd, target,
       <Grid frame={frame} box={box} xLabel={`VERTICAL SECTION @ ${verticalSectionAzimuthDeg.toFixed(1)}° / m`} yLabel="TVD / m" />
       {target && <g pointerEvents="none" className="sw-traj-aim"><line x1={box.left} x2={box.left + box.width} y1={frame.y(target.tvdM)} y2={frame.y(target.tvdM)} /></g>}
       <PathSegments points={points} survey={survey} limit={dlsLimitDegPer30m} />
-      <Markers points={points} markers={markers} />
+      <Markers points={points} markers={markers} right={box.left + box.width} />
       <SelectedMark points={points} mdM={selectedMdM} />
       {target && <TargetHandle x={frame.x(sectionOf(target))} y={frame.y(target.tvdM)} invalid={targetInvalid} interactive={!!onTargetChange} handlers={handlers} label={`Target ${metres(target.tvdM, 0)} m TVD, ${metres(sectionOf(target), 0)} m departure`} onKeyDown={(event) => nudge(event, (dx, dy) => { const section = sectionOf(target) + dx; onTargetChange?.({ tvdM: target.tvdM + dy, northingM: section * sectionCos, eastingM: section * sectionSin }); }, onTargetCommit)} />}
     </svg>

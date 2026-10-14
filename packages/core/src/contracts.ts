@@ -9,6 +9,7 @@ export * from "./petrophysics-calculations.ts";
 export * from "./well-report.ts";
 export * from "./dataset.ts";
 export * from "./production-surveillance.ts";
+export * from "./well-validation.ts";
 import { array, fail, literal, number, object, reference, text, triple } from "./contract-validation.ts";
 
 export interface SpatialReference {

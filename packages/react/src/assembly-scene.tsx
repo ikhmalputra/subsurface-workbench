@@ -6,13 +6,22 @@ import type { DragEvent as ReactDragEvent } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
+import { ClippingGroup } from "three/webgpu";
+import { createSceneRenderer } from "./scene-renderer.js";
+import { AmbientOcclusion } from "./scene-ao.js";
+import type { SceneRenderer } from "./scene-renderer.js";
 import { getCatalogEntry, moveComponent, placeComponent } from "@ikhmalputra/subsurface-core";
 import type { AssemblyItem, WellAssembly } from "@ikhmalputra/subsurface-core";
 import { Boxes, Crosshair, Focus, Maximize } from "lucide-react";
 import { assetUrl, catalogIdFromDrag } from "./assembly-palette.js";
 import { formatDepth } from "./assembly-format.js";
 import { CommandButton } from "./ui.js";
+import { MODEL_FACES, ViewCube } from "./view-cube.js";
+import type { NamedView } from "./view-cube.js";
+import { SectionTool } from "./section-tool.js";
+import type { SectionState } from "./section-tool.js";
+import { SceneSectionControl, SceneViewKeys } from "./scene-tools.js";
 
 export interface AssemblySceneProps {
   readonly assembly: WellAssembly;
@@ -35,10 +44,18 @@ const CUT_START = THREE.MathUtils.degToRad(76);
 const CUT_LENGTH = Math.PI * 1.5;
 const models = new Map<string, Promise<THREE.Group>>();
 
+// The catalogue's models are quantised and meshopt-packed (tools/compress-models.mjs); one loader
+// with the decoder serves them all.
+let loader: GLTFLoader | null = null;
+function modelLoader() {
+  loader ??= new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+  return loader;
+}
+
 function loadModel(url: string) {
   let pending = models.get(url);
   if (!pending) {
-    pending = new GLTFLoader().loadAsync(url).then((gltf) => gltf.scene);
+    pending = modelLoader().loadAsync(url).then((gltf) => gltf.scene);
     pending.catch(() => models.delete(url));
     models.set(url, pending);
   }
@@ -120,7 +137,7 @@ interface DragHint { readonly x: number; readonly y: number; readonly text: stri
 
 export function AssemblyScene({ assembly, assetBaseUrl, selectedId = null, onSelect, onDropComponent, onMoveComponent, title = "3D assembly", exploded: explodedProp, defaultExploded = false, onExplodedChange }: AssemblySceneProps) {
   const host = useRef<HTMLDivElement>(null);
-  const api = useRef<{ rebuild: (value: WellAssembly) => void; highlight: (id: string | null) => void; fit: (id?: string | null) => void; depthAt: (x: number, y: number) => number; marker: (depth: number | null, valid?: boolean) => void; pick: (x: number, y: number) => string | null; setControls: (enabled: boolean) => void; explode: (on: boolean, animate?: boolean) => void; isolate: (id: string | null) => void } | null>(null);
+  const api = useRef<{ rebuild: (value: WellAssembly) => void; highlight: (id: string | null) => void; fit: (id?: string | null) => void; depthAt: (x: number, y: number) => number; marker: (depth: number | null, valid?: boolean) => void; pick: (x: number, y: number) => string | null; setControls: (enabled: boolean) => void; explode: (on: boolean, animate?: boolean) => void; isolate: (id: string | null) => void; section: (state: SectionState | null) => void; look: (view: NamedView) => void } | null>(null);
   const [explodedState, setExplodedState] = useState(defaultExploded);
   const exploded = explodedProp ?? explodedState;
   const [isolated, setIsolated] = useState(false);
@@ -129,26 +146,24 @@ export function AssemblyScene({ assembly, assetBaseUrl, selectedId = null, onSel
   const [failure, setFailure] = useState("");
   const [hint, setHint] = useState<DragHint | null>(null);
   const [loaded, setLoaded] = useState(0);
+  const [section, setSection] = useState<SectionState | null>(null);
   useEffect(() => { latest.current = { assembly, selectedId, onSelect, onMoveComponent, exploded, isolated }; });
 
   useEffect(() => {
     const element = host.current;
     if (!element) return;
-    let renderer: THREE.WebGLRenderer;
+    // WebGPU where the browser has it, WebGL 2 where it does not; the scene builds now and draws once the device is up.
+    let started: SceneRenderer;
     try {
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+      started = createSceneRenderer({ alpha: true });
     } catch {
-      setFailure("WebGL is unavailable; the schematic remains fully editable.");
+      setFailure("3D is unavailable in this browser; the schematic remains fully editable.");
       return;
     }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    const { renderer } = started;
     renderer.domElement.setAttribute("aria-hidden", "true");
     element.prepend(renderer.domElement);
     const scene = new THREE.Scene();
-    const environment = new THREE.PMREMGenerator(renderer);
-    scene.environment = environment.fromScene(new RoomEnvironment(), 0.04).texture;
     /**
      * Three-point lighting, because one sun and a bright hemisphere is what made this flat.
      *
@@ -173,12 +188,22 @@ export function AssemblyScene({ assembly, assetBaseUrl, selectedId = null, onSel
     controls.zoomToCursor = true;
     controls.minDistance = 1.2;
     controls.maxDistance = 400;
-    const world = new THREE.Group();
+    // The construction is a clipping group: the section plane cuts it on either backend.
+    const world = new ClippingGroup();
     const context = new THREE.Group();
     const ladder = new THREE.Group();
     const selection = new THREE.Group();
     ladder.visible = false;
     scene.add(context, ladder, world, selection);
+    // Cut the construction, not the context: the depth ladder and ground stay whole around the cut.
+    const section = new SectionTool(world, {
+      solids: () => { const meshes: THREE.Mesh[] = []; world.traverse((object) => { if ((object as THREE.Mesh).isMesh && !object.userData.sectionCap) meshes.push(object as THREE.Mesh); }); return meshes; },
+      bounds: () => new THREE.Box3().setFromObject(world),
+    });
+    scene.add(section.outline);
+    let sectionDirty = false;
+    const cube = new ViewCube(camera, controls, element, { labels: MODEL_FACES, home: new THREE.Vector3(0.92, 0.34, 1), onChange: () => undefined,
+      onSettled: () => { element.dataset.camera = `${camera.position.toArray().map((value) => value.toFixed(2)).join(",")}|${controls.target.toArray().map((value) => value.toFixed(2)).join(",")}`; } });
     const selectTone = () => new THREE.Color(getComputedStyle(element).getPropertyValue("--sw-select").trim() || "#ff6a00");
     const themeColour = (name: string, fallback: string) => getComputedStyle(element).getPropertyValue(name).trim() || fallback;
     const labelInk = () => themeColour("--sw-well-text", "#3d4a44");
@@ -297,6 +322,7 @@ export function AssemblyScene({ assembly, assetBaseUrl, selectedId = null, onSel
             model.rotation.y = THREE.MathUtils.degToRad(-32);
             group.add(tag(model, item.id));
             highlight(latest.current.selectedId);
+            sectionDirty = true;
             setLoaded((count) => count + 1);
           }, () => setFailure(`Could not load ${spec.label} model from ${url}.`));
         }
@@ -305,6 +331,7 @@ export function AssemblyScene({ assembly, assetBaseUrl, selectedId = null, onSel
       stackSurface(items, build);
       layout(value, false);
       highlight(latest.current.selectedId);
+      sectionDirty = true;
       if (latest.current.isolated) isolate(latest.current.selectedId, false);
     }
 
@@ -334,6 +361,7 @@ export function AssemblyScene({ assembly, assetBaseUrl, selectedId = null, onSel
           world.getObjectByName(item.id)?.add(tag(model, item.id));
         });
         highlight(latest.current.selectedId);
+        sectionDirty = true;
         setLoaded((count) => count + surface.length);
       }, () => setFailure("Could not load the surface stack models."));
     }
@@ -542,7 +570,7 @@ export function AssemblyScene({ assembly, assetBaseUrl, selectedId = null, onSel
       markerRing.position.y = y(depth);
       (markerRing.material as THREE.MeshBasicMaterial).color.setHex(valid ? 0x235faa : 0xc0392b);
     }
-    api.current = { rebuild, highlight, fit, depthAt, marker, pick, setControls: (enabled) => { controls.enabled = enabled; }, explode, isolate: (id) => isolate(id) };
+    api.current = { rebuild, highlight, fit, depthAt, marker, pick, setControls: (enabled) => { controls.enabled = enabled; }, explode, isolate: (id) => isolate(id), section: (state) => section.set(state), look: (view) => cube.look(view) };
 
     const resize = () => {
       const { width, height } = element.getBoundingClientRect();
@@ -576,19 +604,31 @@ export function AssemblyScene({ assembly, assetBaseUrl, selectedId = null, onSel
           if (fitAfter) { fitAfter = false; fit(latest.current.isolated ? latest.current.selectedId : null); }
         }
       }
-      controls.update();
-      renderer.render(scene, camera);
+      if (sectionDirty) { sectionDirty = false; section.refresh(); }
+      cube.update();
+      if (!cube.swinging) controls.update();
+      if (!started.draws()) return;
+      if (occlusion) occlusion.render(); else renderer.render(scene, camera);
       placeTag();
     };
     loop();
     controls.addEventListener("end", () => { element.dataset.camera = `${camera.position.toArray().map((value) => value.toFixed(2)).join(",")}|${controls.target.toArray().map((value) => value.toFixed(2)).join(",")}`; });
-    setReady(true);
+    // Ambient occlusion gives the parts their crevices back; if the device cannot run it, the plain pass stands.
+    let occlusion: AmbientOcclusion | null = null;
+    started.ready.then((backend) => {
+      scene.environment = started.environment();
+      try { occlusion = new AmbientOcclusion(renderer, scene, camera, { radius: 0.5 }); } catch { occlusion = null; }
+      element.dataset.backend = backend;
+      setReady(true);
+    }, (cause) => setFailure(`3D could not start (${cause instanceof Error ? cause.message : String(cause)}); the schematic remains fully editable.`));
     return () => {
       cancelAnimationFrame(frame);
       observer.disconnect();
+      cube.dispose();
+      section.dispose();
       controls.dispose();
-      environment.dispose();
-      renderer.dispose();
+      occlusion?.dispose();
+      started.dispose();
       renderer.domElement.remove();
       nameTag.remove();
       api.current = null;
@@ -596,6 +636,7 @@ export function AssemblyScene({ assembly, assetBaseUrl, selectedId = null, onSel
   }, [assetBaseUrl]);
 
   useEffect(() => { api.current?.rebuild(assembly); }, [assembly]);
+  useEffect(() => { api.current?.section(section); }, [section, ready]);
   useEffect(() => { api.current?.highlight(selectedId); }, [selectedId, loaded]);
   const first = useRef(true);
   useEffect(() => { if (first.current) { first.current = false; return; } api.current?.explode(exploded); }, [exploded]);
@@ -689,6 +730,8 @@ export function AssemblyScene({ assembly, assetBaseUrl, selectedId = null, onSel
         else if (travelled <= 4) onSelect?.(current.id);
       }}
       {...dropProps}>
+      <SceneSectionControl state={section} onChange={setSection} axes={{ x: "Side", z: "Front", y: "Depth" }} />
+      <SceneViewKeys labels={MODEL_FACES} onView={(view) => api.current?.look(view)} />
       {hint && <div className={`sw-asm-scene-hint${hint.valid ? "" : " is-invalid"}`} style={{ left: hint.x, top: hint.y }} role="status">{hint.text}</div>}
       {failure && <p className="sw-asm-scene-failure" role="status">{failure}</p>}
     </div>

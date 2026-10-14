@@ -2,31 +2,6 @@ import type { ReactNode } from "react";
 import { WorkspaceRoute } from "./workspace-route";
 export { UsagePanel } from "./usage-panel";
 
-export function DemoHeader({ eyebrow, title, lede, points, uses, code, children }: { eyebrow: string; title: string; lede: string; points: readonly string[]; uses: readonly string[]; code: string; children?: ReactNode }) {
-  return <header className="demo-header">
-    {/* The route label rides on the title line rather than above it; the readable copy stays in
-        the accessibility tree so nothing is lost when it stops being a 24px headline. */}
-    <span className="demo-eyebrow">{eyebrow}</span>
-    <div className="demo-header-line" data-route-label={eyebrow.replace(/^Capability · /i, "")}><h1>{title}</h1></div>
-    <details className="demo-about">
-      <summary>Usage and SDK details</summary>
-      <div className="demo-header-body">
-        <div className="demo-header-copy">
-          <p className="demo-lede">{lede}</p>
-          <ul className="demo-points">{points.map((point) => <li key={point}>{point}</li>)}</ul>
-          <ul className="demo-uses" aria-label="SDK imports used on this page">{uses.map((use) => <li key={use}><code>{use}</code></li>)}</ul>
-          {children}
-        </div>
-        <div className="demo-code"><pre tabIndex={0} aria-label="Usage example"><code>{code.trim()}</code></pre></div>
-      </div>
-    </details>
-  </header>;
-}
-
-/**
- * One route's content. The frame around it lives in `layout.tsx` and is not rebuilt here, so this
- * is only the part that genuinely changes: the availability gate and the route's own views.
- */
 export function DemoPage({ current, children }: { current: string; children: ReactNode }) {
   return <WorkspaceRoute key={current} current={current}>{children}</WorkspaceRoute>;
 }

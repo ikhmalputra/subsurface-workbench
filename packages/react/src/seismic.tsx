@@ -5,6 +5,7 @@ import { scaleLinear } from "d3-scale";
 import { amplitudeClip, seismicColour, seismicImage, wellMdAtDepth, wellPointAtMd, type ProjectedPoint, type SeismicColorMap, type SegyFile, type SegyTrace } from "@ikhmalputra/subsurface-core";
 import { AccessibleTable } from "./accessible-table.js";
 import { CommandButton } from "./ui.js";
+import { usePlotZoom } from "./depth-zoom.js";
 
 export type { SeismicColorMap } from "@ikhmalputra/subsurface-core";
 
@@ -188,12 +189,9 @@ export function SeismicSection({ file, traceX = (trace) => trace.index, xLabel =
     const element = svgRef.current;
     if (!element) return;
     const onWheel = (event: WheelEvent) => {
-      const box = element.getBoundingClientRect();
-      const px = ((event.clientX - box.left) / box.width) * W, py = ((event.clientY - box.top) / box.height) * H;
-      if (event.ctrlKey || event.metaKey) {
-        event.preventDefault();
-        zoomAround(Math.exp(event.deltaY * 0.004), x.invert(px), y.invert(py));
-      } else if (zoomed) {
+      // Ctrl/⌘ + wheel zooms through d3-zoom below; a plain wheel pans a zoomed section.
+      if (event.ctrlKey || event.metaKey) return;
+      if (zoomed) {
         event.preventDefault();
         const dx = (event.shiftKey ? event.deltaY : event.deltaX) * (view.x1 - view.x0) / plotW;
         const dz = (event.shiftKey ? 0 : event.deltaY) * (view.z1 - view.z0) / plotH;
@@ -202,6 +200,24 @@ export function SeismicSection({ file, traceX = (trace) => trace.index, xLabel =
     };
     element.addEventListener("wheel", onWheel, { passive: false });
     return () => element.removeEventListener("wheel", onWheel);
+  });
+
+  // Drag to pan, Ctrl/⌘ + wheel to zoom about the pointer, Shift + drag for a zoom box: d3-zoom and
+  // d3-brush, measured from the view on screen when the gesture began.
+  const gestureBase = useRef<SeismicView | null>(null);
+  usePlotZoom(svgRef, {
+    plot: () => [[M.left, M.top], [W - M.right, H - M.bottom]],
+    onStart: () => { gestureBase.current = view; },
+    onGesture: ({ invert }) => {
+      const base = gestureBase.current ?? view;
+      const bx = scaleLinear().domain([base.x0, base.x1]).range([M.left, W - M.right]);
+      const by = scaleLinear().domain([base.z0, base.z1]).range([M.top, H - M.bottom]);
+      const [left, top] = invert(M.left, M.top), [right, bottom] = invert(W - M.right, H - M.bottom);
+      const next = { x0: bx.invert(left), x1: bx.invert(right), z0: by.invert(top), z1: by.invert(bottom) };
+      const whole = next.x1 - next.x0 >= full.x1 - full.x0 - 1e-6 && next.z1 - next.z0 >= full.z1 - full.z0 - 1e-6;
+      applyView(whole ? null : next);
+    },
+    onBox: ([[left, top], [right, bottom]]) => applyView({ x0: x.invert(left), x1: x.invert(right), z0: y.invert(top), z1: y.invert(bottom) }),
   });
 
   const pathD = (points: readonly ProjectedPoint[]) => points.map((point, index) => `${index ? "L" : "M"}${x(point.alongM).toFixed(1)},${y(point.depthM).toFixed(1)}`).join("");
@@ -248,15 +264,9 @@ export function SeismicSection({ file, traceX = (trace) => trace.index, xLabel =
     drag.current = { x: event.clientX, y: event.clientY, view, moved: false, id: event.pointerId };
   }
   function onPointerMove(event: PointerEvent<SVGSVGElement>) {
+    // d3-zoom pans while the button is down; past a few pixels the press is a drag, not a click.
     const current = drag.current;
-    if (current && (current.moved || Math.hypot(event.clientX - current.x, event.clientY - current.y) > 4)) {
-      if (!current.moved) { current.moved = true; event.currentTarget.setPointerCapture?.(current.id); }
-      const box = event.currentTarget.getBoundingClientRect();
-      const dx = ((event.clientX - current.x) / box.width) * W * (current.view.x1 - current.view.x0) / plotW;
-      const dz = ((event.clientY - current.y) / box.height) * H * (current.view.z1 - current.view.z0) / plotH;
-      applyView({ x0: current.view.x0 - dx, x1: current.view.x1 - dx, z0: current.view.z0 - dz, z1: current.view.z1 - dz });
-      return;
-    }
+    if (current && (current.moved || Math.hypot(event.clientX - current.x, event.clientY - current.y) > 4)) { current.moved = true; return; }
     hoverAt(event.clientX, event.clientY);
   }
   function onPointerUp(event: PointerEvent<SVGSVGElement>) {

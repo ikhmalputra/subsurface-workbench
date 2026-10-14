@@ -1,4 +1,7 @@
 import * as THREE from "three";
+import { MeshBasicNodeMaterial, RenderTarget } from "three/webgpu";
+import type { WebGPURenderer } from "three/webgpu";
+import { clamp, float, positionWorld, texture3D, uniform, vec4 } from "three/tsl";
 
 export interface GpuPickTarget {
   readonly mesh: THREE.Mesh;
@@ -18,47 +21,19 @@ export interface GpuSurfacePick {
   readonly amplitude: number | null;
 }
 
-const vertexShader = `
-varying vec3 vPoint;
-void main() {
-  vec4 world = modelMatrix * vec4(position, 1.0);
-  vPoint = world.xyz;
-  gl_Position = projectionMatrix * viewMatrix * world;
-}`;
-const fragmentShader = `
-precision highp sampler3D;
-varying vec3 vPoint;
-uniform float uId;
-uniform bool uValuePass;
-uniform bool uHasVolume;
-uniform sampler3D uVolume;
-uniform mat4 uWorldToTexture;
-uniform float uScale;
-uniform float uOffset;
-void main() {
-  float amplitude = 0.0;
-  if (uHasVolume) {
-    vec3 uvw = (uWorldToTexture * vec4(vPoint, 1.0)).xyz;
-    amplitude = texture(uVolume, clamp(uvw, 0.0, 1.0)).r * uScale + uOffset;
-  }
-  gl_FragColor = uValuePass ? vec4(amplitude, 0.0, 0.0, uId) : vec4(vPoint, uId);
-}`;
-
-/** Two 1-pixel float FBO passes: scene XYZ/object ID, then actual GPU texture amplitude. */
+/**
+ * Two 1-pixel float render passes through three's WebGPU renderer (WebGPU, or its WebGL 2
+ * fallback): the first writes scene XYZ and an object ID, the second the amplitude the GPU samples
+ * from the volume texture at that point. Both are read back asynchronously.
+ */
 export class GpuFramebufferPicker {
-  private readonly target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.FloatType, format: THREE.RGBAFormat, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
-  private readonly values = this.target.clone();
-  private readonly emptyTexture = new THREE.Data3DTexture(new Float32Array(1), 1, 1, 1);
+  private readonly target = new RenderTarget(1, 1, { type: THREE.FloatType, format: THREE.RGBAFormat, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: true });
+  private readonly values = new RenderTarget(1, 1, { type: THREE.FloatType, format: THREE.RGBAFormat, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: true });
   private busy = false;
   private disposed = false;
   private released = false;
 
-  constructor(private readonly renderer: THREE.WebGLRenderer) {
-    if (!renderer.extensions.has("EXT_color_buffer_float")) throw new Error("GPU picking requires WebGL2 EXT_color_buffer_float; use explicit CPU picking on unsupported devices.");
-    this.emptyTexture.type = THREE.FloatType;
-    this.emptyTexture.format = THREE.RedFormat;
-    this.emptyTexture.needsUpdate = true;
-  }
+  constructor(private readonly renderer: WebGPURenderer) {}
 
   /** x/y are drawing-buffer pixels from the top-left, not CSS pixels. One pick at a time per instance. */
   async pick(camera: THREE.PerspectiveCamera, targets: readonly GpuPickTarget[], x: number, y: number): Promise<GpuSurfacePick | null> {
@@ -69,23 +44,25 @@ export class GpuFramebufferPicker {
     if (targets.length > 16_777_214) throw new RangeError("GPU pick IDs exceed exact float precision.");
     if (camera.view?.enabled) throw new Error("GPU picker expects an unsplit camera without an active view offset.");
     this.busy = true;
-    const pickScene = new THREE.Scene(), materials: THREE.ShaderMaterial[] = [];
+    const pickScene = new THREE.Scene();
+    const meshes: { mesh: THREE.Mesh; position: MeshBasicNodeMaterial; value: MeshBasicNodeMaterial }[] = [];
     const localCamera = camera.clone();
     localCamera.setViewOffset(size.x, size.y, Math.floor(x), Math.floor(y), 1, 1);
     localCamera.updateMatrixWorld(true);
     targets.forEach((binding, index) => {
       binding.mesh.updateWorldMatrix(true, false);
-      const material = new THREE.ShaderMaterial({
-        vertexShader, fragmentShader, side: THREE.DoubleSide, toneMapped: false, blending: THREE.NoBlending,
-        uniforms: {
-          uId: { value: index + 1 }, uValuePass: { value: false },
-          uHasVolume: { value: !!binding.volume }, uVolume: { value: binding.volume?.texture ?? this.emptyTexture },
-          uWorldToTexture: { value: binding.volume?.worldToTexture ?? new THREE.Matrix4() },
-          uScale: { value: binding.volume?.scale ?? 1 }, uOffset: { value: binding.volume?.offset ?? 0 },
-        },
-      });
-      materials.push(material);
-      const mesh = new THREE.Mesh(binding.mesh.geometry, material);
+      const id = float(index + 1);
+      const common = { side: THREE.DoubleSide, toneMapped: false, blending: THREE.NoBlending, transparent: false } as const;
+      const position = new MeshBasicNodeMaterial(common);
+      position.fragmentNode = vec4(positionWorld, id);
+      const value = new MeshBasicNodeMaterial(common);
+      if (binding.volume) {
+        const toTexture = uniform(binding.volume.worldToTexture);
+        const uvw = clamp(toTexture.mul(vec4(positionWorld, 1)).xyz, 0, 1);
+        const amplitude = texture3D(binding.volume.texture, uvw).level(float(0)).r.mul(binding.volume.scale).add(binding.volume.offset);
+        value.fragmentNode = vec4(amplitude, 0, 0, id);
+      } else value.fragmentNode = vec4(0, 0, 0, id);
+      const mesh = new THREE.Mesh(binding.mesh.geometry, position);
       mesh.matrixAutoUpdate = false;
       mesh.matrix.copy(binding.mesh.matrixWorld);
       // Pick proxies may intentionally have invisible display materials; object visibility still applies.
@@ -95,47 +72,37 @@ export class GpuFramebufferPicker {
       }
       mesh.layers.mask = binding.mesh.layers.mask;
       pickScene.add(mesh);
+      meshes.push({ mesh, position, value });
     });
     const renderer = this.renderer, previous = renderer.getRenderTarget();
     const color = renderer.getClearColor(new THREE.Color()), alpha = renderer.getClearAlpha();
-    const autoClear = renderer.autoClear, xr = renderer.xr.enabled;
-    const previousShaderError = renderer.debug.onShaderError;
-    let shaderFailure: Error | null = null;
+    const autoClear = renderer.autoClear;
     try {
       try {
-        renderer.debug.onShaderError = (gl, program, vertex, fragment) => {
-          shaderFailure = new Error(`GPU picking shader failed: ${gl.getProgramInfoLog(program) ?? gl.getShaderInfoLog(fragment) ?? gl.getShaderInfoLog(vertex) ?? "unknown compilation error"}`);
-          previousShaderError?.(gl, program, vertex, fragment);
-        };
-        renderer.xr.enabled = false;
         renderer.autoClear = true;
         renderer.setClearColor(0, 0);
         renderer.setRenderTarget(this.target);
         renderer.render(pickScene, localCamera);
-        if (shaderFailure) throw shaderFailure;
-        for (const material of materials) material.uniforms.uValuePass!.value = true;
+        for (const { mesh, value } of meshes) mesh.material = value;
         renderer.setRenderTarget(this.values);
         renderer.render(pickScene, localCamera);
-        if (shaderFailure) throw shaderFailure;
       } finally {
         renderer.setRenderTarget(previous);
         renderer.setClearColor(color, alpha);
         renderer.autoClear = autoClear;
-        renderer.xr.enabled = xr;
-        renderer.debug.onShaderError = previousShaderError;
       }
       const [coordinates, values] = await Promise.all([
-        renderer.readRenderTargetPixelsAsync(this.target, 0, 0, 1, 1, new Float32Array(4)),
-        renderer.readRenderTargetPixelsAsync(this.values, 0, 0, 1, 1, new Float32Array(4)),
-      ]);
+        renderer.readRenderTargetPixelsAsync(this.target, 0, 0, 1, 1),
+        renderer.readRenderTargetPixelsAsync(this.values, 0, 0, 1, 1),
+      ]) as [Float32Array, Float32Array];
       if (this.disposed) return null;
       const id = Math.round(coordinates[3]!);
       if (id === 0) return null;
       const binding = targets[id - 1];
-      if (!binding || ![...coordinates, ...values].every(Number.isFinite)) throw new Error("GPU pick returned invalid framebuffer data.");
+      if (!binding || ![...coordinates.slice(0, 4), ...values.slice(0, 4)].every(Number.isFinite)) throw new Error("GPU pick returned invalid framebuffer data.");
       return { target: binding, point: new THREE.Vector3(coordinates[0], coordinates[1], coordinates[2]), amplitude: binding.volume ? values[0]! : null };
     } finally {
-      for (const material of materials) material.dispose();
+      for (const { position, value } of meshes) { position.dispose(); value.dispose(); }
       this.busy = false;
       if (this.disposed) this.release();
     }
@@ -145,6 +112,6 @@ export class GpuFramebufferPicker {
   private release() {
     if (this.released) return;
     this.released = true;
-    this.target.dispose(); this.values.dispose(); this.emptyTexture.dispose();
+    this.target.dispose(); this.values.dispose();
   }
 }

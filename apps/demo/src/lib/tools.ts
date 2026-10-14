@@ -13,16 +13,16 @@ export type ToolVerb = "view" | "create" | "edit" | "delete";
 export const toolVerbs: readonly ToolVerb[] = ["view", "create", "edit", "delete"];
 
 /** The panels tools open. Route workspaces become panels on the sheet; the rest already are. */
-export type ToolPanelId = "section" | "report" | "field" | "correlation" | "cross-section" | "petrophysics" | "production" | "linked-data" | "sandbox" | "inspector" | "well-file" | "kick" | "cement" | "time" | "hydraulics" | "planner" | "stations" | "survey-summary" | "study" | "evidence" | "construction" | "well-properties" | "component-records" | "formations" | "records-data" | "field-register" | "field-trajectory" | "design" | "scene-options";
+export type ToolPanelId = "section" | "report" | "field" | "field-gis" | "correlation" | "cross-section" | "petrophysics" | "production" | "linked-data" | "sandbox" | "inspector" | "well-file" | "kick" | "cement" | "time" | "hydraulics" | "planner" | "stations" | "survey-summary" | "study" | "evidence" | "construction" | "well-properties" | "component-records" | "formations" | "records-data" | "field-register" | "field-trajectory" | "design" | "scene-options";
 
 /**
  * Documents: the workspaces that fill the sheet. One is open at a time, like the active drawing;
  * opening another puts the current one away. Each had a route of its own; the route now forwards
  * to the sheet with `?tool=<document>`, which is also the deep link.
  */
-export const documents: readonly ToolPanelId[] = ["section", "report", "field", "correlation", "cross-section", "petrophysics", "production", "linked-data", "sandbox"];
+export const documents: readonly ToolPanelId[] = ["section", "report", "field", "field-gis", "correlation", "cross-section", "petrophysics", "production", "linked-data", "sandbox"];
 export const documentLabels: Readonly<Record<string, string>> = {
-  section: "Well section", trajectory: "Survey", study: "Drilling study", evidence: "Study evidence", planner: "Trajectory planner", stations: "Station editor", "survey-summary": "Survey summary", brief: "Design brief", report: "Well report", field: "Field",
+  section: "Well section", trajectory: "Survey", study: "Drilling study", evidence: "Study evidence", planner: "Trajectory planner", stations: "Station editor", "survey-summary": "Survey summary", brief: "Design brief", report: "Well report", field: "Wells map", "field-gis": "Field GIS",
   correlation: "Correlation", "cross-section": "Cross-section", "edit-well": "Edit well", construction: "Construction", "well-properties": "Well properties", "component-records": "Component records", formations: "Formations", "records-data": "Records & data", "field-register": "Well register", "field-trajectory": "Field trajectory", design: "Design brief", "scene-options": "Volume & interpretation tools", petrophysics: "Petrophysics", production: "Production", "linked-data": "Linked data", sandbox: "WebGPU sandbox",
 };
 /** The route each document used to be, for the forwarders and for anything still linking there. */
@@ -81,7 +81,8 @@ const derived = (detail: string): ToolSupply => ({ state: "derived", detail });
 const missing = (detail = "not supplied"): ToolSupply => ({ state: "missing", detail });
 
 export const toolObjects: readonly ToolObject[] = [
-  { id: "well", label: "Well", group: "identity", supply: (well) => supplied(`${well.design.wellName ?? well.label} · ${well.design.provenance}`),
+  // `well.label` already carries its provenance; appending it again said "documented · documented".
+  { id: "well", label: "Well", group: "identity", supply: (well) => supplied(well.design.wellName ? `${well.design.wellName} · ${well.design.provenance}` : well.label),
     verbs: { view: { panel: "inspector", where: "This well", tab: "tools" }, edit: { panel: "well-properties", where: "Well properties" } } },
   { id: "reference", label: "Reference and datum", group: "identity", aliases: ["datum", "crs"],
     supply: (well) => well.design.depthDatum ? supplied(`datum ${well.design.depthDatum}`) : missing("datum not reported"),
@@ -131,12 +132,15 @@ export const toolObjects: readonly ToolObject[] = [
   { id: "report", label: "Well report", group: "evidence", aliases: ["as-drilled"],
     supply: (well) => wellCapabilities(well).report ? supplied("sourced records") : missing("no sourced report for this well"),
     verbs: { view: { panel: "report" } }, hostOwned: "the report spec is the host's" },
-  { id: "field", label: "Field", group: "field", aliases: ["map", "gis"],
+  { id: "map", label: "Wells map", group: "field", aliases: ["world", "globe", "sites"],
+    supply: () => derived("2 sites placed · 2 wells without a location"),
+    verbs: { view: { panel: "field", where: "World map · site in 3D" } } },
+  { id: "field", label: "Field GIS", group: "field", aliases: ["map layers", "gis"],
     supply: () => derived("Equator field · synthetic"),
-    verbs: { view: { panel: "field", where: "Locate wells" }, create: { panel: "field", where: "GIS import" }, edit: { panel: "field", where: "Layers" } } },
+    verbs: { view: { panel: "field-gis", where: "Locate wells" }, create: { panel: "field-gis", where: "GIS import" }, edit: { panel: "field-gis", where: "Layers" } } },
   { id: "correlation", label: "Correlation and cross-section", group: "field", aliases: ["cross-section", "section"],
     supply: () => derived("field wells"),
-    verbs: { view: { panel: "field", where: "Compare intervals · Spatial section" } } },
+    verbs: { view: { panel: "correlation", where: "Compare intervals · Spatial section" } } },
 ];
 
 export function findToolObject(name: string): ToolObject | undefined {
@@ -253,7 +257,8 @@ export const domainTools: readonly DomainTool[] = [
   T("fracture-gradient", "Fracture gradient", "geomechanics", "planned", "Gauge", "LOT/FIT points and the fitted gradient (the brief's pressure window carries the typed gradient today)", "LOT/FIT records"),
   T("sand-risk", "Sand production risk", "geomechanics", "planned", "TrendingDown", "Critical drawdown by depth", "rock strength"),
   // Field, data and reference
-  T("map", "Map", "field", "built", "Map", "Wells on a map with layers, bathymetry, GIS import and the offshore scene", "locations, layers", { panel: "field", where: "1 · Locate wells", also: ["field-register", "field-trajectory"] }),
+  T("map", "Map", "field", "built", "Map", "Every located well on a world map; a site opens in 3D with its wells, horizons and seismic in one frame", "locations, surveys, seismic", { panel: "field", where: "World map · site in 3D" }),
+  T("field-gis", "Field GIS", "field", "built", "Layers", "The field's wells with layers, bathymetry, GIS import and embedded 3D trajectories", "locations, layers", { panel: "field-gis", where: "1 · Locate wells", also: ["field-register", "field-trajectory"] }),
   T("offsets", "Offsets", "field", "built", "Database", "Comparable wells, nine-factor match, adoption into a brief — the brief's Offset wells step", "offset records", { panel: "design", tab: "offsets", where: "Define · Offset wells" }),
   T("sources", "Sources", "field", "built", "Database", "The mud log path and the operational records registered for the well, editable with their citations", "the host registry", { panel: "records-data", where: "Records & data" }),
   T("report", "Report", "field", "built", "Printer", "The as-drilled report from sourced records", "report spec", { panel: "report" }),
@@ -279,8 +284,3 @@ export const ribbonGroups: Readonly<Record<string, string>> = {
 /** The sub-domains with at least one working tool: what the ribbon shows. The rest are counted in the study. */
 export const ribbonDomains = subDomains.filter((domain) => domainTools.some((tool) => tool.domain === domain.id && tool.status !== "planned"));
 
-export function domainToolCounts(): Readonly<Record<SubDomain, Readonly<Record<ToolStatus, number>>>> {
-  const counts = Object.fromEntries(subDomains.map((domain) => [domain.id, { built: 0, partial: 0, planned: 0 }])) as Record<SubDomain, Record<ToolStatus, number>>;
-  for (const tool of domainTools) counts[tool.domain][tool.status] += 1;
-  return counts;
-}

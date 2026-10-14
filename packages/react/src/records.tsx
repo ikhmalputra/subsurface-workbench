@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { scaleLinear } from "d3-scale";
+import { useDepthZoom } from "./depth-zoom.js";
 import { daysVsDepth, feetToMetres, intervalsOverlap, lasCurve, metresToFeet, type DayCategory, type HoleSectionRecord, type LasFile, type RunKind, type ServiceRun, type WellDay, type WellOperations } from "@ikhmalputra/subsurface-core";
 import { AccessibleTable } from "./accessible-table.js";
 import { CommandButton } from "./ui.js";
@@ -341,6 +342,8 @@ export interface LogTracksProps {
   readonly depthWindowFt?: readonly [number, number] | null;
   /** Reports zoom and pan (buttons, Ctrl/⌘ + wheel, wheel) so other depth views can follow. */
   readonly onDepthWindowChange?: (window: readonly [number, number] | null) => void;
+  /** Handle zoom and pan gestures on the tracks (default); a host depth surface turns this off. */
+  readonly depthGestures?: boolean;
   readonly height?: number;
   readonly title?: string;
   /**
@@ -352,7 +355,10 @@ export interface LogTracksProps {
 }
 
 /** Plot inset for a view drawn as a track on a shared depth axis. */
-export interface TrackFrame { readonly top: number; readonly bottom: number; readonly chromeless?: boolean }
+// The depth-track contract is declared once, by the schematic; every track honours the same inset.
+// It was declared here as well, identically, which is how three tracks came to agree by accident.
+import type { TrackFrame } from "./assembly-schematic.tsx";
+export type { TrackFrame };
 
 function percentile(values: readonly number[], p: number) {
   if (!values.length) return 1;
@@ -361,7 +367,7 @@ function percentile(values: readonly number[], p: number) {
 }
 
 /** Multi-track depth log (LAS) with casing markers, an interval column, hover readout and click-to-depth. */
-export function LogTracks({ las, tracks, markers = [], intervals = [], selectedRange = null, cursorFt = null, onSelectDepth, onCursorChange, depthWindowFt, onDepthWindowChange, height = 620, title = "Depth log", frame: trackFrame }: LogTracksProps) {
+export function LogTracks({ las, tracks, markers = [], intervals = [], selectedRange = null, cursorFt = null, onSelectDepth, onCursorChange, depthWindowFt, onDepthWindowChange, height = 620, title = "Depth log", frame: trackFrame, depthGestures = true }: LogTracksProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const index = las.curves[0];
   const depths = useMemo(() => (index?.values ?? []).map((value) => value ?? Number.NaN), [index]);
@@ -411,25 +417,12 @@ export function LogTracks({ las, tracks, markers = [], intervals = [], selectedR
     const value = y.invert(((event.clientY - box.top) / box.height) * height);
     return Math.max(view.top, Math.min(view.base, Math.round(value)));
   }
-  useEffect(() => {
-    const element = svgRef.current;
-    if (!element) return;
-    const onWheel = (event: WheelEvent) => {
-      const span = view.base - view.top;
-      if (event.ctrlKey || event.metaKey) {
-        event.preventDefault();
-        const box = element.getBoundingClientRect();
-        const pivot = y.invert(((event.clientY - box.top) / box.height) * height);
-        const next = span * Math.exp(event.deltaY * 0.004);
-        const ratio = (pivot - view.top) / span;
-        setWindow([pivot - ratio * next, pivot - ratio * next + next]);
-      } else if (zoomed) {
-        const top = Math.min(Math.max(first, view.top + event.deltaY * span / 900), last - span);
-        if (top !== view.top) { event.preventDefault(); setWindow([top, top + span]); }
-      }
-    };
-    element.addEventListener("wheel", onWheel, { passive: false });
-    return () => element.removeEventListener("wheel", onWheel);
+  // The shared depth gestures (depth-zoom.ts) in the SVG's own units, on the log's extent in feet.
+  useDepthZoom(svgRef, {
+    enabled: depthGestures,
+    window: zoomed ? [view.top, view.base] : null,
+    axis: () => ({ extent: [first, last], plot: trackFrame ? [trackFrame.top, height - trackFrame.bottom] : [headerH + 4, height - 6], minSpan: Math.max(step * 4, 20) }),
+    onWindow: setWindow,
   });
 
   function onKey(event: KeyboardEvent<HTMLDivElement>) {

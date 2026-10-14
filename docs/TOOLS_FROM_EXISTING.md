@@ -156,3 +156,12 @@ says "not supplied" when they are not there.
 Every former route is now either the sheet's view or a tool over it; the documents that remain
 (report, field map, correlation, cross-section, petrophysics, production, linked data, sandbox)
 fill the sheet because they are pictures of other things than the active well's section.
+
+## 6. Dock groups (2026-10-14)
+
+Panels docked to the same side were stacking into equal shares — three tools on the right meant
+three cramped thirds. They are now one palette group per side, as in Photoshop or AutoCAD: a row of
+tabs, one body at full height; the newest arrival is in front, a tab brings another forward, a tab
+dragged off becomes a window, and every panel stays mounted (the builder's and the brief's portals
+keep their state behind an inactive tab). `activatePanel(page, title)` in `e2e/support/app.ts`
+brings a panel forward in tests.
