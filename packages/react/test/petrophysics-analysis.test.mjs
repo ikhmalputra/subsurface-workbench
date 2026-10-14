@@ -8,7 +8,6 @@ import {
   PetrophysicsFlattenView,
   PetrophysicsHistogram,
   PetrophysicsTemplateSelect,
-  PetrophysicsLogView,
   PetrophysicsZoneSummaryView,
 } from "../dist/2d.js";
 import {
@@ -108,16 +107,9 @@ test("Petrophysics flatten view shows explicit tie depths and relative-MD data",
   assert.match(html, /well-b/);
 });
 
-test("Petrophysics template selector and log view render core values and explicit unknowns", () => {
+test("Petrophysics template selector renders its templates", () => {
   const template = { id: "basic", name: "Basic", tracks: [{ curveId: first.curves[0].id, color: "#247c59", min: 0, max: 1 }] };
   const selectHtml = renderToStaticMarkup(createElement(PetrophysicsTemplateSelect, { templates: [template], value: "basic", onChange: () => {} }));
   assert.match(selectHtml, /Track template/);
   assert.match(selectHtml, /Basic/);
-  const logHtml = renderToStaticMarkup(createElement(PetrophysicsLogView, {
-    well: first, tracks: template.tracks,
-  }));
-  assert.match(logHtml, /data-testid="petrophysics-core-measurements"/);
-  assert.match(logHtml, /0.22/);
-  assert.match(logHtml, /not reported/);
-  assert.match(logHtml, /View well-a petrophysics samples as a table/);
 });

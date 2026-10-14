@@ -287,7 +287,7 @@ las = [
     "~A " + " ".join(m for m, _, _, _ in KEEP),
     *[" ".join(str(int(v)) if i == 0 else f"{v:g}" for i, v in enumerate(r)) for r in out_rows],
 ]
-las_path = root / "apps/demo/public/data/forge-16a-mudlog-10ft.las"
+las_path = root / "packages/fixtures/data/forge-16a-mudlog-10ft.las"
 las_path.parent.mkdir(parents=True, exist_ok=True)
 las_path.write_text("\n".join(las) + "\n")
 

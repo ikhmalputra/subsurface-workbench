@@ -7,10 +7,10 @@ checked against its CRC-32 and size. (The enhanced volume's deflate stream is
 corrupt in the published zip, so the unenhanced stack is used.)
 
 Outputs
-- apps/demo/public/data/forge-16a-psdm-section.sgy: SEG-Y rev 1, IBM float.
+- packages/fixtures/data/forge-16a-psdm-section.sgy: SEG-Y rev 1, IBM float.
   Every trace is an unmodified copy of the nearest 25 m bin of the source
   volume, cropped to 0-4000 m below the 1800 m seismic datum.
-- apps/demo/public/data/forge-16a-psdm-volume.i8: a well-centred sub-volume,
+- packages/fixtures/data/forge-16a-psdm-volume.i8: a well-centred sub-volume,
   the nearest 25 m bin at every (along, offset) node of a grid aligned with the
   section, 0-3200 m below datum at 5 m. Amplitudes are quantised to int8
   (amplitude = count * amplitudePerCount, clipped at the 99.9th percentile of
@@ -256,7 +256,7 @@ def write_section(path: Path, traces: list[tuple[float, float, float, tuple[int,
       assert np.array_equal(check.trace[n], volume[source][:first_depth])
 
 
-out_path = ROOT / "apps/demo/public/data/forge-16a-psdm-section.sgy"
+out_path = ROOT / "packages/fixtures/data/forge-16a-psdm-section.sgy"
 write_section(out_path, picked, "UTAH FORGE 16A(78)-32 WELL-PATH SECTION FROM 3D ANISO PSDM (UNENHANCED)", azimuth, "")
 
 # Sub-volume: nearest bin at every (along, offset) node; offset is to the right of the section azimuth.
@@ -267,7 +267,7 @@ assert np.array_equal(cube[len(offsets) // 2, :, :], np.stack([volume[p[4]][:vol
 vol_clip = float(np.percentile(np.abs(cube), 99.9))
 per_count = vol_clip / 127.0
 counts = np.clip(np.rint(cube / per_count), -127, 127).astype(np.int8)
-vol_path = ROOT / "apps/demo/public/data/forge-16a-psdm-volume.i8"
+vol_path = ROOT / "packages/fixtures/data/forge-16a-psdm-volume.i8"
 vol_path.write_bytes(np.ascontiguousarray(counts.transpose(2, 0, 1)).tobytes())  # [depth, offset, along]
 check = np.frombuffer(vol_path.read_bytes(), dtype=np.int8).reshape(vol_samples, len(offsets), len(distances)).transpose(1, 2, 0)
 inside = np.abs(cube) <= vol_clip

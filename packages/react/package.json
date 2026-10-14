@@ -23,10 +23,6 @@
       "import": "./dist/gis-map.js"
     },
     "./gis.css": "./dist/gis.css",
-    "./webgpu": {
-      "types": "./dist/webgpu.d.ts",
-      "import": "./dist/webgpu.js"
-    },
     "./state": {
       "types": "./dist/state.d.ts",
       "import": "./dist/state.js"
@@ -43,25 +39,9 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./schematic": {
-      "types": "./dist/curved-schematic.d.ts",
-      "import": "./dist/curved-schematic.js"
-    },
     "./viewport": {
       "types": "./dist/viewport.d.ts",
       "import": "./dist/viewport.js"
-    },
-    "./assembly": {
-      "types": "./dist/assembly.d.ts",
-      "import": "./dist/assembly.js"
-    },
-    "./production": {
-      "types": "./dist/production-surveillance.d.ts",
-      "import": "./dist/production-surveillance.js"
-    },
-    "./examples": {
-      "types": "./dist/examples.d.ts",
-      "import": "./dist/examples.js"
     },
     "./styles.css": "./dist/styles.css",
     "./three": {
@@ -75,14 +55,6 @@
     "./trajectory": {
       "types": "./dist/trajectory.d.ts",
       "import": "./dist/trajectory.js"
-    },
-    "./well-design": {
-      "types": "./dist/well-design.d.ts",
-      "import": "./dist/well-design.js"
-    },
-    "./offset-wells": {
-      "types": "./dist/offset-wells.d.ts",
-      "import": "./dist/offset-wells.js"
     },
     "./records": {
       "types": "./dist/records.d.ts",

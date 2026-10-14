@@ -22,7 +22,7 @@ const midpoint = frame.top + (height - frame.bottom - frame.top) / 2; // 284
 const attr = (html, pattern) => { const match = html.match(pattern); assert.ok(match, `expected ${pattern}`); return Number(match[1] ?? match[2]); };
 
 test("a framed log maps the shared window into the shared inset, even beyond its own samples", () => {
-  const las = parseLas(readFileSync(new URL("../../../apps/demo/public/data/forge-16a-mudlog-10ft.las", import.meta.url), "utf8"));
+  const las = parseLas(readFileSync(new URL("../../fixtures/data/forge-16a-mudlog-10ft.las", import.meta.url), "utf8"));
   // The window starts at 0 ft although the log's first sample is 130 ft: unframed, the log clamps to
   // its own extent and its mapping shifts by 130 ft against every track beside it.
   const html = renderToStaticMarkup(createElement(LogTracks, {

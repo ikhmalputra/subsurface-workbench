@@ -11,8 +11,8 @@
 import { readFileSync, writeFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { join, extname } from "node:path";
 
-const SOURCE_ROOTS = ["apps/demo/src", "packages/core/src", "packages/react/src", "tools"];
-const SHEETS = ["apps/demo/src/app/showcase.css", "packages/react/src/styles.css"];
+const SOURCE_ROOTS = ["packages/core/src", "packages/react/src", "tools"];
+const SHEETS = ["packages/react/src/styles.css"];
 const PREFIX = /\.((?:demo|sw|swb|swx)-[a-z0-9-]+)/g;
 
 for (const path of [...SOURCE_ROOTS, ...SHEETS]) {

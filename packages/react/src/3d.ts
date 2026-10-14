@@ -9,6 +9,5 @@ export type { SiteSceneProps, SiteSceneWell, SiteSceneSurface, SiteSurfaceGeomet
 export { AssemblyScene } from "./assembly-scene.js";
 export type { AssemblySceneProps } from "./assembly-scene.js";
 export { useSubsurfaceSelector } from "./state.js";
-export { loadBlenderHorizon } from "./blender-horizon.js";
 export { GpuFramebufferPicker } from "./gpu-picker.js";
 export type { GpuPickTarget, GpuSurfacePick } from "./gpu-picker.js";

@@ -4,8 +4,8 @@ Ikhmal, 12 Oct 2026: *every page we built was there to show several functions. N
 giant page, and every tool is an icon you click. Study the subsurface domain and its sub-domains,
 and build all the tools for it.*
 
-`WELL_TOOLS_STUDY.md` modelled the tool — `verb object`, opening the object's data if the host has
-it. This study supplies the inventory: the subsurface domain as the industry divides it, the tools
+A tool is `verb object` (view, create, edit or delete one object of the well), opening the object's
+data if the host has it. This study supplies the inventory: the subsurface domain as the industry divides it, the tools
 each sub-domain works with day to day, and for each tool what it needs from the host and what the
 repository has. The ribbon on the sheet is this document rendered as icons: a tab per sub-domain,
 an icon per tool, live when built and greyed when not — so the scope is on screen, not in a plan.

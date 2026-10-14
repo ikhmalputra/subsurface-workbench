@@ -1,13 +1,14 @@
 import { forgeDesign, forgeSeismicSection, getWellComponents } from "@ikhmalputra/subsurface-core";
 import { reprojectGisXY } from "@ikhmalputra/subsurface-core/gis";
 import type { GeographicXY } from "@ikhmalputra/subsurface-core/gis";
-import type { WellsMapSite } from "@ikhmalputra/subsurface-react/gis";
-import type { SiteSceneSurface, SiteSceneWell } from "@ikhmalputra/subsurface-react/3d";
-import type { FieldProject } from "./field-project.ts";
-import { projectWells } from "./project.ts";
+import { createMockTrajectory } from "@ikhmalputra/subsurface-core/sandbox";
+import { prepareGisDocument } from "@ikhmalputra/subsurface-core/gis";
+import { researchDesign, sProfileDesign } from "@ikhmalputra/subsurface-core";
+import type { WellsMapSite } from "./wells-map.js";
+import type { SiteSceneSurface, SiteSceneWell } from "./site-scene.js";
 
 /**
- * The project's wells as sites on a map of the world, and each site as one 3D frame.
+ * Wells as sites on a map of the world (`WellsMap`), and each site as one 3D frame (`SiteScene`).
  *
  * A site is drawn from what its records declare and nothing else: the FORGE wellhead and seismic
  * grid in NAD83 / UTM 12N, the Equator field's assumed UTM 50N locations. Wells that declare no
@@ -19,10 +20,8 @@ export const RESERVOIR = { top: "#d97706", base: "#92400e" } as const;
 
 export interface WorldSite {
   readonly map: WellsMapSite;
-  /** The project well a reader can open in the well workspace, when the site is one of them. */
+  /** The project well a host can open in its well workspace, when the site is one of them. */
   readonly projectWellId: string | null;
-  /** Documents that work on this site as a whole, opened from its header. */
-  readonly documents?: readonly { readonly id: "field-gis" | "correlation" | "cross-section"; readonly label: string }[];
   readonly depthLabel: string;
   readonly originLabel: string;
   readonly wells: readonly SiteSceneWell[];
@@ -84,8 +83,53 @@ export function forgeSite(): WorldSite {
   };
 }
 
-/** The synthetic Equator field: four wells, their Sand R1 picks, and the sea and seabed above them. */
-export function equatorSite(project: FieldProject): WorldSite {
+/**
+ * The synthetic Equator field: four generated wells at assumed WGS84 / UTM 50N locations in the
+ * Makassar Strait, illustrative water depths, and interpreted Sand R1 top and base picks. The
+ * reservoir is 2,200 m below sea, shifted 0.025 m/m east and 0.035 m/m north across the field;
+ * the base is 210 m below the top, less 20 m per well. All of it is labelled synthetic.
+ */
+export function equatorField() {
+  const origin = reprojectGisXY([118.7, 0.4], "EPSG:4326", "EPSG:32650");
+  const offsets = [[-1800, -1000], [1200, 800], [-1000, 1800], [2400, -1600]] as const;
+  const waterDepthsM: Record<string, number> = {};
+  const wells = offsets.map(([east, north], index) => {
+    const id = `offshore-${index + 1}`;
+    const path = createMockTrajectory({ id, stations: 301, totalDepthMdM: 2400 + index * 250, seed: 75 + index * 67 });
+    waterDepthsM[id] = 800 + index * 180;
+    return {
+      id, label: `Equator ${String.fromCharCode(65 + index)}`, crs: "EPSG:32650",
+      depthDatum: "synthetic seabed wellhead", source: "Generated offshore trajectory; assumed WGS84 UTM 50N location", provenance: "synthetic" as const,
+      xyz: Float64Array.from(path.xyz, (value, at) => at % 3 === 0 ? value + origin[0] + east : at % 3 === 1 ? value + origin[1] + north : value),
+      depthsMdM: Float64Array.from(path.depthsMdM),
+    };
+  });
+  const model = prepareGisDocument({ version: 1, id: "synthetic-equator-offshore", wells, layers: [] });
+  const mdAtDepth = (xyz: Float64Array, depths: Float64Array, depth: number) => {
+    for (let i = 1; i < depths.length; i++) {
+      const a = xyz[(i - 1) * 3 + 2]!, b = xyz[i * 3 + 2]!;
+      if (depth >= a && depth <= b) return depths[i - 1]! + (depth - a) / (b - a) * (depths[i]! - depths[i - 1]!);
+    }
+    throw new RangeError("Synthetic field marker is outside the supplied trajectory.");
+  };
+  const records = model.wells.map(({ well, stations }, index) => {
+    const water = waterDepthsM[well.id]!;
+    const head = stations[0]!.xyz;
+    const reservoirTopDepth = 2200 + (head[0] - origin[0]) * 0.025 + (head[1] - origin[1]) * 0.035;
+    const reservoirBaseDepth = reservoirTopDepth + 210 - index * 20;
+    const tops = [
+      { id: "reservoir-top", label: "Sand R1 top", mdM: mdAtDepth(well.xyz, well.depthsMdM, reservoirTopDepth - water) },
+      { id: "reservoir-base", label: "Sand R1 base", mdM: mdAtDepth(well.xyz, well.depthsMdM, reservoirBaseDepth - water) },
+    ];
+    return { well, stations, tops, reservoirTopDepth, reservoirBaseDepth };
+  });
+  return { model, origin, waterDepthsM, records };
+}
+
+export type EquatorField = ReturnType<typeof equatorField>;
+
+/** The Equator field as a site: four wells, their Sand R1 picks, and the sea and seabed above them. */
+export function equatorSite(project: EquatorField = equatorField()): WorldSite {
   const [ox, oy] = project.origin;
   const wells: SiteSceneWell[] = project.records.map((record) => {
     const water = project.waterDepthsM[record.well.id]!;
@@ -120,7 +164,6 @@ export function equatorSite(project: FieldProject): WorldSite {
       wells: project.records.map((record) => ({ id: record.well.id, label: record.well.label, head: record.stations[0]!.geographic, path: record.stations.map((station) => station.geographic) })),
     },
     projectWellId: null,
-    documents: [{ id: "field-gis", label: "Field GIS" }, { id: "correlation", label: "Correlation" }, { id: "cross-section", label: "Cross-section" }],
     depthLabel: "m below sea surface",
     originLabel: "field origin · WGS84 / UTM 50N, assumed location",
     wells, surfaces, hasSeismic: false,
@@ -129,7 +172,8 @@ export function equatorSite(project: FieldProject): WorldSite {
   };
 }
 
-/** Project wells that declare no surface location, so cannot be placed on the map. */
+/** The bundled wells that declare no surface location, so cannot be placed on the map. */
 export function unlocatedWells() {
-  return projectWells.filter((well) => well.id !== "forge").map((well) => ({ id: well.id, label: well.label, provenance: well.design.provenance, reason: "No surface location or coordinate reference is supplied." }));
+  return [{ id: "s-profile", design: sProfileDesign, label: "S-profile completion" }, { id: "research", design: researchDesign, label: "Open research reference" }]
+    .map(({ id, design, label }) => ({ id, label: `${label} · ${design.provenance}`, provenance: design.provenance, reason: "No surface location or coordinate reference is supplied." }));
 }

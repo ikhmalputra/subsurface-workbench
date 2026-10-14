@@ -69,7 +69,7 @@ test("reads the FORGE volume's non-standard header bytes verbatim", () => {
 });
 
 test("the bundled well-path section matches its pinned metadata", () => {
-  const raw = bytes("../../../apps/demo/public/data/forge-16a-psdm-section.sgy");
+  const raw = bytes("../../fixtures/data/forge-16a-psdm-section.sgy");
   assert.equal(createHash("sha256").update(new Uint8Array(raw)).digest("hex"), forgeSeismicSection.section.sha256);
   const file = parseSegy(raw);
   const { section, wellhead } = forgeSeismicSection;
@@ -106,7 +106,7 @@ test("FORGE 16A trajectory converts to section depth and projects onto the line"
 });
 
 test("seismic image is one RGBA pixel per trace sample, coloured by clipped amplitude", () => {
-  const file = parseSegy(bytes("../../../apps/demo/public/data/forge-16a-psdm-section.sgy"));
+  const file = parseSegy(bytes("../../fixtures/data/forge-16a-psdm-section.sgy"));
   const image = seismicImage(file, { colorMap: "red-blue", clip: 1 });
   assert.equal(image.width, file.traceCount);
   assert.equal(image.height, file.sampleCount);
@@ -123,7 +123,7 @@ test("seismic image is one RGBA pixel per trace sample, coloured by clipped ampl
 test("the bundled sub-volume is the same volume: its offset-0 row is the well-path section", () => {
   const { subVolume, section } = forgeSeismicSection;
   assert.ok(subVolume);
-  const raw = bytes(`../../../apps/demo/public/data/${subVolume.file}`);
+  const raw = bytes(`../../fixtures/data/${subVolume.file}`);
   assert.equal(createHash("sha256").update(new Uint8Array(raw)).digest("hex"), subVolume.sha256);
   const counts = new Int8Array(raw);
   const { alongCount, offsetCount, samples, amplitudePerCount } = subVolume;
@@ -132,7 +132,7 @@ test("the bundled sub-volume is the same volume: its offset-0 row is the well-pa
   assert.equal(alongCount, section.traces);
   assert.equal(subVolume.alongFromM, section.fromM);
   assert.equal((subVolume.offsetToM - subVolume.offsetFromM) / subVolume.spacingM + 1, offsetCount);
-  const inline = parseSegy(bytes(`../../../apps/demo/public/data/${section.file}`));
+  const inline = parseSegy(bytes(`../../fixtures/data/${section.file}`));
   const middle = (offsetCount - 1) / 2;
   const clip = 127 * amplitudePerCount;
   let compared = 0;

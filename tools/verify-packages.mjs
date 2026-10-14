@@ -24,15 +24,16 @@ for (const archive of [core, react]) {
 const reactInventory = execFileSync("tar", ["-tzf", react], { encoding: "utf8" });
 assert.match(reactInventory, /package\/assets\/well-components\/manifest\.json/);
 assert.match(reactInventory, /package\/dist\/assembly-scene\.js/);
-assert.match(reactInventory, /package\/dist\/webgpu\.d\.ts/);
-assert.match(reactInventory, /package\/dist\/webgpu-volume\.js/);
+assert.match(reactInventory, /package\/dist\/site-scene\.js/);
+assert.match(reactInventory, /package\/dist\/wells-map\.js/);
+assert.match(reactInventory, /package\/assets\/gis\/world-50m\.json/);
 assert.match(reactInventory, /package\/dist\/gpu-picker\.js/);
 assert.match(reactInventory, /package\/dist\/ui\.d\.ts/);
 assert.doesNotMatch(reactInventory, /package\/(?!assets\/well-components\/)[^\n]*\.(png|glb)/);
 const consumer = await mkdtemp(resolve(tmpdir(), "subsurface-consumer-"));
 try {
 await writeFile(resolve(consumer, "package.json"), JSON.stringify({ name: "sdk-consumer", private: true, type: "module" }));
-execFileSync("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund", "--strict-peer-deps", core, react, "react@19.3.0", "react-dom@19.3.0"], { cwd: consumer, stdio: "inherit" });
+execFileSync("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund", "--strict-peer-deps", core, react, "react@19.3.0", "react-dom@19.3.0", "three@0.186.1"], { cwd: consumer, stdio: "inherit" });
 await writeFile(resolve(consumer, "smoke.mjs"), `
 import assert from 'node:assert/strict';
 import { createElement } from 'react';
@@ -46,17 +47,15 @@ import { validateWellboreTrajectory, validateWellLogCurve, validateSeismicVoxelC
 import * as twoD from '@ikhmalputra/subsurface-react/2d';
 import { useSubsurfaceSelector } from '@ikhmalputra/subsurface-react/state';
 import * as sdk from '@ikhmalputra/subsurface-react';
-import { CurvedSchematic } from '@ikhmalputra/subsurface-react/schematic';
 import { InteractiveViewport } from '@ikhmalputra/subsurface-react/viewport';
 import { CommandButton } from '@ikhmalputra/subsurface-react/ui';
-import { WellAssemblyBuilder } from '@ikhmalputra/subsurface-react/examples';
-import { AssemblyInspector, AssemblySchematic, ComponentPalette } from '@ikhmalputra/subsurface-react/assembly';
+import { AssemblySchematic, ComponentPalette, CurvedAssemblySchematic } from '@ikhmalputra/subsurface-react/2d';
+import { SiteScene } from '@ikhmalputra/subsurface-react/3d';
+import { WellsMap } from '@ikhmalputra/subsurface-react/gis';
 import { assemblyCatalog, exampleAssembly, placeComponent, wellComponentsToAssembly } from '@ikhmalputra/subsurface-core/assembly';
 import { computeMinimumCurvature, planBuildHold } from '@ikhmalputra/subsurface-core/trajectory';
 import { SurveyTable, TrajectoryPlanView } from '@ikhmalputra/subsurface-react/trajectory';
 import { designToAssembly, exampleWellBrief, pipeRatings, proposeCasingScheme, validateDesign } from '@ikhmalputra/subsurface-core/well-design';
-import { CasingSchemeTable, PressureWindowPlot } from '@ikhmalputra/subsurface-react/well-design';
-import { WellDesignWorkflow } from '@ikhmalputra/subsurface-react/examples';
 import { forgeOperations, parseLas, sectionAtDepth } from '@ikhmalputra/subsurface-core/records';
 import { DaysVsDepthChart, HoleSectionLog, LogTracks, ServiceRunLog, WellHistoryLog } from '@ikhmalputra/subsurface-react/records';
 import { forgeSeismicSection, ibmToFloat, parseSegy, seismicColour, seismicDepthToTvd, seismicImage, tvdToSeismicDepth, wellMdAtDepth, wellPointAtMd } from '@ikhmalputra/subsurface-core/seismic';
@@ -82,29 +81,21 @@ assert.equal(typeof twoD.LogTracks, 'function');
 assert.equal(typeof twoD.SeismicSection, 'function');
 assert.equal('WellScene' in twoD, false);
 assert.equal(getWellComponents(design).length, 746);
-assert.equal(typeof sdk.CurvedSchematic, 'function');
 assert.equal(typeof InteractiveViewport, 'function');
 assert.match(renderToStaticMarkup(createElement(CommandButton, {icon:'fit'}, 'Fit drawing')), /data-ui-kind="command"/);
-assert.equal(typeof sdk.ComponentInventory, 'function');
-const html = renderToStaticMarkup(createElement(CurvedSchematic, {
-  design,
-  components: getWellComponents(design),
-  selectedId: getWellComponents(design)[0].id,
-  onSelect: () => {},
-}));
-assert.match(html, /Trajectory|construction/i);
-const inventoryHtml = renderToStaticMarkup(createElement(sdk.ComponentInventory, { components: getWellComponents(design), selectedId: 'casing', onSelect: () => {}, pageSize: 5 }));
-assert.match(inventoryHtml, /data-testid="component-inventory"/);
-assert.match(inventoryHtml, /aria-pressed="true"/);
 const assembly = exampleAssembly();
-assert.equal(typeof sdk.AssemblySchematic, 'function');
-assert.equal('WellAssemblyBuilder' in sdk, false);
+const forgeRecords = getWellComponents(forgeDesign);
+const forgeAssembly = wellComponentsToAssembly({ id: 'forge', name: 'FORGE', totalDepthM: forgeDesign.totalDepthM, components: forgeRecords });
+assert.match(renderToStaticMarkup(createElement(CurvedAssemblySchematic, { assembly: forgeAssembly, assetBaseUrl: '/parts', survey: forgeDesign.survey, records: forgeRecords })), /data-shoe-for="surface-casing"/);
+const forge = sdk.forgeSite();
+assert.ok(Math.abs(forge.map.wells[0].head[1] - 38.50416) < 1e-4);
+assert.equal(sdk.equatorSite().wells.length, 4);
+assert.match(renderToStaticMarkup(createElement(SiteScene, { title: 'FORGE', depthLabel: forge.depthLabel, originLabel: forge.originLabel, wells: forge.wells, surfaces: forge.surfaces })), /data-testid="site-scene"/);
+assert.match(renderToStaticMarkup(createElement(WellsMap, { sites: [forge.map], workerUrl: '/gis/worker.mjs', selectedSiteId: null, selectedWellId: null, onSelect: () => {} })), /data-testid="wells-map"/);
 const schematicHtml = renderToStaticMarkup(createElement(AssemblySchematic, { assembly, assetBaseUrl: '/parts', selectedId: 'packer-1' }));
 assert.match(schematicHtml, /data-item-id="packer-1"/);
 assert.ok(schematicHtml.includes('href="/parts/wellhead.png"'));
 assert.match(renderToStaticMarkup(createElement(ComponentPalette, { assetBaseUrl: '/parts', onAdd: () => {} })), new RegExp('draggable="true"[^>]*data-catalog-id="' + assemblyCatalog[0].id));
-assert.match(renderToStaticMarkup(createElement(AssemblyInspector, { assembly, assetBaseUrl: '/parts', selectedId: 'packer-1', onUpdate: () => {} })), /Retrievable packer/);
-assert.match(renderToStaticMarkup(createElement(WellAssemblyBuilder, { assetBaseUrl: '/parts' })), /Component library/);
 assert.throws(() => placeComponent(exampleAssembly(), 'wellhead', 0), /already installed/i);
 const recorded = wellComponentsToAssembly({ id: 'forge', name: 'FORGE', totalDepthM: forgeDesign.totalDepthM, components: getWellComponents(forgeDesign) });
 assert.ok(recorded.items.some((item) => item.catalogId.endsWith('casing')));
@@ -119,9 +110,6 @@ assert.ok(Math.abs(pipeRatings(9.625, 0.472, 'N80').burstPsi - 6870) < 35);
 assert.equal(validateDesign(brief).filter((issue) => issue.severity === 'error').length, 0);
 assert.ok(proposeCasingScheme(brief).length >= 3);
 assert.ok(designToAssembly(brief).items.some((item) => item.catalogId === 'production-casing'));
-assert.match(renderToStaticMarkup(createElement(PressureWindowPlot, { brief })), /data-testid="pressure-window-plot"/);
-assert.match(renderToStaticMarkup(createElement(CasingSchemeTable, { brief, onChange: () => {} })), /Casing scheme/);
-assert.match(renderToStaticMarkup(createElement(WellDesignWorkflow, { assetBaseUrl: '/parts' })), /data-testid="well-design-workflow"/);
 assert.equal(forgeOperations.days.length, 76);
 assert.equal(sectionAtDepth(forgeOperations, 3000)?.holeComponentId, 'intermediate-hole');
 assert.match(renderToStaticMarkup(createElement(WellHistoryLog, { operations: forgeOperations })), /data-testid="well-history-log"/);
@@ -150,8 +138,7 @@ assert.equal(typeof seismicImage, 'function');
 assert.equal(wellPointAtMd(linkPath, 250)?.depthM, 350);
 assert.equal(typeof sdk.useDepthLink, 'function');
 assert.match(renderToStaticMarkup(createElement(SeismicSection, { file: segy, wellPath: linkPath, mdWindow: [200, 400], cursorMdM: 300 })), /data-testid="seismic-cursor"/);
-assert.equal('WellDesignWorkflow' in sdk, false);
-console.log('Packed modular SDK and opt-in examples: PASS (no Next.js installed).');
+console.log('Packed SDK: PASS (no Next.js installed).');
 `);
 execFileSync(process.execPath, ["smoke.mjs"], { cwd: consumer, stdio: "inherit" });
 const installed = resolve(consumer, "node_modules/@ikhmalputra/subsurface-react");
@@ -164,7 +151,7 @@ const assetManifest = JSON.parse(await readFile(resolve(installed, "assets/well-
 const assetFiles = assetManifest.components.flatMap((entry) => [{ path: entry.thumbnail, sha256: entry.thumbnailSha256 }, ...(entry.model ? [{ path: entry.model, sha256: entry.modelSha256 }] : [])]);
 assert.ok(assetFiles.length >= 26, `expected rendered component assets, found ${assetFiles.length}`);
 for (const file of assetFiles) assert.equal(createHash("sha256").update(await readFile(resolve(installed, "assets/well-components", file.path))).digest("hex"), file.sha256, file.path);
-await writeFile(resolve(output, "verification.json"), JSON.stringify({ passed: true, node: process.version, checks: ["tarball contents", "strict peers", "SSR-safe imports", "composable root and capability subpaths", "opt-in examples subpath", "assembly capability subpath", "hash-verified Blender component assets", "independent React render", "CSS export", "no Next.js dependency"], limitation: "Consumer smoke uses React server rendering; packed browser E2E remains a release gate." }, null, 2));
+await writeFile(resolve(output, "verification.json"), JSON.stringify({ passed: true, node: process.version, checks: ["tarball contents", "strict peers", "SSR-safe imports", "composable root and capability subpaths", "site scene, wells map and site adapters", "hash-verified Blender component assets", "independent React render", "CSS export", "no Next.js dependency"], limitation: "Consumer smoke uses React server rendering; packed browser E2E remains a release gate." }, null, 2));
 } finally {
   await rm(consumer, { recursive: true, force: true });
 }

@@ -68,7 +68,7 @@ test("parseLas reads headers, nulls and prefixed curve names", () => {
 });
 
 test("the published 10 ft mud log parses with provenance", () => {
-  const las = parseLas(readFileSync(new URL("../../../apps/demo/public/data/forge-16a-mudlog-10ft.las", import.meta.url), "utf8"));
+  const las = parseLas(readFileSync(new URL("../../fixtures/data/forge-16a-mudlog-10ft.las", import.meta.url), "utf8"));
   const depth = las.curves[0]!;
   assert.equal(depth.values.length, 1086);
   assert.equal(depth.values[0], 130);
