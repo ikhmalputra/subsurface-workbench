@@ -17,6 +17,8 @@
     "src/seismic.ts",
     "src/units.ts",
     "src/frames.ts",
-    "src/gis.ts"
+    "src/gis.ts",
+    "src/known.ts",
+    "src/hydraulics.ts"
   ]
 }

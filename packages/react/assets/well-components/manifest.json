@@ -19,7 +19,7 @@
         "bottom": -3.2
       },
       "model": "wellhead.glb",
-      "modelSha256": "1dd9f7d7c56cd882c7c9b29bf51e6b625df30150a62834b1eb340f3c04c5fb74"
+      "modelSha256": "bc8ffe10625787211a9115f6cbfd38baa723e22b95c97e72366bd57d32c6a6df"
     },
     {
       "id": "casing-spool",
@@ -31,7 +31,7 @@
         "bottom": -2.22
       },
       "model": "casing-spool.glb",
-      "modelSha256": "115e42556666a190619ed2497be022218e4fe7844acb038f8e29a0520749656e"
+      "modelSha256": "17614d7963e253bffeea2cecf6e1dfaf1dc19f7a77727dc571fd4332fa84bd5d"
     },
     {
       "id": "tubing-head",
@@ -43,7 +43,7 @@
         "bottom": -2.38
       },
       "model": "tubing-head.glb",
-      "modelSha256": "9f5c6d61e8cf6606ddeb4c2290b12defae831e1fb67dfb0dbf151da779e2cd63"
+      "modelSha256": "42c9fa59e04e8ab290b0ee673e9e3b44163a820cf1dc17267265734ecd52516a"
     },
     {
       "id": "tubing-hanger",
@@ -55,7 +55,7 @@
         "bottom": -3.1
       },
       "model": "tubing-hanger.glb",
-      "modelSha256": "9957c62663c310737aeeef810b751a5c80b8744eebd003dae68cd7f52cc72870"
+      "modelSha256": "9e434d39c36055f45d33c1c3af49c583440ab6eb4534a87bb2eb89cb0ddb241e"
     },
     {
       "id": "christmas-tree",
@@ -67,7 +67,7 @@
         "bottom": 0
       },
       "model": "christmas-tree.glb",
-      "modelSha256": "0b1fa7f533f077036626d1d757a29d1baba7ef44a6c7ee3a3518a874705fb282"
+      "modelSha256": "eed7f0c2c8b73f4a2a4233b4588fc6f13be1b0a7baf5b3140d22a7330d8ebc4e"
     },
     {
       "id": "horizontal-tree",
@@ -79,7 +79,7 @@
         "bottom": -2.25
       },
       "model": "horizontal-tree.glb",
-      "modelSha256": "eb1e3952e5f27cda2590eec902566a39022aa7bbb2abd139c56a03df6781b5a1"
+      "modelSha256": "7e7a4166c947f509f6f1cbdece0f780c87770a5c4f6d23a9c0e4b8c8257d8c27"
     },
     {
       "id": "bop-stack",
@@ -91,7 +91,7 @@
         "bottom": -4
       },
       "model": "bop-stack.glb",
-      "modelSha256": "079191d3b5cda92af590d8aadd7d37bdaf1893df02c64a626299423070a45074"
+      "modelSha256": "82d9e7852222446c1150fb410b89b17f1c3bf69b8ef414a2f85f28dc0ffcfc2d"
     },
     {
       "id": "conductor",
@@ -153,7 +153,7 @@
         "bottom": -5
       },
       "model": "liner.glb",
-      "modelSha256": "450757deaa156132ceacfbc9ba2c4a31b8fd36b82ab66fce172438b6bc1203a3"
+      "modelSha256": "a455d6a164a0dd56ba047228d693122de7896e5bbe21b3b9ce49013f2eb09886"
     },
     {
       "id": "drilling-liner",
@@ -165,7 +165,7 @@
         "bottom": -5
       },
       "model": "drilling-liner.glb",
-      "modelSha256": "8af62970af3ec62cf07068fd13455e71cc4116e8e6f599b7e884320afef34597"
+      "modelSha256": "9ca1c2958558b6693d62c3587ccb1644717d850de5fb894c2914137f1660b294"
     },
     {
       "id": "float-shoe",
@@ -177,7 +177,7 @@
         "bottom": -3.2906
       },
       "model": "float-shoe.glb",
-      "modelSha256": "c514c9d6dc51c40ce33760e58a1540821d7a68326dc3ec8b0ce612425e62d34c"
+      "modelSha256": "5a72112cd90c437b0a247547037e794762fa52fc81a60b4f4d99d0efcabb06e7"
     },
     {
       "id": "guide-shoe",
@@ -189,7 +189,7 @@
         "bottom": -2.9772
       },
       "model": "guide-shoe.glb",
-      "modelSha256": "33baa67b2a63d03e354da27c4438e4c104d8f1f60dca5156ca5e43f16ee453a3"
+      "modelSha256": "8290ff5d4bf4a3ec168f4edb84f3ed75f373047de14e813cab6470e8ab0a356c"
     },
     {
       "id": "float-collar",
@@ -201,7 +201,7 @@
         "bottom": -2.4
       },
       "model": "float-collar.glb",
-      "modelSha256": "7c8c3baf68da63133e07e1930d11a435e81feb767443d88ef121200625841543"
+      "modelSha256": "aa6f0b60db8d70c4622a9dc6b38efc7d3544f1c5b0a610b2cb7d586a6c6df164"
     },
     {
       "id": "landing-collar",
@@ -213,7 +213,7 @@
         "bottom": -2.35
       },
       "model": "landing-collar.glb",
-      "modelSha256": "eede35577e76dd004eb0db408836c6d7786137fc5ced39f963a85069673ac249"
+      "modelSha256": "9c19284d1fe92a03d29bd201c4d53aa520d74569e18d13ad1e00703649fa6b50"
     },
     {
       "id": "centralizer",
@@ -225,7 +225,7 @@
         "bottom": -5.6
       },
       "model": "centralizer.glb",
-      "modelSha256": "9a9bcdea7b8197528d5aa06b8136d93a3b43327c8cdebb1b9d2d1e7f75cb52d6"
+      "modelSha256": "232817d9d36afba2fea298efd989f28eba0f30b4810141a76b8a0e42a48ce84f"
     },
     {
       "id": "rigid-centralizer",
@@ -237,7 +237,7 @@
         "bottom": -5.2
       },
       "model": "rigid-centralizer.glb",
-      "modelSha256": "e06f242ef5536ec905a6574dff466e70c933e7bc94525eb10a03db51edc844ae"
+      "modelSha256": "a848b09538bbbe9b46635fbe107879304c096f899c55d9415f207404300a18f7"
     },
     {
       "id": "stage-tool",
@@ -249,7 +249,7 @@
         "bottom": -3.4
       },
       "model": "stage-tool.glb",
-      "modelSha256": "8b2c1d22ef4b615fc2e28b7dcb830a7ce4ef010743992305851964e5c8717cbc"
+      "modelSha256": "b64b2db5d40a68c28cf42c5ce7d29f9d7377a7d7d2f362535238d7a4203dab8c"
     },
     {
       "id": "cement-basket",
@@ -261,7 +261,7 @@
         "bottom": -3.5
       },
       "model": "cement-basket.glb",
-      "modelSha256": "93272ab9b329e050364d7b39adcd93dbc5dd126da07007b712a34e4777f9693a"
+      "modelSha256": "cf1adf6820ee91a9692312e69caac98cebbecab0e106af5c0f3c6ddb3616659a"
     },
     {
       "id": "liner-top-packer",
@@ -273,7 +273,7 @@
         "bottom": -4.2
       },
       "model": "liner-top-packer.glb",
-      "modelSha256": "6b934e949d0e5485d3f5fec9b73830ad30873f99902ec3e8fd7ebcfa0dea9b65"
+      "modelSha256": "cc46b1bfc035161494a787277b19e2d7d0b98852b82e60ffff3fc5ef4c574195"
     },
     {
       "id": "cement",
@@ -305,7 +305,7 @@
         "bottom": -4.9
       },
       "model": "safety-valve.glb",
-      "modelSha256": "183bc8701a95a4f8f4859fb45b7588fe487a924383d78e2d7eeede74e50f2f59"
+      "modelSha256": "5c3c0f4d5cc92a28a91f0ff033ba2489c383182d5e4a917e7018e5c20557b790"
     },
     {
       "id": "landing-nipple",
@@ -317,7 +317,7 @@
         "bottom": -2.5
       },
       "model": "landing-nipple.glb",
-      "modelSha256": "996cb679aa3618d18ca782fa89d34a94cd6c28ec639806baeca512af4cf90992"
+      "modelSha256": "66dcf16f8e5178556389b2cfa7d3106a029e1d29078b3816d355ac8cfb249fbc"
     },
     {
       "id": "no-go-nipple",
@@ -329,7 +329,7 @@
         "bottom": -2.5
       },
       "model": "no-go-nipple.glb",
-      "modelSha256": "7d99c76499475329ef88fec47f85f5b0126c763ffa11a9f3850ee50f5ef97ef5"
+      "modelSha256": "a01e0c1e0842c85136765f48e9ed9ae2bdc4e9147c96c33384abbc12fbaae911"
     },
     {
       "id": "chemical-injection-mandrel",
@@ -341,7 +341,7 @@
         "bottom": -5.2
       },
       "model": "chemical-injection-mandrel.glb",
-      "modelSha256": "217fca799f0dcb80c8b6adcf91c0ac4db07bab3700ea0ef39a286d77bb2597b2"
+      "modelSha256": "69aa4fa596ef878c3f335b8de09ca5d6eb73c89ad8427aa6fe8e480d2b106b25"
     },
     {
       "id": "gauge",
@@ -353,7 +353,7 @@
         "bottom": -4.4
       },
       "model": "gauge.glb",
-      "modelSha256": "180b1f1a5fd2525948c039aa5e5ab2997dc33b5c29d66bae87596b72392301c9"
+      "modelSha256": "8d0268dc76063a0f24fae778d89aaae54e694c38b97f0826753d69d10e32a8ed"
     },
     {
       "id": "sliding-sleeve",
@@ -365,7 +365,7 @@
         "bottom": -3.6
       },
       "model": "sliding-sleeve.glb",
-      "modelSha256": "2e5e65a53212a18fadef0df1595fa5081d930af2d278ff81001213d67eef11ed"
+      "modelSha256": "8f8f148df310eb0594c68dd46953c997e54994755f730b1bb647a12e9d980783"
     },
     {
       "id": "flow-coupling",
@@ -377,7 +377,7 @@
         "bottom": -2.4
       },
       "model": "flow-coupling.glb",
-      "modelSha256": "4bdfda6f658ef68de4708205b53c99ebfd1ea98650cbac2936f41ebf8170d132"
+      "modelSha256": "b1c3a0d7e9f7b51e7d693baec3013a2b7ee627af4699eaaf0651dbd8ba914e1a"
     },
     {
       "id": "blast-joint",
@@ -389,7 +389,7 @@
         "bottom": -4.3
       },
       "model": "blast-joint.glb",
-      "modelSha256": "6cbbe41af593bd58756b79edd60c748271c0898cf11134559ec188fcd50799eb"
+      "modelSha256": "f9247dcafa107338c5a607963281ae15734f129fb42103717f4143bdb6b251f6"
     },
     {
       "id": "expansion-joint",
@@ -401,7 +401,7 @@
         "bottom": -5
       },
       "model": "expansion-joint.glb",
-      "modelSha256": "1e21128348082345be4afe167b9f574c39d32cd078660321033e585fc49cfae0"
+      "modelSha256": "86c601b86424d4fb74d4c4de8cae719db6c8f162db14d2bd75ec105f1a0eadc7"
     },
     {
       "id": "seal-assembly",
@@ -413,7 +413,7 @@
         "bottom": -3.7
       },
       "model": "seal-assembly.glb",
-      "modelSha256": "c3dc2bd6acc74e770ea22786910143f794c91ed81db69e8f75dce81acc33db5a"
+      "modelSha256": "7ec3455587de7742a834f7515c2d193b9e5e91f79e4896d06356b72228fc7405"
     },
     {
       "id": "packer",
@@ -425,7 +425,7 @@
         "bottom": -5.4
       },
       "model": "packer.glb",
-      "modelSha256": "5903ab3cd0b5555cc73a9df6987e257a79e8dc3a71b75ac45d51dfe930af107f"
+      "modelSha256": "89b51beb03c5184002575be8e04fdcfebb92bcbeda99a7396c8bc72619ef43ab"
     },
     {
       "id": "permanent-packer",
@@ -437,7 +437,7 @@
         "bottom": -5
       },
       "model": "permanent-packer.glb",
-      "modelSha256": "7cad5393bac585e4c17a074031f3d699640cad70afebe8ba86cc4c3c8e5da95a"
+      "modelSha256": "158235fd1857268a6d2d6b5c995dec7cd9f54e118f93dc3542ef7ab00ce818d2"
     },
     {
       "id": "wireline-entry-guide",
@@ -449,7 +449,7 @@
         "bottom": -3.6456
       },
       "model": "wireline-entry-guide.glb",
-      "modelSha256": "3ae476f30fbbfa6617d4506e44357e3fe47af26cac265cf0c577c189b06becee"
+      "modelSha256": "91d0c8a1f99af691707b65520aaf3be955cdbfccf88a47c3b77385bbfd55e01b"
     },
     {
       "id": "gas-lift-mandrel",
@@ -461,7 +461,7 @@
         "bottom": -6
       },
       "model": "gas-lift-mandrel.glb",
-      "modelSha256": "3a3562528496d0f0f5a0a5dd8da337127ee87292ee27cb924c625cc9816b80e4"
+      "modelSha256": "22744443378b2140c0ee9cd84745edf0ee0f146bf1530207323e02a51aeeef78"
     },
     {
       "id": "esp",
@@ -473,7 +473,7 @@
         "bottom": -7.2
       },
       "model": "esp.glb",
-      "modelSha256": "5bcca4eee09e5f4744d1670452c1f92ff402fc72efedaba2ef9d4c2bbd0d3514"
+      "modelSha256": "c8cd1fae1823f0f056312157c57d0710cdd7c44f0749cf4cc2b9bff579378342"
     },
     {
       "id": "rod-pump",
@@ -485,7 +485,7 @@
         "bottom": -5
       },
       "model": "rod-pump.glb",
-      "modelSha256": "9fe3198eeabf7e1b5680d74869f13d66f62c5b0588388f237b5b38b7d93372d7"
+      "modelSha256": "990c43763ad695dd0d0d99468a641267b8c60d6fa276adb65769720157e16dbb"
     },
     {
       "id": "pcp",
@@ -497,7 +497,7 @@
         "bottom": -5.2
       },
       "model": "pcp.glb",
-      "modelSha256": "86725d118aaeed50c54a523d9cee00e174d406f450ac69098fe1aab73fef9261"
+      "modelSha256": "c5095b857a32defec3e0302374dd6d4e2bcd40ad4b9850de5672416adaf00d06"
     },
     {
       "id": "jet-pump",
@@ -509,7 +509,7 @@
         "bottom": -3.7
       },
       "model": "jet-pump.glb",
-      "modelSha256": "e329b9d83c3ce00021523f59eab86ee91b9fdf8248b07038e5098ef95e465255"
+      "modelSha256": "5670fc0f2886de8f3df752dfcb199078e6b3c0212ceef4785945ded5920cdd6d"
     },
     {
       "id": "perforations",
@@ -521,19 +521,19 @@
         "bottom": -4.95
       },
       "model": "perforations.glb",
-      "modelSha256": "e46cdafcb2d6e04b18ff1f371eb730114d198fe02abf0d437642dedda12b04ba"
+      "modelSha256": "a2f73862fcb0d54b60aa36fff32860833a50bc434b3c97c63a9ded51ce088e83"
     },
     {
       "id": "wire-wrap-screen",
       "thumbnail": "wire-wrap-screen.png",
-      "thumbnailSha256": "59168eb36f493716c5a3d18d3dd84c8a2e00f9250a993007acbedefac1131eaa",
+      "thumbnailSha256": "9ebda561f9c1d52a3cf9d4ce7121a9e3282535270bd5105f1478a82710621bf2",
       "bounds": {
         "radius": 0.76,
         "top": 0.2,
         "bottom": -4.7
       },
       "model": "wire-wrap-screen.glb",
-      "modelSha256": "ddcd407a61900234bd4ed0e0c954acbdbe3a803a753ed4cc237f7524096e442d"
+      "modelSha256": "80b905dbbac8acccc45608ea36b81c4fa2e90f8586da9417baf606e4220f22ff"
     },
     {
       "id": "premium-screen",
@@ -545,31 +545,31 @@
         "bottom": -4.6
       },
       "model": "premium-screen.glb",
-      "modelSha256": "79929974a8a7596176725dad7ae8e695dfcd24dd2e7bb87f68501845465cee4b"
+      "modelSha256": "eba68ab79733a156349c794993a31ce3a4cb9601c04b9ef253e588f765619c05"
     },
     {
       "id": "gravel-pack",
       "thumbnail": "gravel-pack.png",
-      "thumbnailSha256": "c3456e710fe6554ea022533f82a75fa204161708069bde3d2d8a3cbd12e366f9",
+      "thumbnailSha256": "be716b0e2dcc82c775f949eb9b7dc9a10e8dbb5de5b4d211418a83db8928b802",
       "bounds": {
         "radius": 1,
         "top": 0.2,
         "bottom": -4.8
       },
       "model": "gravel-pack.glb",
-      "modelSha256": "5a8efc2c97b7017b8ba76d11b620b5f33e4ae3d627da34d81d16a87e7f909e85"
+      "modelSha256": "b3c13570c1d111dd8960a8c2daa9f17b2238fc35c361ab92b8d02a37ac1e1b45"
     },
     {
       "id": "icd-screen",
       "thumbnail": "icd-screen.png",
-      "thumbnailSha256": "1113984a712f0ae20041dc8fb60eed8e001aae34b98b67057c51790ddca0eec9",
+      "thumbnailSha256": "243a951f307ec4eee97eff3b0f8be2ac3484fe2bc4070da97f94e24cc7e436ed",
       "bounds": {
         "radius": 0.9,
         "top": 0.2,
         "bottom": -4.7
       },
       "model": "icd-screen.glb",
-      "modelSha256": "8ca106cc813649d412d9330b8df4f75f5f6cb4713682af4dca545f86b8b069a3"
+      "modelSha256": "26e6a15dea760a424332226346ead5ea433989a141e7165874f1e28fb7924d51"
     },
     {
       "id": "swell-packer",
@@ -581,7 +581,7 @@
         "bottom": -4.7
       },
       "model": "swell-packer.glb",
-      "modelSha256": "b738236e7f266d9749ece0a83bd631b6fd1653e0bf605df50737e22d8139b605"
+      "modelSha256": "af02f2e0cf6b1817a49c531684c8c33cbc46b14f53e0915194c70c90f2db107f"
     },
     {
       "id": "frac-sleeve",
@@ -593,7 +593,7 @@
         "bottom": -3.6
       },
       "model": "frac-sleeve.glb",
-      "modelSha256": "4ebae0ae80413bc9781594f160d627e08ee8b83934b46f7c7ffa612a9e28473b"
+      "modelSha256": "5b73d65bda605737f744d8a99f5d45ce98d097e5968028112a81ceb916cc9b17"
     },
     {
       "id": "slotted-liner",
@@ -605,7 +605,7 @@
         "bottom": -4.8
       },
       "model": "slotted-liner.glb",
-      "modelSha256": "77241247621e8c71e2b9bb97852f73009c00d07a0e8200fd74932c1307d5dd3b"
+      "modelSha256": "119da0a85ef442043960f7b25ba12997c03f8e6b46268d067f6676d8d7857b0a"
     },
     {
       "id": "icv",
@@ -617,7 +617,7 @@
         "bottom": -4.2
       },
       "model": "icv.glb",
-      "modelSha256": "6b1c82bdf040c9e02feebf64e2d92800cbb22f1104ecaa7f1461be618d91cb06"
+      "modelSha256": "92b35ce104d3bc9e65b15370989334a5b59b68d8e2b00ef9c624094a3e58694c"
     },
     {
       "id": "bridge-plug",
@@ -629,7 +629,7 @@
         "bottom": -3.72
       },
       "model": "bridge-plug.glb",
-      "modelSha256": "227e211bdf929c9ef6f9dbcdd0a025527abb6e11d61c6ac84c25c8ef23ab995f"
+      "modelSha256": "f6cfa00c5a9eb3d9ae95136dc9b4ad3e1640163a87806c74d89c9f129be4c8c2"
     },
     {
       "id": "cement-plug",
@@ -641,7 +641,7 @@
         "bottom": -4.4
       },
       "model": "cement-plug.glb",
-      "modelSha256": "3fe67a8cf9b4055b78d34fea3d58f30ccffdf25c73f4aadf3d4f44755c600d9c"
+      "modelSha256": "e70fc250179df25150424a481f7ef2bb7dc0de98c8055ba9ac0c772b9079eb49"
     },
     {
       "id": "cement-retainer",
@@ -653,7 +653,8 @@
         "bottom": -3.8
       },
       "model": "cement-retainer.glb",
-      "modelSha256": "d7fde2ee98692e0ac7f7c4527a947ffe1e24bd490c4ac8e5fce5baa9edfd2e47"
+      "modelSha256": "cb3633eab31454de70503973698c788e0de15d765c1ce908cdb80ac04f6b8eff"
     }
-  ]
+  ],
+  "modelCompression": "glTF-Transform: dedup, weld, quantize (position 14 bit, normal 10 bit), EXT_meshopt_compression. Decode with three.js GLTFLoader.setMeshoptDecoder."
 }

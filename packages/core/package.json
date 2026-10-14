@@ -78,6 +78,14 @@
     "./seismic": {
       "types": "./dist/seismic.d.ts",
       "import": "./dist/seismic.js"
+    },
+    "./known": {
+      "types": "./dist/known.d.ts",
+      "import": "./dist/known.js"
+    },
+    "./hydraulics": {
+      "types": "./dist/hydraulics.d.ts",
+      "import": "./dist/hydraulics.js"
     }
   },
   "scripts": {

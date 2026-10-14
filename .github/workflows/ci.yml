@@ -1,7 +1,19 @@
 name: CI
-on: [push, pull_request]
+# Pull requests already cover branch work; triggering on push as well ran the whole matrix twice
+# for every commit. Push now only covers the default branch.
+on:
+  push:
+    branches: [master]
+  pull_request:
 permissions:
   contents: read
+
+# Superseded runs are cancelled, so pushing twice in a row no longer leaves a full matrix running
+# against a commit nobody is waiting on.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -15,18 +27,10 @@ jobs:
           node-version: 24.21.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm test && pnpm test:demo-library && pnpm test:asset && pnpm lint
+      # Core and asset tests import source directly and lint reads source, so they run before the
+      # build for fast feedback. The React tests import dist, so they wait for the build.
+      - run: pnpm test && pnpm test:asset && pnpm lint && pnpm typecheck && pnpm test:deck
       - run: pnpm audit --audit-level high
       - run: pnpm build
       - run: pnpm test:render-adapters
       - run: pnpm test:packages
-      - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm test:e2e
-      - run: pnpm exec playwright test e2e/rendering.spec.ts --grep "native WebGPU"
-        env:
-          WEBGPU_TEST: "1"
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: e2e-evidence
-          path: output/

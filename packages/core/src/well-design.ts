@@ -1,5 +1,7 @@
 import { createAssembly, placeComponent, updateComponent, validateAssembly } from "./assembly.ts";
 import type { WellAssembly } from "./assembly.ts";
+import { FEET_PER_METRE } from "./units.ts";
+import type { FormationLayer, SurveyPoint, WellComponent, WellDesign } from "./index.ts";
 import { computeMinimumCurvature, planBuildHold, surveyPointAtMd } from "./trajectory.ts";
 import type { BuildHoldInput, SurveyStationInput } from "./trajectory.ts";
 
@@ -23,7 +25,6 @@ export const SEAWATER_SG = 1.03;
 export const GAS_GRADIENT_SG = 0.23;
 export const M3_TO_BBL = 6.2898;
 const IN2_M_TO_M3 = 0.00064516;
-const FT_PER_M = 3.28084;
 /**
  * Fractional loss of minimum yield strength per °C above 20 °C for carbon and low-alloy casing steels
  * (≈ 0.03 %/°F, the value commonly used when mill elevated-temperature data are not available).
@@ -45,7 +46,8 @@ export interface PipeSize {
   readonly couplingOdIn: number;
 }
 
-const casingDrift = (odIn: number, idIn: number) => idIn - (odIn <= 9.625 ? 0.125 : odIn <= 13.375 ? 0.15625 : 0.1875);
+// API 5CT drift mandrels: ID − 1/8 in below 9-5/8 in; ID − 5/32 in for 9-5/8 to 13-3/8 in; ID − 3/16 in from 16 in.
+const casingDrift = (odIn: number, idIn: number) => idIn - (odIn < 9.625 ? 0.125 : odIn <= 13.375 ? 0.15625 : 0.1875);
 const couplingOd: Readonly<Record<string, number>> = { "30": 31, "20": 21, "18.625": 20, "16": 17, "13.375": 14.375, "10.75": 11.75, "9.625": 10.625, "7.625": 8.5, "7": 7.656, "5.5": 6.05, "4.5": 5 };
 const casingRow = (odIn: number, weightLbFt: number, wallIn: number, idIn: number, alternateDriftIn?: number): PipeSize => Object.freeze({ odIn, weightLbFt, wallIn, idIn, driftIn: Number(casingDrift(odIn, idIn).toFixed(3)), ...(alternateDriftIn ? { alternateDriftIn } : {}), couplingOdIn: couplingOd[String(odIn)] ?? odIn * 1.1 });
 
@@ -123,7 +125,9 @@ export function pipeRatings(odIn: number, wallIn: number, grade: string, yieldPs
 }
 
 export const hydrostaticPsi = (densitySg: number, tvdM: number) => densitySg * PSI_PER_M_PER_SG * tvdM;
-export const sgToPpg = (sg: number) => sg * 8.345;
+/** Pounds per gallon per unit of specific gravity, as drilling sheets round it. */
+export const PPG_PER_SG = 8.345;
+export const sgToPpg = (sg: number) => sg * PPG_PER_SG;
 
 export type WellEnvironment = "onshore" | "offshore-platform" | "offshore-subsea";
 export type DepthReference = "RKB" | "DF" | "GL" | "MSL";
@@ -219,6 +223,8 @@ export interface CompletionPlan {
   readonly perforations: readonly { readonly topMdM: number; readonly bottomMdM: number }[];
   readonly artificialLift: ArtificialLift;
   readonly gasLiftMandrels?: number;
+  /** Fluid left in the tubing–casing annulus above the packer, SG. Unset: the production string's mud weight is assumed, and the load case says so. */
+  readonly packerFluidSg?: number;
 }
 
 export interface WellDesignBrief {
@@ -601,17 +607,31 @@ export function analyzeSection(brief: WellDesignBrief, index: number, factors: D
   let internalShoe = formationPsi - gas(exposedTvd, shoeTvd);
   let burstCase = isProduction ? "Tubing leak / gas to surface at reservoir pressure" : "Gas kick to surface from the next hole section";
   if (!isProduction && internalShoe > fracShoePsi) { internalShoe = fracShoePsi; burstCase = "Gas to surface, limited by the fracture pressure at the shoe"; }
-  const internalAt = (tvd: number) => internalShoe - gas(shoeTvd, tvd);
+  const gasColumnAt = (tvd: number) => internalShoe - gas(shoeTvd, tvd);
   const backup = (tvd: number) => hydrostaticPsi(SEAWATER_SG, tvd);
-  const burstLoad = Math.max(0, internalAt(topTvd) - backup(topTvd), internalAt(shoeTvd) - backup(shoeTvd));
+  // A production string's governing case is a tubing leak near surface: shut-in tubing pressure
+  // (reservoir pressure less a gas column to surface) lands on top of the packer fluid, so the
+  // load grows with depth down to the packer whenever the packer fluid is heavier than the backup.
+  // Below the packer the casing sees the gas column from the reservoir, as before.
+  const packerMd = isProduction && brief.completion ? Math.min(Math.max(brief.completion.packerMdM, section.topMdM), section.shoeMdM) : null;
+  const packerTvd = packerMd === null ? null : tvdAtMd(brief, packerMd);
+  const packerFluidSg = brief.completion?.packerFluidSg ?? section.mudWeightSg;
+  const sitp = Math.max(0, formationPsi - gas(exposedTvd, 0));
+  const internalAt = (tvd: number) => packerTvd !== null && tvd <= packerTvd + 1e-9 ? sitp + hydrostaticPsi(packerFluidSg, tvd) : gasColumnAt(tvd);
+  if (packerTvd !== null) burstCase = `Tubing leak: ${Math.round(sitp).toLocaleString("en-US")} psi shut-in tubing pressure on ${packerFluidSg.toFixed(2)} SG packer fluid${brief.completion?.packerFluidSg === undefined ? " (packer fluid not set: mud weight assumed)" : ""}, gas below the packer`;
+  // The load is linear between these depths, so its largest value sits at one of them.
+  const burstDepths = [topTvd, shoeTvd, ...(packerTvd !== null ? [packerTvd] : [])];
+  const burstLoad = Math.max(0, ...burstDepths.map((tvd) => internalAt(tvd) - backup(tvd)));
   // Tension: buoyed air weight hanging from the top of the string.
   const buoyancy = 1 - section.mudWeightSg / STEEL_SG;
-  const lengthFt = (section.shoeMdM - section.topMdM) * FT_PER_M;
+  const lengthFt = (section.shoeMdM - section.topMdM) * FEET_PER_METRE;
   const tensionLoad = section.weightLbFt * lengthFt * buoyancy;
 
   // Ratings at the shoe temperature, on the worn wall for strings that are drilled through,
   // and collapse with the API TR 5C3 reduced yield under the axial tension at each depth.
-  const collapseLoadAt = (tvd: number) => hydrostaticPsi(section.mudWeightSg, tvd) - (section.topMdM > 0 ? hydrostaticPsi(section.mudWeightSg, topTvd) : 0);
+  // Full evacuation: nothing inside, the mud column from surface outside. A liner (or a string hung
+  // below the rig floor) is no exception: the annulus above its top still carries mud to surface.
+  const collapseLoadAt = (tvd: number) => hydrostaticPsi(section.mudWeightSg, tvd);
   let effective: EffectiveRatings | null = null;
   let collapseLoad = collapseLoadAt(shoeTvd);
   if (pipe && ratings) {
@@ -627,7 +647,7 @@ export function analyzeSection(brief: WellDesignBrief, index: number, factors: D
       const md = section.topMdM + (section.shoeMdM - section.topMdM) * step / 24;
       const load = collapseLoadAt(tvdAtMd(brief, md));
       if (load <= 0) continue;
-      const axial = section.weightLbFt * (section.shoeMdM - md) * FT_PER_M * buoyancy / area;
+      const axial = section.weightLbFt * (section.shoeMdM - md) * FEET_PER_METRE * buoyancy / area;
       const r = Math.min(0.99, Math.max(0, axial / hotYield));
       const reduced = Math.max(1000, hotYield * (Math.sqrt(1 - 0.75 * r * r) - 0.5 * r));
       const rating = pipeRatings(pipe.odIn, wall, section.grade, reduced).collapsePsi;
@@ -974,6 +994,85 @@ export function designToAssembly(brief: WellDesignBrief): WellAssembly {
   return value;
 }
 
+const lithologyColour = (lithology: string) => {
+  const value = lithology.toLowerCase();
+  if (value.includes("sand")) return "#e3cf8f";
+  if (value.includes("shale") || value.includes("clay")) return "#9aa7a0";
+  if (value.includes("lime") || value.includes("carbonate")) return "#b7c4dd";
+  if (value.includes("granite") || value.includes("basement")) return "#c9a9a6";
+  return "#c2c7cf";
+};
+
+/**
+ * A design brief as a well the views can draw: the planned path by minimum curvature, the planned
+ * holes, strings and cement as components (each string keeps its section id, so a section's
+ * analysis finds its string in every view), the completion, and the formations as layers with the
+ * air gap and water column above an offshore well. Nothing is added that the brief does not hold:
+ * diameters come from the API tables for the planned sizes, and every component says it is planned.
+ */
+export function briefToWellDesign(brief: WellDesignBrief, provenance: WellDesign["provenance"] = "synthetic"): WellDesign {
+  // The plan is held straight from its last station to TD, so every planned depth has a position.
+  const planned = brief.trajectory && brief.trajectory.length > 1 ? [...brief.trajectory] : [{ mdM: 0, inclinationDeg: 0, azimuthDeg: 0 }];
+  const last = planned.at(-1)!;
+  if (last.mdM < brief.totalDepthMdM - 1e-6) planned.push({ mdM: brief.totalDepthMdM, inclinationDeg: last.inclinationDeg, azimuthDeg: last.azimuthDeg });
+  const stations = computeMinimumCurvature(planned);
+  const survey: SurveyPoint[] = stations.map((station) => ({ mdM: station.mdM, tvdM: station.tvdM, eastingM: station.eastingM, northingM: station.northingM, inclinationDeg: station.inclinationDeg, azimuthDeg: station.azimuthDeg }));
+  const mm = (inches: number) => inches * 25.4;
+  const plannedNote = "Planned in the design brief; not a record of an installed string.";
+  const components: WellComponent[] = [];
+  const sections = [...brief.sections].sort((a, b) => b.odIn - a.odIn);
+  const mudline = brief.location.environment === "onshore" ? 0 : mudlineDepthM(brief);
+  for (const [index, section] of sections.entries()) {
+    const pipe = findPipe(section.odIn, section.weightLbFt);
+    const outer = sections.slice(0, index).reverse().find((value) => value.shoeMdM < section.shoeMdM);
+    const holeTop = outer ? outer.shoeMdM : section.role === "conductor" ? Math.min(mudline, section.shoeMdM - 1) : 0;
+    components.push({ id: `${section.id}-hole`, name: `${section.label.replace(/ (casing|conductor)$/, "")} hole / ${formatOd(section.holeSizeIn)}`, kind: "Hole", material: "Planned hole", outerDiameterMm: mm(section.holeSizeIn), innerDiameterMm: null, topDepthM: holeTop, bottomDepthM: section.shoeMdM, description: plannedNote, topDepthReported: true });
+    components.push({ id: section.id, name: `${section.label} / ${formatOd(section.odIn)}`, kind: "Casing", material: `${section.grade} / ${section.weightLbFt} lb/ft`, outerDiameterMm: mm(section.odIn), innerDiameterMm: pipe ? mm(pipe.idIn) : null, topDepthM: section.topMdM, bottomDepthM: section.shoeMdM, description: plannedNote, topDepthReported: section.topMdM > 0 });
+    if (section.cement) components.push({ id: `${section.id}-cement`, name: `${section.label} cement`, kind: "Cement", material: `Lead ${section.cement.leadDensitySg.toFixed(2)} SG / tail ${section.cement.tailDensitySg.toFixed(2)} SG`, outerDiameterMm: mm(section.holeSizeIn), innerDiameterMm: mm(section.odIn), topDepthM: Math.min(section.cement.topMdM, section.shoeMdM), bottomDepthM: section.shoeMdM, description: `${plannedNote} ${section.cement.excessPct}% open-hole excess.`, parentId: section.id, topDepthReported: true });
+  }
+  components.push({ id: "wellhead", name: "Wellhead", kind: "Wellhead", material: "Planned", outerDiameterMm: null, innerDiameterMm: null, topDepthM: 0, bottomDepthM: 0, description: plannedNote });
+  const completion = brief.completion;
+  if (completion) {
+    const tubing = findPipe(completion.tubingOdIn, completion.tubingWeightLbFt, tubingTable);
+    const tail = Math.min(brief.totalDepthMdM - 1, completion.packerMdM + 30);
+    components.push({ id: "christmas-tree", name: "Christmas tree", kind: "Valve", material: "Planned", outerDiameterMm: null, innerDiameterMm: null, topDepthM: 0, bottomDepthM: 0, description: plannedNote });
+    components.push({ id: "tubing", name: `${formatOd(completion.tubingOdIn)} ${completion.tubingWeightLbFt}# ${completion.tubingGrade} tubing`, kind: "Tubular", material: `${completion.tubingGrade} / ${completion.tubingWeightLbFt} lb/ft`, outerDiameterMm: mm(completion.tubingOdIn), innerDiameterMm: tubing ? mm(tubing.idIn) : null, topDepthM: 0, bottomDepthM: tail, description: plannedNote });
+    if (completion.sssvMdM !== null) components.push({ id: "sssv", name: "Subsurface safety valve", kind: "Safety valve", material: "Planned", outerDiameterMm: null, innerDiameterMm: null, topDepthM: completion.sssvMdM, bottomDepthM: completion.sssvMdM + 2, description: plannedNote, parentId: "tubing" });
+    if (completion.artificialLift === "gas-lift") {
+      const count = Math.max(1, completion.gasLiftMandrels ?? 4);
+      for (let index = 0; index < count; index++) {
+        const md = Math.round(completion.packerMdM * (0.3 + 0.6 * index / Math.max(1, count - 1)) - 40);
+        components.push({ id: `glm-${index + 1}`, name: `Gas lift mandrel ${index + 1}`, kind: "Gas lift mandrel", material: "Planned", outerDiameterMm: null, innerDiameterMm: null, topDepthM: md, bottomDepthM: md + 2.5, description: plannedNote, parentId: "tubing" });
+      }
+    }
+    components.push({ id: "packer", name: "Production packer", kind: "Packer", material: `Packer fluid ${(completion.packerFluidSg ?? sections.at(-1)?.mudWeightSg ?? 1).toFixed(2)} SG`, outerDiameterMm: null, innerDiameterMm: null, topDepthM: completion.packerMdM, bottomDepthM: completion.packerMdM + 2, description: plannedNote, parentId: "tubing" });
+  }
+  const tdTvd = tvdAtMd(brief, brief.totalDepthMdM);
+  const layers: FormationLayer[] = [];
+  const rkb = brief.datum.elevationAboveMslM ?? 0;
+  if (brief.location.environment !== "onshore" && rkb > 0) layers.push({ id: "air-gap", name: "Air gap", lithology: "Air", topTvdM: 0, bottomTvdM: rkb, densityKgM3: null, porosityPct: null, color: "#edf4f6" });
+  if (brief.location.environment !== "onshore" && brief.location.waterDepthM) layers.push({ id: "water", name: "Water column", lithology: "Seawater", topTvdM: rkb, bottomTvdM: rkb + brief.location.waterDepthM, densityKgM3: null, porosityPct: null, color: "#c8e3ef" });
+  const formations = [...brief.geology.formations].sort((a, b) => a.topTvdM - b.topTvdM);
+  formations.forEach((formation, index) => {
+    const bottom = formations[index + 1]?.topTvdM ?? Math.max(tdTvd + 50, formation.topTvdM + 50);
+    layers.push({ id: formation.name.toLowerCase().replace(/\W+/g, "-"), name: formation.name, lithology: formation.lithology, topTvdM: formation.topTvdM, bottomTvdM: bottom, densityKgM3: null, porosityPct: null, color: lithologyColour(formation.lithology), interpretation: formation.hazard ? `Hazard: ${formation.hazard}` : formation.reservoir ? "Reservoir" : undefined });
+  });
+  const strings = sections.filter((section) => section.role !== "conductor");
+  return Object.freeze({
+    id: `design-${brief.identity.uwi ?? brief.identity.name}`.toLowerCase().replace(/[^a-z0-9-]+/g, "-"),
+    revision: 1, units: "m", provenance,
+    wellName: brief.identity.name || "Untitled design",
+    surveyStatus: "planned",
+    trajectoryName: brief.trajectory ? "Planned trajectory" : "Vertical plan",
+    trajectorySource: "Design brief",
+    totalDepthM: brief.totalDepthMdM,
+    casingBottomM: Math.max(0, ...strings.map((section) => section.shoeMdM)),
+    depthDatum: brief.datum.reference,
+    ...(brief.datum.elevationAboveMslM !== null ? { referenceElevationMslM: brief.datum.elevationAboveMslM } : {}),
+    survey: Object.freeze(survey), components: Object.freeze(components), formations: Object.freeze(layers),
+  });
+}
+
 /** A blank brief: everything a new well still needs is reported by `designReadiness`. */
 export function emptyWellBrief(): WellDesignBrief {
   const brief: WellDesignBrief = {
@@ -1027,6 +1126,8 @@ export function exampleWellBrief(): WellDesignBrief {
   const sections = proposeCasingScheme(base);
   const production = sections[sections.length - 1]!;
   const reservoirMd = mdAtTvd({ ...base, sections } as WellDesignBrief, 2620);
-  const completion: CompletionPlan = { tubingOdIn: 3.5, tubingWeightLbFt: 9.3, tubingGrade: "L80", packerMdM: Math.round(reservoirMd - 60), sssvMdM: 250, perforations: [{ topMdM: Math.round(reservoirMd + 10), bottomMdM: Math.min(Math.round(reservoirMd + 70), production.shoeMdM - 40) }], artificialLift: "gas-lift", gasLiftMandrels: 3 };
-  return Object.freeze({ ...base, sections, completion });
+  const completion: CompletionPlan = { tubingOdIn: 3.5, tubingWeightLbFt: 9.3, tubingGrade: "L80", packerMdM: Math.round(reservoirMd - 60), sssvMdM: 250, perforations: [{ topMdM: Math.round(reservoirMd + 10), bottomMdM: Math.min(Math.round(reservoirMd + 70), production.shoeMdM - 40) }], artificialLift: "gas-lift", gasLiftMandrels: 3, packerFluidSg: 1.06 };
+  // The production string was picked before the completion existed; the tubing-leak load above the
+  // packer only applies now, so any string that no longer passes is re-graded, as a designer would.
+  return regradeFailingStrings(Object.freeze({ ...base, sections, completion })).brief;
 }

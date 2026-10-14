@@ -308,3 +308,23 @@ test("explicit geographic and local-frame conversions round trip without changin
   assert.throws(() => webMercatorToGeographic([1e9, 0, 0]), RangeError);
   assert.throws(() => toLocalCoordinates([NaN, 0, 0], [0, 0, 0]), TypeError);
 });
+
+test("the time cursor is exact epoch milliseconds, published as its own event, and survives a URL round trip", () => {
+  const store = createSubsurfaceStore();
+  const seen: string[] = [];
+  store.subscribe((event) => seen.push(`${event.type}:${event.source}`));
+  const spud = Date.UTC(2020, 9, 30);
+  store.setTimeCursor(spud, "time-rail");
+  assert.equal(store.getState().time?.cursorMs, spud);
+  assert.deepEqual(seen, ["time:time-rail"]);
+  store.setTimeCursor(spud, "time-rail");
+  assert.equal(seen.length, 1, "an identical time publishes nothing");
+  assert.throws(() => store.setTimeCursor(spud + 0.5), /epoch milliseconds/);
+  assert.throws(() => store.setTimeCursor(Number.NaN), /epoch milliseconds/);
+  const url = stateToUrl(store.getState(), "https://example.test/deck");
+  assert.equal(url.searchParams.get("sw.time"), String(spud));
+  assert.equal(stateFromUrl(url)?.time?.cursorMs, spud);
+  store.setTimeCursor(null);
+  assert.equal(store.getState().time?.cursorMs, null);
+  assert.equal(createSubsurfaceStore({ ...createInitialSubsurfaceState(), time: undefined }).getState().time?.cursorMs, null, "older snapshots without time still hydrate");
+});

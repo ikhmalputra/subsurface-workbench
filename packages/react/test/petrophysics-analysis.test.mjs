@@ -8,7 +8,6 @@ import {
   PetrophysicsFlattenView,
   PetrophysicsHistogram,
   PetrophysicsTemplateSelect,
-  PetrophysicsLogView,
   PetrophysicsZoneSummaryView,
 } from "../dist/2d.js";
 import {
@@ -91,7 +90,7 @@ test("Petrophysics zone summary renders formulas, explicit cutoff and sampled me
 test("Petrophysics calculation report exposes formulas, units, parameters and per-sample results", () => {
   const html = renderToStaticMarkup(createElement(PetrophysicsCalculationReport, { archie, mn }));
   assert.match(html, /Sw = \(a \* Rw \/ \(Rt \* phi\^m\)\)\^\(1\/n\)/);
-  assert.match(html, /M = \(DTf - DT\)/);
+  assert.match(html, /M = 0\.01 \* \(DTf - DT\) \/ \(rhob - rhof\)/);
   assert.match(html, /formation-temperature-corrected Rw|caller must temperature-correct Rw/i);
   assert.match(html, /0\.1 ohm\.m/);
   assert.match(html, /exact MD keys/);
@@ -108,16 +107,9 @@ test("Petrophysics flatten view shows explicit tie depths and relative-MD data",
   assert.match(html, /well-b/);
 });
 
-test("Petrophysics template selector and log view render core values and explicit unknowns", () => {
+test("Petrophysics template selector renders its templates", () => {
   const template = { id: "basic", name: "Basic", tracks: [{ curveId: first.curves[0].id, color: "#247c59", min: 0, max: 1 }] };
   const selectHtml = renderToStaticMarkup(createElement(PetrophysicsTemplateSelect, { templates: [template], value: "basic", onChange: () => {} }));
   assert.match(selectHtml, /Track template/);
   assert.match(selectHtml, /Basic/);
-  const logHtml = renderToStaticMarkup(createElement(PetrophysicsLogView, {
-    well: first, tracks: template.tracks,
-  }));
-  assert.match(logHtml, /data-testid="petrophysics-core-measurements"/);
-  assert.match(logHtml, /0.22/);
-  assert.match(logHtml, /not reported/);
-  assert.match(logHtml, /View well-a petrophysics samples as a table/);
 });

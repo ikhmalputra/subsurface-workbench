@@ -29,7 +29,8 @@ test("short survey clips the construction path without changing the source inter
   assert.ok(path);
   const coordinates = [...path.matchAll(/[ML]([\d.-]+),([\d.-]+)/g)].map((match) => [Number(match[1]), Number(match[2])]);
   assert.ok(coordinates.at(-1)[0] > coordinates[0][0], "Supplied departure must curve the construction");
-  assert.equal(Math.max(...coordinates.map((point) => point[1])), 530);
+  // The path reaches the plot's bottom edge: 570 px tall, less the 80 px that hold the departure axis.
+  assert.equal(Math.max(...coordinates.map((point) => point[1])), 490);
 });
 
 test("survey outside assembly coverage does not fabricate a path or selectable parts", () => {

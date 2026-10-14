@@ -38,8 +38,16 @@ test("mixed layer CRS normalizes horizontally without converting TVD or source c
   assert.deepEqual([...document.wells[0]!.xyz], before);
 });
 
+test("NAD83 / UTM places the Utah FORGE 16A(78)-32 wellhead at Milford, Utah and round-trips", () => {
+  const [longitude, latitude] = reprojectGisXY([334637.9, 4263458.9], "EPSG:26912", "EPSG:4326");
+  assert.ok(Math.abs(longitude - -112.89643) < 1e-5 && Math.abs(latitude - 38.50416) < 1e-5, `${longitude}, ${latitude}`);
+  const back = reprojectGisXY([longitude, latitude], "EPSG:4326", "EPSG:26912");
+  assert.ok(Math.abs(back[0] - 334637.9) < 1e-3 && Math.abs(back[1] - 4263458.9) < 1e-3);
+});
+
 test("unsupported datum, malformed geometry, non-finite coordinates and unordered MD fail explicitly", () => {
-  assert.throws(() => reprojectGisXY([500000, 0], "EPSG:26912", "EPSG:4326"), /Unsupported GIS CRS/);
+  assert.throws(() => reprojectGisXY([500000, 0], "EPSG:27700", "EPSG:4326"), /Unsupported GIS CRS/);
+  assert.throws(() => reprojectGisXY([500000, 0], "EPSG:26930", "EPSG:4326"), /Unsupported GIS CRS/);
   assert.throws(() => reprojectGisXY([0, 90], "EPSG:4326", "EPSG:3857"), /extent/);
   assert.throws(() => reprojectGisXY([0, NaN], "EPSG:4326", "EPSG:3857"), /finite/);
   const document = fixture();

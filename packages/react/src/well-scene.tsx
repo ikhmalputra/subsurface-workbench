@@ -5,9 +5,13 @@ import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
-import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-import { computeMinimumCurvature, getWellComponents, positionAtMeasuredDepth, seismicColour } from "@ikhmalputra/subsurface-core";
-import type { BuildHoldTarget, SeismicImage, WellComponent, WellDesign } from "@ikhmalputra/subsurface-core";
+import { ClippingGroup } from "three/webgpu";
+import { uniform } from "three/tsl";
+import { createSceneRenderer } from "./scene-renderer.js";
+import type { SceneRenderer } from "./scene-renderer.js";
+import { volumeRenderMaterial, volumeSolidMaterial } from "./seismic-materials.js";
+import { computeMinimumCurvature, getWellComponents, mdAtSurveyTvd, positionAtMeasuredDepth, seismicColour } from "@ikhmalputra/subsurface-core";
+import type { BuildHoldTarget, SeismicColorMap, SeismicImage, WellComponent, WellDesign } from "@ikhmalputra/subsurface-core";
 import type { SlicePlane, SpatialXYZ, SubsurfaceState, WellLogStyle } from "@ikhmalputra/subsurface-core/state";
 import type { SubsurfaceWellLogCurve } from "@ikhmalputra/subsurface-core/contracts";
 import { GpuFramebufferPicker } from "./gpu-picker.js";
@@ -18,6 +22,12 @@ import { dlsColor } from "./trajectory-colour.js";
 import { cutawayTube } from "./cutaway-tube.js";
 import { Crosshair, Maximize, ChevronDown } from "lucide-react";
 import { CommandButton } from "./ui.js";
+import { COMPASS_FACES, ViewCube } from "./view-cube.js";
+import type { NamedView } from "./view-cube.js";
+import { SectionTool } from "./section-tool.js";
+import type { SectionState } from "./section-tool.js";
+import { SceneSectionControl, SceneViewKeys } from "./scene-tools.js";
+import { LabelLayer, axesBox } from "./scene-labels.js";
 
 function CasingDiameterInset({ components, selectedId, onSelect }: { components: readonly WellComponent[]; selectedId: string; onSelect: (id: string) => void }) {
   const [expanded, setExpanded] = useState(false);
@@ -137,6 +147,8 @@ export interface WellSceneProps {
   readonly sections?: readonly SceneSeismicSection[];
   /** Seismic volume shown as a croppable block or a volume render; memoise it. */
   readonly volume?: SceneSeismicVolume | null;
+  /** The volume's colour map; "grey" (peak black) matches the 2D section and the site scene by default. */
+  readonly seismicColorMap?: SeismicColorMap;
   readonly volumeView?: SceneVolumeView;
   /** Linked depth cursor (e.g. from `useDepthLink`): a ring on the well and a line across each panel or around the volume. */
   readonly cursorMdM?: number | null;
@@ -158,52 +170,36 @@ export interface WellSceneProps {
   readonly onGpuPick?: (pick: { readonly xyz: SpatialXYZ; readonly amplitude: number | null; readonly componentId: string | null }) => void;
   readonly logCurve?: SubsurfaceWellLogCurve | null;
   readonly logStyle?: WellLogStyle | null;
+  /** Fly the camera to the selected interval whenever the selection changes, e.g. when it is chosen in another view. */
+  readonly focusOnSelect?: boolean;
+  /**
+   * The well as it stood at a moment in its history: the path is drawn only down to `reachMdM`
+   * (the depth drilled by then), and only the components in `installedIds` are shown. Either left
+   * undefined shows the well as finally recorded. Applied without rebuilding the scene, so a host
+   * can scrub through a well's days.
+   */
+  readonly reachMdM?: number | null;
+  readonly installedIds?: readonly string[] | null;
+  /** Strings run part of the way: the depth each had reached, metres MD. Drawn to there, without a shoe. */
+  readonly runToMdM?: Readonly<Record<string, number>> | null;
+  /** Components to call out, e.g. strings that fail a what-if: they pulse in `alertColor` until cleared. */
+  readonly alertIds?: readonly string[] | null;
+  readonly alertColor?: string;
 }
 
+/**
+ * Well-local metres (east, north, TVD) and the scene: one scene unit is 100 m, x is east, y is up
+ * and z is south (three.js is right-handed). Every conversion goes through these three.
+ */
+const SCENE_M = 100;
+const toScene = (eastM: number, northM: number, tvdM: number) => new THREE.Vector3(eastM / SCENE_M, -tvdM / SCENE_M, -northM / SCENE_M);
+const fromScene = (point: THREE.Vector3): SpatialXYZ => [point.x * SCENE_M, -point.z * SCENE_M, -point.y * SCENE_M];
+const sceneTvd = (y: number) => -y * SCENE_M;
+
 const NO_SECTIONS: readonly SceneSeismicSection[] = [];
+const NO_ALERTS: readonly string[] = [];
 const DEFAULT_VIEW: SceneVolumeView = {};
 
-const VOLUME_VERTEX = `
-uniform vec3 uCropMin;
-uniform vec3 uCropSize;
-varying vec3 vUvw;
-void main() {
-  vUvw = uCropMin + position * uCropSize;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-}`;
-const VOLUME_COMMON = `
-uniform highp sampler3D uVolume;
-uniform sampler2D uLut;
-uniform float uGain;
-varying vec3 vUvw;
-vec3 lut(float a) { return texture(uLut, vec2(clamp(a, -1.0, 1.0) * 0.5 + 0.5, 0.5)).rgb; }`;
-const SOLID_FRAGMENT = `${VOLUME_COMMON}
-void main() { gl_FragColor = vec4(lut(texture(uVolume, vUvw).r * uGain), 1.0); }`;
-// Front-to-back compositing from where the eye ray enters the crop box to this back face; one step per voxel crossed.
-const RENDER_FRAGMENT = `${VOLUME_COMMON}
-uniform vec3 uEye;
-uniform vec3 uCropMin;
-uniform vec3 uCropMax;
-uniform vec3 uDims;
-uniform float uThreshold;
-void main() {
-  vec3 dir = vUvw - uEye;
-  vec3 inv = 1.0 / dir;
-  vec3 near = min((uCropMin - uEye) * inv, (uCropMax - uEye) * inv);
-  float entry = clamp(max(max(near.x, near.y), near.z), 0.0, 1.0);
-  vec3 start = uEye + dir * entry;
-  vec3 span = vUvw - start;
-  int steps = int(clamp(length(span * uDims), 1.0, 720.0));
-  vec4 sum = vec4(0.0);
-  for (int i = 0; i < 720; i++) {
-    if (i >= steps || sum.a > 0.97) break;
-    float a = texture(uVolume, start + span * ((float(i) + 0.5) / float(steps))).r * uGain;
-    float alpha = smoothstep(uThreshold, 1.0, abs(a)) * 0.35;
-    sum.rgb += (1.0 - sum.a) * alpha * lut(a);
-    sum.a += (1.0 - sum.a) * alpha;
-  }
-  gl_FragColor = sum;
-}`;
 const savedViews = new Map<string, { position: THREE.Vector3; target: THREE.Vector3 }>();
 
 function niceStep(total: number) {
@@ -213,36 +209,11 @@ function niceStep(total: number) {
   return (unit < 1.5 ? 1 : unit < 3.5 ? 2.5 : unit < 7.5 ? 5 : 10) * power;
 }
 
-function textSprite(text: string, screenHeight: number, color = "#33423b", weight = 500) {
-  const canvas = document.createElement("canvas");
-  const context = canvas.getContext("2d")!;
-  const font = `${weight} 40px 'IBM Plex Sans', 'Helvetica Neue', Arial, sans-serif`;
-  context.font = font;
-  canvas.width = Math.ceil(context.measureText(text).width) + 28;
-  canvas.height = 64;
-  context.font = font;
-  context.textBaseline = "middle";
-  context.lineJoin = "round";
-  context.lineWidth = 9;
-  context.strokeStyle = "rgba(246, 248, 246, 0.92)";
-  context.strokeText(text, 14, 33);
-  context.fillStyle = color;
-  context.fillText(text, 14, 33);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = 4;
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, depthTest: false, transparent: true, sizeAttenuation: false }));
-  sprite.center.set(0, 0.5);
-  sprite.scale.set(screenHeight * canvas.width / canvas.height, screenHeight, 1);
-  sprite.renderOrder = 20;
-  return sprite;
-}
-
 function formatMetres(value: number) {
   return `${value.toLocaleString("en-US", { maximumFractionDigits: 0 })} m`;
 }
 
-export default function WellScene({ design, selectedId, onSelect, layersVisible = true, colorBy = "solid", dlsLimitDegPer30m = 3, target = null, probeMdM, onProbe, sections = NO_SECTIONS, volume = null, volumeView = DEFAULT_VIEW, cursorMdM = null, onCursorMdChange, mdWindow = null, cameraView = null, onCameraViewChange, onSpatialPick, slicePlane = null, onSlicePlaneChange, picking = "cpu", onGpuPick, logCurve = null, logStyle = null }: WellSceneProps) {
+export default function WellScene({ design, selectedId, onSelect, layersVisible = true, colorBy = "solid", dlsLimitDegPer30m = 3, target = null, probeMdM, onProbe, sections = NO_SECTIONS, volume = null, seismicColorMap = "grey", volumeView = DEFAULT_VIEW, cursorMdM = null, onCursorMdChange, mdWindow = null, cameraView = null, onCameraViewChange, onSpatialPick, slicePlane = null, onSlicePlaneChange, picking = "cpu", onGpuPick, logCurve = null, logStyle = null, focusOnSelect = false, reachMdM = null, installedIds = null, runToMdM = null, alertIds = null, alertColor = "#f472b6" }: WellSceneProps) {
   const host = useRef<HTMLDivElement>(null);
   const redraw = useRef<() => void>(() => undefined);
   const reset = useRef<() => void>(() => undefined);
@@ -255,11 +226,20 @@ export default function WellScene({ design, selectedId, onSelect, layersVisible 
   const cameraAt = useRef<(view: SubsurfaceState["viewState"]) => void>(() => undefined);
   const sliceAt = useRef<(plane: SlicePlane | null) => void>(() => undefined);
   const logAt = useRef<(curve: SubsurfaceWellLogCurve | null, style: WellLogStyle | null) => void>(() => undefined);
+  const sectionAt = useRef<(state: SectionState | null) => void>(() => undefined);
+  const lookAt = useRef<(view: NamedView) => void>(() => undefined);
+  const alertAt = useRef<(ids: readonly string[], color: string) => void>(() => undefined);
+  const alerts = useRef<{ ids: readonly string[]; color: string }>({ ids: [], color: alertColor });
+  alerts.current = { ids: alertIds ?? [], color: alertColor };
+  const reachAt = useRef<(reach: number | null, installed: readonly string[] | null, runTo: Readonly<Record<string, number>> | null) => void>(() => undefined);
+  const history = useRef<{ reach: number | null; installed: readonly string[] | null; runTo: Readonly<Record<string, number>> | null }>({ reach: reachMdM, installed: installedIds, runTo: runToMdM });
+  history.current = { reach: reachMdM, installed: installedIds, runTo: runToMdM };
+  const [section, setSection] = useState<SectionState | null>(null);
   const [sliceVertices, setSliceVertices] = useState(0);
   const [logTriangles, setLogTriangles] = useState(0);
   const [gpuReadout, setGpuReadout] = useState<{ xyz: SpatialXYZ; amplitude: number | null } | null>(null);
   const [sectionHover, setSectionHover] = useState<SectionReadout | null>(null);
-  const compass = useRef<SVGSVGElement>(null);
+  const [heading, setHeading] = useState(0);
   const [cameraState, setCameraState] = useState("");
   const [targetState, setTargetState] = useState("");
   const [accessibleCamera, setAccessibleCamera] = useState<SubsurfaceState["viewState"] | null>(cameraView);
@@ -289,17 +269,17 @@ export default function WellScene({ design, selectedId, onSelect, layersVisible 
 
   useEffect(() => {
     const container = host.current!;
-    let renderer: THREE.WebGLRenderer;
-    try { renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true }); }
-    catch { setFailure("WebGL is unavailable. The 2D schematic and inventory remain available."); return; }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    // WebGPU where the browser has it, WebGL 2 where not: the scene builds now and draws once the device is up.
+    let started: SceneRenderer;
+    try { started = createSceneRenderer({ alpha: true, pixelRatioCap: 1.75 }); }
+    catch { setFailure("3D is unavailable in this browser. The 2D schematic and inventory remain available."); return; }
+    const { renderer } = started;
     container.appendChild(renderer.domElement);
+    // Labels are page text over the canvas (scene-labels.ts), sharp at any zoom, as in the site scene.
+    const labels = new LabelLayer(container);
+    const textSprite = (text: string, _height: number, colour: string, weight = 500) =>
+      labels.label(text, weight >= 700 ? "name" : weight >= 600 ? "name" : "pick", weight >= 700 ? 3 : weight >= 600 ? 2 : 1, { colour, className: weight >= 600 && weight < 700 ? "is-reference" : undefined });
     const scene = new THREE.Scene();
-    const environment = new THREE.PMREMGenerator(renderer);
-    const environmentMap = environment.fromScene(new RoomEnvironment(), 0.04).texture;
-    scene.environment = environmentMap;
     scene.add(new THREE.HemisphereLight(0xf4f1e8, 0x56605a, 1.1));
     const sun = new THREE.DirectionalLight(0xffffff, 1.7);
     sun.position.set(14, 30, 22);
@@ -307,7 +287,9 @@ export default function WellScene({ design, selectedId, onSelect, layersVisible 
     // Earth pass: formation block, ground and seismic panels, depth-sorted together. The well pass is drawn after a depth
     // clear so casing, DLS colour and labels stay readable through the seismic.
     const earth = new THREE.Scene();
-    earth.environment = environmentMap;
+    // Each pass's content sits in a clipping group, so a section plane cuts both on either backend.
+    // Everything is built into the scenes, then moved into these groups once construction ends.
+    const sceneCut = new ClippingGroup(), earthCut = new ClippingGroup();
     earth.add(new THREE.HemisphereLight(0xf4f1e8, 0x56605a, 1.1));
     const earthSun = sun.clone();
     earth.add(earthSun);
@@ -322,7 +304,7 @@ export default function WellScene({ design, selectedId, onSelect, layersVisible 
     const totalDepth = design.totalDepthM;
     const vector = (mdM: number) => {
       const point = positionAtMeasuredDepth(design, mdM);
-      return new THREE.Vector3(point.eastingM / 100, -point.tvdM / 100, -point.northingM / 100); // three.js is right-handed: x = east, y = up, z = south
+      return toScene(point.eastingM, point.northingM, point.tvdM);
     };
     const stations = design.survey ?? [positionAtMeasuredDepth(design, 0), positionAtMeasuredDepth(design, totalDepth)];
     const bounds = new THREE.Box3().setFromPoints(stations.map((station) => vector(station.mdM)));
@@ -336,7 +318,13 @@ export default function WellScene({ design, selectedId, onSelect, layersVisible 
     const radiusFor = (od: number | null, fallback: number) => od == null ? fallback : unit * od / maxOd;
     const radiusById = new Map<string, number>();
     const created: StandardMesh[] = [];
-    const disposables: { dispose: () => void }[] = [environment, environmentMap];
+    const disposables: { dispose: () => void }[] = [];
+    // A section cuts the construction and the earth around it; the cut faces of the strings are filled.
+    const section = new SectionTool([sceneCut, earthCut], { solids: () => created, bounds: () => wholeBounds() });
+    scene.add(section.outline);
+    sectionAt.current = (state) => { section.set(state); render(); };
+    const cube = new ViewCube(camera, controls, container, { labels: COMPASS_FACES, compass: true, home: new THREE.Vector3(0.85, 0.32, 1.15), onChange: () => render(), onSettled: () => reportCamera() });
+    lookAt.current = (view) => cube.look(view);
 
     function curveBetween(start: number, end: number) {
       const points = [vector(start), ...stations.filter((station) => station.mdM > start && station.mdM < end).map((station) => vector(station.mdM)), vector(end)];
@@ -349,6 +337,8 @@ export default function WellScene({ design, selectedId, onSelect, layersVisible 
       const { curve, count } = curveBetween(start, end);
       const segments = THREE.MathUtils.clamp(count * 2, 2, 420);
       const geometry = cutaway ? cutawayTube(curve, segments, radius, radial) : new THREE.TubeGeometry(curve, segments, radius, radial, false);
+      // Faces run segment by segment from the top, so a draw range shows the tube down to a depth.
+      geometry.userData.span = { start, end, segments };
       return { geometry, curve };
     }
     const metal = (color: string, extra: THREE.MeshStandardMaterialParameters = {}) => new THREE.MeshStandardMaterial({ color, metalness: 0.62, roughness: 0.34, side: THREE.DoubleSide, ...extra });
@@ -390,6 +380,7 @@ export default function WellScene({ design, selectedId, onSelect, layersVisible 
         const { geometry, curve } = tube(start, end, radius, 32, true);
         add(new THREE.Mesh(geometry, metal(color)), component.id);
         const shoe = add(new THREE.Mesh(new THREE.CylinderGeometry(radius * 1.16, radius * 1.4, unit * 0.55, 32), metal(color, { roughness: 0.5 })), component.id);
+        shoe.userData.shoeAt = end;
         const tangent = curve.getTangentAt(1);
         orient(shoe, tangent.clone().negate());
         shoe.position.copy(vector(end)).addScaledVector(tangent, -unit * 0.2);
@@ -470,14 +461,7 @@ export default function WellScene({ design, selectedId, onSelect, layersVisible 
     scene.add(hitTarget);
     const samples = Array.from({ length: 601 }, (_, index) => { const mdM = totalDepth * index / 600; return { mdM, point: vector(mdM) }; });
     /** First MD where the well reaches a TVD, or null below TD. */
-    const mdAtTvd = (tvdM: number) => {
-      for (let index = 1; index < samples.length; index++) {
-        const a = samples[index - 1]!, b = samples[index]!;
-        const ta = -a.point.y * 100, tb = -b.point.y * 100;
-        if (tb >= tvdM && tb > ta) return tvdM <= ta ? a.mdM : a.mdM + (b.mdM - a.mdM) * (tvdM - ta) / (tb - ta);
-      }
-      return null;
-    };
+    const mdAtTvd = (tvdM: number) => mdAtSurveyTvd(stations, tvdM);
     const nearestDepth = (point: THREE.Vector3) => samples.reduce((best, sample) => sample.point.distanceToSquared(point) < best.point.distanceToSquared(point) ? sample : best).mdM;
     function componentAt(mdM: number) {
       const covering = top.filter((component) => component.topDepthM <= mdM && component.bottomDepthM >= mdM);
@@ -525,7 +509,7 @@ export default function WellScene({ design, selectedId, onSelect, layersVisible 
     const box = { minX: bounds.min.x - margin, maxX: bounds.max.x + margin, minZ: bounds.min.z - margin, maxZ: bounds.max.z + margin };
     const planAt = (originE: number, originN: number, azimuthDeg: number) => {
       const azimuth = THREE.MathUtils.degToRad(azimuthDeg), east = Math.sin(azimuth), north = Math.cos(azimuth);
-      return (alongM: number, offsetM: number, tvdM: number) => new THREE.Vector3((originE + alongM * east + offsetM * north) / 100, -tvdM / 100, -(originN + alongM * north - offsetM * east) / 100);
+      return (alongM: number, offsetM: number, tvdM: number) => toScene(originE + alongM * east + offsetM * north, originN + alongM * north - offsetM * east, tvdM);
     };
     const footprint = [
       ...sections.flatMap((panel) => { const at = planAt(panel.originEastingM ?? 0, panel.originNorthingM ?? 0, panel.azimuthDeg); return [at(panel.alongStartM, 0, 0), at(panel.alongEndM, 0, 0)]; }),
@@ -535,26 +519,26 @@ export default function WellScene({ design, selectedId, onSelect, layersVisible 
     const blockCenter = new THREE.Vector3((box.minX + box.maxX) / 2, 0, (box.minZ + box.maxZ) / 2);
     const blockWidth = box.maxX - box.minX;
     const blockDepth = box.maxZ - box.minZ;
-    const groundY = -(design.groundTvdM ?? 0) / 100;
+    const groundY = -(design.groundTvdM ?? 0) / SCENE_M;
     let visibleLayers = 0;
     const hidden = new THREE.MeshBasicMaterial({ visible: false });
     for (const layer of layersVisible ? design.formations ?? [] : []) {
-      const layerBottom = Math.min(layer.bottomTvdM, -bounds.min.y * 100);
+      const layerBottom = Math.min(layer.bottomTvdM, sceneTvd(bounds.min.y));
       const thickness = layerBottom - layer.topTvdM;
       if (thickness <= 0) continue;
       visibleLayers++;
-      const geometry = new THREE.BoxGeometry(blockWidth, thickness / 100, blockDepth);
+      const geometry = new THREE.BoxGeometry(blockWidth, thickness / SCENE_M, blockDepth);
       const wall = new THREE.MeshStandardMaterial({ color: layer.color, roughness: 1, metalness: 0, side: THREE.BackSide, transparent: true, opacity: 0.92, polygonOffset: hasSeismic, polygonOffsetFactor: 2, polygonOffsetUnits: 8 });
       // A volume fills the block, so a layer's floor would veil everything beneath it; the edges still mark the boundary.
       const block = new THREE.Mesh(geometry, [wall, wall, hidden, volume ? hidden : wall, wall, wall]);
-      block.position.set(blockCenter.x, -(layer.topTvdM + thickness / 2) / 100, blockCenter.z);
+      block.position.set(blockCenter.x, -(layer.topTvdM + thickness / 2) / SCENE_M, blockCenter.z);
       block.renderOrder = -2;
       ground.add(block);
       const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), new THREE.LineBasicMaterial({ color: "#6f7d76", transparent: true, opacity: 0.45 }));
       edges.position.copy(block.position);
       ground.add(edges);
       const name = textSprite(layer.name.toUpperCase(), labelHeight * 0.85, "#4b5b53", 600);
-      name.position.set(box.minX + blockWidth * 0.03, -(layer.topTvdM / 100) - unit * 1.4, box.minZ + 0.01);
+      name.position.set(box.minX + blockWidth * 0.03, -(layer.topTvdM / SCENE_M) - unit * 1.4, box.minZ + 0.01);
       scene.add(name);
     }
     setLayerCount(visibleLayers);
@@ -567,6 +551,19 @@ export default function WellScene({ design, selectedId, onSelect, layersVisible 
     (grid.material as THREE.Material).transparent = true;
     (grid.material as THREE.Material).opacity = 0.5;
     ground.add(grid);
+    // The survey frame: east, north and TVD ticks on the block's near edges, in the well's own metres.
+    {
+      const css = getComputedStyle(container);
+      const deepest = Math.max(sceneTvd(bounds.min.y), volume?.baseTvdM ?? 0, ...sections.map((panel) => panel.baseTvdM));
+      const frame = axesBox({
+        at: (east, north, depth) => toScene(east, north, depth),
+        east: [box.minX * SCENE_M, box.maxX * SCENE_M], north: [-box.maxZ * SCENE_M, -box.minZ * SCENE_M], depth: [design.groundTvdM ?? 0, deepest],
+        depthTitle: `m TVD below ${design.depthDatum?.includes("RKB") ? "RKB" : "the well reference"}`, labels,
+        axisColour: css.getPropertyValue("--sw-scene-axis").trim() || "#7d8794", gridColour: css.getPropertyValue("--sw-scene-grid").trim() || "#d5dbe2", walls: false,
+      });
+      ground.add(frame.group);
+      disposables.push(frame);
+    }
 
     interface Panel { readonly mesh: THREE.Mesh; readonly label: string; readonly local: (point: THREE.Vector3) => { alongM: number; offsetM: number | null; tvdM: number; amplitude?: number }; readonly line?: (tvdM: number) => THREE.Vector3[] }
     const panels: Panel[] = [];
@@ -587,7 +584,7 @@ export default function WellScene({ design, selectedId, onSelect, layersVisible 
       const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ map: seismicTexture(image), side: THREE.DoubleSide, transparent: opacity < 1, opacity, toneMapped: false }));
       mesh.userData.section = true;
       earth.add(mesh);
-      earth.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(corners), new THREE.LineBasicMaterial({ color: "#20322a" })));
+      earth.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([...corners, corners[0]!]), new THREE.LineBasicMaterial({ color: "#20322a" })));
       panelCorners.push(...corners);
       if (label) {
         const tag = textSprite(label.toUpperCase(), labelHeight * 0.8, "#20322a", 700);
@@ -600,7 +597,7 @@ export default function WellScene({ design, selectedId, onSelect, layersVisible 
       const azimuth = THREE.MathUtils.degToRad(section.azimuthDeg);
       const east = Math.sin(azimuth), north = Math.cos(azimuth);
       const originE = section.originEastingM ?? 0, originN = section.originNorthingM ?? 0;
-      const at = (alongM: number, tvdM: number) => new THREE.Vector3((originE + alongM * east) / 100, -tvdM / 100, -(originN + alongM * north) / 100);
+      const at = (alongM: number, tvdM: number) => toScene(originE + alongM * east, originN + alongM * north, tvdM);
       const span = section.baseTvdM - section.topTvdM;
       const [wantTop, wantBase] = section.visibleTvdM ?? [Math.max(section.topTvdM, design.groundTvdM ?? section.topTvdM), section.baseTvdM];
       const top = THREE.MathUtils.clamp(wantTop, section.topTvdM, section.baseTvdM), base = THREE.MathUtils.clamp(wantBase, top, section.baseTvdM);
@@ -608,7 +605,7 @@ export default function WellScene({ design, selectedId, onSelect, layersVisible 
       const a0 = section.alongStartM, a1 = section.alongEndM;
       const label = section.label ?? `Section ${index + 1}`;
       const mesh = hangPanel([at(a0, top), at(a1, top), at(a1, base), at(a0, base)], [0, v0, 1, v0, 1, v1, 0, v1], section.image, section.opacity ?? 1, section.label ?? "", at(a1, base).add(new THREE.Vector3(0, unit * 1.2, 0)));
-      panels.push({ mesh, label, local: (point) => ({ alongM: (point.x * 100 - originE) * east + (-point.z * 100 - originN) * north, offsetM: null, tvdM: -point.y * 100 }), line: (tvdM) => [at(a0, tvdM), at(a1, tvdM)] });
+      panels.push({ mesh, label, local: (point) => { const [e, n, tvdM] = fromScene(point); return { alongM: (e - originE) * east + (n - originN) * north, offsetM: null, tvdM }; }, line: (tvdM) => [at(a0, tvdM), at(a1, tvdM)] });
     });
     let setVolumeView: (view: SceneVolumeView) => void = () => undefined;
     let volumeEye: (() => void) | null = null;
@@ -626,7 +623,7 @@ export default function WellScene({ design, selectedId, onSelect, layersVisible 
     transform.addEventListener("objectChange", () => {
       if (!currentSlice) return;
       const p = sliceAnchor.position;
-      emitSlice({ origin: [p.x * 100, -p.z * 100, -p.y * 100], normal: currentSlice.normal });
+      emitSlice({ origin: fromScene(p), normal: currentSlice.normal });
     });
     if (volume) {
       const { alongCount: nx, offsetCount: ny, sampleCount: nz, alongStartM: a0, alongEndM: a1, offsetStartM: o0, offsetEndM: o1, topTvdM: t0, baseTvdM: t1 } = volume;
@@ -639,30 +636,32 @@ export default function WellScene({ design, selectedId, onSelect, layersVisible 
       frame.matrixAutoUpdate = false;
       frame.updateMatrixWorld(true);
       earth.add(frame);
-      const texture = new THREE.Data3DTexture(volume.counts, nx, ny, nz);
+      // Counts are signed bytes; the texture stores them +128 as unsigned bytes, the 8-bit format every
+      // backend can sample with filtering (WebGPU will not create a signed-byte 3D texture three can use).
+      const offsetCounts = new Uint8Array(volume.counts.length);
+      for (let index = 0; index < offsetCounts.length; index++) offsetCounts[index] = volume.counts[index]! + 128;
+      const texture = new THREE.Data3DTexture(offsetCounts, nx, ny, nz);
       texture.format = THREE.RedFormat;
-      texture.type = THREE.ByteType;
-      texture.internalFormat = "R8_SNORM";
+      texture.type = THREE.UnsignedByteType;
       texture.minFilter = THREE.LinearFilter;
       texture.magFilter = THREE.LinearFilter;
       texture.unpackAlignment = 1;
       texture.needsUpdate = true;
       const lutBytes = new Uint8Array(256 * 4);
-      for (let index = 0; index < 256; index++) { const [r, g, b] = seismicColour("seismic", index / 127.5 - 1); lutBytes.set([r, g, b, 255], index * 4); }
+      for (let index = 0; index < 256; index++) { const [r, g, b] = seismicColour(seismicColorMap, index / 127.5 - 1); lutBytes.set([r, g, b, 255], index * 4); }
       const lutTexture = new THREE.DataTexture(lutBytes, 256, 1, THREE.RGBAFormat);
       lutTexture.magFilter = THREE.LinearFilter;
       lutTexture.minFilter = THREE.LinearFilter;
+      // The LUT holds display colours; marking it sRGB lets the node materials decode and re-encode it unchanged.
+      lutTexture.colorSpace = THREE.SRGBColorSpace;
       lutTexture.needsUpdate = true;
       disposables.push(texture, lutTexture);
       const cropMin = new THREE.Vector3(0, 0, 0), cropMax = new THREE.Vector3(1, 1, 1), cropSize = new THREE.Vector3(1, 1, 1);
-      const shared = { uVolume: { value: texture }, uLut: { value: lutTexture }, uGain: { value: volume.gain ?? 1 }, uCropMin: { value: cropMin }, uCropSize: { value: cropSize } };
-      const unitBox = new THREE.BoxGeometry(1, 1, 1).translate(0.5, 0.5, 0.5);
-      const solid = new THREE.Mesh(unitBox, new THREE.ShaderMaterial({ uniforms: shared, vertexShader: VOLUME_VERTEX, fragmentShader: SOLID_FRAGMENT, side: THREE.DoubleSide, toneMapped: false }));
       const eye = new THREE.Vector3();
-      const rendered = new THREE.Mesh(unitBox.clone(), new THREE.ShaderMaterial({
-        uniforms: { ...shared, uEye: { value: eye }, uCropMax: { value: cropMax }, uDims: { value: new THREE.Vector3(nx, ny, nz) }, uThreshold: { value: 0.5 } },
-        vertexShader: VOLUME_VERTEX, fragmentShader: RENDER_FRAGMENT, side: THREE.BackSide, transparent: true, depthWrite: false, premultipliedAlpha: true, toneMapped: false,
-      }));
+      const uniforms = { gain: uniform(volume.gain ?? 1), cropMin: uniform(cropMin), cropMax: uniform(cropMax), cropSize: uniform(cropSize), eye: uniform(eye), threshold: uniform(0.5) };
+      const unitBox = new THREE.BoxGeometry(1, 1, 1).translate(0.5, 0.5, 0.5);
+      const solid = new THREE.Mesh(unitBox, volumeSolidMaterial(texture, lutTexture, uniforms));
+      const rendered = new THREE.Mesh(unitBox.clone(), volumeRenderMaterial(texture, lutTexture, uniforms, new THREE.Vector3(nx, ny, nz)));
       const proxy = new THREE.Mesh(unitBox.clone(), new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide }));
       const outline = new THREE.LineSegments(new THREE.EdgesGeometry(unitBox), new THREE.LineBasicMaterial({ color: "#20322a" }));
       const cropped = [solid, rendered, proxy, outline];
@@ -673,7 +672,7 @@ export default function WellScene({ design, selectedId, onSelect, layersVisible 
       const frameInverse = frame.matrixWorld.clone().invert();
       const slice = new SeismicSlice(texture, lutTexture, volume.gain ?? 1);
       frame.add(slice.mesh);
-      const binding = { texture, worldToTexture: frameInverse, scale: 127 * volume.amplitudePerCount, offset: 0 };
+      const binding = { texture, worldToTexture: frameInverse, scale: 255 * volume.amplitudePerCount, offset: -128 * volume.amplitudePerCount };
       volumeBindings.set(proxy, binding); volumeBindings.set(slice.mesh, binding);
       const localVolume = (point: THREE.Vector3) => {
         const uvw = point.clone().applyMatrix4(frameInverse);
@@ -689,7 +688,7 @@ export default function WellScene({ design, selectedId, onSelect, layersVisible 
         rendered.visible = !plane && displayMode === "render";
         proxy.visible = !plane;
         if (plane) {
-          sliceAnchor.position.set(plane.origin[0] / 100, -plane.origin[2] / 100, -plane.origin[1] / 100);
+          sliceAnchor.position.copy(toScene(plane.origin[0], plane.origin[1], plane.origin[2]));
           sliceAnchor.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(plane.normal[0], -plane.normal[2], -plane.normal[1]).normalize());
           if (!transform.object) transform.attach(sliceAnchor);
         } else transform.detach();
@@ -713,7 +712,7 @@ export default function WellScene({ design, selectedId, onSelect, layersVisible 
         for (const object of cropped) { object.position.copy(cropMin); object.scale.copy(cropSize); }
         displayMode = view.mode;
         applySlice(currentSlice);
-        (rendered.material as THREE.ShaderMaterial).uniforms.uThreshold!.value = THREE.MathUtils.clamp(view.threshold ?? 0.5, 0, 0.99);
+        uniforms.threshold.value = THREE.MathUtils.clamp(view.threshold ?? 0.5, 0, 0.99);
         frame.updateMatrixWorld(true);
         tag.position.copy(corner(u1, v1, w1)).add(new THREE.Vector3(0, unit * 1.2, 0));
       };
@@ -727,7 +726,7 @@ export default function WellScene({ design, selectedId, onSelect, layersVisible 
     }
     sliceAt.current = (plane) => { applySlice(plane); render(); };
     const cursorLines = panels.filter((panel) => panel.line).map(() => {
-      const line = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: CURSOR_COLOR, depthTest: false, transparent: true }));
+      const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: CURSOR_COLOR, depthTest: false, transparent: true }));
       line.renderOrder = 16;
       line.visible = false;
       scene.add(line);
@@ -749,7 +748,7 @@ export default function WellScene({ design, selectedId, onSelect, layersVisible 
     shadowEnd.position.set(bottomPoint.x, groundY + 0.006, bottomPoint.z);
     scene.add(shadowEnd);
     if (target) {
-      const aim = new THREE.Vector3(target.eastingM / 100, -target.tvdM / 100, -target.northingM / 100);
+      const aim = toScene(target.eastingM, target.northingM, target.tvdM);
       const targetMaterial = new THREE.MeshBasicMaterial({ color: "#2f5fb3", depthTest: false, transparent: true, opacity: 0.95 });
       const ring = new THREE.Mesh(new THREE.TorusGeometry(unit * 1.1, unit * 0.12, 10, 40), targetMaterial);
       ring.position.copy(aim);
@@ -769,24 +768,22 @@ export default function WellScene({ design, selectedId, onSelect, layersVisible 
     let collar: THREE.Mesh | null = null;
     const collarMaterial = new THREE.MeshBasicMaterial({ color: SELECT_COLOR, transparent: true, opacity: 0.3, depthWrite: false, side: THREE.DoubleSide });
     disposables.push(collarMaterial, hidden);
+    /** The view's grid heading, for the screen-reader caption; the cube's ring shows it to everyone else. */
     function updateCompass() {
-      const element = compass.current;
-      if (!element) return;
       const forward = controls.target.clone().sub(camera.position);
-      const heading = Math.hypot(forward.x, forward.z) < 1e-9 ? 0 : (Math.atan2(forward.x, -forward.z) * 180 / Math.PI + 360) % 360;
-      element.querySelector("[data-dial]")?.setAttribute("transform", `rotate(${(-heading).toFixed(2)})`);
-      element.querySelectorAll<SVGTextElement>("[data-upright]").forEach((label) => label.setAttribute("transform", `rotate(${heading.toFixed(2)})`));
-      const caption = element.querySelector("[data-heading]");
-      if (caption) caption.textContent = `view ${Math.round(heading) % 360}°`;
+      setHeading(Math.hypot(forward.x, forward.z) < 1e-9 ? 0 : Math.round((Math.atan2(forward.x, -forward.z) * 180 / Math.PI + 360) % 360) % 360);
     }
     function render() {
+      cube.update();
       updateCompass();
       camera.updateMatrixWorld();
       volumeEye?.();
+      if (!started.draws()) return;
       renderer.clear();
       renderer.render(earth, camera);
       renderer.clearDepth();
       renderer.render(scene, camera);
+      labels.place(camera);
       setCameraState([...camera.position.toArray(), ...camera.quaternion.toArray()].map((value) => value.toFixed(3)).join(","));
       setTargetState(controls.target.toArray().map((value) => value.toFixed(3)).join(","));
     }
@@ -807,11 +804,13 @@ export default function WellScene({ design, selectedId, onSelect, layersVisible 
       controls.update();
       render();
     }
-    function fit() {
+    function wholeBounds() {
       const whole = new THREE.Box3().setFromPoints(stations.map((station) => vector(station.mdM)));
       for (const corner of panelCorners) whole.expandByPoint(corner);
-      whole.expandByPoint(new THREE.Vector3(box.minX, groundY, box.minZ)).expandByPoint(new THREE.Vector3(box.maxX, groundY, box.maxZ)).expandByPoint(new THREE.Vector3(wellhead.x, stackY, wellhead.z));
-      fitBounds(whole, 1.02);
+      return whole.expandByPoint(new THREE.Vector3(box.minX, groundY, box.minZ)).expandByPoint(new THREE.Vector3(box.maxX, groundY, box.maxZ)).expandByPoint(new THREE.Vector3(wellhead.x, stackY, wellhead.z));
+    }
+    function fit() {
+      fitBounds(wholeBounds(), 1.02);
     }
     function resize() {
       const width = container.clientWidth;
@@ -825,7 +824,7 @@ export default function WellScene({ design, selectedId, onSelect, layersVisible 
     const observer = new ResizeObserver(resize);
     observer.observe(container);
     controls.addEventListener("change", render);
-    const spatial = (point: THREE.Vector3): SpatialXYZ => [point.x * 100, -point.z * 100, -point.y * 100];
+    const spatial = fromScene;
     function reportCamera() {
       const view = { position: spatial(camera.position), target: spatial(controls.target), zoom: camera.zoom };
       setAccessibleCamera(view);
@@ -839,8 +838,8 @@ export default function WellScene({ design, selectedId, onSelect, layersVisible 
     cameraAt.current = (view) => {
       const { position, target, zoom } = view;
       if (![...position, ...target, zoom].every(Number.isFinite) || zoom <= 0 || position.every((value, i) => value === target[i])) throw new TypeError("Camera view requires finite, distinct position/target vectors and positive zoom.");
-      camera.position.set(position[0] / 100, -position[2] / 100, -position[1] / 100);
-      controls.target.set(target[0] / 100, -target[2] / 100, -target[1] / 100);
+      camera.position.copy(toScene(position[0], position[1], position[2]));
+      controls.target.copy(toScene(target[0], target[1], target[2]));
       camera.zoom = zoom;
       const distance = camera.position.distanceTo(controls.target);
       camera.near = Math.max(0.01, distance / 2000);
@@ -958,7 +957,7 @@ export default function WellScene({ design, selectedId, onSelect, layersVisible 
         mesh.material.depthWrite = dim ? false : base.depthWrite;
         mesh.material.needsUpdate = true;
       }
-      if (collar) { scene.remove(collar); collar.geometry.dispose(); collar = null; }
+      if (collar) { sceneCut.remove(collar); collar.geometry.dispose(); collar = null; }
       const component = records.find((value) => value.id === id);
       if (component && component.bottomDepthM - component.topDepthM >= 0.5) {
         const base = radiusById.get(id) ?? (component.parentId ? radiusById.get(component.parentId) : undefined) ?? unit * 0.4;
@@ -966,7 +965,7 @@ export default function WellScene({ design, selectedId, onSelect, layersVisible 
         const half = Math.max((component.bottomDepthM - component.topDepthM) / 2, unit * 18);
         collar = new THREE.Mesh(tube(Math.max(0, middle - half), Math.min(totalDepth, middle + half), base * 1.3 + unit * 0.12, 32).geometry, collarMaterial);
         collar.userData.collar = id;
-        scene.add(collar);
+        sceneCut.add(collar);
       }
       render();
     };
@@ -979,6 +978,12 @@ export default function WellScene({ design, selectedId, onSelect, layersVisible 
       fitBounds(intervalBounds, 1.2);
       reportCamera();
     };
+    // Construction is done: the model moves into the clipped groups. Labels, the section outline and
+    // the slice gizmo stay outside — a section cuts the well, never its annotations.
+    for (const child of [...scene.children]) if (child !== section.outline && child !== transform.getHelper() && !(child instanceof THREE.Sprite)) sceneCut.add(child);
+    for (const child of [...earth.children]) earthCut.add(child);
+    scene.add(sceneCut);
+    earth.add(earthCut);
     resize();
     const saved = savedViews.get(design.id);
     if (saved) {
@@ -1014,29 +1019,30 @@ export default function WellScene({ design, selectedId, onSelect, layersVisible 
         const point = vector(depth);
         cursorRing.position.copy(point);
         cursorRing.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), vector(Math.min(totalDepth, depth + 1)).sub(vector(Math.max(0, depth - 1))).normalize());
-        sectionLines.forEach((line, index) => cursorLines[index]!.geometry.setFromPoints(line(-point.y * 100)));
+        // A closed outline for the volume's four corners, a plain segment for a panel.
+        sectionLines.forEach((line, index) => { const points = line(sceneTvd(point.y)); cursorLines[index]!.geometry.setFromPoints(points.length > 2 ? [...points, points[0]!] : points); });
       }
       render();
     };
     windowAt.current = (window) => {
       lastWindow = window;
-      for (const mesh of [windowTube, ...windowBands]) if (mesh) { scene.remove(mesh); mesh.geometry.dispose(); }
+      for (const mesh of [windowTube, ...windowBands]) if (mesh) { sceneCut.remove(mesh); mesh.geometry.dispose(); }
       windowTube = null;
       windowBands = [];
       if (window) {
         const top = Math.max(0, Math.min(window[0], window[1])), base = Math.min(totalDepth, Math.max(window[0], window[1]));
         if (base - top > 0.5) {
           windowTube = new THREE.Mesh(tube(top, base, unit * 0.5, 16).geometry, windowMaterial);
-          scene.add(windowTube);
+          sceneCut.add(windowTube);
           for (const line of sectionLines) {
-            const upper = line(-vector(top).y * 100), lower = line(-vector(base).y * 100);
+            const upper = line(sceneTvd(vector(top).y)), lower = line(sceneTvd(vector(base).y));
             const geometry = new THREE.BufferGeometry().setFromPoints([...upper, ...lower]);
             const count = upper.length, index: number[] = [];
             for (let side = 0; side < (count > 2 ? count : 1); side++) { const next = (side + 1) % count; index.push(side, next, count + next, side, count + next, count + side); }
             geometry.setIndex(index);
             const band = new THREE.Mesh(geometry, bandMaterial);
             band.renderOrder = 1;
-            scene.add(band);
+            sceneCut.add(band);
             windowBands.push(band);
           }
         }
@@ -1044,11 +1050,62 @@ export default function WellScene({ design, selectedId, onSelect, layersVisible 
       render();
     };
     viewAt.current = (view) => { setVolumeView(view); cursorAt.current(lastCursor); windowAt.current(lastWindow); };
+    // The well as it stood: the path drawn to the depth reached, and only what had been run.
+    const pathIndexCount = pathGeometry.index?.count ?? 0;
+    const kindOf = new Map(records.map((component) => [component.id as string, component.kind]));
+    reachAt.current = (reach, installed, runTo) => {
+      const fraction = reach === null ? 1 : THREE.MathUtils.clamp(reach / totalDepth, 0, 1);
+      pathGeometry.setDrawRange(0, fraction >= 1 ? pathIndexCount : Math.ceil(fraction * pathSegments) * 8 * 6);
+      pathMesh.visible = fraction > 0 && !logCylinder.mesh.visible;
+      const shown = installed ? new Set(installed) : null;
+      for (const mesh of created) {
+        const id = mesh.userData.componentId as string;
+        if (shown && !shown.has(id)) { mesh.visible = false; continue; }
+        // A hole is drawn to the depth drilled; a string to the depth it had been run.
+        const limit = kindOf.get(id) === "Hole" ? (reach ?? Infinity) : (runTo?.[id] ?? Infinity);
+        const span = mesh.geometry.userData.span as { start: number; end: number; segments: number } | undefined;
+        if (mesh.userData.shoeAt !== undefined) { mesh.visible = limit >= (mesh.userData.shoeAt as number) - 0.5; continue; }
+        if (!span) { mesh.visible = true; continue; }
+        const part = THREE.MathUtils.clamp((limit - span.start) / Math.max(1e-6, span.end - span.start), 0, 1);
+        const total = mesh.geometry.index?.count ?? 0;
+        mesh.geometry.setDrawRange(0, part >= 1 ? total : Math.ceil(part * span.segments) * (total / span.segments));
+        mesh.visible = part > 0;
+      }
+      render();
+    };
+    reachAt.current(history.current.reach, history.current.installed, history.current.runTo);
+    // Alerts pulse their emissive colour; the loop runs only while there is something to call out.
+    let alertFrame = 0;
+    const resting = new Map<THREE.MeshStandardMaterial, { color: THREE.Color; intensity: number }>();
+    alertAt.current = (ids, color) => {
+      cancelAnimationFrame(alertFrame);
+      for (const [material, rest] of resting) { material.emissive.copy(rest.color); material.emissiveIntensity = rest.intensity; }
+      resting.clear();
+      const called = created.filter((mesh) => ids.includes(mesh.userData.componentId as string)).map((mesh) => mesh.material);
+      for (const material of called) resting.set(material, { color: material.emissive.clone(), intensity: material.emissiveIntensity });
+      if (!called.length) { render(); return; }
+      const glow = new THREE.Color(color);
+      const pulse = (time: number) => {
+        const level = 0.35 + 0.35 * Math.sin(time / 260);
+        for (const material of called) { material.emissive.copy(glow); material.emissiveIntensity = level; }
+        render();
+        alertFrame = requestAnimationFrame(pulse);
+      };
+      alertFrame = requestAnimationFrame(pulse);
+    };
+    alertAt.current(alerts.current.ids, alerts.current.color);
     sliceAt.current(initialSlice());
     reportCamera();
-    setReady(true);
+    started.ready.then((backend) => {
+      if (dead) return;
+      scene.environment = earth.environment = started.environment();
+      container.dataset.backend = backend;
+      setReady(true);
+      render();
+    }, (cause) => { if (!dead) setFailure(`3D could not start (${cause instanceof Error ? cause.message : String(cause)}). The 2D schematic and inventory remain available.`); });
     return () => {
-      dead = true; gpuPicker?.dispose(); transform.dispose();
+      dead = true; gpuPicker?.dispose(); transform.dispose(); cube.dispose(); section.dispose();
+      sectionAt.current = () => undefined; lookAt.current = () => undefined;
       savedViews.set(design.id, { position: camera.position.clone(), target: controls.target.clone() });
       setReady(false);
       setHover(null);
@@ -1072,8 +1129,8 @@ export default function WellScene({ design, selectedId, onSelect, layersVisible 
         }
       });
       for (const item of disposables) item.dispose();
-      renderer.dispose();
-      renderer.forceContextLoss();
+      labels.dispose();
+      started.dispose();
       renderer.domElement.remove();
       redraw.current = () => undefined;
       reset.current = () => undefined;
@@ -1086,8 +1143,11 @@ export default function WellScene({ design, selectedId, onSelect, layersVisible 
       cameraAt.current = () => undefined;
       sliceAt.current = () => undefined;
       logAt.current = () => undefined;
+      reachAt.current = () => undefined;
+      alertAt.current(NO_ALERTS, "#000");
+      alertAt.current = () => undefined;
     };
-  }, [design, layersVisible, colorBy, dlsLimitDegPer30m, targetKey, sections, volume]); // target and volumeView are applied without a rebuild
+  }, [design, layersVisible, colorBy, dlsLimitDegPer30m, targetKey, sections, volume, seismicColorMap]); // target and volumeView are applied without a rebuild
 
   useEffect(() => { if (probeMdM !== undefined) probeAt.current(probeMdM); }, [probeMdM, ready]);
   useEffect(() => { if (cameraView) cameraAt.current(cameraView); }, [cameraView, ready]);
@@ -1103,8 +1163,15 @@ export default function WellScene({ design, selectedId, onSelect, layersVisible 
   useEffect(() => { windowAt.current(mdWindow); }, [windowKey, ready]);
 
   useEffect(() => { highlight.current(selectedId); }, [selectedId, ready]);
+  useEffect(() => { if (focusOnSelect && ready && selectedId) focus.current(selectedId); }, [focusOnSelect, selectedId, ready]);
+  const installedKey = installedIds?.join("|") ?? null;
+  const runToKey = runToMdM ? Object.entries(runToMdM).map(([id, md]) => `${id}:${md}`).join("|") : null;
+  useEffect(() => { reachAt.current(reachMdM, installedIds, runToMdM); }, [reachMdM, installedKey, runToKey, ready]);
+  const alertKey = alertIds?.join("|") ?? "";
+  useEffect(() => { alertAt.current(alertIds ?? NO_ALERTS, alertColor); }, [alertKey, alertColor, ready]);
   const viewKey = JSON.stringify(volumeView);
   useEffect(() => { viewAt.current(volumeView); }, [viewKey, ready]);
+  useEffect(() => { sectionAt.current(section); }, [section, ready]);
 
   const shown = hover ?? probe;
   function adjustCamera(axis: 0 | 2, amount: number) {
@@ -1150,7 +1217,9 @@ export default function WellScene({ design, selectedId, onSelect, layersVisible 
     {design.provenance === "documented" && <CasingDiameterInset components={getWellComponents(design)} selectedId={selectedId} onSelect={onSelect} />}
     <CommandButton className="sw-icon-button sw-scene-fit" aria-label="Fit 3D well" title="Fit 3D well" onClick={() => reset.current()}><Maximize size={17} /></CommandButton>
     <CommandButton className="sw-icon-button sw-scene-focus" aria-label="Focus selected interval" title="Focus selected interval" onClick={() => focus.current(selectedId)}><Crosshair size={17} /></CommandButton>
-    <svg ref={compass} className="sw-scene-compass" viewBox="-40 -40 80 92" role="img" aria-label="Compass: grid north relative to the current view direction (up)" data-testid="well-scene-compass"><circle r="36" /><g data-dial=""><line x1="0" y1="6" x2="0" y2="-14" className="sw-compass-north" /><path d="M0 -22 L5.5 -12 L-5.5 -12 Z" className="sw-compass-head" /><line x1="-6" y1="0" x2="19" y2="0" className="sw-compass-east" /><g transform="translate(0 -29)"><text data-upright="" y="4">N</text></g><g transform="translate(27 0)"><text data-upright="" y="4">E</text></g></g><text data-heading="" y="49" className="sw-compass-caption">view 0°</text></svg>
+    <output className="sw-sr-only" data-testid="well-scene-compass" aria-live="off">View heading {heading}° from grid north</output>
+    <SceneSectionControl state={section} onChange={setSection} axes={{ x: "North–south", z: "East–west", y: "Depth" }} />
+    <SceneViewKeys labels={COMPASS_FACES} onView={(view) => lookAt.current(view)} />
     {(sections.length > 0 || volume) && <span className="sw-scene-legend sw-scene-section-legend" data-testid="well-scene-section-legend">{[...sections.map((panel, index) => panel.label ?? `Section ${index + 1}`), ...(volume ? [volume.label ?? "Seismic volume"] : [])].map((name, index) => <span key={index}>{name}</span>)}<small>Hover the seismic for position, TVD and amplitude; click to pin the depth where the well reaches it</small></span>}
     {colorBy === "dls" && <span className="sw-scene-legend" data-testid="well-scene-dls-legend">DLS 0<i aria-hidden="true" />{dlsLimitDegPer30m}°/30 m limit →</span>}
     <output className="sw-scene-readout" data-testid="well-scene-readout" data-md={shown ? shown.mdM.toFixed(1) : ""} data-section={sectionHover ? "" : undefined} aria-live="polite">{sectionHover && <span className="sw-scene-section-readout"><b>{sectionHover.label}</b><span>along {formatMetres(sectionHover.alongM)}</span>{sectionHover.offsetM !== null && <span>offset {formatMetres(sectionHover.offsetM)}</span>}<span>TVD {formatMetres(sectionHover.tvdM)}</span>{sectionHover.amplitude !== undefined && <span>amp {sectionHover.amplitude.toFixed(2)}</span>}<span>{sectionHover.mdM === null ? "below well TD" : `well reaches at MD ${formatMetres(sectionHover.mdM)}`}</span></span>}{shown ? <><b>MD {formatMetres(shown.mdM)}</b><span>TVD {formatMetres(shown.tvdM)}</span><span>Inc {shown.inclinationDeg.toFixed(1)}°</span><span>Azi {shown.azimuthDeg.toFixed(1)}°</span>{shown.name && <span>{shown.name}</span>}</> : !sectionHover && <span>Click the well path to probe a depth</span>}</output>

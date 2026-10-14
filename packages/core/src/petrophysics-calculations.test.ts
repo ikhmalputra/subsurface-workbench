@@ -70,6 +70,21 @@ test("Archie records out-of-range, invalid, missing, and unpaired samples withou
   }), /Archie m/);
 });
 
+test("M and N do not depend on porosity: clean water-filled sandstone plots at the sandstone matrix point", () => {
+  // Sandstone: rhoma 2.65, DTma 55.5, phiN on the matrix -0.035 (limestone units). For any porosity
+  // the log values are mixtures of matrix and fresh water, and every sample must land on (M, N)ma.
+  const parameters = { matrixDensityGPerCm3: 2.65, fluidDensityGPerCm3: 1, matrixSlownessUsPerFt: 55.5, fluidSlownessUsPerFt: 189, matrixNeutronPorosity: -0.035 };
+  const porosities = [0.1, 0.2, 0.3];
+  const mix = (matrix: number, fluid: number) => porosities.map((phi) => phi * fluid + (1 - phi) * matrix);
+  const md = [100, 101, 102];
+  const calculation = calculateSchlumbergerMN(curve("nphi", "v/v", md, mix(-0.035, 1)), curve("rhob", "g/cm3", md, mix(2.65, 1)), curve("dt", "us/ft", md, mix(55.5, 189)), parameters);
+  // Published sandstone point (fresh mud, CP-8): M ≈ 0.810, N ≈ 0.627.
+  assert.ok(Math.abs(calculation.matrixPoint.m - 0.809) < 0.002 && Math.abs(calculation.matrixPoint.n - 0.627) < 0.002, JSON.stringify(calculation.matrixPoint));
+  for (const point of calculation.points) {
+    assert.ok(Math.abs(point.m! - calculation.matrixPoint.m) < 1e-12 && Math.abs(point.n! - calculation.matrixPoint.n) < 1e-12);
+  }
+});
+
 test("Schlumberger M-N transform calculates dimensionless coordinates and handles missing samples", () => {
   const phi = curve("nphi", "v/v", [100, 110], [0.2, 0.2]);
   const density = curve("rhob", "g/cm3", [100, 110], [2.4, 2.4]);
@@ -81,9 +96,10 @@ test("Schlumberger M-N transform calculates dimensionless coordinates and handle
     fluidSlownessUsPerFt: 189,
   };
   const calculation = calculateSchlumbergerMN(phi, density, sonic, parameters);
-  assert.equal(calculation.formula, "M = (DTf - DT) / (phiN * (DTf - DTma)); N = (rhoma - rhob) / (phiN * (rhoma - rhof))");
-  assert.ok(Math.abs(calculation.points[0]!.m! - 109 / 26.8) < 1e-12);
-  assert.ok(Math.abs(calculation.points[0]!.n! - 0.25 / 0.33) < 1e-12);
+  assert.equal(calculation.formula, "M = 0.01 * (DTf - DT) / (rhob - rhof); N = (phiNf - phiN) / (rhob - rhof)");
+  // Schlumberger CP-8: M = 0.01 (189 - 80) / (2.4 - 1) = 0.77857; N = (1 - 0.2) / (2.4 - 1) = 0.57143.
+  assert.ok(Math.abs(calculation.points[0]!.m! - 1.09 / 1.4) < 1e-12);
+  assert.ok(Math.abs(calculation.points[0]!.n! - 0.8 / 1.4) < 1e-12);
   assert.equal(calculation.points[0]?.quality, "valid");
   const curves = schlumbergerMNToCurves(calculation, { wellId: "well-a", depthReference: reference, idPrefix: "mn" });
   assert.equal(curves.m.values[0], calculation.points[0]?.m);
@@ -125,4 +141,44 @@ test("Schlumberger M-N leaves unmatched exact-MD samples visible as missing", ()
     [110, "missing", "Input curves do not share this exact MD key."],
     [120, "missing", "One or more input curves have no sample at this MD."],
   ]);
+});
+
+test("shale volume, porosity and net pay follow their textbook definitions", async () => {
+  const { densityPorosity, gammaRayLines, netPaySummary, neutronDensityPorosity, shaleVolumeFromGamma } = await import("./petrophysics-calculations.ts");
+  const lines = gammaRayLines(Float64Array.from({ length: 101 }, (_, i) => 20 + i));
+  assert.deepEqual(lines, { clean: 25, shale: 115 });
+  assert.equal(shaleVolumeFromGamma(70, lines), 0.5);
+  assert.equal(shaleVolumeFromGamma(10, lines), 0);
+  assert.ok(Math.abs(shaleVolumeFromGamma(70, lines, "larionov-tertiary") - 0.083 * (2 ** 1.85 - 1)) < 1e-12);
+  assert.ok(Math.abs(shaleVolumeFromGamma(70, lines, "larionov-older") - 0.33) < 1e-12);
+  assert.equal(densityPorosity(2.65), 0);
+  assert.ok(Math.abs(densityPorosity(2.32) - 0.2) < 1e-12);
+  assert.ok(Math.abs(neutronDensityPorosity(0.3, 0.1) - Math.sqrt(0.05)) < 1e-12, "gas crossover: root mean square");
+  assert.equal(neutronDensityPorosity(0.2, 0.3), 0.25);
+  // Ten samples a metre apart: four are pay, two more are net water sand, one has no porosity.
+  const samples = [0.6, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.6, 0.1, 0.6].map((vsh, i) => ({ mdM: 1000 + i, vsh, porosity: i === 8 ? null : 0.2, sw: i < 5 ? 0.3 : 0.9 }));
+  const summary = netPaySummary(samples, { vshMax: 0.4, porosityMin: 0.1, swMax: 0.5 });
+  assert.equal(summary.grossM, 9);
+  assert.equal(summary.netM, 6);
+  assert.equal(summary.payM, 4);
+  assert.equal(summary.unusableSamples, 1);
+  assert.ok(Math.abs(summary.hydrocarbonColumnM - 4 * 0.2 * 0.7) < 1e-12);
+  assert.ok(Math.abs(summary.swPay! - 0.3) < 1e-12);
+  assert.throws(() => gammaRayLines([50, 50, 50]), /shale line/);
+});
+
+test("crystalline helpers: Poisson from Vp/Vs, geometric mean, correlation and tool-limit flags", async () => {
+  const { atToolLimit, correlation, geometricMean, poissonFromVelocityRatio } = await import("./petrophysics-calculations.ts");
+  assert.ok(Math.abs(poissonFromVelocityRatio(Math.sqrt(3)) - 0.25) < 1e-12, "Vp/Vs √3 is ν 0.25");
+  assert.throws(() => poissonFromVelocityRatio(1.2), /√2/);
+  assert.ok(Math.abs(geometricMean([10, 1000])! - 100) < 1e-9);
+  assert.equal(geometricMean([0, -1]), null);
+  assert.ok(Math.abs(correlation([1, 2, 3, 4], [2, 4, 6, 8])! - 1) < 1e-12);
+  assert.ok(Math.abs(correlation([1, 2, 3, 4], [8, 6, 4, 2])! + 1) < 1e-12);
+  assert.equal(correlation([1, 2], [3, 4]), null);
+  assert.equal(atToolLimit(1950, 1950), true);
+  assert.equal(atToolLimit(1940, 1950), false);
+  const { clippedAt } = await import("./petrophysics-calculations.ts");
+  assert.equal(clippedAt([10, 1950, 1950, 300, 1950, Number.NaN]), 1950);
+  assert.equal(clippedAt([1, 2, 3, 4, 5]), null);
 });

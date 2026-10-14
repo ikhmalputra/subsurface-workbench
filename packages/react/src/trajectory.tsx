@@ -4,9 +4,8 @@ import { InfoTip } from "./info-tip.js";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent, ReactNode, RefObject, MouseEvent as ReactMouseEvent } from "react";
 import { scaleLinear } from "d3-scale";
-import type { BuildHoldInput, BuildHoldPlan, BuildHoldTarget, ComputedStation, FormationLayer, SurveyStationInput, TrajectoryIssue, TrajectorySummary } from "@ikhmalputra/subsurface-core";
+import type { BuildHoldTarget, ComputedStation, FormationLayer } from "@ikhmalputra/subsurface-core";
 import { AccessibleTable } from "./accessible-table.js";
-import { CommandButton } from "./ui.js";
 
 /**
  * Trajectory engineering views. Every view takes stations computed by
@@ -30,6 +29,26 @@ export interface TrajectoryPlotProps {
   readonly dlsLimitDegPer30m?: number;
   readonly markers?: readonly TrajectoryMarker[];
   readonly height?: number;
+  /**
+   * Draw at the element's own pixel size instead of scaling a fixed drawing: text stays at its set
+   * size and the plot uses the whole pane. The host's CSS must size the SVG (e.g. height: 100%).
+   */
+  readonly fill?: boolean;
+}
+
+function usePlotSize(svg: RefObject<SVGSVGElement | null>, fill: boolean, width: number, height: number) {
+  const [size, setSize] = useState<{ readonly width: number; readonly height: number } | null>(null);
+  useEffect(() => {
+    const element = svg.current;
+    if (!fill || !element || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => {
+      const box = entry!.contentRect;
+      if (box.width > 120 && box.height > 120) setSize({ width: Math.round(box.width), height: Math.round(box.height) });
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [fill, svg]);
+  return fill && size ? size : { width, height };
 }
 
 const PATH = "#147a65";
@@ -164,8 +183,22 @@ function PathSegments({ points, survey, limit }: { points: readonly { x: number;
   return <g pointerEvents="none"><polyline points={points.map((point) => `${point.x},${point.y}`).join(" ")} fill="none" stroke="#fff" strokeWidth="7" strokeLinejoin="round" />{segments}</g>;
 }
 
-function Markers({ points, markers }: { points: readonly { x: number; y: number; mdM: number }[]; markers?: readonly TrajectoryMarker[] }) {
-  return <g pointerEvents="none">{markers?.map((marker) => { const point = pointAtMd(points, marker.mdM); return point && <g key={marker.label} className="sw-traj-marker"><circle cx={point.x} cy={point.y} r="4.5" /><text x={point.x + 8} y={point.y - 6}>{marker.label}</text></g>; })}</g>;
+/**
+ * Station markers with their names. Names that would land on one already written (shoes stacked
+ * on a vertical hole, in plan) are stacked below it; a name near the right edge is set to the left
+ * of its marker so it is not cut off.
+ */
+function Markers({ points, markers, right = Infinity }: { points: readonly { x: number; y: number; mdM: number }[]; markers?: readonly TrajectoryMarker[]; right?: number }) {
+  const written: { x: number; y: number }[] = [];
+  return <g pointerEvents="none">{markers?.map((marker) => {
+    const point = pointAtMd(points, marker.mdM);
+    if (!point) return null;
+    const flip = point.x + 8 + marker.label.length * 6.4 > right;
+    let y = point.y - 6;
+    while (written.some((other) => Math.abs(other.x - point.x) < 90 && Math.abs(other.y - y) < 13)) y += 13;
+    written.push({ x: point.x, y });
+    return <g key={marker.label} className="sw-traj-marker"><circle cx={point.x} cy={point.y} r="4.5" /><text x={flip ? point.x - 8 : point.x + 8} y={y} textAnchor={flip ? "end" : "start"}>{marker.label}</text></g>;
+  })}</g>;
 }
 
 function SelectedMark({ points, mdM }: { points: readonly { x: number; y: number; mdM: number }[]; mdM?: number | null }) {
@@ -186,11 +219,11 @@ function TargetHandle({ x, y, invalid, label, interactive, handlers, onKeyDown }
 }
 
 /** Plan (top-down) view: easting to the right, northing up, true scale with a north arrow. */
-export function TrajectoryPlanView({ survey, selectedMdM, onSelectMd, target, targetInvalid, onTargetChange, onTargetCommit, dlsLimitDegPer30m, markers, height = 340 }: TrajectoryPlotProps) {
+export function TrajectoryPlanView({ survey, selectedMdM, onSelectMd, target, targetInvalid, onTargetChange, onTargetCommit, dlsLimitDegPer30m, markers, height: preferredHeight = 340, fill = false }: TrajectoryPlotProps) {
   const svg = useRef<SVGSVGElement>(null);
-  const width = 460;
+  const { width, height } = usePlotSize(svg, fill, 460, preferredHeight);
   const box = { left: 58, top: 28, width: width - 78, height: height - 66 };
-  const live = useMemo(() => trueScaleFrame([...survey.map((station) => station.eastingM), ...(target ? [target.eastingM] : [])], [...survey.map((station) => -station.northingM), ...(target ? [-target.northingM] : [])], box), [survey, target, height]);
+  const live = useMemo(() => trueScaleFrame([...survey.map((station) => station.eastingM), ...(target ? [target.eastingM] : [])], [...survey.map((station) => -station.northingM), ...(target ? [-target.northingM] : [])], box), [survey, target, width, height]);
   const { frame, handlers } = useTargetDrag(svg, live, (view, x, y) => target ? { ...target, eastingM: Math.round(view.invertX(x)), northingM: Math.round(-view.invertY(y)) } : null, onTargetChange, onTargetCommit);
   const points = survey.map((station) => ({ x: frame.x(station.eastingM), y: frame.y(-station.northingM), mdM: station.mdM }));
   const last = survey.at(-1);
@@ -204,7 +237,7 @@ export function TrajectoryPlanView({ survey, selectedMdM, onSelectMd, target, ta
       {target && <line x1={frame.x(0)} y1={frame.y(0)} x2={frame.x(target.eastingM)} y2={frame.y(-target.northingM)} className="sw-traj-aim" />}
       <PathSegments points={points} survey={survey} limit={dlsLimitDegPer30m} />
       <circle cx={frame.x(survey[0]?.eastingM ?? 0)} cy={frame.y(-(survey[0]?.northingM ?? 0))} r="5" className="sw-traj-wellhead" />
-      <Markers points={points} markers={markers} />
+      <Markers points={points} markers={markers} right={box.left + box.width} />
       <SelectedMark points={points} mdM={selectedMdM} />
       {target && <TargetHandle x={frame.x(target.eastingM)} y={frame.y(-target.northingM)} invalid={targetInvalid} interactive={!!onTargetChange} handlers={handlers} label={`Target ${metres(target.northingM, 0)} m N, ${metres(target.eastingM, 0)} m E`} onKeyDown={(event) => nudge(event, (dx, dy) => onTargetChange?.({ ...target, eastingM: target.eastingM + dx, northingM: target.northingM - dy }), onTargetCommit)} />}
     </svg>
@@ -221,14 +254,14 @@ function niceLength(scale: number) {
 }
 
 /** Vertical section: horizontal departure projected on the section azimuth against TVD, true scale. */
-export function TrajectorySectionView({ survey, selectedMdM, onSelectMd, target, targetInvalid, onTargetChange, onTargetCommit, dlsLimitDegPer30m, markers, height = 380, verticalSectionAzimuthDeg, formations }: TrajectoryPlotProps & { readonly verticalSectionAzimuthDeg: number; readonly formations?: readonly FormationLayer[] }) {
+export function TrajectorySectionView({ survey, selectedMdM, onSelectMd, target, targetInvalid, onTargetChange, onTargetCommit, dlsLimitDegPer30m, markers, height: preferredHeight = 380, verticalSectionAzimuthDeg, formations, fill = false }: TrajectoryPlotProps & { readonly verticalSectionAzimuthDeg: number; readonly formations?: readonly FormationLayer[] }) {
   const svg = useRef<SVGSVGElement>(null);
-  const width = 640;
+  const { width, height } = usePlotSize(svg, fill, 640, preferredHeight);
   const box = { left: 64, top: 28, width: width - 86, height: height - 66 };
   const sectionCos = Math.cos(verticalSectionAzimuthDeg * Math.PI / 180);
   const sectionSin = Math.sin(verticalSectionAzimuthDeg * Math.PI / 180);
   const sectionOf = (point: { northingM: number; eastingM: number }) => point.northingM * sectionCos + point.eastingM * sectionSin;
-  const live = useMemo(() => trueScaleFrame([0, ...survey.map(sectionOf), ...(target ? [sectionOf(target)] : [])], [0, ...survey.map((station) => station.tvdM), ...(target ? [target.tvdM] : [])], box), [survey, target, verticalSectionAzimuthDeg, height]);
+  const live = useMemo(() => trueScaleFrame([0, ...survey.map(sectionOf), ...(target ? [sectionOf(target)] : [])], [0, ...survey.map((station) => station.tvdM), ...(target ? [target.tvdM] : [])], box), [survey, target, verticalSectionAzimuthDeg, width, height]);
   const { frame, handlers } = useTargetDrag(svg, live, (view, x, y) => {
     if (!target) return null;
     const section = view.invertX(x);
@@ -245,7 +278,7 @@ export function TrajectorySectionView({ survey, selectedMdM, onSelectMd, target,
       <Grid frame={frame} box={box} xLabel={`VERTICAL SECTION @ ${verticalSectionAzimuthDeg.toFixed(1)}° / m`} yLabel="TVD / m" />
       {target && <g pointerEvents="none" className="sw-traj-aim"><line x1={box.left} x2={box.left + box.width} y1={frame.y(target.tvdM)} y2={frame.y(target.tvdM)} /></g>}
       <PathSegments points={points} survey={survey} limit={dlsLimitDegPer30m} />
-      <Markers points={points} markers={markers} />
+      <Markers points={points} markers={markers} right={box.left + box.width} />
       <SelectedMark points={points} mdM={selectedMdM} />
       {target && <TargetHandle x={frame.x(sectionOf(target))} y={frame.y(target.tvdM)} invalid={targetInvalid} interactive={!!onTargetChange} handlers={handlers} label={`Target ${metres(target.tvdM, 0)} m TVD, ${metres(sectionOf(target), 0)} m departure`} onKeyDown={(event) => nudge(event, (dx, dy) => { const section = sectionOf(target) + dx; onTargetChange?.({ tvdM: target.tvdM + dy, northingM: section * sectionCos, eastingM: section * sectionSin }); }, onTargetCommit)} />}
     </svg>
@@ -262,6 +295,15 @@ export interface TrajectoryLogProps extends Pick<TrajectoryPlotProps, "survey" |
   readonly onCursorMdChange?: (mdM: number | null) => void;
   /** Linked MD window, shaded across the tracks. */
   readonly mdWindow?: readonly [number, number] | null;
+  /**
+   * The depth range the tracks span, when it is not the whole survey. `mdWindow` only shades a band;
+   * a container aligning this log with other depth views needs the scale itself to follow the
+   * shared window, which is a different thing and gets its own prop so existing callers keep the
+   * band they rely on.
+   */
+  readonly domainMdM?: readonly [number, number] | null;
+  /** Render as a track on a shared depth axis: fixed plot inset, no caption of its own. */
+  readonly frame?: { readonly top: number; readonly bottom: number; readonly chromeless?: boolean };
 }
 
 /** Survey values at an MD, linearly interpolated between stations (DLS taken from the interval that contains it). */
@@ -273,18 +315,18 @@ function stationAt(survey: readonly ComputedStation[], mdM: number) {
   return { mdM, inclinationDeg: a.inclinationDeg + (b.inclinationDeg - a.inclinationDeg) * t, azimuthDeg: (a.azimuthDeg + turn * t + 360) % 360, dlsDegPer30m: b.dlsDegPer30m };
 }
 
-export function TrajectoryLog({ survey, selectedMdM, onSelectMd, dlsLimitDegPer30m, markers, height = 380, cursorMdM = null, onCursorMdChange, mdWindow = null }: TrajectoryLogProps) {
+export function TrajectoryLog({ survey, selectedMdM, onSelectMd, dlsLimitDegPer30m, markers, height = 380, cursorMdM = null, onCursorMdChange, mdWindow = null, domainMdM = null, frame: trackFrame }: TrajectoryLogProps) {
   const svg = useRef<SVGSVGElement>(null);
   const [keyboardMdM, setKeyboardMdM] = useState<number | null>(null);
   const width = 420;
-  const top = 40;
-  const bottom = height - 26;
+  const top = trackFrame ? trackFrame.top : 40;
+  const bottom = height - (trackFrame ? trackFrame.bottom : 26);
   const tracks = [
     { key: "inc", title: "INC / °", left: 64, width: 108 },
     { key: "azi", title: "AZI / °", left: 182, width: 108 },
     { key: "dls", title: "DLS / °/30 m", left: 300, width: 108 },
   ] as const;
-  const md = scaleLinear().domain([survey[0]?.mdM ?? 0, survey.at(-1)?.mdM ?? 1]).range([top, bottom]);
+  const md = scaleLinear().domain(domainMdM ?? [survey[0]?.mdM ?? 0, survey.at(-1)?.mdM ?? 1]).range([top, bottom]);
   const maxInc = Math.max(90, ...survey.map((station) => station.inclinationDeg));
   const maxDls = Math.max((dlsLimitDegPer30m ?? 0) * 1.4, 1, ...survey.map((station) => station.dlsDegPer30m)) * 1.05;
   const scales = { inc: scaleLinear().domain([0, maxInc]), azi: scaleLinear().domain([0, 360]), dls: scaleLinear().domain([0, maxDls]) };
@@ -313,8 +355,8 @@ export function TrajectoryLog({ survey, selectedMdM, onSelectMd, dlsLimitDegPer3
     setKeyboardMdM(nextMdM);
     onCursorMdChange?.(nextMdM);
   }
-  return <figure className="sw-traj-plot" data-testid="trajectory-log" data-cursor-md={cursor ? cursor.mdM.toFixed(1) : undefined}>
-    <figcaption><strong className="sw-title">Survey log<InfoTip label="About the survey log">Inclination, azimuth and dogleg severity (DLS) against measured depth. DLS bars past the limit line are drawn red.</InfoTip></strong>{dlsLimitDegPer30m !== undefined && <span>DLS limit {dlsLimitDegPer30m}°/30 m</span>}</figcaption>
+  return <figure className="sw-traj-plot" data-testid="trajectory-log" data-cursor-md={cursor ? cursor.mdM.toFixed(1) : undefined} data-track={trackFrame ? "true" : undefined}>
+    {!trackFrame?.chromeless && <figcaption><strong className="sw-title">Survey log<InfoTip label="About the survey log">Inclination, azimuth and dogleg severity (DLS) against measured depth. DLS bars past the limit line are drawn red.</InfoTip></strong>{dlsLimitDegPer30m !== undefined && <span>DLS limit {dlsLimitDegPer30m}°/30 m</span>}</figcaption>}
     <svg ref={svg} viewBox={`0 0 ${width} ${height}`} role="group" tabIndex={0} aria-label="Inclination, azimuth and dogleg severity against measured depth. Use arrow keys to move by station, Home and End for first and last, Enter to select." onKeyDown={onKeyDown} onClick={(event) => { if (!onSelectMd || !svg.current) return; const point = svgPoint(event, svg.current); if (point.y >= top && point.y <= bottom) onSelectMd(md.invert(point.y)); }} onPointerMove={onCursorMdChange ? (event) => onCursorMdChange(pointerMd(event)) : undefined} onPointerLeave={onCursorMdChange ? () => onCursorMdChange(null) : undefined}>
       <g className="sw-traj-grid" pointerEvents="none">
         {md.ticks(8).map((tick) => <g key={tick}><line x1={tracks[0].left} x2={tracks[2].left + tracks[2].width} y1={md(tick)} y2={md(tick)} /><text x={tracks[0].left - 6} y={md(tick) + 3} textAnchor="end" className="sw-axis-value">{tick.toLocaleString("en-US")}</text></g>)}
@@ -333,125 +375,4 @@ export function TrajectoryLog({ survey, selectedMdM, onSelectMd, dlsLimitDegPer3
     <p className="sw-sr-only">{survey.length} supplied trajectory stations from {metres(survey[0]?.mdM ?? 0)} to {metres(survey.at(-1)?.mdM ?? 0)} m measured depth; maximum dogleg severity {degrees(maxDlsActual, 1)} per 30 m.</p>
     <AccessibleTable label="trajectory survey log" description="Computed inclination, azimuth and dogleg severity at supplied measured-depth stations." columns={[{ label: "MD", unit: "m" }, { label: "Inclination", unit: "°" }, { label: "Azimuth", unit: "°" }, { label: "DLS", unit: "°/30 m" }]} rowCount={survey.length} getRows={(start, end) => survey.slice(start, end).map((station) => [station.mdM, station.inclinationDeg, station.azimuthDeg, station.dlsDegPer30m])} />
   </figure>;
-}
-
-/** Key results of a computed trajectory. */
-export function TrajectorySummaryPanel({ summary, dlsLimitDegPer30m, footer }: { readonly summary: TrajectorySummary; readonly dlsLimitDegPer30m?: number; readonly footer?: ReactNode }) {
-  const over = dlsLimitDegPer30m !== undefined && summary.maxDlsDegPer30m > dlsLimitDegPer30m + 1e-9;
-  const items: [string, string, string?][] = [
-    ["TD (MD)", `${metres(summary.totalDepthMdM)} m`],
-    ["TD (TVD)", `${metres(summary.totalDepthTvdM)} m`],
-    ["Closure", `${metres(summary.closureDistanceM)} m`, `@ ${degrees(summary.closureAzimuthDeg, 1)}`],
-    ["Kickoff", summary.kickoffMdM == null ? "—" : `${metres(summary.kickoffMdM, 0)} m MD`],
-    ["Max inclination", degrees(summary.maxInclinationDeg)],
-    ["Max DLS", `${summary.maxDlsDegPer30m.toFixed(2)}°/30 m`, `at ${metres(summary.maxDlsMdM, 0)} m MD`],
-  ];
-  return <section className="sw-traj-summary" aria-label="Trajectory summary" data-testid="trajectory-summary">
-    <dl>{items.map(([label, value, detail]) => <div key={label} data-over={label === "Max DLS" && over ? true : undefined}><dt>{label}</dt><dd>{value}{detail && <small>{detail}</small>}</dd></div>)}</dl>
-    {footer}
-  </section>;
-}
-
-function NumberCell({ value, onCommit, label, invalid, step = "any", digits = 2 }: { value: number; onCommit: (value: number) => void; label: string; invalid?: boolean; step?: string; digits?: number }) {
-  const [draft, setDraft] = useState<string | null>(null);
-  const commit = () => {
-    if (draft === null) return;
-    const next = Number(draft);
-    setDraft(null);
-    if (draft.trim() !== "" && Number.isFinite(next) && next !== value) onCommit(next);
-  };
-  return <input type="number" inputMode="decimal" step={step} aria-label={label} aria-invalid={invalid || undefined} value={draft ?? Number(value.toFixed(digits))} onChange={(event) => setDraft(event.target.value)} onBlur={commit} onKeyDown={(event) => { if (event.key === "Enter") { commit(); (event.target as HTMLInputElement).blur(); } if (event.key === "Escape") setDraft(null); }} />;
-}
-
-export interface SurveyTableProps {
-  readonly survey: readonly ComputedStation[];
-  /** Pass `onChange` to make MD, inclination and azimuth editable; positions always come from the math. */
-  readonly onChange?: (stations: readonly SurveyStationInput[]) => void;
-  readonly issues?: readonly TrajectoryIssue[];
-  readonly selectedMdM?: number | null;
-  readonly onSelectMd?: (mdM: number) => void;
-  readonly dlsLimitDegPer30m?: number;
-  readonly maxHeight?: number;
-}
-
-/** Survey station table with minimum-curvature results; editable when `onChange` is given. */
-export function SurveyTable({ survey, onChange, issues = [], selectedMdM, onSelectMd, dlsLimitDegPer30m, maxHeight = 420 }: SurveyTableProps) {
-  const body = useRef<HTMLDivElement>(null);
-  const editable = !!onChange;
-  const stations = survey.map(({ mdM, inclinationDeg, azimuthDeg }) => ({ mdM, inclinationDeg, azimuthDeg }));
-  let selectedIndex = -1;
-  if (selectedMdM != null) {
-    let best = Infinity;
-    survey.forEach((station, index) => { const distance = Math.abs(station.mdM - selectedMdM); if (distance < best) { best = distance; selectedIndex = index; } });
-  }
-  useEffect(() => {
-    const row = body.current?.querySelector<HTMLElement>(`[data-index="${selectedIndex}"]`);
-    const container = body.current;
-    if (!row || !container || container.contains(document.activeElement)) return;
-    const top = row.offsetTop - container.clientHeight / 3;
-    container.scrollTo({ top: Math.max(0, top) });
-  }, [selectedIndex]);
-  const update = (index: number, patch: Partial<SurveyStationInput>) => onChange?.(stations.map((station, position) => position === index ? { ...station, ...patch } : station));
-  const insertAfter = (index: number) => {
-    const current = stations[index]!;
-    const next = stations[index + 1];
-    const mdM = next ? (current.mdM + next.mdM) / 2 : current.mdM + 30;
-    onChange?.([...stations.slice(0, index + 1), { mdM: Math.round(mdM * 100) / 100, inclinationDeg: next ? (current.inclinationDeg + next.inclinationDeg) / 2 : current.inclinationDeg, azimuthDeg: current.azimuthDeg }, ...stations.slice(index + 1)]);
-  };
-  const remove = (index: number) => { if (stations.length > 2 && index > 0) onChange?.(stations.filter((_, position) => position !== index)); };
-  const issueFor = (index: number, field: TrajectoryIssue["field"]) => issues.find((issue) => issue.index === index && issue.field === field);
-  return <div className="sw-traj-table" data-testid="survey-table" data-editable={editable || undefined}>
-    <div className="sw-traj-table-scroll" ref={body} style={{ maxHeight }} tabIndex={0} role="region" aria-label="Survey stations">
-      <table>
-        <caption className="sw-sr-only">Survey stations with minimum-curvature positions</caption>
-        <thead><tr><th scope="col">#</th><th scope="col">MD m</th><th scope="col">Inc °</th><th scope="col">Azi °</th><th scope="col">TVD m</th><th scope="col">N m</th><th scope="col">E m</th><th scope="col">VS m</th><th scope="col">DLS °/30 m</th>{editable && <th scope="col"><span className="sw-sr-only">Actions</span></th>}</tr></thead>
-        <tbody>{survey.map((station, index) => {
-          const over = dlsLimitDegPer30m !== undefined && station.dlsDegPer30m > dlsLimitDegPer30m + 1e-9;
-          const rowIssue = issues.find((issue) => issue.index === index);
-          return <tr key={index} data-index={index} aria-selected={index === selectedIndex} data-over={over || undefined} title={rowIssue?.message} onClick={() => onSelectMd?.(station.mdM)}>
-            <th scope="row">{index + 1}</th>
-            {editable ? <>
-              <td><NumberCell label={`Station ${index + 1} measured depth`} value={station.mdM} invalid={!!issueFor(index, "mdM")} onCommit={(mdM) => update(index, { mdM })} /></td>
-              <td><NumberCell label={`Station ${index + 1} inclination`} value={station.inclinationDeg} invalid={!!issueFor(index, "inclinationDeg")} onCommit={(inclinationDeg) => update(index, { inclinationDeg })} /></td>
-              <td><NumberCell label={`Station ${index + 1} azimuth`} value={station.azimuthDeg} invalid={!!issueFor(index, "azimuthDeg")} onCommit={(azimuthDeg) => update(index, { azimuthDeg })} /></td>
-            </> : <><td>{metres(station.mdM, 2)}</td><td>{station.inclinationDeg.toFixed(2)}</td><td>{station.azimuthDeg.toFixed(2)}</td></>}
-            <td>{metres(station.tvdM, 2)}</td><td>{metres(station.northingM, 2)}</td><td>{metres(station.eastingM, 2)}</td><td>{metres(station.verticalSectionM, 2)}</td>
-            <td className="sw-traj-dls">{index === 0 ? "—" : station.dlsDegPer30m.toFixed(2)}</td>
-            {editable && <td className="sw-traj-actions"><CommandButton icon="add" type="button" aria-label={`Insert a station after ${index + 1}`} onClick={(event) => { event.stopPropagation(); insertAfter(index); }}></CommandButton><CommandButton icon="remove" type="button" aria-label={`Delete station ${index + 1}`} disabled={index === 0 || stations.length <= 2} onClick={(event) => { event.stopPropagation(); remove(index); }}></CommandButton></td>}
-          </tr>;
-        })}</tbody>
-      </table>
-    </div>
-    {issues.length > 0 && <ul className="sw-traj-issues" aria-label="Survey issues">{issues.slice(0, 6).map((issue) => <li key={`${issue.index}-${issue.field}`} data-severity={issue.severity}><CommandButton kind="selection" type="button" onClick={() => { const station = survey[issue.index]; if (station) onSelectMd?.(station.mdM); }}>Station {issue.index + 1}</CommandButton> {issue.message}</li>)}{issues.length > 6 && <li>+{issues.length - 6} more</li>}</ul>}
-  </div>;
-}
-
-export interface BuildHoldFormProps {
-  readonly value: BuildHoldInput;
-  readonly onChange: (value: BuildHoldInput) => void;
-  readonly plan?: BuildHoldPlan | null;
-  readonly error?: string | null;
-}
-
-/** Inputs for `planBuildHold` with the solved geometry beside them. */
-export function BuildHoldForm({ value, onChange, plan, error }: BuildHoldFormProps) {
-  const field = (label: string, unit: string, current: number, apply: (next: number) => BuildHoldInput, hint?: string) => <label className="sw-traj-field"><span>{label}<small>{unit}</small></span><NumberCell label={`${label} (${unit})`} value={current} onCommit={(next) => onChange(apply(next))} digits={2} />{hint && <em>{hint}</em>}</label>;
-  return <section className="sw-traj-form" aria-label="Build and hold planner" data-testid="build-hold-form">
-    <div className="sw-traj-fields">
-      {field("Kickoff", "m MD", value.kickoffMdM, (kickoffMdM) => ({ ...value, kickoffMdM }), "vertical above")}
-      {field("Build rate", "°/30 m", value.buildRateDegPer30m, (buildRateDegPer30m) => ({ ...value, buildRateDegPer30m }))}
-      {field("Target TVD", "m", value.target.tvdM, (tvdM) => ({ ...value, target: { ...value.target, tvdM } }))}
-      {field("Target north", "m", value.target.northingM, (northingM) => ({ ...value, target: { ...value.target, northingM } }))}
-      {field("Target east", "m", value.target.eastingM, (eastingM) => ({ ...value, target: { ...value.target, eastingM } }))}
-      {field("Drill past target", "m", value.extensionM ?? 0, (extensionM) => ({ ...value, extensionM }))}
-    </div>
-    {error ? <p className="sw-traj-error" role="alert">{error}</p> : plan && <dl className="sw-traj-solved" aria-label="Solved build and hold geometry">
-      <div><dt>Hold inclination</dt><dd>{degrees(plan.holdInclinationDeg)}</dd></div>
-      <div><dt>Azimuth</dt><dd>{degrees(plan.azimuthDeg)}</dd></div>
-      <div><dt>Build radius</dt><dd>{metres(plan.radiusM, 0)} m</dd></div>
-      <div><dt>End of build</dt><dd>{metres(plan.endOfBuildMdM, 0)} m MD · {metres(plan.endOfBuildTvdM, 0)} m TVD</dd></div>
-      <div><dt>Hold length</dt><dd>{metres(plan.holdLengthM, 0)} m</dd></div>
-      <div><dt>Target MD</dt><dd>{metres(plan.targetMdM, 1)} m</dd></div>
-    </dl>}
-  </section>;
 }

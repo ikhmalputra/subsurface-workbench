@@ -9,6 +9,7 @@ export * from "./petrophysics-calculations.ts";
 export * from "./well-report.ts";
 export * from "./dataset.ts";
 export * from "./production-surveillance.ts";
+export * from "./well-validation.ts";
 import { array, fail, literal, number, object, reference, text, triple } from "./contract-validation.ts";
 
 export interface SpatialReference {
@@ -145,3 +146,4 @@ export function seismicVolumeFromBuffer(headerValue: unknown, buffer: ArrayBuffe
   for (let index = 0; index < count; index += 1) samples[index] = view.getFloat32(index * 4, true);
   return validateSeismicVolume(header, samples);
 }
+export * from "./petrophysics-synthetic.ts";

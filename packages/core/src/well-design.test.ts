@@ -53,7 +53,10 @@ test("API 5C3 ratings match published casing tables", () => {
 test("casing table rows carry drift and coupling OD", () => {
   const row = findPipe(9.625, 47)!;
   assert.equal(row.idIn, 8.681);
-  assert.equal(row.driftIn, 8.556);
+  // API 5CT: 9-5/8 to 13-3/8 in drift at ID − 5/32 in (8.681 − 0.15625); smaller sizes at ID − 1/8 in.
+  assert.equal(row.driftIn, 8.525);
+  assert.equal(findPipe(7, 26)!.driftIn, 6.151);
+  assert.equal(findPipe(13.375, 72)!.driftIn, 12.191);
   assert.equal(row.couplingOdIn, 10.625);
   assert.ok(casingTable.every((value) => value.idIn < value.odIn && value.driftIn < value.idIn));
   assert.equal(formatOd(13.375), '13-3/8"');
@@ -206,4 +209,61 @@ test("sour service restricts grades and readiness is honest about assumptions", 
   assert.equal(uncalibrated.requirements.find((value) => value.id === "pressures")!.status, "attention");
   const coverage = designCoverage(brief);
   assert.ok(coverage.checked.length >= 6 && coverage.notChecked.some((value) => /triaxial/i.test(value)));
+});
+
+test("a liner's collapse load is the full mud column outside an evacuated string, not the column below its top", () => {
+  const brief = exampleWellBrief();
+  const index = brief.sections.findIndex((section) => section.odIn === 7);
+  assert.ok(index >= 0, "the example has a 7 in string");
+  const liner = { ...brief, sections: brief.sections.map((section, at) => at === index ? { ...section, role: "liner" as const, topMdM: section.shoeMdM - 800 } : section) };
+  const section = liner.sections[index]!;
+  const analysis = analyzeSection(liner, index);
+  const expected = hydrostaticPsi(section.mudWeightSg, tvdAtMd(liner, section.shoeMdM));
+  assert.ok(Math.abs(analysis.loads.collapsePsi - expected) < 1, `${analysis.loads.collapsePsi} vs ${expected}`);
+  // Hung from surface or as a liner, the same string at the same shoe carries the same collapse load.
+  assert.ok(Math.abs(analysis.loads.collapsePsi - analyzeSection(brief, index).loads.collapsePsi) < 1);
+});
+
+test("a production string's burst is a tubing leak on the packer fluid, growing with depth down to the packer", () => {
+  const brief = exampleWellBrief();
+  const index = brief.sections.findIndex((section) => section.role === "production");
+  assert.ok(index >= 0 && brief.completion);
+  const masp = maximumSurfacePressure(brief).maspPsi;
+  const withBrine = { ...brief, completion: { ...brief.completion!, packerFluidSg: 1.2 } };
+  const analysis = analyzeSection(withBrine, index);
+  const packerTvd = tvdAtMd(withBrine, Math.min(withBrine.completion!.packerMdM, withBrine.sections[index]!.shoeMdM));
+  // Hand calculation: SITP + (packer fluid − seawater backup) × depth at the packer.
+  const expected = masp + hydrostaticPsi(1.2 - 1.03, packerTvd);
+  assert.ok(Math.abs(analysis.loads.burstPsi - expected) < 3, `${analysis.loads.burstPsi} vs ${Math.round(expected)}`);
+  assert.ok(analysis.loads.burstPsi > masp, "with brine heavier than the backup the load exceeds the surface pressure");
+  assert.match(analysis.loads.burstCase, /Tubing leak: .* on 1\.20 SG packer fluid/);
+  const unset = { ...brief, completion: { ...brief.completion!, packerFluidSg: undefined } };
+  assert.match(analyzeSection(unset, index).loads.burstCase, /packer fluid not set: mud weight assumed/);
+});
+
+test("a design brief becomes a drawable well: planned path, holes, strings, cement, completion and layers", async () => {
+  const { briefToWellDesign, exampleWellBrief, wellComponentsToAssembly } = await import("./index.ts");
+  const brief = exampleWellBrief();
+  const design = briefToWellDesign(brief);
+  assert.equal(design.provenance, "synthetic");
+  assert.equal(design.surveyStatus, "planned");
+  assert.equal(design.totalDepthM, brief.totalDepthMdM);
+  assert.equal(design.survey!.at(-1)!.mdM, brief.totalDepthMdM, "the plan reaches TD, held straight past its last station");
+  for (const section of brief.sections) {
+    const string = design.components!.find((component) => component.id === section.id)!;
+    assert.equal(string.kind, "Casing");
+    assert.equal(string.bottomDepthM, section.shoeMdM);
+    assert.ok(Math.abs(string.outerDiameterMm! - section.odIn * 25.4) < 1e-9);
+    assert.ok(design.components!.some((component) => component.id === `${section.id}-hole` && component.bottomDepthM === section.shoeMdM));
+    assert.equal(design.components!.some((component) => component.id === `${section.id}-cement`), section.cement !== null);
+  }
+  const hole = (id: string) => design.components!.find((component) => component.id === `${id}-hole`)!;
+  assert.equal(hole("production").topDepthM, brief.sections.find((section) => section.id === "intermediate-2")!.shoeMdM, "a hole starts at the shoe it is drilled out of");
+  assert.equal(hole("conductor").topDepthM, 115, "the conductor hole starts at the mudline");
+  assert.ok(design.components!.some((component) => component.kind === "Packer" && component.topDepthM === brief.completion!.packerMdM));
+  assert.deepEqual(design.formations!.slice(0, 2).map((layer) => layer.id), ["air-gap", "water"]);
+  assert.equal(design.formations!.find((layer) => layer.name === "K-10 reservoir")!.interpretation, "Reservoir");
+  // The strings keep their section ids through to the drawing, so an analysis finds its string.
+  const assembly = wellComponentsToAssembly({ id: design.id, name: design.wellName!, totalDepthM: design.totalDepthM, components: design.components! });
+  for (const section of brief.sections) assert.ok(assembly.items.some((item) => item.id === section.id), section.id);
 });

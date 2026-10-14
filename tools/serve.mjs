@@ -5,7 +5,10 @@ import { extname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "parse5";
 
-const root = fileURLToPath(new URL("../apps/demo/out/", import.meta.url));
+// Which exported app to serve. Lets the old demo and the new workbench run side by side during the
+// migration, so both Playwright projects can exercise their own app in one CI run.
+const app = process.env.SERVE_APP ?? "deck";
+const root = fileURLToPath(new URL(`../apps/${app}/out/`, import.meta.url));
 const types = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".png": "image/png", ".json": "application/json", ".woff2": "font/woff2", ".svg": "image/svg+xml", ".txt": "text/plain", ".ico": "image/x-icon" };
 
 function scriptHashes(html) {
@@ -41,7 +44,9 @@ createServer(async (request, response) => {
       "X-Content-Type-Options": "nosniff",
       "Referrer-Policy": "no-referrer",
       "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
-      "Content-Security-Policy": `default-src 'self'; script-src 'self' ${hashes.join(" ")}; worker-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'`,
+      // wasm-unsafe-eval: the meshopt decoder for the component models is WebAssembly. It allows
+      // compiling wasm only; JavaScript eval stays blocked.
+      "Content-Security-Policy": `default-src 'self'; script-src 'self' 'wasm-unsafe-eval' ${hashes.join(" ")}; worker-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'`,
       "Cache-Control": "no-store",
     });
     response.end(request.method === "HEAD" ? undefined : data);
@@ -49,5 +54,5 @@ createServer(async (request, response) => {
     response.writeHead(404).end("Not found");
   }
 }).listen(Number(process.env.PORT ?? 3100), "127.0.0.1", () => {
-  console.log(`Static demo: http://127.0.0.1:${process.env.PORT ?? 3100}`);
+  console.log(`Static ${app}: http://127.0.0.1:${process.env.PORT ?? 3100}`);
 });

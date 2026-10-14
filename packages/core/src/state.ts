@@ -35,9 +35,14 @@ export interface SubsurfaceState {
   readonly depthLink: { readonly linked: boolean; readonly window: MdWindow | null; readonly hoverMdM: number | null; readonly pinnedMdM: number | null };
   readonly dataInteraction: DataInteractionState;
   readonly interpretation?: { readonly slicePlane: SlicePlane | null; readonly logStyle: WellLogStyle | null };
+  /**
+   * The moment in the asset's history every time-aware view shows, as UTC Unix epoch milliseconds;
+   * null shows the asset as finally recorded. Optional so older snapshots still hydrate.
+   */
+  readonly time?: { readonly cursorMs: number | null };
 }
 
-export type StateEventType = "asset" | "depth-hover" | "depth-pick" | "spatial-pick" | "slices" | "camera" | "depth-window" | "depth-link" | "data-interaction" | "interpretation" | "hydrate";
+export type StateEventType = "asset" | "depth-hover" | "depth-pick" | "spatial-pick" | "slices" | "camera" | "depth-window" | "depth-link" | "data-interaction" | "interpretation" | "time" | "hydrate";
 export interface StateEvent {
   readonly type: StateEventType;
   /** Identifier of the publishing component; lets imperative subscribers suppress echoes. */
@@ -66,6 +71,8 @@ export interface SubsurfaceStore {
   readonly hydrate: (state: SubsurfaceState, source?: string) => void;
   readonly setSlicePlane: (plane: SlicePlane | null, source?: string) => void;
   readonly setLogStyle: (style: WellLogStyle | null, source?: string) => void;
+  /** Moves the time cursor (UTC Unix epoch milliseconds); null returns to the asset as finally recorded. */
+  readonly setTimeCursor: (cursorMs: number | null, source?: string) => void;
 }
 
 function finite(value: number, field: string) {
@@ -101,7 +108,14 @@ export function createInitialSubsurfaceState(): SubsurfaceState {
     viewState: { position: [0, 0, 1000], target: [0, 0, 0], zoom: 1 },
     depthLink: { linked: true, window: null, hoverMdM: null, pinnedMdM: null },
     dataInteraction: { datasetId: null, hoveredId: null, selectedIds: [], depthRange: null, timeRange: null, brush: null },
+    time: { cursorMs: null },
   };
+}
+
+function epochMs(value: number | null): number | null {
+  if (value === null) return null;
+  if (!Number.isSafeInteger(value) || Math.abs(value) > 8.64e15) throw new RangeError("Time cursor must be exact, valid UTC Unix epoch milliseconds.");
+  return value;
 }
 
 /** Copies and freezes small state snapshots; no model/voxel buffers belong in reactive state. */
@@ -177,6 +191,7 @@ function snapshot(input: SubsurfaceState): SubsurfaceState {
       slicePlane: input.interpretation.slicePlane === null ? null : validateSlicePlane(input.interpretation.slicePlane),
       logStyle: input.interpretation.logStyle === null ? null : validateWellLogStyle(input.interpretation.logStyle),
     }) } : {}),
+    time: Object.freeze({ cursorMs: epochMs(input.time?.cursorMs ?? null) }),
   });
 }
 
@@ -198,6 +213,7 @@ export function createSubsurfaceStore(initial = createInitialSubsurfaceState()):
       depthLink: sameRecord(previous.depthLink, checked.depthLink) ? previous.depthLink : checked.depthLink,
       dataInteraction: sameRecord(previous.dataInteraction, checked.dataInteraction) ? previous.dataInteraction : checked.dataInteraction,
       ...(checked.interpretation ? { interpretation: previous.interpretation && sameRecord(previous.interpretation, checked.interpretation) ? previous.interpretation : checked.interpretation } : {}),
+      time: previous.time && sameRecord(previous.time, checked.time!) ? previous.time : checked.time!,
     });
     const event = { type, source: source ?? null, state, previous };
     const errors: unknown[] = [];
@@ -262,5 +278,7 @@ export function createSubsurfaceStore(initial = createInitialSubsurfaceState()):
     hydrate: (next, source) => { publish(snapshot(next), "hydrate", source); },
     setSlicePlane: (slicePlane, source) => publish({ ...state, interpretation: { slicePlane, logStyle: state.interpretation?.logStyle ?? null } }, "interpretation", source),
     setLogStyle: (logStyle, source) => publish({ ...state, interpretation: { logStyle, slicePlane: state.interpretation?.slicePlane ?? null } }, "interpretation", source),
+    setTimeCursor: (cursorMs, source) => publish({ ...state, time: { cursorMs } }, "time", source),
   };
 }
+export * from "./edit-history.ts";

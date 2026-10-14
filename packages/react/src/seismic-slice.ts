@@ -1,26 +1,15 @@
 import * as THREE from "three";
 import { intersectSliceBox, validateSlicePlane } from "@ikhmalputra/subsurface-core";
 import type { SlicePlane } from "@ikhmalputra/subsurface-core/state";
+import type { MeshBasicNodeMaterial } from "three/webgpu";
+import { sliceMaterial } from "./seismic-materials.js";
 
 /** GPU-sampled slice through the same volume texture. Geometry is at most six vertices; data is never resliced on CPU. */
 export class SeismicSlice {
-  readonly mesh: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
-  constructor(texture: THREE.Data3DTexture, lut: THREE.DataTexture, gain: number) {
-    this.mesh = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.ShaderMaterial({
-      side: THREE.DoubleSide, toneMapped: false,
-      uniforms: { uVolume: { value: texture }, uLut: { value: lut }, uGain: { value: gain } },
-      vertexShader: "varying vec3 vUvw; void main() { vUvw = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
-      fragmentShader: `
-        precision highp sampler3D;
-        uniform sampler3D uVolume;
-        uniform sampler2D uLut;
-        uniform float uGain;
-        varying vec3 vUvw;
-        void main() {
-          float a = texture(uVolume, vUvw).r * uGain;
-          gl_FragColor = vec4(texture(uLut, vec2(clamp(a, -1.0, 1.0)*0.5+0.5,0.5)).rgb, 1.0);
-        }`,
-    }));
+  readonly mesh: THREE.Mesh<THREE.BufferGeometry, MeshBasicNodeMaterial>;
+  constructor(texture: THREE.Data3DTexture, lut: THREE.Texture, gain: number) {
+    // The slice's own geometry is in texture space, so its node material samples at its position.
+    this.mesh = new THREE.Mesh(new THREE.BufferGeometry(), sliceMaterial(texture, lut, gain));
     this.mesh.visible = false;
     this.mesh.name = "Arbitrary seismic slice";
   }

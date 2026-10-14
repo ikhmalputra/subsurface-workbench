@@ -3,13 +3,17 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { DragEvent, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { scaleLinear } from "d3-scale";
-import { getCatalogEntry, mdAtTvd, moveComponent, placeComponent, stringsAtDepth } from "@ikhmalputra/subsurface-core";
-import type { AssemblyCatalogEntry, AssemblyIssue, AssemblyItem, FormationLayer, SurveyPoint, WellAssembly } from "@ikhmalputra/subsurface-core";
+import { useDepthZoom } from "./depth-zoom.js";
+import { getCatalogEntry, mdAtTvd, moveComponent, placeComponent, stringsAtDepth, tvdAtSurveyMd } from "@ikhmalputra/subsurface-core";
+import type { AssemblyCatalogEntry, AssemblyIssue, AssemblyItem, FormationLayer, SurveyPoint, WellAssembly, WellComponent } from "@ikhmalputra/subsurface-core";
 import { Boxes, Maximize2, ZoomIn, ZoomOut } from "lucide-react";
 import { assetUrl, catalogIdFromDrag } from "./assembly-palette.js";
 import { formatDepth, formatInches } from "./assembly-format.js";
 import { ExplodedParts } from "./assembly-exploded.js";
 import { CommandButton } from "./ui.js";
+
+/** Plot inset for a view drawn as a track on a shared depth axis. */
+export interface TrackFrame { readonly top: number; readonly bottom: number; readonly chromeless?: boolean }
 
 export interface AssemblySchematicProps {
   readonly assembly: WellAssembly;
@@ -33,10 +37,72 @@ export interface AssemblySchematicProps {
   readonly depthWindow?: readonly [number, number] | null;
   /** Reports zoom and pan (buttons, Ctrl/⌘ + wheel, wheel) so other depth views can follow. */
   readonly onDepthWindowChange?: (window: readonly [number, number] | null) => void;
+  /**
+   * Handle zoom and pan gestures on the drawing (default). A host that puts the schematic in a
+   * larger depth surface — the well section — turns this off and lets that surface handle them.
+   */
+  readonly depthGestures?: boolean;
   /** Measured depth drawn as a cursor line, e.g. the pointer depth in a linked seismic section or log. */
   readonly cursorDepthM?: number | null;
+  /** Depth intervals to mark across the drawing, e.g. a brushed log interval. MD metres. */
+  readonly highlights?: readonly { readonly id: string; readonly topM: number; readonly baseM: number; readonly label: string }[];
+  /**
+   * Render as a track on a shared depth axis.
+   *
+   * `top` and `bottom` fix the plot inset in pixels, so a container laying several depth views side
+   * by side can give every one the same mapping from depth to pixel; `chromeless` drops the panel's
+   * own header and toolbar so the container can supply one header row for all tracks. Without it
+   * the schematic picks its own inset from the surface-equipment stack and grows taller than its
+   * box when annotations need room — right for a standalone panel, wrong beside other tracks.
+   */
+  readonly frame?: TrackFrame;
   /** Reports the measured depth under the pointer, `null` when it leaves. */
   readonly onCursorDepthChange?: (depthM: number | null) => void;
+  /**
+   * The source records the assembly was built from (matched by id). With them the drawing shows
+   * what the records say and the assembly cannot hold: drilled hole sections and their bit sizes,
+   * grade, weight and connection, cement slurry, depths as reported in feet and source pages.
+   */
+  readonly records?: readonly WellComponent[];
+  /**
+   * Formations drawn as a lithology column beside the depth rulers, whatever the earth tint
+   * (`formations`) is set to. Standalone drawings only; a track leaves geology to its container.
+   */
+  readonly formationColumn?: readonly FormationLayer[];
+}
+
+/** A lithology name to the pattern geologists draw it with. */
+type Lithology = "air" | "water" | "sand" | "shale" | "carbonate" | "crystalline" | "salt" | "coal" | "sediment" | "plain";
+function lithologyOf(name: string): Lithology {
+  const value = name.toLowerCase();
+  if (/\bair\b/.test(value)) return "air";
+  if (/water|sea/.test(value)) return "water";
+  if (/salt|halite|anhydrite/.test(value)) return "salt";
+  if (/coal|lignite/.test(value)) return "coal";
+  if (/sand|grit|conglomerate/.test(value)) return "sand";
+  if (/shale|clay|mud|silt/.test(value)) return "shale";
+  if (/lime|dolo|carbonate|chalk|marl/.test(value)) return "carbonate";
+  if (/granit|basement|crystalline|igneous|metamorph|gneiss|schist|basalt/.test(value)) return "crystalline";
+  if (/sediment/.test(value)) return "sediment";
+  return "plain";
+}
+
+function LithologyPattern({ id, kind, color }: { readonly id: string; readonly kind: Lithology; readonly color: string }) {
+  const ink = "rgba(40, 46, 52, .55)";
+  const glyph = kind === "sand" ? <><circle cx="2.5" cy="2.5" r=".85" fill={ink} /><circle cx="7.5" cy="7" r=".85" fill={ink} /></>
+    : kind === "shale" ? <><line x1="1" y1="3" x2="5" y2="3" stroke={ink} strokeWidth=".9" /><line x1="6" y1="8" x2="9.5" y2="8" stroke={ink} strokeWidth=".9" /></>
+    : kind === "carbonate" ? <><path d="M0 .5H10M0 5.5H10M5 .5V5.5M0 5.5V10M10 5.5V10" stroke={ink} strokeWidth=".7" fill="none" /></>
+    : kind === "crystalline" ? <><path d="M2.5 1V4M1 2.5H4M7.5 6V9M6 7.5H9" stroke={ink} strokeWidth=".8" /></>
+    : kind === "salt" ? <><path d="M0 0L10 10M10 0L0 10" stroke={ink} strokeWidth=".6" /></>
+    : kind === "water" ? <><path d="M0 5 q2.5 -2 5 0 t5 0" stroke="rgba(30, 90, 140, .45)" strokeWidth=".8" fill="none" /></>
+    : kind === "sediment" ? <><circle cx="2.5" cy="2.5" r=".8" fill={ink} /><line x1="5.5" y1="7.5" x2="9" y2="7.5" stroke={ink} strokeWidth=".8" /></>
+    : kind === "coal" ? <rect width="10" height="10" fill="rgba(30, 30, 30, .55)" /> : null;
+  return <pattern id={id} width="10" height="10" patternUnits="userSpaceOnUse"><rect width="10" height="10" fill={color} />{glyph}</pattern>;
+}
+
+/** The reported text of a record field, or null where the record says it was not reported. */
+function reported(value: string | undefined) {
+  return value && !/not reported/i.test(value) ? value : null;
 }
 
 const MAJOR_SLOTS: ReadonlySet<string> = new Set(["casing", "liner", "tubing", "cement", "sandface"]);
@@ -71,7 +137,7 @@ function itemSummary(item: AssemblyItem) {
   return `${formatInches(item.odIn)} · ${formatDepth(item.topM)}`;
 }
 
-export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, issues = [], onSelect, onDropComponent, onMoveComponent, onRemoveComponent, title = "Well construction schematic", formations = [], survey, exploded: explodedProp, defaultExploded = false, onExplodedChange, depthWindow: depthWindowProp, onDepthWindowChange, cursorDepthM = null, onCursorDepthChange }: AssemblySchematicProps) {
+export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, issues = [], onSelect, onDropComponent, onMoveComponent, onRemoveComponent, title = "Well construction schematic", formations = [], survey, exploded: explodedProp, defaultExploded = false, onExplodedChange, depthWindow: depthWindowProp, onDepthWindowChange, cursorDepthM = null, onCursorDepthChange, frame: trackFrame, depthGestures = true, records, formationColumn, highlights = [] }: AssemblySchematicProps) {
   const [explodedState, setExplodedState] = useState(defaultExploded);
   const exploded = explodedProp ?? explodedState;
   const toggleExploded = () => { const next = !exploded; if (explodedProp === undefined) setExplodedState(next); onExplodedChange?.(next); };
@@ -80,7 +146,15 @@ export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, i
   const frame = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 900, height: 940 });
   const W = size.width;
-  const maxOd = Math.max(30, ...assembly.items.map((item) => item.odIn));
+  const recordOf = useMemo(() => new Map((records ?? []).map((record) => [record.id as string, record])), [records]);
+  // Drilled hole sections: the assembly holds steel, the records hold the hole it sits in.
+  const holes = useMemo(() => (records ?? []).filter((record) => record.kind === "Hole" && record.outerDiameterMm !== null)
+    .map((record) => ({ id: record.id as string, label: record.name, topM: record.topDepthM, bottomM: Math.min(record.bottomDepthM, assembly.totalDepthM), odIn: record.outerDiameterMm! / 25.4, record }))
+    .sort((a, b) => a.topM - b.topM), [records, assembly.totalDepthM]);
+  const holeAt = (depthM: number) => holes.find((hole) => hole.topM <= depthM && hole.bottomM >= depthM);
+  // TVD on the surveyed (curved) path, not a straight chord between stations.
+  const tvdAt = (mdM: number) => survey && survey.length >= 2 ? tvdAtSurveyMd(survey, mdM) : null;
+  const maxOd = Math.max(30, ...assembly.items.map((item) => item.odIn), ...holes.map((hole) => hole.odIn));
   const pxPerIn = Math.min(3.6, (W * 0.42 - 70) / (maxOd * 2));
   const r = (inches: number) => inches * pxPerIn;
   const CX = W / 2;
@@ -102,9 +176,14 @@ export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, i
   const zoomed = bottom - top < td - 0.5;
   const annotatedCount = shown.items.filter((item) => slot(item) !== "surface" && (zoomed || ["casing", "liner", "tubing", "sandface"].includes(slot(item)) || item.id === selectedId) && anchorDepth(item) >= top && anchorDepth(item) <= bottom).length;
   const surfaceCount = shown.items.filter((item) => slot(item) === "surface").length;
-  const Y0 = Math.max(90, surfaceCount * 22 + 12);
-  const H = Math.max(size.height, annotatedCount * (zoomed ? 78 : 60) + 40);
-  const Y1 = H - 32;
+  // As a track, the inset is dictated and the height is the box: a schematic that grew to fit
+  // its annotations would stop sharing a scale with the tracks beside it.
+  const Y0 = trackFrame ? trackFrame.top : Math.max(90, surfaceCount * 22 + 12);
+  // Full record labels need a standalone drawing's width; a track keeps the compact ones.
+  const rich = !!records && !trackFrame;
+  const labelGap = zoomed ? 78 : rich ? 96 : 60;
+  const H = trackFrame ? size.height : Math.max(size.height, annotatedCount * labelGap + 40);
+  const Y1 = H - (trackFrame ? trackFrame.bottom : 32);
   const y = useMemo(() => scaleLinear().domain([top, bottom]).range([Y0, Y1]), [top, bottom, Y0, Y1]);
   const errors = new Set(issues.filter((issue) => issue.severity === "error" && issue.itemId).map((issue) => issue.itemId!));
   const warnings = new Set(issues.filter((issue) => issue.severity === "warning" && issue.itemId).map((issue) => issue.itemId!));
@@ -114,35 +193,28 @@ export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, i
     if (!element || typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(([entry]) => {
       const { width, height } = entry!.contentRect;
-      if (width > 0 && height > 0) setSize({ width: Math.max(900, width), height });
+      // Standalone, the drawing keeps a 900px floor and scrolls inside its frame so labels have
+      // room. As a track it has to fit the column it was given — a 900px drawing in a 320px
+      // track shows the middle third and nothing else.
+      if (width > 0 && height > 0) setSize({ width: trackFrame ? width : Math.max(900, width), height });
     });
     observer.observe(element);
     return () => observer.disconnect();
-  }, [exploded]);
+  }, [exploded, trackFrame]);
 
   useEffect(() => {
     if (frame.current) frame.current.scrollLeft = Math.max(0, (W - frame.current.clientWidth) / 2);
   }, [W, size.height, exploded]);
 
-  useEffect(() => {
-    const element = svg.current;
-    if (!element) return;
-    const onWheel = (event: WheelEvent) => {
-      const span = bottom - top;
-      if (event.ctrlKey || event.metaKey) {
-        event.preventDefault();
-        const pivot = depthAt(event.clientY);
-        const nextSpan = Math.min(td, Math.max(40, span * Math.exp(event.deltaY * 0.004)));
-        const ratio = (pivot - top) / span;
-        const start = Math.min(Math.max(0, pivot - ratio * nextSpan), td - nextSpan);
-        setWindow([start, start + nextSpan]);
-      } else if (span < td) {
-        const start = Math.min(Math.max(0, top + event.deltaY * span / 900), td - span);
-        if (start !== top) { event.preventDefault(); setWindow([start, start + span]); }
-      }
-    };
-    element.addEventListener("wheel", onWheel, { passive: false });
-    return () => element.removeEventListener("wheel", onWheel);
+  // Zoom and pan are the shared depth gestures (depth-zoom.ts): Ctrl/⌘ + wheel or pinch, wheel,
+  // drag, Shift + drag box, double-click. Dragging a part still moves the part.
+  useDepthZoom(svg, {
+    enabled: depthGestures,
+    window: depthWindow && depthWindow[1] <= td && depthWindow[1] - depthWindow[0] < td ? depthWindow : null,
+    axis: () => ({ extent: [0, td], plot: [Y0, Y1], minSpan: 40 }),
+    onWindow: setWindow,
+    ignore: ".sw-asm-item, .sw-asm-label",
+    canScroll: () => { const element = frame.current; return !!element && element.scrollHeight > element.clientHeight + 1; },
   });
 
   function depthAt(clientY: number) {
@@ -250,6 +322,13 @@ export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, i
   const deepestShoe = Math.max(0, ...strings.map((item) => item.bottomM));
   const innermostDeep = strings.filter((item) => item.bottomM === deepestShoe).sort((a, b) => a.odIn - b.odIn)[0];
   const holeR = innermostDeep ? r(innermostDeep.idIn ?? innermostDeep.odIn) - 2 : r(8.5);
+  // Left of the MD ruler, standalone: a TVD ruler where there is a survey, then the formation column.
+  const showTvd = !trackFrame && !!survey && survey.length > 1;
+  const TVD_X = RULER_X - 62;
+  const COL_W = 56;
+  const COL_X = (showTvd ? TVD_X - 50 : RULER_X - 60) - COL_W;
+  const showColumn = !trackFrame && !!formationColumn?.length && COL_X > 4;
+  const tdTvd = tvdAt(td);
   const clip = `sw-asm-clip-${uid}`;
   const hatch = `sw-asm-cement-${uid}`;
   const packerHatch = `sw-asm-packer-${uid}`;
@@ -268,8 +347,12 @@ export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, i
     return sorted.slice(1).map((end, index) => {
       const start = sorted[index]!;
       const outer = strings.filter((value) => value.odIn > host.odIn && value.topM <= (start + end) / 2 && value.bottomM >= (start + end) / 2).sort((a, b) => a.odIn - b.odIn)[0];
-      const outerR = outer ? r(outer.idIn ?? outer.odIn * 0.92) : r(host.odIn * 1.28);
-      return { start, end, inner: r(host.odIn), outer: outerR, open: !outer };
+      // Outside the next string the cement reaches the borehole wall: the cement record's own OD, else
+      // the hole section drilled there. Only with neither is a nominal envelope drawn, and marked so.
+      const recordOd = recordOf.get(item.id)?.outerDiameterMm;
+      const hole = holeAt((start + end) / 2);
+      const outerR = outer ? r(outer.idIn ?? outer.odIn * 0.92) : recordOd ? r(recordOd / 25.4) : hole ? r(hole.odIn) : r(host.odIn * 1.28);
+      return { start, end, inner: r(host.odIn), outer: outerR, open: !outer, nominal: !outer && !recordOd && !hole };
     });
   }
 
@@ -309,7 +392,7 @@ export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, i
         return <g key={segment.start}>
           <rect x={CX - segment.outer} y={a} width={segment.outer - segment.inner} height={b - a} fill={`url(#${hatch})`} className="sw-asm-cement" />
           <rect x={CX + segment.inner} y={a} width={segment.outer - segment.inner} height={b - a} fill={`url(#${hatch})`} className="sw-asm-cement" />
-          {segment.open && <><path d={`M${CX - segment.outer} ${a} v${b - a}`} className="sw-asm-hole-wall" /><path d={`M${CX + segment.outer} ${a} v${b - a}`} className="sw-asm-hole-wall" /></>}
+          {segment.open && !holes.length && <><path d={`M${CX - segment.outer} ${a} v${b - a}`} className={`sw-asm-hole-wall${segment.nominal ? " is-nominal" : ""}`} /><path d={`M${CX + segment.outer} ${a} v${b - a}`} className={`sw-asm-hole-wall${segment.nominal ? " is-nominal" : ""}`} /></>}
         </g>;
       })}<line x1={CX - outer - 26} x2={CX - outer - 4} y1={yt} y2={yt} className="sw-asm-toc" /></g>;
       case "casing":
@@ -447,14 +530,15 @@ export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, i
       groups.push(group);
       open = accessory ? group : null;
     }
-    const first = 42, last = Y1 - 12;
-    const gap = zoomed ? 78 : 60;
+    // A label's detail runs below its anchor; the last one must end inside the drawing, not under the legend.
+    const first = 42, last = Y1 - 12 - (rich && !zoomed ? 70 : 0);
+    const gap = labelGap;
     let cursor = first - gap;
     for (const label of groups) { label.at = Math.max(label.anchor, cursor + gap); cursor = label.at; }
     let limit = last;
     for (let index = groups.length - 1; index >= 0; index--) { const label = groups[index]!; label.at = Math.min(label.at, limit); limit = label.at - gap; }
     return { groups, compact: gap < 26 };
-  }, [items, top, bottom, y, Y1, zoomed, selectedId]);
+  }, [items, top, bottom, y, Y1, zoomed, selectedId, labelGap, rich]);
 
   const stack = useMemo(() => {
     const surface = items.filter((item) => slot(item) === "surface");
@@ -482,7 +566,7 @@ export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, i
   return <section className="sw-asm-schematic" aria-label={title} onKeyDown={(event) => {
     if (event.key === "Escape") { event.preventDefault(); drag.current = null; setPreview(null); onSelect?.(null); }
   }}>
-    <header className="sw-asm-panel-head">
+    {!trackFrame?.chromeless && <header className="sw-asm-panel-head">
       <div><h2>{title}</h2><small>{zoomed ? `${formatDepth(top)} – ${formatDepth(bottom)} MD` : `0 – ${formatDepth(td)} MD · TD`}</small></div>
       <div className="sw-asm-tools" role="toolbar" aria-label="Schematic view">
         <CommandButton type="button" onClick={() => zoom(0.5)} aria-label="Zoom depth in" disabled={exploded}><ZoomIn size={15} /></CommandButton>
@@ -491,7 +575,7 @@ export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, i
         <CommandButton type="button" className="sw-asm-mode" onClick={() => zoom(0.05)} disabled={exploded || !selectedItem || slot(selectedItem) === "surface"} aria-label="Inspect selected depth"><ZoomIn size={15} /><span>Detail</span></CommandButton>
         <CommandButton type="button" className="sw-asm-mode" onClick={toggleExploded} aria-pressed={exploded} aria-label="Exploded view" title="Exploded view: every component on its own"><Boxes size={15} /><span>Exploded</span></CommandButton>
       </div>
-    </header>
+    </header>}
     {exploded ? <ExplodedParts assembly={assembly} assetBaseUrl={assetBaseUrl} selectedId={selectedId} onSelect={onSelect} issues={issues} /> :
     <div ref={frame} className="sw-asm-schematic-frame" tabIndex={0} role="region" aria-label="Engineering schematic drawing" data-dropping={preview?.kind === "drop" ? (preview.valid ? "valid" : "invalid") : undefined}>
       <svg ref={svg} style={{ width: W, height: H }} viewBox={`0 0 ${W} ${H}`} role="group" aria-label={`${title}. ${items.length} components. ${onDropComponent ? "Drop catalog components to place them at the pointer depth." : ""}`} data-testid="assembly-schematic" data-revision={assembly.revision} data-has-selection={selectedItem ? "true" : undefined}
@@ -514,6 +598,7 @@ export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, i
             <feComposite in="white" in2="inner" operator="in" result="halo" />
             <feMerge><feMergeNode in="ring" /><feMergeNode in="halo" /><feMergeNode in="SourceGraphic" /></feMerge>
           </filter>
+          {(formationColumn ?? []).map((layer, index) => <LithologyPattern key={layer.id} id={`${clip}-lith-${index}`} kind={lithologyOf(layer.lithology)} color={layer.color} />)}
           <linearGradient id={`${clip}-earth`} x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#f1ede3" /><stop offset="1" stopColor="#e6e3dc" /></linearGradient>
         </defs>
         <rect className="sw-asm-bg" x={0} y={0} width={W} height={H} fill="transparent" />
@@ -528,9 +613,30 @@ export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, i
           </g>;
         })}
         <g className="sw-asm-ruler" aria-hidden>
-          {ticks.map((tick) => <g key={tick}><line x1={RULER_X - 10} x2={RULER_X} y1={y(tick)} y2={y(tick)} /><line x1={RULER_X} x2={LABEL_X - 20} y1={y(tick)} y2={y(tick)} className="sw-asm-gridline" /><text x={RULER_X - 14} y={y(tick) + 3.5} textAnchor="end">{tick.toLocaleString("en-US")}</text></g>)}
-          <text x={RULER_X - 52} y={Y0 - 10} className="sw-asm-axis-title">MD (m)</text>
+          {ticks.map((tick) => <g key={tick}><line x1={RULER_X - 10} x2={RULER_X} y1={y(tick)} y2={y(tick)} /><line x1={RULER_X} x2={LABEL_X - 20} y1={y(tick)} y2={y(tick)} className="sw-asm-gridline" />{!trackFrame && <text x={RULER_X - 14} y={y(tick) + 3.5} textAnchor="end">{tick.toLocaleString("en-US")}</text>}</g>)}
+          {!trackFrame && <text x={RULER_X - 52} y={Y0 - 10} className="sw-asm-axis-title">MD (m)</text>}
+          {showTvd && <>
+            {ticks.map((tick) => { const tvd = tvdAt(tick); return tvd === null ? null : <text key={`tvd-${tick}`} x={TVD_X} y={y(tick) + 3.5} textAnchor="end" className="sw-asm-tvd">{Math.round(tvd).toLocaleString("en-US")}</text>; })}
+            <text x={TVD_X - 44} y={Y0 - 10} className="sw-asm-axis-title">TVD (m)</text>
+          </>}
         </g>
+        {showColumn && <g className="sw-asm-formation-column" aria-label="Formation column" data-testid="formation-column">
+          <text x={COL_X} y={Y0 - 10} className="sw-asm-axis-title">Formation</text>
+          {formationColumn!.map((layer, index) => {
+            const trajectory = { trajectory: survey ?? null, totalDepthMdM: td };
+            const mdTop = mdAtTvd(trajectory, layer.topTvdM), mdBase = mdAtTvd(trajectory, layer.bottomTvdM);
+            const a = Math.max(Y0, y(Math.max(mdTop, top))), b = Math.min(Y1, y(Math.min(mdBase, bottom)));
+            if (!(b > a)) return null;
+            const h = b - a, vertical = h >= layer.name.length * 6.2 + 12, fits = h >= 13;
+            return <g key={layer.id} data-formation-id={layer.id}>
+              <title>{`${layer.name} · ${layer.lithology} · ${Math.round(layer.topTvdM).toLocaleString("en-US")}–${Math.round(layer.bottomTvdM).toLocaleString("en-US")} m TVD${layer.interpretation ? `\n${layer.interpretation}` : ""}`}</title>
+              <rect x={COL_X} y={a} width={COL_W} height={h} fill={`url(#${clip}-lith-${index})`} className="sw-asm-formation-cell" />
+              {vertical ? <text transform={`translate(${COL_X + COL_W / 2 + 4} ${(a + b) / 2}) rotate(-90)`} textAnchor="middle" className="sw-asm-formation-name">{layer.name}</text>
+                : fits && <text x={COL_X + 4} y={a + 11} className="sw-asm-formation-name is-short">{layer.name.length > 10 ? `${layer.name.slice(0, 9)}…` : layer.name}</text>}
+              {mdTop > top && mdTop < bottom && mdTop > 0.5 && <line x1={COL_X + COL_W} x2={LABEL_X - 20} y1={y(mdTop)} y2={y(mdTop)} className="sw-asm-formation-top" />}
+            </g>;
+          })}
+        </g>}
         {top <= 0 && <line x1={RULER_X} x2={LABEL_X - 20} y1={Y0} y2={Y0} className="sw-asm-ground" />}
         <g className="sw-asm-surface" aria-label="Surface equipment">
           {stack.map(({ level, members, y: sy, height }) => {
@@ -545,22 +651,47 @@ export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, i
               {hanger && <rect {...interactive(hanger)} x={CX - 16} y={sy + height * 0.45} width={32} height={height * 0.5} className={`${interactive(hanger).className} sw-asm-hit`} />}
             </g>;
           })}
-          {!stack.length && <g className="sw-asm-surface-slot"><rect x={CX - 60} y={44} width={120} height={70} rx={6} /><text x={CX} y={84} textAnchor="middle">Drop wellhead</text></g>}
+          {!stack.length && onDropComponent && <g className="sw-asm-surface-slot"><rect x={CX - 60} y={44} width={120} height={70} rx={6} /><text x={CX} y={84} textAnchor="middle">Drop wellhead</text></g>}
         </g>
         <g clipPath={`url(#${clip})`}>
-          {innermostDeep && deepestShoe < bottom && <path d={`M${CX - holeR} ${y(Math.max(deepestShoe, top))} ${Array.from({ length: 24 }, (_, index) => `L${CX - holeR - (index % 2 ? 4 : 0)} ${y(Math.max(deepestShoe, top)) + (y(td) - y(Math.max(deepestShoe, top))) * (index + 1) / 24}`).join(" ")} M${CX + holeR} ${y(Math.max(deepestShoe, top))} ${Array.from({ length: 24 }, (_, index) => `L${CX + holeR + (index % 2 ? 4 : 0)} ${y(Math.max(deepestShoe, top)) + (y(td) - y(Math.max(deepestShoe, top))) * (index + 1) / 24}`).join(" ")}`} className="sw-asm-open-hole" />}
+          {holes.map((hole, index) => {
+            const a = Math.max(hole.topM, top), b = Math.min(hole.bottomM, bottom);
+            if (!(b > a)) return null;
+            const R = r(hole.odIn), ya = y(a), yb = y(b);
+            const openFrom = Math.max(a, deepestShoe);
+            const casedTo = Math.min(b, deepestShoe);
+            const wavy = (side: number) => {
+              const y0 = y(openFrom), steps = Math.max(2, Math.round((yb - y0) / 7));
+              return `M${CX + side * R} ${y0} ${Array.from({ length: steps }, (_, step) => `L${CX + side * (R + (step % 2 ? 3 : 0))} ${y0 + (yb - y0) * (step + 1) / steps}`).join(" ")}`;
+            };
+            const previous = holes[index - 1];
+            return <g key={hole.id} className="sw-asm-hole" data-hole-id={hole.id} pointerEvents="none">
+              <rect x={CX - R} y={ya} width={R * 2} height={yb - ya} className="sw-asm-borehole" />
+              {casedTo > a && <path d={`M${CX - R} ${ya} V${y(casedTo)} M${CX + R} ${ya} V${y(casedTo)}`} className="sw-asm-hole-wall" />}
+              {b > openFrom && <path d={`${wavy(-1)} ${wavy(1)}`} className="sw-asm-open-hole" />}
+              {previous && hole.topM >= top && hole.topM <= bottom && previous.odIn > hole.odIn && <path d={`M${CX - r(previous.odIn)} ${ya} H${CX - R} M${CX + R} ${ya} H${CX + r(previous.odIn)}`} className="sw-asm-hole-wall" />}
+            </g>;
+          })}
+          {!holes.length && innermostDeep && deepestShoe < bottom && <path d={`M${CX - holeR} ${y(Math.max(deepestShoe, top))} ${Array.from({ length: 24 }, (_, index) => `L${CX - holeR - (index % 2 ? 4 : 0)} ${y(Math.max(deepestShoe, top)) + (y(td) - y(Math.max(deepestShoe, top))) * (index + 1) / 24}`).join(" ")} M${CX + holeR} ${y(Math.max(deepestShoe, top))} ${Array.from({ length: 24 }, (_, index) => `L${CX + holeR + (index % 2 ? 4 : 0)} ${y(Math.max(deepestShoe, top)) + (y(td) - y(Math.max(deepestShoe, top))) * (index + 1) / 24}`).join(" ")}`} className="sw-asm-open-hole" />}
           {band && <g className="sw-asm-select-band" aria-hidden data-testid="assembly-selection-band"><rect x={RULER_X} y={band.a} width={LABEL_X - RULER_X - 20} height={band.b - band.a} /><line x1={RULER_X} x2={LABEL_X - 20} y1={band.a} y2={band.a} /><line x1={RULER_X} x2={LABEL_X - 20} y1={band.b} y2={band.b} /></g>}
           <line x1={CX} x2={CX} y1={Y0} y2={y(td)} className="sw-asm-axis" />
           {ordered.map(drawItem)}
           {tubing && <text x={CX} y={Math.min(y(tubing.bottomM) + 24, Y1 + 10)} textAnchor="middle" className="sw-asm-small">EOT</text>}
           <line x1={RULER_X} x2={LABEL_X - 20} y1={y(td)} y2={y(td)} className="sw-asm-td-line" />
-          <text x={LABEL_X - 24} y={y(td) - 5} textAnchor="end" className="sw-asm-small">TD {formatDepth(td)}</text>
+          <text x={LABEL_X - 24} y={trackFrame ? y(td) - 5 : y(td) + 15} textAnchor="end" className="sw-asm-small">TD {formatDepth(td)}{tdTvd !== null && !trackFrame ? ` MD · ${formatDepth(tdTvd)} TVD` : ""}</text>
         </g>
         {band && <g className="sw-asm-select-ruler" aria-hidden>
           <path d={`M${RULER_X - 2} ${band.a} H${RULER_X - 8} V${band.b} H${RULER_X - 2}`} />
           <rect x={RULER_X - 60} y={band.a - 9} width={50} height={16} rx={3} /><text x={RULER_X - 35} y={band.a + 2.5} textAnchor="middle">{Math.round(band.topM).toLocaleString("en-US")}</text>
           {band.b - band.a > 22 && <><rect x={RULER_X - 60} y={band.b - 7} width={50} height={16} rx={3} /><text x={RULER_X - 35} y={band.b + 4.5} textAnchor="middle">{Math.round(band.bottomM).toLocaleString("en-US")}</text></>}
         </g>}
+        {highlights.filter((band) => band.baseM >= top && band.topM <= bottom).map((band) => {
+          const y0 = y(Math.max(top, band.topM)), y1 = y(Math.min(bottom, band.baseM));
+          return <g key={band.id} className="sw-asm-highlight" pointerEvents="none" data-highlight={band.id}>
+            <rect x={62} width={Math.max(0, LABEL_X - 82)} y={y0} height={Math.max(2, y1 - y0)} />
+            <text x={66} y={y0 + 12}>{band.label}</text>
+          </g>;
+        })}
         {cursorDepthM !== null && cursorDepthM >= top && cursorDepthM <= bottom && <g className="sw-asm-cursor" aria-hidden data-testid="assembly-cursor">
           <line x1={62} x2={LABEL_X - 20} y1={y(cursorDepthM)} y2={y(cursorDepthM)} />
           <rect x={LABEL_X - 92} y={y(cursorDepthM) - 17} width={72} height={15} rx={3} /><text x={LABEL_X - 56} y={y(cursorDepthM) - 6} textAnchor="middle">{formatDepth(cursorDepthM)}</text>
@@ -583,20 +714,36 @@ export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, i
             const textX = LABEL_X + 12;
             const titleLines = wrapLabel(title, Math.max(18, Math.floor((W - textX - 16) / 6.4)));
             const cement = items.find((value) => slot(value) === "cement" && value.hostId === item.id);
+            const record = recordOf.get(item.id);
+            const isString = ["casing", "liner", "tubing"].includes(slot(item));
+            const hole = isString && slot(item) !== "tubing" ? holeAt(item.bottomM - 0.5) : undefined;
+            const shoeTvd = tvdAt(item.bottomM);
+            const material = reported(record?.material);
+            const slurry = cement ? reported(recordOf.get(cement.id)?.material) : null;
+            const detailLines = !rich ? [
+              `OD ${formatInches(item.odIn)} · ID ${item.idIn == null ? "not reported" : formatInches(item.idIn)}`,
+              `${slot(item) === "casing" || slot(item) === "liner" ? "Shoe" : slot(item) === "tubing" ? "Tail" : "Base"} ${formatDepth(item.bottomM)} MD · Top ${formatDepth(item.topM)}`,
+              ...(cement ? [`Cement TOC ${formatDepth(cement.topM)} MD`] : []),
+            ] : [
+              `OD ${formatInches(item.odIn)} · ID ${item.idIn == null ? "not reported" : formatInches(item.idIn)}`,
+              material || record?.sourcePage ? [material?.replaceAll(" / ", " · "), record?.sourcePage ? `p. ${record.sourcePage}` : null].filter(Boolean).join(" · ") : null,
+              `${slot(item) === "casing" || slot(item) === "liner" ? "Shoe" : slot(item) === "tubing" ? "Tail" : "Base"} ${formatDepth(item.bottomM)} MD${shoeTvd !== null && Math.abs(shoeTvd - item.bottomM) > 0.5 ? ` · ${formatDepth(shoeTvd)} TVD` : ""}`,
+              `${record?.rawBottomDepthFt ? `Reported ${record.rawBottomDepthFt.toLocaleString("en-US")} ft · ` : ""}top ${record?.topDepthReported === false ? "not reported" : formatDepth(item.topM)}`,
+              hole ? `In ${formatInches(hole.odIn)} hole to ${formatDepth(hole.bottomM)}${hole.bottomM - item.bottomM > 1 ? ` · ${Math.round(hole.bottomM - item.bottomM).toLocaleString("en-US")} m below shoe` : ""}` : null,
+              cement ? `Cement TOC ${formatDepth(cement.topM)} · ${slurry?.replaceAll(" / ", " · ") ?? "slurry not reported"}` : null,
+            ].filter((line): line is string => !!line).flatMap((line) => wrapLabel(line, Math.max(24, Math.floor((W - Math.max(0, W - size.width) / 2 - textX - 20) / 6.8))));
             return <g key={members[0]!.item.id} role="button" tabIndex={0} aria-pressed={selected} aria-label={title} className={`sw-asm-label${selected ? " is-selected" : ""}${members.some((member) => preview?.focusId === member.item.id) ? " is-preview" : ""}`} data-state={state} data-group-size={members.length} onPointerDown={(event) => { event.stopPropagation(); next(); }} onKeyDown={(event) => {
               if (event.key === "Enter" || event.key === " ") { event.preventDefault(); next(); }
             }}>
               <title>{members.map((member) => `${member.item.label} — ${itemSummary(member.item)}`).join("\n") + (many ? "\nClick to step through, then clear selection." : "\nClick again to clear selection.")}</title>
-              <rect x={LABEL_X} y={at - 24} width={W - LABEL_X - 12} height={titleLines.length * 13 + (zoomed ? 30 : cement ? 43 : 30)} className="sw-asm-hit" />
+              <rect x={LABEL_X} y={at - 24} width={W - LABEL_X - 12} height={titleLines.length * 13 + (zoomed ? 30 : detailLines.length * 13 + 4)} className="sw-asm-hit" />
               {selected && <rect x={LABEL_X - 3} y={at - (tall ? 17 : 12)} width={W - LABEL_X - 1} height={tall ? 33 : 20} rx={5} className="sw-asm-label-pill" />}
               {members.map((member) => <path key={member.item.id} d={`M${reach(member.item)} ${member.anchor} H${LABEL_X - 26} L${LABEL_X - 8} ${at - 4} H${LABEL_X - 2}`} className={`sw-asm-leader${member === chosen && selected ? " is-active" : ""}`} />)}
               {selected && <circle cx={reach(item)} cy={chosen.anchor} r={3.6} className="sw-asm-leader-dot" />}
               <rect x={LABEL_X} y={at - (tall ? 14 : 10)} width={6} height={tall ? 24 : 15} rx={1.5} fill={spec.color} />
               <text x={textX} y={at - 20} className="sw-asm-label-title">{titleLines.map((line, index) => <tspan key={index} x={textX} dy={index ? 13 : 0}>{line}</tspan>)}</text>
               {!zoomed ? <text x={textX} y={at - 20 + titleLines.length * 13} className="sw-asm-label-detail">
-                <tspan x={textX}>OD {formatInches(item.odIn)} · ID {item.idIn === undefined ? "not reported" : formatInches(item.idIn)}</tspan>
-                <tspan x={textX} dy={13}>{slot(item) === "casing" || slot(item) === "liner" ? "Shoe" : slot(item) === "tubing" ? "Tail" : "Base"} {formatDepth(item.bottomM)} MD · Top {formatDepth(item.topM)}</tspan>
-                {cement && <tspan x={textX} dy={13}>Cement TOC {formatDepth(cement.topM)} MD</tspan>}
+                {detailLines.map((line, index) => <tspan key={index} x={textX} dy={index ? 13 : 0}>{line}</tspan>)}
               </text> : tall && <text x={textX} y={at - 20 + titleLines.length * 13} className="sw-asm-label-detail">{wrapLabel(detail, Math.max(18, Math.floor((W - textX - 16) / 6.1))).map((line, index) => <tspan key={index} x={textX} dy={index ? 13 : 0}>{line}</tspan>)}</text>}
             </g>;
           })}
@@ -608,6 +755,13 @@ export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, i
         </g>}
       </svg>
     </div>}
-    <p className="sw-asm-scale-note">{zoomed ? "Depth detail" : "Engineering overview"} · Linear MD · Actual component lengths · Diameters proportional, exaggerated relative to depth. Select a short tool, then Detail.</p>
+    {!trackFrame?.chromeless && !exploded && <ul className="sw-asm-legend" aria-label="Legend">
+      <li><svg width="22" height="14" aria-hidden="true"><rect x="3" y="0" width="4" height="14" fill="#5b6670" /><rect x="15" y="0" width="4" height="14" fill="#5b6670" /><path d="M3 14h-3l3-5z M19 14h3l-3-5z" fill="#5b6670" /></svg>Casing and shoe</li>
+      <li><svg width="22" height="14" aria-hidden="true"><rect width="22" height="14" fill={`url(#${hatch})`} /></svg>Cement</li>
+      {holes.length > 0 && <li><svg width="22" height="14" aria-hidden="true"><rect width="22" height="14" className="sw-asm-borehole" /><path d="M1 0V14M21 0V14" className="sw-asm-hole-wall" /></svg>Drilled hole (bit size)</li>}
+      <li><svg width="22" height="14" aria-hidden="true"><path d="M3 0L6 3.5L3 7L6 10.5L3 14M19 0L16 3.5L19 7L16 10.5L19 14" className="sw-asm-open-hole" /></svg>Open hole</li>
+      {showColumn && formationColumn!.map((layer, index) => <li key={layer.id}><svg width="22" height="14" aria-hidden="true"><rect width="22" height="14" fill={`url(#${clip}-lith-${index})`} stroke="rgba(0,0,0,.25)" /></svg>{layer.lithology}</li>)}
+    </ul>}
+    {!trackFrame?.chromeless && <p className="sw-asm-scale-note">{zoomed ? "Depth detail" : "Engineering overview"} · Linear MD{showTvd ? ", TVD read from the survey" : ""} · Actual component lengths · Diameters proportional, exaggerated relative to depth{rich ? " · Labels quote the source records; unreported values say so" : ""}. Select a short tool, then Detail.</p>}
   </section>;
 }

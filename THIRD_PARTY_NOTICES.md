@@ -3,7 +3,7 @@
 Original code and synthetic Blender asset: MIT, Ikhmal Putra Manan.
 No F3 data, PPDM schemas or documentation are bundled.
 
-The bundled `forge-data.json` fixture is adapted from Utah FORGE public records,
+The bundled FORGE fixtures are adapted from Utah FORGE public records,
 licensed CC BY 4.0, https://creativecommons.org/licenses/by/4.0/:
 
 - McLennan et al. (2021), Utah FORGE Well 16A(78)-32 drilling data, Energy and
@@ -13,11 +13,24 @@ licensed CC BY 4.0, https://creativecommons.org/licenses/by/4.0/:
 	of the Utah FORGE Well 16A(78)-32, GDR 1296:
 	https://gdr.openei.org/submissions/1296.
 
+- Bill Gilmour, Joseph Wooden, Fred Pulka, Brett Rose (Horizon Well Logging),
+	Clifton Barker (Sanvean Technologies) and Erik Borchardt (Schlumberger),
+	Utah FORGE: Well 16A(78)-32 Logs (2021), DOI 10.15121/1777912, GDR 1292:
+	https://gdr.openei.org/submissions/1292. Adapted as
+	`packages/fixtures/data/forge-16a-openhole-1ft.las`: selected curves binned to
+	1 ft means, neutron porosity converted from percent to fraction.
+
 Changes: XLSX station extraction, explicit unit conversion, report-page record
 transcription and approximate sediment/granite contact projection. No endorsement
 by the authors or University is implied. The fixture data is not relicensed MIT.
 Source hashes, provenance and attribution remain in the distributed JSON and
 core package README; see docs/FORGE_SOURCE_RECORD.md for evidence boundaries.
+
+The offline world basemap `packages/react/assets/gis/world-50m.json` is built by
+`tools/build-world.mjs` from Natural Earth 1:50m land and country boundaries
+(public domain, https://www.naturalearthdata.com/), as packaged in world-atlas
+2.0.2 (ISC). Coordinates are rounded to 0.001°. Country boundaries are Natural
+Earth's de facto lines and carry no position on disputed borders.
 
 Runtime packages include Next.js/React (MIT), D3 Scale (ISC), Lucide (ISC),
 and IBM Plex font files (SIL Open Font License 1.1). Their full license notices

@@ -50,7 +50,12 @@ export interface TrajectorySummary {
   readonly maxInclinationDeg: number;
   readonly maxDlsDegPer30m: number;
   readonly maxDlsMdM: number;
-  /** Deepest station that is still within the kickoff tolerance (default 1°) before the well departs from vertical. */
+  /**
+   * Kickoff: the deepest station still within the tolerance (default 2°) before the inclination
+   * rises above it and stays above it for a sustained interval (default 90 m MD, or to TD). A single
+   * noisy station in a near-vertical hole is not a kickoff; FORGE wanders up to 2.07° by 369 m and
+   * builds from 1,779 m.
+   */
   readonly kickoffMdM: number | null;
   readonly stationCount: number;
 }
@@ -214,11 +219,50 @@ export function surveyPointAtMd(survey: readonly SurveyPoint[], mdM: number): Su
   return upper.mdM === mdM ? upper : interpolateSurveyPoint(lower, upper, mdM);
 }
 
-export function summarizeTrajectory(computed: readonly ComputedStation[], options: { readonly kickoffToleranceDeg?: number; readonly verticalSectionAzimuthDeg?: number } = {}): TrajectorySummary {
+/** TVD at a measured depth along the survey's curved path; null outside its coverage. */
+export function tvdAtSurveyMd(survey: readonly SurveyPoint[], mdM: number): number | null {
+  if (!survey.length || !Number.isFinite(mdM) || mdM < survey[0]!.mdM || mdM > survey.at(-1)!.mdM) return null;
+  return surveyPointAtMd(survey, mdM).tvdM;
+}
+
+/**
+ * The first measured depth at which the survey reaches a TVD, on its curved path; null if it never
+ * does. A well that turns back up crosses a TVD twice: the shallower crossing is the one returned.
+ */
+export function mdAtSurveyTvd(survey: readonly SurveyPoint[], tvdM: number): number | null {
+  for (let index = 1; index < survey.length; index++) {
+    const a = survey[index - 1]!, b = survey[index]!;
+    if (a.tvdM === tvdM) return a.mdM;
+    if ((a.tvdM - tvdM) * (b.tvdM - tvdM) > 0) continue;
+    let low = a.mdM, high = b.mdM;
+    const rising = b.tvdM >= a.tvdM;
+    for (let step = 0; step < 40; step++) {
+      const middle = (low + high) / 2;
+      if ((interpolateSurveyPoint(a, b, middle).tvdM < tvdM) === rising) low = middle; else high = middle;
+    }
+    return (low + high) / 2;
+  }
+  return null;
+}
+
+/** Index of the first station of a sustained departure from vertical, or -1 if the well never leaves it. */
+export function sustainedDepartureIndex(stations: readonly { readonly mdM: number; readonly inclinationDeg: number }[], toleranceDeg = 2, sustainM = 90): number {
+  if (!(toleranceDeg >= 0) || !(sustainM >= 0)) throw new RangeError("Kickoff tolerance and sustained interval must be non-negative.");
+  for (let index = 0; index < stations.length; index++) {
+    if (stations[index]!.inclinationDeg <= toleranceDeg) continue;
+    let sustained = true;
+    for (let next = index + 1; next < stations.length && stations[next]!.mdM <= stations[index]!.mdM + sustainM; next++) {
+      if (stations[next]!.inclinationDeg <= toleranceDeg) { sustained = false; break; }
+    }
+    if (sustained) return index;
+  }
+  return -1;
+}
+
+export function summarizeTrajectory(computed: readonly ComputedStation[], options: { readonly kickoffToleranceDeg?: number; readonly kickoffSustainM?: number; readonly verticalSectionAzimuthDeg?: number } = {}): TrajectorySummary {
   const last = computed.at(-1);
   if (!last) throw new RangeError("Cannot summarise an empty trajectory.");
-  const tolerance = options.kickoffToleranceDeg ?? 1;
-  const departure = computed.findIndex((station) => station.inclinationDeg > tolerance);
+  const departure = sustainedDepartureIndex(computed, options.kickoffToleranceDeg ?? 2, options.kickoffSustainM ?? 90);
   let maxDls = computed[0]!;
   let maxInclination = 0;
   for (const station of computed) {

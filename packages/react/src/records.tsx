@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
-import { scaleLinear } from "d3-scale";
-import { daysVsDepth, intervalsOverlap, lasCurve, type DayCategory, type HoleSectionRecord, type LasFile, type RunKind, type ServiceRun, type WellDay, type WellOperations } from "@ikhmalputra/subsurface-core";
+import { scaleLinear, scaleLog } from "d3-scale";
+import { useDepthZoom } from "./depth-zoom.js";
+import { daysVsDepth, feetToMetres, intervalsOverlap, lasCurve, metresToFeet, type DayCategory, type HoleSectionRecord, type LasFile, type RunKind, type ServiceRun, type WellDay, type WellOperations } from "@ikhmalputra/subsurface-core";
 import { AccessibleTable } from "./accessible-table.js";
 import { CommandButton } from "./ui.js";
 
@@ -13,10 +14,9 @@ export interface DepthRange {
   readonly baseFt: number;
 }
 
-const FT_TO_M = 0.3048;
 const int = (value: number) => value.toLocaleString("en-US", { maximumFractionDigits: 0 });
 const feet = (value: number | null | undefined) => (value === null || value === undefined ? "—" : `${int(value)} ft`);
-const dualDepth = (value: number) => `${int(value)} ft · ${int(value * FT_TO_M)} m`;
+const dualDepth = (value: number) => `${int(value)} ft · ${int(feetToMetres(value))} m`;
 const shortDate = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 const overlaps = (top: number, base: number, range: DepthRange) => intervalsOverlap(top, base, range.topFt, range.baseFt);
 const fractions: Record<string, string> = { "0.25": " 1/4", "0.5": " 1/2", "0.75": " 3/4" };
@@ -120,12 +120,24 @@ export interface DaysVsDepthChartProps {
   readonly focusDate?: string | null;
   readonly onSelectDay?: (day: WellDay) => void;
   readonly title?: string;
+  /**
+   * Shared measured-depth cursor, in metres.
+   *
+   * This is the only view in the application on the axis the drilling stage actually reasons on —
+   * date and measured depth together — and it could neither accept a depth nor emit one, so the
+   * question "why did this interval take so long" was answered by reading four views in sequence
+   * and holding the depth in your head. The Y axis is already measured depth, so the cursor is an
+   * exact horizontal line and nothing is interpolated to draw it.
+   */
+  readonly cursorMdM?: number | null;
+  /** Emitted with the depth under the pointer, alongside `onSelectDay` for the day under it. */
+  readonly onSelectMd?: (mdM: number) => void;
 }
 
 const sectionFill = ["#eef4f0", "#e6eef6", "#f6efe4", "#efe9f5"];
 
 /** Classic drilling days-versus-depth curve with hole sections, milestones and a selectable day cursor. */
-export function DaysVsDepthChart({ operations, focusDate = null, onSelectDay, title = "Days vs depth" }: DaysVsDepthChartProps) {
+export function DaysVsDepthChart({ operations, focusDate = null, onSelectDay, title = "Days vs depth", cursorMdM = null, onSelectMd }: DaysVsDepthChartProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const points = daysVsDepth(operations);
   const width = 560, height = 340, margin = { top: 16, right: 18, bottom: 34, left: 58 };
@@ -137,17 +149,31 @@ export function DaysVsDepthChart({ operations, focusDate = null, onSelectDay, ti
   const focus = operations.days.find((day) => day.date === focusDate);
   const byDay = new Map(operations.days.map((day) => [day.dayFromSpud, day]));
 
+  // Runs that did not complete, on the only axis they have. The records carry depths and an outcome
+  // but no dates, so they are drawn across the plot at their depths rather than placed on the day
+  // axis — inventing a date for them would be inventing evidence.
+  //
+  // Five of FORGE's nine report a base depth and no top. Those are drawn as a line at the base
+  // rather than a band, because a band would have to invent a top; a run with neither depth is not
+  // drawn at all and the legend says how many.
+  const troubleRuns = operations.runs.filter((run) => run.outcome !== "completed");
+  const placedRuns = troubleRuns.filter((run) => run.baseFt !== null);
+  const cursorFt = cursorMdM === null ? null : metresToFeet(cursorMdM);
+
   function pick(event: PointerEvent<SVGSVGElement>) {
     const box = svgRef.current?.getBoundingClientRect();
-    if (!box || !onSelectDay) return;
+    if (!box) return;
     const day = Math.round(x.invert(((event.clientX - box.left) / box.width) * width));
     const hit = byDay.get(Math.max(0, Math.min(maxDay, day)));
-    if (hit) onSelectDay(hit);
+    if (hit) onSelectDay?.(hit);
+    // The pointer carries a depth as well as a day, and the depth is what every other view reads.
+    const depthFt = y.invert(((event.clientY - box.top) / box.height) * height);
+    if (onSelectMd && depthFt >= 0 && depthFt <= maxMd) onSelectMd(feetToMetres(depthFt));
   }
 
   return <figure className="sw-rec sw-dvd" data-testid="days-vs-depth">
     <figcaption className="sw-rec-head"><h3>{title}</h3><span>{maxDay} days spud → last report · TD {feet(maxMd)}</span></figcaption>
-    <svg ref={svgRef} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${title}: ${points.length} daily depths from spud to ${feet(points.at(-1)?.mdFt)}. Click to select a day.`} onPointerDown={pick}>
+    <svg ref={svgRef} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${title}: ${points.length} daily depths from spud to ${feet(points.at(-1)?.mdFt)}. ${placedRuns.length} of ${troubleRuns.length} runs that ended with a problem or failure are marked at their reported depths. Click to select a day and a depth.`} onPointerDown={pick}>
       {operations.sections.map((section, index) => <g key={section.id}>
         <rect x={margin.left} y={y(section.topFt)} width={width - margin.left - margin.right} height={Math.max(0, y(section.baseFt) - y(section.topFt))} fill={sectionFill[index % sectionFill.length]} />
         <text x={width - margin.right - 6} y={y(section.topFt) + 13} textAnchor="end" className="sw-dvd-band">{section.name} · {bitSize(section.bitSizeIn)}</text>
@@ -161,11 +187,26 @@ export function DaysVsDepthChart({ operations, focusDate = null, onSelectDay, ti
         const day = operations.days.find((item) => item.date === event.date)?.dayFromSpud ?? 0;
         return <circle key={event.id} cx={x(Math.max(0, day))} cy={y(event.mdFt as number)} r={4.5} className="sw-dvd-milestone"><title>{`${event.label} · ${shortDate(event.date)} · ${feet(event.mdFt)}`}</title></circle>;
       })}
+      {placedRuns.map((run) => {
+        const base = run.baseFt as number;
+        const topReported = run.topFt !== null;
+        return <g key={run.id} className="sw-dvd-trouble" data-run-id={run.id} data-outcome={run.outcome} data-top-reported={String(topReported)}>
+          {topReported
+            ? <rect x={margin.left} y={y(run.topFt as number)} width={width - margin.left - margin.right} height={Math.max(2, y(base) - y(run.topFt as number))} />
+            : <line x1={margin.left} x2={width - margin.right} y1={y(base)} y2={y(base)} />}
+          <title>{`${run.id} · ${runKindLabels[run.kind]} · ${run.outcome} · ${topReported ? `${feet(run.topFt)}–${feet(base)}` : `base ${feet(base)}, top not reported`} · ${run.summary}`}</title>
+        </g>;
+      })}
+      {cursorFt !== null && cursorFt >= 0 && cursorFt <= maxMd && <g className="sw-dvd-depth-cursor" data-cursor-ft={cursorFt.toFixed(1)}>
+        <line x1={margin.left} x2={width - margin.right} y1={y(cursorFt)} y2={y(cursorFt)} />
+        <text x={margin.left + 4} y={y(cursorFt) - 4} className="sw-dvd-tick">{feet(cursorFt)}</text>
+      </g>}
       {focus && focus.dayFromSpud >= 0 && <g className="sw-dvd-focus">
         <line x1={x(focus.dayFromSpud)} x2={x(focus.dayFromSpud)} y1={margin.top} y2={height - margin.bottom} />
         {focus.mdFt !== null && <circle cx={x(focus.dayFromSpud)} cy={y(focus.mdFt)} r={6} />}
       </g>}
     </svg>
+    {troubleRuns.length > 0 && <p className="sw-dvd-legend"><span><i aria-hidden="true" />{troubleRuns.length} of {operations.runs.length} runs ended with a problem or failure. {placedRuns.length} report a depth and are marked{placedRuns.length !== troubleRuns.length ? `; ${troubleRuns.length - placedRuns.length} report none` : ""}. {placedRuns.filter((run) => run.topFt === null).length} report a base and no top, drawn as a line rather than an interval. The records carry no dates, so none is placed on the day axis.</span></p>}
     <ul className="sw-dvd-events" aria-label="Milestones">
       {operations.milestones.map((event) => {
         const day = operations.days.find((item) => item.date === event.date);
@@ -173,7 +214,7 @@ export function DaysVsDepthChart({ operations, focusDate = null, onSelectDay, ti
       })}
     </ul>
     <p className="sw-sr-only">{points.length} reported daily measured-depth values over {maxDay} days from spud. The chart uses measured depth in feet and omits days with unreported depth.</p>
-    <AccessibleTable label="daily depth progress" description="Reported days from spud and measured depths; days without reported depth are not plotted." columns={[{ label: "Date" }, { label: "Day from spud", unit: "days" }, { label: "Measured depth", unit: "ft" }, { label: "Measured depth", unit: "m" }]} rowCount={points.length} getRows={(start, end) => points.slice(start, end).map((point) => [point.date, point.day, point.mdFt, point.mdFt * FT_TO_M])} />
+    <AccessibleTable label="daily depth progress" description="Reported days from spud and measured depths; days without reported depth are not plotted." columns={[{ label: "Date" }, { label: "Day from spud", unit: "days" }, { label: "Measured depth", unit: "ft" }, { label: "Measured depth", unit: "m" }]} rowCount={points.length} getRows={(start, end) => points.slice(start, end).map((point) => [point.date, point.day, point.mdFt, feetToMetres(point.mdFt)])} />
   </figure>;
 }
 
@@ -271,12 +312,17 @@ export function HoleSectionLog({ operations, selectedComponentId = null, onSelec
   </section>;
 }
 
+/** Track scale ends: whole numbers stay whole; densities and porosities keep their decimals. */
+const scaleLabel = (value: number) => Math.abs(value) >= 10 || Number.isInteger(value) ? Math.round(value).toLocaleString("en-US") : value.toFixed(2).replace(/0$/, "");
+
 export interface LogTrackSpec {
   readonly mnemonic: string;
   readonly label?: string;
   readonly color?: string;
   readonly min?: number;
   readonly max?: number;
+  /** "log" for curves read on a logarithmic grid, such as resistivity; min and max must be positive. */
+  readonly scale?: "linear" | "log";
 }
 
 export interface LogInterval extends DepthRange {
@@ -297,13 +343,29 @@ export interface LogTracksProps {
   readonly onSelectDepth?: (depthFt: number) => void;
   /** Reports the depth under the pointer (ft), `null` when it leaves. */
   readonly onCursorChange?: (depthFt: number | null) => void;
+  /** With this, Shift + drag selects an interval (ft) instead of zooming to it: a brush. */
+  readonly onBrush?: (range: DepthRange) => void;
   /** Controlled depth window `[top, base]` in ft; `null` shows the full log. Leave `undefined` for an independent view. */
   readonly depthWindowFt?: readonly [number, number] | null;
   /** Reports zoom and pan (buttons, Ctrl/⌘ + wheel, wheel) so other depth views can follow. */
   readonly onDepthWindowChange?: (window: readonly [number, number] | null) => void;
+  /** Handle zoom and pan gestures on the tracks (default); a host depth surface turns this off. */
+  readonly depthGestures?: boolean;
   readonly height?: number;
   readonly title?: string;
+  /**
+   * Render as a track on a shared depth axis: a fixed plot inset so the container can align every
+   * track's depth scale, the window taken as given rather than clamped to the log's own extent
+   * (empty space beyond the data is correct when the axis is shared), and no header of its own.
+   */
+  readonly frame?: TrackFrame;
 }
+
+/** Plot inset for a view drawn as a track on a shared depth axis. */
+// The depth-track contract is declared once, by the schematic; every track honours the same inset.
+// It was declared here as well, identically, which is how three tracks came to agree by accident.
+import type { TrackFrame } from "./assembly-schematic.tsx";
+export type { TrackFrame };
 
 function percentile(values: readonly number[], p: number) {
   if (!values.length) return 1;
@@ -312,7 +374,7 @@ function percentile(values: readonly number[], p: number) {
 }
 
 /** Multi-track depth log (LAS) with casing markers, an interval column, hover readout and click-to-depth. */
-export function LogTracks({ las, tracks, markers = [], intervals = [], selectedRange = null, cursorFt = null, onSelectDepth, onCursorChange, depthWindowFt, onDepthWindowChange, height = 620, title = "Depth log" }: LogTracksProps) {
+export function LogTracks({ las, tracks, markers = [], intervals = [], selectedRange = null, cursorFt = null, onSelectDepth, onCursorChange, onBrush, depthWindowFt, onDepthWindowChange, height = 620, title = "Depth log", frame: trackFrame, depthGestures = true }: LogTracksProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const index = las.curves[0];
   const depths = useMemo(() => (index?.values ?? []).map((value) => value ?? Number.NaN), [index]);
@@ -328,7 +390,11 @@ export function LogTracks({ las, tracks, markers = [], intervals = [], selectedR
     const start = Math.min(Math.max(first, top), last - span);
     return { top: start, base: start + span };
   };
-  const view = depthWin && depthWin[1] > first && depthWin[0] < last ? clampWindow(depthWin[0], depthWin[1]) : { top: first, base: last };
+  // A framed track obeys the shared scale even where it has no samples; clamping to the log's
+  // own extent would shift its mapping by the first sample depth and misalign it with every
+  // track beside it.
+  const view = trackFrame && depthWin ? { top: depthWin[0], base: depthWin[1] }
+    : depthWin && depthWin[1] > first && depthWin[0] < last ? clampWindow(depthWin[0], depthWin[1]) : { top: first, base: last };
   const zoomed = view.base - view.top < last - first - 0.5;
   const setWindow = (next: readonly [number, number] | null) => {
     const value = next ? (() => { const c = clampWindow(next[0], next[1]); return c.base - c.top >= last - first - 0.5 ? null : [Math.round(c.top), Math.round(c.base)] as const; })() : null;
@@ -345,7 +411,7 @@ export function LogTracks({ las, tracks, markers = [], intervals = [], selectedR
   });
   const headerH = 46, depthW = 62, intervalW = intervals.length ? 30 : 0, trackW = 120;
   const width = depthW + intervalW + resolved.length * trackW;
-  const y = scaleLinear().domain([view.top, view.base]).range([headerH + 4, height - 6]);
+  const y = scaleLinear().domain([view.top, view.base]).range(trackFrame ? [trackFrame.top, height - trackFrame.bottom] : [headerH + 4, height - 6]);
   const visible = depths.map((depth, i) => [depth, i] as const).filter(([depth]) => depth >= view.top - step && depth <= view.base + step);
   const nearest = (depth: number) => visible.reduce((best, item) => (Math.abs(item[0] - depth) < Math.abs(best[0] - depth) ? item : best), visible[0] ?? ([first, 0] as const));
   const shown = hover ?? cursorFt;
@@ -358,25 +424,13 @@ export function LogTracks({ las, tracks, markers = [], intervals = [], selectedR
     const value = y.invert(((event.clientY - box.top) / box.height) * height);
     return Math.max(view.top, Math.min(view.base, Math.round(value)));
   }
-  useEffect(() => {
-    const element = svgRef.current;
-    if (!element) return;
-    const onWheel = (event: WheelEvent) => {
-      const span = view.base - view.top;
-      if (event.ctrlKey || event.metaKey) {
-        event.preventDefault();
-        const box = element.getBoundingClientRect();
-        const pivot = y.invert(((event.clientY - box.top) / box.height) * height);
-        const next = span * Math.exp(event.deltaY * 0.004);
-        const ratio = (pivot - view.top) / span;
-        setWindow([pivot - ratio * next, pivot - ratio * next + next]);
-      } else if (zoomed) {
-        const top = Math.min(Math.max(first, view.top + event.deltaY * span / 900), last - span);
-        if (top !== view.top) { event.preventDefault(); setWindow([top, top + span]); }
-      }
-    };
-    element.addEventListener("wheel", onWheel, { passive: false });
-    return () => element.removeEventListener("wheel", onWheel);
+  // The shared depth gestures (depth-zoom.ts) in the SVG's own units, on the log's extent in feet.
+  useDepthZoom(svgRef, {
+    enabled: depthGestures,
+    window: zoomed ? [view.top, view.base] : null,
+    axis: () => ({ extent: [first, last], plot: trackFrame ? [trackFrame.top, height - trackFrame.bottom] : [headerH + 4, height - 6], minSpan: Math.max(step * 4, 20) }),
+    onWindow: setWindow,
+    ...(onBrush ? { onBrush: ([topFt, baseFt]: readonly [number, number]) => onBrush({ topFt, baseFt }) } : {}),
   });
 
   function onKey(event: KeyboardEvent<HTMLDivElement>) {
@@ -393,18 +447,19 @@ export function LogTracks({ las, tracks, markers = [], intervals = [], selectedR
     if (event.key === "Enter" && hover !== null) onSelectDepth?.(hover);
   }
 
-  return <section className="sw-rec sw-logs" aria-label={title} data-testid="log-tracks">
-    <header className="sw-rec-head">
+  const readout = <div className="sw-logs-readout" aria-live="polite" data-testid="log-readout">
+      {sample ? <><strong>{dualDepth(sample[0])}</strong>{resolved.map((track) => { const value = track.values[sample[1]]; return <span key={track.mnemonic}><i style={{ background: track.color ?? "#147a65" }} />{track.label ?? track.mnemonic} {value === null || value === undefined ? "—" : `${Math.round(value * 10) / 10} ${track.curve?.unit ?? ""}`}</span>; })}{intervals.filter((item) => sample[0] >= item.topFt && sample[0] <= item.baseFt).map((item) => <span key={item.id} className="sw-logs-run">{item.label}</span>)}</> : <span>Hover or use ↑/↓ on the log to read values; click or Enter selects that depth. Ctrl/⌘ + wheel or +/− zooms, wheel pans.</span>}
+    </div>;
+  return <section className="sw-rec sw-logs" aria-label={title} data-testid="log-tracks" data-track={trackFrame ? "true" : undefined}>
+    {!trackFrame?.chromeless && <header className="sw-rec-head">
       <h3>{title}</h3>
       <div className="sw-logs-tools">
         <span>{int(view.top)}–{int(view.base)} ft</span>
         <CommandButton icon="fit" type="button" aria-pressed={!zoomed} onClick={() => setWindow(null)}>Full log</CommandButton>
         <CommandButton kind="selection" type="button" disabled={!selectionWindow} onClick={() => selectionWindow && setWindow(selectionWindow)}>Zoom to selection</CommandButton>
       </div>
-    </header>
-    <div className="sw-logs-readout" aria-live="polite" data-testid="log-readout">
-      {sample ? <><strong>{dualDepth(sample[0])}</strong>{resolved.map((track) => { const value = track.values[sample[1]]; return <span key={track.mnemonic}><i style={{ background: track.color ?? "#147a65" }} />{track.label ?? track.mnemonic} {value === null || value === undefined ? "—" : `${Math.round(value * 10) / 10} ${track.curve?.unit ?? ""}`}</span>; })}{intervals.filter((item) => sample[0] >= item.topFt && sample[0] <= item.baseFt).map((item) => <span key={item.id} className="sw-logs-run">{item.label}</span>)}</> : <span>Hover or use ↑/↓ on the log to read values; click or Enter selects that depth. Ctrl/⌘ + wheel or +/− zooms, wheel pans.</span>}
-    </div>
+    </header>}
+    {!trackFrame?.chromeless && readout}
     <div className="sw-logs-frame" tabIndex={0} role="group" aria-label={`${title}. Arrow keys move the depth cursor, Shift for larger steps, Enter selects the depth. Plus and minus zoom, 0 shows the full log.`} onKeyDown={onKey} onBlur={() => setHover(null)}>
       <svg ref={svgRef} viewBox={`0 0 ${width} ${height}`} style={{ height, minWidth: width }} aria-hidden onPointerMove={(event) => setHover(depthAt(event))} onPointerLeave={() => setHover(null)} onPointerDown={(event) => { const depth = depthAt(event); if (depth !== null) onSelectDepth?.(depth); }}>
         <text x={depthW / 2} y={18} textAnchor="middle" className="sw-logs-label">MD</text>
@@ -417,7 +472,8 @@ export function LogTracks({ las, tracks, markers = [], intervals = [], selectedR
         </g>}
         {resolved.map((track, t) => {
           const left = depthW + intervalW + t * trackW;
-          const x = scaleLinear().domain([track.min, track.max]).range([left + 6, left + trackW - 6]).clamp(true);
+          const logScale = track.scale === "log" && track.min > 0 && track.max > 0;
+          const x = (logScale ? scaleLog() : scaleLinear()).domain([track.min, track.max]).range([left + 6, left + trackW - 6]).clamp(true);
           let d = "", pen = false;
           for (const [depth, i] of visible) {
             const value = track.values[i];
@@ -428,8 +484,8 @@ export function LogTracks({ las, tracks, markers = [], intervals = [], selectedR
           return <g key={track.mnemonic}>
             <line x1={left} x2={left} y1={0} y2={height} className="sw-logs-sep" />
             <text x={left + trackW / 2} y={16} textAnchor="middle" className="sw-logs-label" fill={track.color ?? "#147a65"}>{track.label ?? track.mnemonic}</text>
-            <text x={left + 6} y={34} className="sw-logs-unit">{int(track.min)}</text>
-            <text x={left + trackW - 6} y={34} textAnchor="end" className="sw-logs-unit">{int(track.max)} {track.curve?.unit ?? "?"}</text>
+            <text x={left + 6} y={34} className="sw-logs-unit">{scaleLabel(track.min)}</text>
+            <text x={left + trackW - 6} y={34} textAnchor="end" className="sw-logs-unit">{scaleLabel(track.max)} {track.curve?.unit ?? "?"}</text>
             <line x1={left + 6} x2={left + trackW - 6} y1={40} y2={40} stroke={track.color ?? "#147a65"} strokeWidth={2} />
             <path d={d} fill="none" stroke={track.color ?? "#147a65"} strokeWidth={1.1} vectorEffect="non-scaling-stroke" />
           </g>;
@@ -439,6 +495,9 @@ export function LogTracks({ las, tracks, markers = [], intervals = [], selectedR
         {hover !== null && <line x1={depthW} x2={width} y1={y(hover)} y2={y(hover)} className="sw-logs-hover" />}
       </svg>
     </div>
+    {/* As a track the readout sits under the plot, so the plot's top edge is the panel's top edge
+        and lines up with the tracks beside it. */}
+    {trackFrame?.chromeless && readout}
     <p className="sw-sr-only">{resolved.length} log tracks and {depths.length} samples from {int(first)} to {int(last)} ft measured depth. Null or invalid samples are reported as not reported in the table.</p>
     <AccessibleTable
       label={`${title} samples`}
@@ -449,7 +508,7 @@ export function LogTracks({ las, tracks, markers = [], intervals = [], selectedR
         const index = start + offset;
         return [
           Number.isFinite(depth) ? depth : null,
-          Number.isFinite(depth) ? depth * FT_TO_M : null,
+          Number.isFinite(depth) ? feetToMetres(depth) : null,
           ...resolved.map((track) => {
             const value = track.values[index];
             return value === null || value === undefined || !Number.isFinite(value) ? null : value;

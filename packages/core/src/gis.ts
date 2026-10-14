@@ -4,13 +4,22 @@ import type { SpatialXYZ, SubsurfaceStore } from "./state.ts";
 export * from "./gis-layers.ts";
 
 export type GeographicXY = readonly [longitude: number, latitude: number];
-export type GisCrs = "EPSG:4326" | "EPSG:3857" | `EPSG:326${string}` | `EPSG:327${string}`;
+export type GisCrs = "EPSG:4326" | "EPSG:3857" | `EPSG:326${string}` | `EPSG:327${string}` | `EPSG:269${string}`;
 
 function projection(crs: string): string {
   if (crs === "EPSG:4326" || crs === "EPSG:3857") return crs;
+  // NAD83 / UTM zones 1N–23N (EPSG:26901–26923), North American records such as Utah FORGE.
+  // EPSG's own proj definition: GRS80 with a null shift to WGS84, i.e. NAD83 is taken as WGS84 to
+  // within the ~1–2 m the two realisations differ by. No grid-based datum shift is applied.
+  const nad83 = /^EPSG:269(\d{2})$/.exec(crs);
+  if (nad83) {
+    const zone = Number(nad83[1]);
+    if (zone < 1 || zone > 23) throw new TypeError(`Unsupported GIS CRS "${crs}". NAD83 / UTM is supported for zones 1N–23N.`);
+    return `+proj=utm +zone=${zone} +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs`;
+  }
   const match = /^EPSG:(326|327)(\d{2})$/.exec(crs);
   const zone = match ? Number(match[2]) : 0;
-  if (!match || zone < 1 || zone > 60) throw new TypeError(`Unsupported GIS CRS "${crs}". Supply WGS84, Web Mercator or WGS84 UTM; other datums require an explicit host transform.`);
+  if (!match || zone < 1 || zone > 60) throw new TypeError(`Unsupported GIS CRS "${crs}". Supply WGS84, Web Mercator, WGS84 UTM or NAD83 UTM; other datums require an explicit host transform.`);
   return `+proj=utm +zone=${zone} ${match[1] === "327" ? "+south" : ""} +datum=WGS84 +units=m +no_defs`;
 }
 

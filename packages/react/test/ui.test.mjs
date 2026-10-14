@@ -23,7 +23,7 @@ test("commands preserve native button semantics and expose consistent decorative
 });
 
 test("SDK and host modules use the shared button primitive, not private native button patterns", () => {
-  for (const directory of [new URL("../src/", import.meta.url), new URL("../../../apps/demo/src/components/", import.meta.url)]) {
+  for (const directory of [new URL("../src/", import.meta.url)]) {
     for (const name of readdirSync(directory).filter((name) => name.endsWith(".tsx") && name !== "ui.tsx")) {
       const text = readFileSync(new URL(name, directory), "utf8");
       assert.doesNotMatch(text, /<button\b/, `${name} should use CommandButton with an explicit command/selection role`);

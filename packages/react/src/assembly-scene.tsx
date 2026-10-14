@@ -6,13 +6,22 @@ import type { DragEvent as ReactDragEvent } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
+import { ClippingGroup } from "three/webgpu";
+import { createSceneRenderer } from "./scene-renderer.js";
+import { AmbientOcclusion } from "./scene-ao.js";
+import type { SceneRenderer } from "./scene-renderer.js";
 import { getCatalogEntry, moveComponent, placeComponent } from "@ikhmalputra/subsurface-core";
 import type { AssemblyItem, WellAssembly } from "@ikhmalputra/subsurface-core";
 import { Boxes, Crosshair, Focus, Maximize } from "lucide-react";
 import { assetUrl, catalogIdFromDrag } from "./assembly-palette.js";
 import { formatDepth } from "./assembly-format.js";
 import { CommandButton } from "./ui.js";
+import { MODEL_FACES, ViewCube } from "./view-cube.js";
+import type { NamedView } from "./view-cube.js";
+import { SectionTool } from "./section-tool.js";
+import type { SectionState } from "./section-tool.js";
+import { SceneSectionControl, SceneViewKeys } from "./scene-tools.js";
 
 export interface AssemblySceneProps {
   readonly assembly: WellAssembly;
@@ -35,10 +44,18 @@ const CUT_START = THREE.MathUtils.degToRad(76);
 const CUT_LENGTH = Math.PI * 1.5;
 const models = new Map<string, Promise<THREE.Group>>();
 
+// The catalogue's models are quantised and meshopt-packed (tools/compress-models.mjs); one loader
+// with the decoder serves them all.
+let loader: GLTFLoader | null = null;
+function modelLoader() {
+  loader ??= new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+  return loader;
+}
+
 function loadModel(url: string) {
   let pending = models.get(url);
   if (!pending) {
-    pending = new GLTFLoader().loadAsync(url).then((gltf) => gltf.scene);
+    pending = modelLoader().loadAsync(url).then((gltf) => gltf.scene);
     pending.catch(() => models.delete(url));
     models.set(url, pending);
   }
@@ -88,14 +105,26 @@ function disposeTree(group: THREE.Object3D) {
   group.clear();
 }
 
-function depthLabel(text: string) {
+/**
+ * A depth tick drawn into a sprite.
+ *
+ * The colour used to be a hard-coded dark grey, which was legible only because the backdrop was a
+ * hard-coded near-white in every theme. Both now follow the theme, and the label carries the
+ * halo the rest of the drawing text uses, so it stays readable against the model as well as
+ * against the ground.
+ */
+function depthLabel(text: string, ink: string, halo: string) {
   const canvas = document.createElement("canvas");
   canvas.width = 256;
   canvas.height = 64;
   const context = canvas.getContext("2d")!;
   context.font = "500 30px 'IBM Plex Mono', monospace";
-  context.fillStyle = "#3d4a44";
   context.textAlign = "right";
+  context.lineWidth = 5;
+  context.lineJoin = "round";
+  context.strokeStyle = halo;
+  context.strokeText(text, 248, 42);
+  context.fillStyle = ink;
   context.fillText(text, 248, 42);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -108,7 +137,7 @@ interface DragHint { readonly x: number; readonly y: number; readonly text: stri
 
 export function AssemblyScene({ assembly, assetBaseUrl, selectedId = null, onSelect, onDropComponent, onMoveComponent, title = "3D assembly", exploded: explodedProp, defaultExploded = false, onExplodedChange }: AssemblySceneProps) {
   const host = useRef<HTMLDivElement>(null);
-  const api = useRef<{ rebuild: (value: WellAssembly) => void; highlight: (id: string | null) => void; fit: (id?: string | null) => void; depthAt: (x: number, y: number) => number; marker: (depth: number | null, valid?: boolean) => void; pick: (x: number, y: number) => string | null; setControls: (enabled: boolean) => void; explode: (on: boolean, animate?: boolean) => void; isolate: (id: string | null) => void } | null>(null);
+  const api = useRef<{ rebuild: (value: WellAssembly) => void; highlight: (id: string | null) => void; fit: (id?: string | null) => void; depthAt: (x: number, y: number) => number; marker: (depth: number | null, valid?: boolean) => void; pick: (x: number, y: number) => string | null; setControls: (enabled: boolean) => void; explode: (on: boolean, animate?: boolean) => void; isolate: (id: string | null) => void; section: (state: SectionState | null) => void; look: (view: NamedView) => void } | null>(null);
   const [explodedState, setExplodedState] = useState(defaultExploded);
   const exploded = explodedProp ?? explodedState;
   const [isolated, setIsolated] = useState(false);
@@ -117,43 +146,68 @@ export function AssemblyScene({ assembly, assetBaseUrl, selectedId = null, onSel
   const [failure, setFailure] = useState("");
   const [hint, setHint] = useState<DragHint | null>(null);
   const [loaded, setLoaded] = useState(0);
+  const [section, setSection] = useState<SectionState | null>(null);
   useEffect(() => { latest.current = { assembly, selectedId, onSelect, onMoveComponent, exploded, isolated }; });
 
   useEffect(() => {
     const element = host.current;
     if (!element) return;
-    let renderer: THREE.WebGLRenderer;
+    // WebGPU where the browser has it, WebGL 2 where it does not; the scene builds now and draws once the device is up.
+    let started: SceneRenderer;
     try {
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+      started = createSceneRenderer({ alpha: true });
     } catch {
-      setFailure("WebGL is unavailable; the schematic remains fully editable.");
+      setFailure("3D is unavailable in this browser; the schematic remains fully editable.");
       return;
     }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    const { renderer } = started;
     renderer.domElement.setAttribute("aria-hidden", "true");
     element.prepend(renderer.domElement);
     const scene = new THREE.Scene();
-    const environment = new THREE.PMREMGenerator(renderer);
-    scene.environment = environment.fromScene(new RoomEnvironment(), 0.04).texture;
-    scene.add(new THREE.HemisphereLight(0xf4f1e8, 0x56605a, 1.1));
-    const sun = new THREE.DirectionalLight(0xffffff, 1.6);
-    sun.position.set(14, 30, 22);
-    scene.add(sun);
+    /**
+     * Three-point lighting, because one sun and a bright hemisphere is what made this flat.
+     *
+     * The hemisphere was carrying most of the exposure, which lights every surface of a cylinder
+     * almost equally — so casing read as a flat orange stripe rather than a tube. Dropping it to a
+     * fill and putting the energy into a key gives the tubulars a lit side and a shaded side; a
+     * dim rim from behind separates the model from the backdrop it now has.
+     */
+    scene.add(new THREE.HemisphereLight(0xf4f1e8, 0x56605a, 0.55));
+    const key = new THREE.DirectionalLight(0xfff4e6, 2.4);
+    key.position.set(14, 30, 22);
+    scene.add(key);
+    const fill = new THREE.DirectionalLight(0xdfe9ff, 0.7);
+    fill.position.set(-22, 8, 14);
+    scene.add(fill);
+    const rim = new THREE.DirectionalLight(0xffffff, 1.1);
+    rim.position.set(-8, 16, -26);
+    scene.add(rim);
     const camera = new THREE.PerspectiveCamera(32, 1, 0.05, 2000);
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.zoomToCursor = true;
     controls.minDistance = 1.2;
     controls.maxDistance = 400;
-    const world = new THREE.Group();
+    // The construction is a clipping group: the section plane cuts it on either backend.
+    const world = new ClippingGroup();
     const context = new THREE.Group();
     const ladder = new THREE.Group();
     const selection = new THREE.Group();
     ladder.visible = false;
     scene.add(context, ladder, world, selection);
+    // Cut the construction, not the context: the depth ladder and ground stay whole around the cut.
+    const section = new SectionTool(world, {
+      solids: () => { const meshes: THREE.Mesh[] = []; world.traverse((object) => { if ((object as THREE.Mesh).isMesh && !object.userData.sectionCap) meshes.push(object as THREE.Mesh); }); return meshes; },
+      bounds: () => new THREE.Box3().setFromObject(world),
+    });
+    scene.add(section.outline);
+    let sectionDirty = false;
+    const cube = new ViewCube(camera, controls, element, { labels: MODEL_FACES, home: new THREE.Vector3(0.92, 0.34, 1), onChange: () => undefined,
+      onSettled: () => { element.dataset.camera = `${camera.position.toArray().map((value) => value.toFixed(2)).join(",")}|${controls.target.toArray().map((value) => value.toFixed(2)).join(",")}`; } });
     const selectTone = () => new THREE.Color(getComputedStyle(element).getPropertyValue("--sw-select").trim() || "#ff6a00");
+    const themeColour = (name: string, fallback: string) => getComputedStyle(element).getPropertyValue(name).trim() || fallback;
+    const labelInk = () => themeColour("--sw-well-text", "#3d4a44");
+    const labelHalo = () => themeColour("--sw-text-halo", "#ffffff");
     const nameTag = document.createElement("div");
     nameTag.className = "sw-asm3d-tag";
     nameTag.setAttribute("aria-hidden", "true");
@@ -202,11 +256,11 @@ export function AssemblyScene({ assembly, assetBaseUrl, selectedId = null, onSel
         const ring = new THREE.Mesh(new THREE.RingGeometry(maxRadius + 0.35, maxRadius + 0.42, 64), new THREE.MeshBasicMaterial({ color: 0x9aa59f, side: THREE.DoubleSide, transparent: true, opacity: 0.55 }));
         ring.rotation.x = -Math.PI / 2;
         ring.position.y = y(md);
-        const label = depthLabel(md === 0 ? "0 m" : `${md.toLocaleString("en-US")} m`);
+        const label = depthLabel(md === 0 ? "0 m" : `${md.toLocaleString("en-US")} m`, labelInk(), labelHalo());
         label.position.set(-(maxRadius + 2.6), y(md), 0);
         context.add(ring, label);
       }
-      const td3 = depthLabel(`TD ${formatDepth(td)}`);
+      const td3 = depthLabel(`TD ${formatDepth(td)}`, labelInk(), labelHalo());
       td3.position.set(maxRadius + 2.6, y(td), 0);
       context.add(td3);
     }
@@ -268,6 +322,7 @@ export function AssemblyScene({ assembly, assetBaseUrl, selectedId = null, onSel
             model.rotation.y = THREE.MathUtils.degToRad(-32);
             group.add(tag(model, item.id));
             highlight(latest.current.selectedId);
+            sectionDirty = true;
             setLoaded((count) => count + 1);
           }, () => setFailure(`Could not load ${spec.label} model from ${url}.`));
         }
@@ -276,6 +331,7 @@ export function AssemblyScene({ assembly, assetBaseUrl, selectedId = null, onSel
       stackSurface(items, build);
       layout(value, false);
       highlight(latest.current.selectedId);
+      sectionDirty = true;
       if (latest.current.isolated) isolate(latest.current.selectedId, false);
     }
 
@@ -305,6 +361,7 @@ export function AssemblyScene({ assembly, assetBaseUrl, selectedId = null, onSel
           world.getObjectByName(item.id)?.add(tag(model, item.id));
         });
         highlight(latest.current.selectedId);
+        sectionDirty = true;
         setLoaded((count) => count + surface.length);
       }, () => setFailure("Could not load the surface stack models."));
     }
@@ -352,7 +409,7 @@ export function AssemblyScene({ assembly, assetBaseUrl, selectedId = null, onSel
       const step = [100, 200, 250, 500, 1000, 2000].find((size) => td / size <= 9) ?? 5000;
       for (let md = 0; md <= td + 1e-6; md += step) {
         const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(left, y(md), 0), new THREE.Vector3(right, y(md), 0)]), new THREE.LineBasicMaterial({ color: 0x9aa59f, transparent: true, opacity: 0.6 }));
-        const label = depthLabel(md === 0 ? "0 m" : `${md.toLocaleString("en-US")} m`);
+        const label = depthLabel(md === 0 ? "0 m" : `${md.toLocaleString("en-US")} m`, labelInk(), labelHalo());
         label.position.set(left - 2.1, y(md), 0);
         ladder.add(line, label);
       }
@@ -446,14 +503,37 @@ export function AssemblyScene({ assembly, assetBaseUrl, selectedId = null, onSel
       const box = new THREE.Box3();
       if (id) world.getObjectByName(id)?.traverse((child) => { if (child instanceof THREE.Mesh) box.expandByObject(child); });
       if (box.isEmpty()) { world.children.forEach((child) => { if (child.visible) box.expandByObject(child); }); box.expandByPoint(new THREE.Vector3(0, y(td), 0)).expandByPoint(new THREE.Vector3(0, explodedNow ? 3.4 : 2, 0)); }
-      const size = box.getSize(new THREE.Vector3());
       const center = box.getCenter(new THREE.Vector3());
       const minimum = id ? 7 : 4;
-      const height = Math.max(size.y, minimum) * 1.1;
-      const width = Math.max(size.x, size.z, minimum) * 1.35;
+      // A three-quarter view rather than a near-side-on one. Looking at a vertical object from
+      // almost square on is what makes a 3D scene read as a 2D stick: there is no foreshortening
+      // anywhere, so nothing tells the eye it has depth.
+      const direction = new THREE.Vector3(0.92, 0.34, 1).normalize();
+
+      /**
+       * Fit the box as the camera will actually see it.
+       *
+       * The old fit measured the world-axis extents and assumed the camera looked down -Z, which
+       * is true only for a front-on view. Tilting the camera made the projected height larger than
+       * `size.y` and the wellhead went off the top of the frame. Measuring the corners in the
+       * camera's own basis is exact from any direction, and it is what lets the padding come down
+       * to a few percent without risking a crop.
+       */
+      const forward = direction.clone().negate();
+      const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), forward).normalize();
+      const up = new THREE.Vector3().crossVectors(forward, right).normalize();
+      let halfWidth = 0, halfHeight = 0, halfDepth = 0;
+      for (const cx of [box.min.x, box.max.x]) for (const cy of [box.min.y, box.max.y]) for (const cz of [box.min.z, box.max.z]) {
+        const offset = new THREE.Vector3(cx, cy, cz).sub(center);
+        halfWidth = Math.max(halfWidth, Math.abs(offset.dot(right)));
+        halfHeight = Math.max(halfHeight, Math.abs(offset.dot(up)));
+        halfDepth = Math.max(halfDepth, Math.abs(offset.dot(forward)));
+      }
+      halfHeight = Math.max(halfHeight, minimum / 2);
+      halfWidth = Math.max(halfWidth, minimum / 2);
       const vertical = THREE.MathUtils.degToRad(camera.fov) / 2;
-      const distance = Math.max(height / 2 / Math.tan(vertical), width / 2 / Math.tan(Math.atan(Math.tan(vertical) * camera.aspect))) + Math.max(size.x, size.z);
-      const direction = new THREE.Vector3(0.52, 0.2, 1).normalize();
+      const horizontal = Math.atan(Math.tan(vertical) * camera.aspect);
+      const distance = Math.max(halfHeight / Math.tan(vertical), halfWidth / Math.tan(horizontal)) * 1.06 + halfDepth;
       controls.target.copy(center);
       camera.position.copy(center).addScaledVector(direction, distance);
       camera.near = Math.max(0.02, distance / 500);
@@ -490,7 +570,7 @@ export function AssemblyScene({ assembly, assetBaseUrl, selectedId = null, onSel
       markerRing.position.y = y(depth);
       (markerRing.material as THREE.MeshBasicMaterial).color.setHex(valid ? 0x235faa : 0xc0392b);
     }
-    api.current = { rebuild, highlight, fit, depthAt, marker, pick, setControls: (enabled) => { controls.enabled = enabled; }, explode, isolate: (id) => isolate(id) };
+    api.current = { rebuild, highlight, fit, depthAt, marker, pick, setControls: (enabled) => { controls.enabled = enabled; }, explode, isolate: (id) => isolate(id), section: (state) => section.set(state), look: (view) => cube.look(view) };
 
     const resize = () => {
       const { width, height } = element.getBoundingClientRect();
@@ -524,19 +604,31 @@ export function AssemblyScene({ assembly, assetBaseUrl, selectedId = null, onSel
           if (fitAfter) { fitAfter = false; fit(latest.current.isolated ? latest.current.selectedId : null); }
         }
       }
-      controls.update();
-      renderer.render(scene, camera);
+      if (sectionDirty) { sectionDirty = false; section.refresh(); }
+      cube.update();
+      if (!cube.swinging) controls.update();
+      if (!started.draws()) return;
+      if (occlusion) occlusion.render(); else renderer.render(scene, camera);
       placeTag();
     };
     loop();
     controls.addEventListener("end", () => { element.dataset.camera = `${camera.position.toArray().map((value) => value.toFixed(2)).join(",")}|${controls.target.toArray().map((value) => value.toFixed(2)).join(",")}`; });
-    setReady(true);
+    // Ambient occlusion gives the parts their crevices back; if the device cannot run it, the plain pass stands.
+    let occlusion: AmbientOcclusion | null = null;
+    started.ready.then((backend) => {
+      scene.environment = started.environment();
+      try { occlusion = new AmbientOcclusion(renderer, scene, camera, { radius: 0.5 }); } catch { occlusion = null; }
+      element.dataset.backend = backend;
+      setReady(true);
+    }, (cause) => setFailure(`3D could not start (${cause instanceof Error ? cause.message : String(cause)}); the schematic remains fully editable.`));
     return () => {
       cancelAnimationFrame(frame);
       observer.disconnect();
+      cube.dispose();
+      section.dispose();
       controls.dispose();
-      environment.dispose();
-      renderer.dispose();
+      occlusion?.dispose();
+      started.dispose();
       renderer.domElement.remove();
       nameTag.remove();
       api.current = null;
@@ -544,6 +636,7 @@ export function AssemblyScene({ assembly, assetBaseUrl, selectedId = null, onSel
   }, [assetBaseUrl]);
 
   useEffect(() => { api.current?.rebuild(assembly); }, [assembly]);
+  useEffect(() => { api.current?.section(section); }, [section, ready]);
   useEffect(() => { api.current?.highlight(selectedId); }, [selectedId, loaded]);
   const first = useRef(true);
   useEffect(() => { if (first.current) { first.current = false; return; } api.current?.explode(exploded); }, [exploded]);
@@ -637,6 +730,8 @@ export function AssemblyScene({ assembly, assetBaseUrl, selectedId = null, onSel
         else if (travelled <= 4) onSelect?.(current.id);
       }}
       {...dropProps}>
+      <SceneSectionControl state={section} onChange={setSection} axes={{ x: "Side", z: "Front", y: "Depth" }} />
+      <SceneViewKeys labels={MODEL_FACES} onView={(view) => api.current?.look(view)} />
       {hint && <div className={`sw-asm-scene-hint${hint.valid ? "" : " is-invalid"}`} style={{ left: hint.x, top: hint.y }} role="status">{hint.text}</div>}
       {failure && <p className="sw-asm-scene-failure" role="status">{failure}</p>}
     </div>
