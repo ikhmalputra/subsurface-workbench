@@ -63,7 +63,9 @@ export function WorkbenchFrame({ children }: { children: ReactNode }) {
 function FrameBody({ path, setLayer, setTray, children }: { readonly path: string; readonly setLayer: (element: HTMLElement | null) => void; readonly setTray: (element: HTMLElement | null) => void; readonly children: ReactNode }) {
   const tools = useTools();
   const current = path === SHEET && tools.link ? `${SHEET}?tool=${tools.link}` : path;
-  const barInRibbon = tools.ribbonOpen && !tools.phone;
+  // The landing page is a page, not the sheet: it gets the navigation and nothing else of the chrome.
+  const onSheet = path === SHEET;
+  const barInRibbon = onSheet && tools.ribbonOpen && !tools.phone;
   return <>
     <Workbench status={<>
       <CommandLine />
@@ -80,9 +82,9 @@ function FrameBody({ path, setLayer, setTray, children }: { readonly path: strin
     {/* The workspace bar — navigation, tools, the well, go-to-depth — rides on the ribbon's title
         row, so it costs the sheet nothing; with the ribbon put away it floats over the sheet. */}
     {!barInRibbon && <FloatingToolbar id="workspace" label="workspace toolbar" defaultStyle={{ left: "calc(var(--dock-left, 0px) + 8px)", top: "calc(var(--dock-top, 0px) + 6px)" }} className="demo-workspace-toolbar">
-      <WorkspaceBar current={current} />
+      {onSheet ? <WorkspaceBar current={current} /> : <WorkspaceNavigation current={current} />}
     </FloatingToolbar>}
-    <ToolsRibbon headExtra={barInRibbon ? <div className="demo-workspace-toolbar demo-workspace-bar"><WorkspaceBar current={current} /></div> : undefined} />
+    {onSheet && <ToolsRibbon headExtra={barInRibbon ? <div className="demo-workspace-toolbar demo-workspace-bar"><WorkspaceBar current={current} /></div> : undefined} />}
     <ToolsPalette />
     <ToolPanels />
   </>;
@@ -100,7 +102,7 @@ function WorkspaceBar({ current }: { readonly current: string }) {
 
 function ToolsToggle() {
   const tools = useTools();
-  return <CommandButton icon="layers" className="demo-tools-toggle" aria-expanded={tools.paletteOpen} onClick={() => tools.setPaletteOpen(!tools.paletteOpen)}>{tools.paletteOpen ? "Close tools" : "Open tools"}</CommandButton>;
+  return <CommandButton icon="layers" className="demo-tools-toggle" aria-expanded={tools.paletteOpen} onClick={() => tools.setPaletteOpen(!tools.paletteOpen)}>{tools.paletteOpen ? "Close finder" : "Find a tool"}</CommandButton>;
 }
 
 /**

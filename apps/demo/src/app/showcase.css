@@ -1724,3 +1724,6 @@ body { background: var(--swc-bg-2); }
 .demo-design-pane .sw-wd { gap: 8px; }
 .demo-design-pane .sw-viewport { position: relative; }
 .demo-design-pane .sw-viewport-tools { position: absolute; top: 8px; right: 8px; z-index: 2; }
+.demo-workspace-bar { min-width: 0; }
+.demo-workspace-bar .demo-picker { flex: 1 1 120px; min-width: 110px; }
+.demo-workspace-bar .demo-picker select { max-width: 100%; }
