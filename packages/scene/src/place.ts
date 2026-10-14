@@ -46,6 +46,12 @@ export interface Placement {
   readonly top: { readonly northingM: number; readonly eastingM: number; readonly tvdM: number };
   /** The hole's direction there, which the model's -Y axis is turned to follow. */
   readonly along: { readonly inclinationDeg: number; readonly azimuthDeg: number };
+  /**
+   * The hole's centre from top to base: the top, every survey station in between, the base. A part
+   * stretched over a curved interval follows this; one straight cylinder from the top would miss the
+   * surveyed bottom of FORGE's production string by over a kilometre.
+   */
+  readonly centreline: readonly { readonly northingM: number; readonly eastingM: number; readonly tvdM: number }[];
   /** Metres per model unit across the body. */
   readonly radiusScale: number;
   /** Metres per model unit along the axis. */
@@ -80,6 +86,11 @@ export function place(component: Component, path: readonly Position[], entry: Ca
   const exaggeration = options.exaggeration ?? 150;
   const nominalRadiusM = options.nominalRadiusM ?? 0.1;
 
+  // calc's lookup clamps to the survey's ends; a component outside them has no surveyed position.
+  const first = path[0], last = path.at(-1);
+  if (!first || !last || component.topMdM < first.mdM || component.baseMdM > last.mdM) {
+    return absent(`"${component.id}" runs outside the surveyed ${first ? Math.round(first.mdM) : 0}–${last ? Math.round(last.mdM) : 0} m MD`);
+  }
   const top = positionAt(path, component.topMdM);
   if (!isKnown(top)) return absent(`no surveyed position at ${Math.round(component.topMdM)} m MD for "${component.id}"`);
   const base = positionAt(path, component.baseMdM);
@@ -103,6 +114,8 @@ export function place(component: Component, path: readonly Position[], entry: Ca
     topMdM: component.topMdM,
     baseMdM: component.baseMdM,
     top: { northingM: top.value.northingM, eastingM: top.value.eastingM, tvdM: top.value.tvdM },
+    centreline: [top.value, ...path.filter((station) => station.mdM > component.topMdM && station.mdM < component.baseMdM), base.value]
+      .map((point) => ({ northingM: point.northingM, eastingM: point.eastingM, tvdM: point.tvdM })),
     along: { inclinationDeg: top.value.inclinationDeg, azimuthDeg: top.value.azimuthDeg },
     radiusScale,
     lengthScale,

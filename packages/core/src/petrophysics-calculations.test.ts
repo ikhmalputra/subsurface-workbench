@@ -70,6 +70,21 @@ test("Archie records out-of-range, invalid, missing, and unpaired samples withou
   }), /Archie m/);
 });
 
+test("M and N do not depend on porosity: clean water-filled sandstone plots at the sandstone matrix point", () => {
+  // Sandstone: rhoma 2.65, DTma 55.5, phiN on the matrix -0.035 (limestone units). For any porosity
+  // the log values are mixtures of matrix and fresh water, and every sample must land on (M, N)ma.
+  const parameters = { matrixDensityGPerCm3: 2.65, fluidDensityGPerCm3: 1, matrixSlownessUsPerFt: 55.5, fluidSlownessUsPerFt: 189, matrixNeutronPorosity: -0.035 };
+  const porosities = [0.1, 0.2, 0.3];
+  const mix = (matrix: number, fluid: number) => porosities.map((phi) => phi * fluid + (1 - phi) * matrix);
+  const md = [100, 101, 102];
+  const calculation = calculateSchlumbergerMN(curve("nphi", "v/v", md, mix(-0.035, 1)), curve("rhob", "g/cm3", md, mix(2.65, 1)), curve("dt", "us/ft", md, mix(55.5, 189)), parameters);
+  // Published sandstone point (fresh mud, CP-8): M ≈ 0.810, N ≈ 0.627.
+  assert.ok(Math.abs(calculation.matrixPoint.m - 0.809) < 0.002 && Math.abs(calculation.matrixPoint.n - 0.627) < 0.002, JSON.stringify(calculation.matrixPoint));
+  for (const point of calculation.points) {
+    assert.ok(Math.abs(point.m! - calculation.matrixPoint.m) < 1e-12 && Math.abs(point.n! - calculation.matrixPoint.n) < 1e-12);
+  }
+});
+
 test("Schlumberger M-N transform calculates dimensionless coordinates and handles missing samples", () => {
   const phi = curve("nphi", "v/v", [100, 110], [0.2, 0.2]);
   const density = curve("rhob", "g/cm3", [100, 110], [2.4, 2.4]);
@@ -81,9 +96,10 @@ test("Schlumberger M-N transform calculates dimensionless coordinates and handle
     fluidSlownessUsPerFt: 189,
   };
   const calculation = calculateSchlumbergerMN(phi, density, sonic, parameters);
-  assert.equal(calculation.formula, "M = (DTf - DT) / (phiN * (DTf - DTma)); N = (rhoma - rhob) / (phiN * (rhoma - rhof))");
-  assert.ok(Math.abs(calculation.points[0]!.m! - 109 / 26.8) < 1e-12);
-  assert.ok(Math.abs(calculation.points[0]!.n! - 0.25 / 0.33) < 1e-12);
+  assert.equal(calculation.formula, "M = 0.01 * (DTf - DT) / (rhob - rhof); N = (phiNf - phiN) / (rhob - rhof)");
+  // Schlumberger CP-8: M = 0.01 (189 - 80) / (2.4 - 1) = 0.77857; N = (1 - 0.2) / (2.4 - 1) = 0.57143.
+  assert.ok(Math.abs(calculation.points[0]!.m! - 1.09 / 1.4) < 1e-12);
+  assert.ok(Math.abs(calculation.points[0]!.n! - 0.8 / 1.4) < 1e-12);
   assert.equal(calculation.points[0]?.quality, "valid");
   const curves = schlumbergerMNToCurves(calculation, { wellId: "well-a", depthReference: reference, idPrefix: "mn" });
   assert.equal(curves.m.values[0], calculation.points[0]?.m);

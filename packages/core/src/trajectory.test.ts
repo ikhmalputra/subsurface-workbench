@@ -99,3 +99,21 @@ test("trajectory edits create a planned revision and trim construction below TD"
   assert.ok(!("hashes" in edited));
   assert.equal(forgeDesign.provenance, "documented");
 });
+
+test("kickoff is the start of a sustained build, not noise in a near-vertical hole: FORGE kicks off at 1,779 m", () => {
+  const computed = computeMinimumCurvature(forgeDesign.survey!.map((station) => ({ mdM: station.mdM, inclinationDeg: station.inclinationDeg, azimuthDeg: station.azimuthDeg })));
+  const summary = summarizeTrajectory(computed);
+  // Stations wander up to 2.07° by 369 m and return below 2°; the build starts at 1,779 m (1.99°) and never comes back.
+  assert.ok(Math.abs(summary.kickoffMdM! - 1779.12) < 0.05, String(summary.kickoffMdM));
+  assert.ok(computed.filter((station) => station.mdM > summary.kickoffMdM!).every((station) => station.inclinationDeg > 2));
+});
+
+test("a vertical well has no kickoff, and a single excursion above tolerance is not one", () => {
+  const vertical = computeMinimumCurvature([0, 300, 600, 900].map((mdM) => ({ mdM, inclinationDeg: 0, azimuthDeg: 0 })));
+  assert.equal(summarizeTrajectory(vertical).kickoffMdM, null);
+  const noisy = computeMinimumCurvature([
+    { mdM: 0, inclinationDeg: 0, azimuthDeg: 0 }, { mdM: 300, inclinationDeg: 2.5, azimuthDeg: 0 }, { mdM: 330, inclinationDeg: 0.5, azimuthDeg: 0 },
+    { mdM: 600, inclinationDeg: 0.8, azimuthDeg: 0 }, { mdM: 630, inclinationDeg: 3, azimuthDeg: 0 }, { mdM: 660, inclinationDeg: 6, azimuthDeg: 0 }, { mdM: 760, inclinationDeg: 12, azimuthDeg: 0 },
+  ]);
+  assert.equal(summarizeTrajectory(noisy).kickoffMdM, 600);
+});

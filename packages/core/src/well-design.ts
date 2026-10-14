@@ -45,7 +45,8 @@ export interface PipeSize {
   readonly couplingOdIn: number;
 }
 
-const casingDrift = (odIn: number, idIn: number) => idIn - (odIn <= 9.625 ? 0.125 : odIn <= 13.375 ? 0.15625 : 0.1875);
+// API 5CT drift mandrels: ID − 1/8 in below 9-5/8 in; ID − 5/32 in for 9-5/8 to 13-3/8 in; ID − 3/16 in from 16 in.
+const casingDrift = (odIn: number, idIn: number) => idIn - (odIn < 9.625 ? 0.125 : odIn <= 13.375 ? 0.15625 : 0.1875);
 const couplingOd: Readonly<Record<string, number>> = { "30": 31, "20": 21, "18.625": 20, "16": 17, "13.375": 14.375, "10.75": 11.75, "9.625": 10.625, "7.625": 8.5, "7": 7.656, "5.5": 6.05, "4.5": 5 };
 const casingRow = (odIn: number, weightLbFt: number, wallIn: number, idIn: number, alternateDriftIn?: number): PipeSize => Object.freeze({ odIn, weightLbFt, wallIn, idIn, driftIn: Number(casingDrift(odIn, idIn).toFixed(3)), ...(alternateDriftIn ? { alternateDriftIn } : {}), couplingOdIn: couplingOd[String(odIn)] ?? odIn * 1.1 });
 
@@ -219,6 +220,8 @@ export interface CompletionPlan {
   readonly perforations: readonly { readonly topMdM: number; readonly bottomMdM: number }[];
   readonly artificialLift: ArtificialLift;
   readonly gasLiftMandrels?: number;
+  /** Fluid left in the tubing–casing annulus above the packer, SG. Unset: the production string's mud weight is assumed, and the load case says so. */
+  readonly packerFluidSg?: number;
 }
 
 export interface WellDesignBrief {
@@ -601,9 +604,21 @@ export function analyzeSection(brief: WellDesignBrief, index: number, factors: D
   let internalShoe = formationPsi - gas(exposedTvd, shoeTvd);
   let burstCase = isProduction ? "Tubing leak / gas to surface at reservoir pressure" : "Gas kick to surface from the next hole section";
   if (!isProduction && internalShoe > fracShoePsi) { internalShoe = fracShoePsi; burstCase = "Gas to surface, limited by the fracture pressure at the shoe"; }
-  const internalAt = (tvd: number) => internalShoe - gas(shoeTvd, tvd);
+  const gasColumnAt = (tvd: number) => internalShoe - gas(shoeTvd, tvd);
   const backup = (tvd: number) => hydrostaticPsi(SEAWATER_SG, tvd);
-  const burstLoad = Math.max(0, internalAt(topTvd) - backup(topTvd), internalAt(shoeTvd) - backup(shoeTvd));
+  // A production string's governing case is a tubing leak near surface: shut-in tubing pressure
+  // (reservoir pressure less a gas column to surface) lands on top of the packer fluid, so the
+  // load grows with depth down to the packer whenever the packer fluid is heavier than the backup.
+  // Below the packer the casing sees the gas column from the reservoir, as before.
+  const packerMd = isProduction && brief.completion ? Math.min(Math.max(brief.completion.packerMdM, section.topMdM), section.shoeMdM) : null;
+  const packerTvd = packerMd === null ? null : tvdAtMd(brief, packerMd);
+  const packerFluidSg = brief.completion?.packerFluidSg ?? section.mudWeightSg;
+  const sitp = Math.max(0, formationPsi - gas(exposedTvd, 0));
+  const internalAt = (tvd: number) => packerTvd !== null && tvd <= packerTvd + 1e-9 ? sitp + hydrostaticPsi(packerFluidSg, tvd) : gasColumnAt(tvd);
+  if (packerTvd !== null) burstCase = `Tubing leak: ${Math.round(sitp).toLocaleString("en-US")} psi shut-in tubing pressure on ${packerFluidSg.toFixed(2)} SG packer fluid${brief.completion?.packerFluidSg === undefined ? " (packer fluid not set: mud weight assumed)" : ""}, gas below the packer`;
+  // The load is linear between these depths, so its largest value sits at one of them.
+  const burstDepths = [topTvd, shoeTvd, ...(packerTvd !== null ? [packerTvd] : [])];
+  const burstLoad = Math.max(0, ...burstDepths.map((tvd) => internalAt(tvd) - backup(tvd)));
   // Tension: buoyed air weight hanging from the top of the string.
   const buoyancy = 1 - section.mudWeightSg / STEEL_SG;
   const lengthFt = (section.shoeMdM - section.topMdM) * FT_PER_M;
@@ -611,7 +626,9 @@ export function analyzeSection(brief: WellDesignBrief, index: number, factors: D
 
   // Ratings at the shoe temperature, on the worn wall for strings that are drilled through,
   // and collapse with the API TR 5C3 reduced yield under the axial tension at each depth.
-  const collapseLoadAt = (tvd: number) => hydrostaticPsi(section.mudWeightSg, tvd) - (section.topMdM > 0 ? hydrostaticPsi(section.mudWeightSg, topTvd) : 0);
+  // Full evacuation: nothing inside, the mud column from surface outside. A liner (or a string hung
+  // below the rig floor) is no exception: the annulus above its top still carries mud to surface.
+  const collapseLoadAt = (tvd: number) => hydrostaticPsi(section.mudWeightSg, tvd);
   let effective: EffectiveRatings | null = null;
   let collapseLoad = collapseLoadAt(shoeTvd);
   if (pipe && ratings) {
@@ -1027,6 +1044,8 @@ export function exampleWellBrief(): WellDesignBrief {
   const sections = proposeCasingScheme(base);
   const production = sections[sections.length - 1]!;
   const reservoirMd = mdAtTvd({ ...base, sections } as WellDesignBrief, 2620);
-  const completion: CompletionPlan = { tubingOdIn: 3.5, tubingWeightLbFt: 9.3, tubingGrade: "L80", packerMdM: Math.round(reservoirMd - 60), sssvMdM: 250, perforations: [{ topMdM: Math.round(reservoirMd + 10), bottomMdM: Math.min(Math.round(reservoirMd + 70), production.shoeMdM - 40) }], artificialLift: "gas-lift", gasLiftMandrels: 3 };
-  return Object.freeze({ ...base, sections, completion });
+  const completion: CompletionPlan = { tubingOdIn: 3.5, tubingWeightLbFt: 9.3, tubingGrade: "L80", packerMdM: Math.round(reservoirMd - 60), sssvMdM: 250, perforations: [{ topMdM: Math.round(reservoirMd + 10), bottomMdM: Math.min(Math.round(reservoirMd + 70), production.shoeMdM - 40) }], artificialLift: "gas-lift", gasLiftMandrels: 3, packerFluidSg: 1.06 };
+  // The production string was picked before the completion existed; the tubing-leak load above the
+  // packer only applies now, so any string that no longer passes is re-graded, as a designer would.
+  return regradeFailingStrings(Object.freeze({ ...base, sections, completion })).brief;
 }

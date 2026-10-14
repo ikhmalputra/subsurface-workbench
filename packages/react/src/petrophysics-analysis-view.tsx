@@ -213,7 +213,7 @@ export function PetrophysicsCalculationReport({ archie, mn }: PetrophysicsCalcul
     />
     <h3>Schlumberger M–N coordinates</h3>
     <p><code>{mn.formula}</code></p>
-    <p>Inputs: neutron <code>{mn.inputCurveIds.neutronPorosity}</code> (v/v), bulk density <code>{mn.inputCurveIds.bulkDensity}</code> (g/cm3), sonic <code>{mn.inputCurveIds.sonicSlowness}</code> (us/ft). Matrix/fluid: density {fmt(mn.parameters.matrixDensityGPerCm3)} / {fmt(mn.parameters.fluidDensityGPerCm3)} g/cm3; slowness {fmt(mn.parameters.matrixSlownessUsPerFt)} / {fmt(mn.parameters.fluidSlownessUsPerFt)} us/ft.</p>
+    <p>Inputs: neutron <code>{mn.inputCurveIds.neutronPorosity}</code> (v/v), bulk density <code>{mn.inputCurveIds.bulkDensity}</code> (g/cm3), sonic <code>{mn.inputCurveIds.sonicSlowness}</code> (us/ft). Matrix/fluid: density {fmt(mn.parameters.matrixDensityGPerCm3)} / {fmt(mn.parameters.fluidDensityGPerCm3)} g/cm3; slowness {fmt(mn.parameters.matrixSlownessUsPerFt)} / {fmt(mn.parameters.fluidSlownessUsPerFt)} us/ft; fluid neutron {fmt(mn.parameters.fluidNeutronPorosity ?? 1)} v/v. Only the fluid values enter M and N; the declared matrix plots at M {fmt(mn.matrixPoint.m)}, N {fmt(mn.matrixPoint.n)}.</p>
     <p>Sample quality: {Object.entries(mnCounts).map(([quality, count]) => `${quality}: ${count}`).join(" · ") || "no samples"}. Coordinates are calculated transforms, not lithology classifications.</p>
     <AccessibleTable
       label="Schlumberger M-N calculation"

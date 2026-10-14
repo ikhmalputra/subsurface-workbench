@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { computeMinimumCurvature } from "@ikhmalputra/subsurface-core";
+import { computeMinimumCurvature, surveyPointAtMd } from "@ikhmalputra/subsurface-core";
 import { forgePublishedPath, forgeStations } from "@ikhmalputra/subsurface-fixtures";
 import { isKnown } from "@ikhmalputra/subsurface-kernel";
 import { at, positions, summarize } from "./trajectory.ts";
@@ -77,4 +77,29 @@ test("a summary knows when the well never leaves vertical", () => {
   assert.ok(isKnown(summary));
   assert.equal(summary.value.kickoffMdM.state, "absent");
   assert.equal(summary.value.closureM, 0);
+});
+
+test("between stations the position lies on the minimum-curvature arc, as core computes it", () => {
+  const path = positions(stations, { tieIn: source[0] });
+  assert.ok(isKnown(path));
+  const computed = computeMinimumCurvature(stations, { tieIn: source[0] });
+  for (const mdM of [500, 1800.3, 2714.5, 3100]) {
+    const mine = at(path.value, mdM), theirs = surveyPointAtMd(computed, mdM);
+    assert.ok(isKnown(mine));
+    const gap = Math.hypot(mine.value.tvdM - theirs.tvdM, mine.value.northingM - theirs.northingM, mine.value.eastingM - theirs.eastingM);
+    assert.ok(gap < 1e-6, `${mdM} m MD differs from core by ${gap} m`);
+  }
+  // Through vertical the azimuth turns at the bottom of the arc, not halfway round the compass.
+  const through = positions([{ mdM: 0, inclinationDeg: 0.5, azimuthDeg: 10 }, { mdM: 30, inclinationDeg: 0.5, azimuthDeg: 190 }]);
+  assert.ok(isKnown(through));
+  const middle = at(through.value, 15);
+  assert.ok(isKnown(middle) && middle.value.inclinationDeg < 1e-6);
+});
+
+test("FORGE kicks off where the build starts, not at near-vertical noise", () => {
+  const path = positions(stations, { tieIn: source[0] });
+  assert.ok(isKnown(path));
+  const summary = summarize(path.value);
+  assert.ok(isKnown(summary) && isKnown(summary.value.kickoffMdM));
+  assert.ok(Math.abs(summary.value.kickoffMdM.value - 1779.12) < 0.05, String(summary.value.kickoffMdM.value));
 });

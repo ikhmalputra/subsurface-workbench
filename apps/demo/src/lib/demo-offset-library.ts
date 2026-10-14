@@ -153,7 +153,8 @@ function validateBrief(value: unknown, path: string): WellDesignBrief {
     }
   });
   if (brief.completion !== null) {
-    const completion = record(brief.completion, `${path}.completion`, ["tubingOdIn", "tubingWeightLbFt", "tubingGrade", "packerMdM", "sssvMdM", "perforations", "artificialLift"], ["gasLiftMandrels"]);
+    const completion = record(brief.completion, `${path}.completion`, ["tubingOdIn", "tubingWeightLbFt", "tubingGrade", "packerMdM", "sssvMdM", "perforations", "artificialLift"], ["gasLiftMandrels", "packerFluidSg"]);
+    if (completion.packerFluidSg !== undefined && (!Number.isFinite(completion.packerFluidSg) || (completion.packerFluidSg as number) <= 0)) throw new TypeError(`${path}.completion.packerFluidSg must be a positive finite number.`);
     for (const key of ["tubingOdIn", "tubingWeightLbFt", "packerMdM"] as const) finite(completion[key], `${path}.completion.${key}`);
     text(completion.tubingGrade, `${path}.completion.tubingGrade`);
     nullableFinite(completion.sssvMdM, `${path}.completion.sssvMdM`);

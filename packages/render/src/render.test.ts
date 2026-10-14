@@ -93,3 +93,22 @@ test("an unreported diameter still draws, and the object says it is nominal", as
   assert.equal(built.drawn[0]!.object.userData.radiusBasis, "nominal");
   assert.match(String(built.drawn[0]!.object.userData.note), /no outer diameter was reported/);
 });
+
+test("a stretched string follows the survey: FORGE's production casing ends where the survey puts its shoe", async () => {
+  assert.ok(isKnown(path));
+  const casing: Component = { id: "production", modelId: "production-casing", topMdM: 0, baseMdM: 3287.88, outerDiameterM: sized(0.1778), fit: "stretch" };
+  const placed = placeAll([casing], path.value, (id) => find(catalogue, id));
+  assert.equal(placed.omitted.length, 0, JSON.stringify(placed.omitted));
+  const built = await buildAssembly(placed.placements, { assetBaseUrl: "/models", load: async () => new Object3D() });
+  const mesh = built.drawn[0]!.object as Mesh;
+  const vertices = mesh.geometry.getAttribute("position");
+  // The tube's last ring is centred on the surveyed shoe: average its vertices (the ring's last vertex repeats its first).
+  const segments = 24, ring = vertices.count - (segments + 1);
+  const centre = new Vector3();
+  for (let index = ring; index < vertices.count - 1; index++) centre.add(new Vector3().fromBufferAttribute(vertices, index));
+  centre.divideScalar(segments).add(mesh.position);
+  const shoe = placed.placements[0]!.centreline.at(-1)!;
+  assert.ok(centre.distanceTo(toScene(shoe)) < 1e-3, `tube ends ${(centre.distanceTo(toScene(shoe)) * 100).toFixed(1)} m from the surveyed shoe`);
+  assert.ok(Math.abs(shoe.tvdM - 2589.9) < 0.5 && shoe.eastingM > 1100, "the shoe is deviated: TVD 2,590 m, over 1 km east");
+  dispose(built);
+});

@@ -1,4 +1,4 @@
-import { CylinderGeometry, Group, Mesh, MeshStandardMaterial, type Object3D } from "three";
+import { CurvePath, CylinderGeometry, Group, LineCurve3, Mesh, MeshStandardMaterial, TubeGeometry, type Object3D } from "three";
 import type { Placement } from "@ikhmalputra/subsurface-scene";
 import { type Frame, alignToHole, defaultFrame, toScene } from "./frame.ts";
 
@@ -39,7 +39,27 @@ export interface Built {
   readonly failed: readonly { readonly componentId: string; readonly why: string }[];
 }
 
-/** A casing, liner or hole section: a tube from the catalogue's bounds and the placement's scales. */
+/**
+ * A stretched casing, liner or hole section: a tube along the surveyed centreline, so a string that
+ * builds and turns is drawn where the survey puts it.
+ */
+function pathTube(placement: Placement, segments: number, frame: Frame): Mesh {
+  const radius = placement.entry.bounds.radius * placement.radiusScale * frame.unitsPerMetre;
+  // Built relative to the top and then placed there, so the object's position is the part's top like every other part's.
+  const origin = toScene(placement.top, frame);
+  const points = placement.centreline.map((point) => toScene(point, frame).sub(origin));
+  const curve = new CurvePath<ReturnType<typeof toScene>>();
+  for (let index = 1; index < points.length; index++) curve.add(new LineCurve3(points[index - 1]!, points[index]!));
+  const geometry = new TubeGeometry(curve, Math.min(1200, Math.max(2, (points.length - 1) * 2)), radius, segments, false);
+  const mesh = new Mesh(geometry, new MeshStandardMaterial({ metalness: 0.6, roughness: 0.45 }));
+  mesh.position.copy(origin);
+  mesh.userData.componentId = placement.componentId;
+  mesh.userData.note = placement.note;
+  mesh.userData.radiusBasis = placement.radiusBasis;
+  return mesh;
+}
+
+/** A short drawn part, or one with no length along the hole: a cylinder from the catalogue's bounds and the placement's scales. */
 function tube(placement: Placement, segments: number, frame: Frame): Mesh {
   const { entry, radiusScale, lengthScale } = placement;
   const radius = entry.bounds.radius * radiusScale * frame.unitsPerMetre;
@@ -75,7 +95,8 @@ export async function buildAssembly(placements: readonly Placement[], options: A
 
   for (const placement of placements) {
     if (placement.entry.kind === "drawn") {
-      const mesh = situate(tube(placement, segments, frame), placement, frame);
+      const followsPath = placement.centreline.length >= 2 && placement.baseMdM > placement.topMdM;
+      const mesh = followsPath ? pathTube(placement, segments, frame) : situate(tube(placement, segments, frame), placement, frame);
       group.add(mesh);
       drawn.push({ componentId: placement.componentId, object: mesh });
       continue;

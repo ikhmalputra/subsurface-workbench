@@ -50,7 +50,12 @@ export interface TrajectorySummary {
   readonly maxInclinationDeg: number;
   readonly maxDlsDegPer30m: number;
   readonly maxDlsMdM: number;
-  /** Deepest station that is still within the kickoff tolerance (default 1°) before the well departs from vertical. */
+  /**
+   * Kickoff: the deepest station still within the tolerance (default 2°) before the inclination
+   * rises above it and stays above it for a sustained interval (default 90 m MD, or to TD). A single
+   * noisy station in a near-vertical hole is not a kickoff; FORGE wanders up to 2.07° by 369 m and
+   * builds from 1,779 m.
+   */
   readonly kickoffMdM: number | null;
   readonly stationCount: number;
 }
@@ -214,11 +219,24 @@ export function surveyPointAtMd(survey: readonly SurveyPoint[], mdM: number): Su
   return upper.mdM === mdM ? upper : interpolateSurveyPoint(lower, upper, mdM);
 }
 
-export function summarizeTrajectory(computed: readonly ComputedStation[], options: { readonly kickoffToleranceDeg?: number; readonly verticalSectionAzimuthDeg?: number } = {}): TrajectorySummary {
+/** Index of the first station of a sustained departure from vertical, or -1 if the well never leaves it. */
+export function sustainedDepartureIndex(stations: readonly { readonly mdM: number; readonly inclinationDeg: number }[], toleranceDeg = 2, sustainM = 90): number {
+  if (!(toleranceDeg >= 0) || !(sustainM >= 0)) throw new RangeError("Kickoff tolerance and sustained interval must be non-negative.");
+  for (let index = 0; index < stations.length; index++) {
+    if (stations[index]!.inclinationDeg <= toleranceDeg) continue;
+    let sustained = true;
+    for (let next = index + 1; next < stations.length && stations[next]!.mdM <= stations[index]!.mdM + sustainM; next++) {
+      if (stations[next]!.inclinationDeg <= toleranceDeg) { sustained = false; break; }
+    }
+    if (sustained) return index;
+  }
+  return -1;
+}
+
+export function summarizeTrajectory(computed: readonly ComputedStation[], options: { readonly kickoffToleranceDeg?: number; readonly kickoffSustainM?: number; readonly verticalSectionAzimuthDeg?: number } = {}): TrajectorySummary {
   const last = computed.at(-1);
   if (!last) throw new RangeError("Cannot summarise an empty trajectory.");
-  const tolerance = options.kickoffToleranceDeg ?? 1;
-  const departure = computed.findIndex((station) => station.inclinationDeg > tolerance);
+  const departure = sustainedDepartureIndex(computed, options.kickoffToleranceDeg ?? 2, options.kickoffSustainM ?? 90);
   let maxDls = computed[0]!;
   let maxInclination = 0;
   for (const station of computed) {

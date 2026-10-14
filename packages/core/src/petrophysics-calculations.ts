@@ -29,11 +29,22 @@ export interface ArchieWaterSaturationCalculation {
   readonly points: readonly PetrophysicsCalculatedPoint[];
 }
 
+/**
+ * Schlumberger M–N (Log Interpretation Charts, CP-8):
+ *   M = 0.01 · (Δtf − Δt) / (ρb − ρf)      N = (φNf − φN) / (ρb − ρf)
+ * Only the fluid values enter the transform, which is what makes M and N independent of porosity.
+ * The matrix values are not used per sample: they give the matrix reference point to read the
+ * samples against (pure sandstone, limestone, dolomite each plot at their own M, N).
+ */
 export interface SchlumbergerMNParameters {
   readonly matrixDensityGPerCm3: number;
   readonly fluidDensityGPerCm3: number;
   readonly matrixSlownessUsPerFt: number;
   readonly fluidSlownessUsPerFt: number;
+  /** Neutron porosity of the pore fluid, v/v. 1.0 for fresh water (the default). */
+  readonly fluidNeutronPorosity?: number;
+  /** Neutron porosity read on the matrix, v/v, in the log's calibration; 0 for limestone units (the default). */
+  readonly matrixNeutronPorosity?: number;
 }
 
 export interface SchlumbergerMNPoint extends PetrophysicsCalculatedPoint {
@@ -43,8 +54,10 @@ export interface SchlumbergerMNPoint extends PetrophysicsCalculatedPoint {
 
 export interface SchlumbergerMNCrossplot {
   readonly method: "schlumberger-m-n";
-  readonly formula: "M = (DTf - DT) / (phiN * (DTf - DTma)); N = (rhoma - rhob) / (phiN * (rhoma - rhof))";
+  readonly formula: "M = 0.01 * (DTf - DT) / (rhob - rhof); N = (phiNf - phiN) / (rhob - rhof)";
   readonly parameters: SchlumbergerMNParameters;
+  /** Where the declared matrix plots, for reading the samples against it. */
+  readonly matrixPoint: { readonly m: number; readonly n: number };
   readonly inputCurveIds: {
     readonly neutronPorosity: string;
     readonly bulkDensity: string;
@@ -162,6 +175,9 @@ export function calculateSchlumbergerMN(
   if (parameters.matrixDensityGPerCm3 === parameters.fluidDensityGPerCm3) {
     throw new RangeError("Matrix and fluid density must differ for the M–N transform.");
   }
+  const fluidNeutron = parameters.fluidNeutronPorosity ?? 1;
+  const matrixNeutron = parameters.matrixNeutronPorosity ?? 0;
+  if (!Number.isFinite(fluidNeutron) || !Number.isFinite(matrixNeutron)) throw new RangeError("Fluid and matrix neutron porosity must be finite.");
   if (parameters.matrixSlownessUsPerFt === parameters.fluidSlownessUsPerFt) {
     throw new RangeError("Matrix and fluid slowness must differ for the M–N transform.");
   }
@@ -191,13 +207,12 @@ export function calculateSchlumbergerMN(
       || !Number.isFinite(rhoBulk) || rhoBulk <= 0 || !Number.isFinite(dt) || dt <= 0) {
       points.push({ mdM, m: null, n: null, value: null, quality: "invalid", reason: "Neutron porosity must be in (0, 1] v/v; density and slowness must be positive finite values." });
     } else {
-      const mDenominator = phi * (parameters.fluidSlownessUsPerFt - parameters.matrixSlownessUsPerFt);
-      const nDenominator = phi * (parameters.matrixDensityGPerCm3 - parameters.fluidDensityGPerCm3);
-      if (mDenominator === 0 || nDenominator === 0) {
-        points.push({ mdM, m: null, n: null, value: null, quality: "invalid", reason: "M–N transform denominator is zero." });
+      const denominator = rhoBulk - parameters.fluidDensityGPerCm3;
+      if (denominator <= 0) {
+        points.push({ mdM, m: null, n: null, value: null, quality: "invalid", reason: "Bulk density must exceed the fluid density for the M–N transform." });
       } else {
-        const m = (parameters.fluidSlownessUsPerFt - dt) / mDenominator;
-        const n = (parameters.matrixDensityGPerCm3 - rhoBulk) / nDenominator;
+        const m = 0.01 * (parameters.fluidSlownessUsPerFt - dt) / denominator;
+        const n = (fluidNeutron - phi) / denominator;
         points.push(Number.isFinite(m) && Number.isFinite(n)
           ? { mdM, m, n, value: null, quality: "valid", reason: null }
           : { mdM, m: null, n: null, value: null, quality: "invalid", reason: "M–N transform produced a non-finite result." });
@@ -218,7 +233,11 @@ export function calculateSchlumbergerMN(
   points.sort((a, b) => a.mdM - b.mdM);
   return {
     method: "schlumberger-m-n",
-    formula: "M = (DTf - DT) / (phiN * (DTf - DTma)); N = (rhoma - rhob) / (phiN * (rhoma - rhof))",
+    formula: "M = 0.01 * (DTf - DT) / (rhob - rhof); N = (phiNf - phiN) / (rhob - rhof)",
+    matrixPoint: {
+      m: 0.01 * (parameters.fluidSlownessUsPerFt - parameters.matrixSlownessUsPerFt) / (parameters.matrixDensityGPerCm3 - parameters.fluidDensityGPerCm3),
+      n: (fluidNeutron - matrixNeutron) / (parameters.matrixDensityGPerCm3 - parameters.fluidDensityGPerCm3),
+    },
     parameters: Object.freeze({ ...parameters }),
     inputCurveIds: { neutronPorosity: neutronPorosityCurve.id, bulkDensity: bulkDensityCurve.id, sonicSlowness: sonicSlownessCurve.id },
     units: { m: "dimensionless", n: "dimensionless" },

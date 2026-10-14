@@ -91,7 +91,7 @@ test("Petrophysics zone summary renders formulas, explicit cutoff and sampled me
 test("Petrophysics calculation report exposes formulas, units, parameters and per-sample results", () => {
   const html = renderToStaticMarkup(createElement(PetrophysicsCalculationReport, { archie, mn }));
   assert.match(html, /Sw = \(a \* Rw \/ \(Rt \* phi\^m\)\)\^\(1\/n\)/);
-  assert.match(html, /M = \(DTf - DT\)/);
+  assert.match(html, /M = 0\.01 \* \(DTf - DT\) \/ \(rhob - rhof\)/);
   assert.match(html, /formation-temperature-corrected Rw|caller must temperature-correct Rw/i);
   assert.match(html, /0\.1 ohm\.m/);
   assert.match(html, /exact MD keys/);

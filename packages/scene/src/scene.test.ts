@@ -3,6 +3,7 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 import { absent, isKnown, reported } from "@ikhmalputra/subsurface-kernel";
 import { positions } from "@ikhmalputra/subsurface-calc";
+import { forgePublishedPath, forgeStations } from "@ikhmalputra/subsurface-fixtures";
 import { find, modelHeight, readCatalogue } from "./catalogue.ts";
 import { place, placeAll, type Component } from "./place.ts";
 
@@ -104,4 +105,17 @@ test("a component is placed where the survey actually puts it, not straight down
   assert.ok(placed.value.top.tvdM < 2600, `expected TVD well above MD, got ${placed.value.top.tvdM}`);
   assert.ok(Math.hypot(placed.value.top.northingM, placed.value.top.eastingM) > 200);
   assert.ok(placed.value.along.inclinationDeg > 50);
+});
+
+test("a component running below the last survey station is refused, not clamped to it", () => {
+  const entry = find(manifest, "casing-spool");
+  assert.ok(isKnown(entry));
+  const last = where.at(-1)!.mdM;
+  const below: Component = { id: "deep", modelId: "casing-spool", topMdM: last + 11, baseMdM: last + 13, outerDiameterM: absent("not reported"), fit: "stretch" };
+  const across: Component = { id: "across", modelId: "casing-spool", topMdM: last - 39, baseMdM: last + 61, outerDiameterM: absent("not reported"), fit: "stretch" };
+  for (const component of [below, across]) {
+    const result = place(component, where, entry.value);
+    assert.equal(result.state, "absent");
+    assert.match(result.state === "absent" ? result.why : "", /outside the surveyed/);
+  }
 });

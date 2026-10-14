@@ -1,6 +1,6 @@
 import { type Known, absent, derived, reported } from "@ikhmalputra/subsurface-kernel";
-import { DEG, RAD, doglegAngleDeg, normalizeAzimuth, ratioFactor, signedAzimuthChange, tangent } from "./angle.ts";
-import { bracket, lerp } from "./interpolate.ts";
+import { DEG, RAD, doglegAngleDeg, normalizeAzimuth, ratioFactor, tangent } from "./angle.ts";
+import { bracket } from "./interpolate.ts";
 
 /**
  * Where the hole goes, by minimum curvature.
@@ -102,7 +102,9 @@ export function positions(stations: readonly Station[], options: SurveyOptions =
 /**
  * The position at a measured depth between stations.
  *
- * Linear between the bracketing pair, and clamped at both ends: a depth past the last station is
+ * On the minimum-curvature arc between the bracketing pair, the same curve the station positions
+ * were computed on (a straight chord would be off by the arc's sagitta: 0.27 m on FORGE's 37.5 m
+ * courses, and wrong in azimuth through vertical). Clamped at both ends: a depth past the last station is
  * reported at the last station rather than extrapolated, because the survey stops where it stops.
  * The previous core's uncovered interval was explicitly not extrapolated and this keeps that.
  */
@@ -111,15 +113,25 @@ export function at(path: readonly Position[], mdM: number): Known<Position> {
   if (!found) return absent("no survey to read");
   const { before, after, fraction } = found;
   if (before === after) return derived(before, mdM < before.mdM ? "clamped to the first station" : "clamped to the last station");
-  const turn = signedAzimuthChange(before.azimuthDeg, after.azimuthDeg);
+  // Direction along the arc: spherical interpolation between the two station tangents.
+  const t1 = tangent(before.inclinationDeg, before.azimuthDeg), t2 = tangent(after.inclinationDeg, after.azimuthDeg);
+  const dogleg = doglegAngleDeg(before, after) * RAD;
+  const direction = dogleg < 1e-9 ? t1 : (() => {
+    const a = Math.sin((1 - fraction) * dogleg) / Math.sin(dogleg), b = Math.sin(fraction * dogleg) / Math.sin(dogleg);
+    return [a * t1[0] + b * t2[0], a * t1[1] + b * t2[1], a * t1[2] + b * t2[2]] as const;
+  })();
+  const horizontal = Math.hypot(direction[0], direction[1]);
+  const inclinationDeg = Math.atan2(horizontal, direction[2]) * DEG;
+  const azimuthDeg = horizontal < 1e-9 ? (fraction < 0.5 ? before.azimuthDeg : after.azimuthDeg) : normalizeAzimuth(Math.atan2(direction[1], direction[0]) * DEG);
+  const step = course(mdM - before.mdM, before, { mdM, inclinationDeg, azimuthDeg });
   return derived({
     mdM,
-    tvdM: lerp(before.tvdM, after.tvdM, fraction),
-    northingM: lerp(before.northingM, after.northingM, fraction),
-    eastingM: lerp(before.eastingM, after.eastingM, fraction),
-    inclinationDeg: lerp(before.inclinationDeg, after.inclinationDeg, fraction),
-    azimuthDeg: normalizeAzimuth(before.azimuthDeg + turn * fraction),
-    doglegDeg: after.doglegDeg * fraction,
+    tvdM: before.tvdM + step.tvdM,
+    northingM: before.northingM + step.northingM,
+    eastingM: before.eastingM + step.eastingM,
+    inclinationDeg,
+    azimuthDeg,
+    doglegDeg: step.dogleg,
     dlsDegPerCourse: after.dlsDegPerCourse,
   }, "interpolated between two survey stations");
 }
@@ -131,7 +143,10 @@ export interface Summary {
   readonly closureM: number;
   readonly closureAzimuthDeg: number;
   readonly maxDlsDegPerCourse: number;
-  /** Where inclination first passes 2°, if it ever does: a vertical well has no kick-off. */
+  /**
+   * The deepest station within 2° before the inclination rises above 2° and stays there for 90 m
+   * (or to TD) — the same rule as core. A single noisy station is not a kick-off; a vertical well has none.
+   */
   readonly kickoffMdM: Known<number>;
 }
 
@@ -139,7 +154,14 @@ export function summarize(path: readonly Position[]): Known<Summary> {
   if (path.length < 2) return absent("a summary needs at least two positions");
   const last = path[path.length - 1]!, first = path[0]!;
   const north = last.northingM - first.northingM, east = last.eastingM - first.eastingM;
-  const kickoff = path.find((p) => p.inclinationDeg > 2);
+  let departure = -1;
+  for (let index = 0; index < path.length && departure < 0; index++) {
+    if (path[index]!.inclinationDeg <= 2) continue;
+    let sustained = true;
+    for (let next = index + 1; next < path.length && path[next]!.mdM <= path[index]!.mdM + 90; next++) if (path[next]!.inclinationDeg <= 2) { sustained = false; break; }
+    if (sustained) departure = index;
+  }
+  const kickoff = departure > 0 ? path[departure - 1] : departure === 0 ? path[0] : undefined;
   return derived({
     stations: path.length,
     totalDepthM: last.mdM,
@@ -147,7 +169,7 @@ export function summarize(path: readonly Position[]): Known<Summary> {
     closureM: Math.hypot(north, east),
     closureAzimuthDeg: normalizeAzimuth(Math.atan2(east, north) * DEG),
     maxDlsDegPerCourse: path.reduce((most, p) => Math.max(most, p.dlsDegPerCourse), 0),
-    kickoffMdM: kickoff ? derived(kickoff.mdM, "first station past 2° inclination") : absent("the well never leaves vertical"),
+    kickoffMdM: kickoff ? derived(kickoff.mdM, "deepest station within 2° before a sustained build") : absent("the well never leaves vertical"),
   }, "summarised from the computed path");
 }
 
