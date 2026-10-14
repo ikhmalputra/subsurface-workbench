@@ -102,7 +102,7 @@ for (const route of routes) {
 test("expanded design editors and alternate well views share the same theme and control contract", async ({ page }) => {
   test.setTimeout(budget(180_000));
   await gotoApp(page, "/builder/");
-  const workflow = page.getByTestId("well-design-workflow");
+  const workflow = page.getByTestId("tool-design");
   await openAppearance(page);
   for (const [phase, step] of [
     ["Define", "Identity"], ["Define", "Location & datum"], ["Define", "Offset wells"],

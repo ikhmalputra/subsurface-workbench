@@ -41,11 +41,12 @@ async function forwarded(page: Page): Promise<void> {
   if (new URL(page.url()).pathname.replace(/\/$/, "") === "/view-well") {
     const tool = new URL(page.url()).searchParams.get("tool") ?? "section";
     // The survey is not a document: it is the section with the summary and the station editor beside it.
-    const document = tool === "trajectory" || tool === "study" || tool === "edit-well" ? "section" : tool;
+    const document = tool === "trajectory" || tool === "study" || tool === "edit-well" || tool === "brief" ? "section" : tool;
     await expect(page.locator(`.demo-tool-page[data-document="${document}"]`), `the "${document}" document should open on the sheet`).toBeAttached({ timeout: SCENE_READY });
     if (tool === "trajectory") await expect(page.getByTestId("tool-stations"), "the station editor should open with the survey").toBeAttached({ timeout: SCENE_READY });
     if (tool === "study") await expect(page.getByTestId("tool-study"), "the study tool should open with the section").toBeAttached({ timeout: SCENE_READY });
     if (tool === "edit-well") await expect(page.getByTestId("tool-construction"), "the construction tool should open with the Edit view").toBeAttached({ timeout: SCENE_READY });
+    if (tool === "brief") await expect(page.locator(".sw-wd-steps"), "the design tool should open with the Design view").toBeAttached({ timeout: SCENE_READY });
   }
 }
 

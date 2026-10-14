@@ -1690,3 +1690,33 @@ body { background: var(--swc-bg-2); }
 .demo-field-tool .demo-field-trajectory { padding: 10px 12px; }
 .demo-field-tool .demo-field-trajectory h2 { font-size: 13px; }
 .demo-field-tool .demo-field-trajectory input[type="number"] { width: 110px; }
+
+/* ---- the design brief as a tool: its canvas in the sheet's Design view, its steps docked right ---- */
+.demo-design-pane { display: grid; min-height: 0; background: var(--sw-paper); }
+.demo-design-pane > .sw-wd { min-height: 0; }
+.demo-design-tool { display: grid; padding: 0; border: 0; background: transparent; overflow: visible; }
+.demo-design-host { min-width: 0; }
+.demo-design-host .sw-wd-tools { position: static; height: auto; max-height: none; border: 0; border-radius: 0; background: transparent; }
+.demo-design-host .sw-wd-tool-content { max-height: none; }
+
+.demo-design-pane .sw-wd-bar { flex-wrap: nowrap; align-items: center; gap: 10px; min-height: 0; padding: 4px 12px; }
+.demo-design-pane .sw-wd-title { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.demo-design-pane .sw-wd-title small { white-space: nowrap; }
+.demo-design-pane .sw-wd-title strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.demo-design-pane .sw-wd-status { white-space: nowrap; }
+.demo-design-pane .sw-wd-draft-note { display: none; }
+.demo-design-pane .sw-wd-bar-actions { flex: 0 0 auto; }
+.demo-design-tool .demo-tool-note { margin: 0; padding: 8px 12px; border-bottom: 1px solid var(--sw-line); font-size: 11.5px; color: var(--sw-muted); }
+
+.demo-design-pane .sw-wd-bar { display: flex; }
+.demo-design-pane .sw-wd-bar > * { min-width: 0; }
+.demo-design-pane .sw-wd-bar-actions { display: flex; flex-wrap: nowrap; gap: 6px; }
+.demo-design-pane .sw-wd-bar-actions button { white-space: nowrap; }
+.demo-design-pane .sw-wd-bar { min-height: 0; height: auto; padding: 4px 12px; box-sizing: border-box; }
+.demo-design-pane .sw-wd-bar .sw-wd-bar-actions button { min-height: 32px; padding-top: 0; padding-bottom: 0; }
+/* The brief's bar is one 40px row, and the viewport's zoom tools float over the drawing's corner
+   rather than taking a row of their own, so the drawing starts where the sheet's does. */
+.demo-design-pane .sw-wd-bar { height: 40px; overflow: hidden; }
+.demo-design-pane .sw-wd { gap: 8px; }
+.demo-design-pane .sw-viewport { position: relative; }
+.demo-design-pane .sw-viewport-tools { position: absolute; top: 8px; right: 8px; z-index: 2; }

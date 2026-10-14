@@ -6,6 +6,8 @@ import { SCENE_READY } from "./support/timing";
 import { gotoApp, reloadApp, openAppearance } from "./support/app";
 
 const schematic = (page: Page) => page.locator(".sw-wd-canvas [data-testid='assembly-schematic']");
+// The design tools — phases, steps, forms, the builder's parts and properties — are the Design brief tool beside the sheet.
+const designTools = (page: Page) => page.getByTestId("tool-design");
 const tile = (page: Page, id: string) => page.locator(`.sw-asm-tile[data-catalog-id="${id}"]`);
 const item = (page: Page, id: string) => schematic(page).locator(`[data-item-id="${id}"]`).first();
 
@@ -92,12 +94,12 @@ test("open directly to the well schematic and start a new design", async ({ page
   const workflow = page.getByTestId("well-design-workflow");
   await expect(workflow.getByTestId("curved-assembly-schematic")).toBeVisible();
   await expect(workflow.locator(".sw-wd-title small")).toContainText("EXAMPLE WELL");
-  await expect(workflow.locator(".sw-wd-steps button[aria-current='step']")).toContainText("Schematic");
+  await expect(designTools(page).locator(".sw-wd-steps button[aria-current='step']")).toContainText("Schematic");
   await expect(workflow.getByTestId("design-readiness")).toContainText("100% data");
   await expect(workflow.getByRole("button", { name: "New design" })).toBeVisible();
   await expect(workflow.getByRole("button", { name: "Rebuild schematic" })).toBeVisible();
   const canvas = await workflow.locator(".sw-wd-canvas").boundingBox();
-  const tools = await workflow.locator(".sw-wd-tools").boundingBox();
+  const tools = await designTools(page).boundingBox();
   expect(canvas).not.toBeNull();
   expect(tools).not.toBeNull();
   expect(tools!.x).toBeGreaterThan(canvas!.x);
@@ -109,9 +111,9 @@ test("open directly to the well schematic and start a new design", async ({ page
   await workflow.getByRole("button", { name: "New design" }).click();
   await expect(workflow.getByTestId("design-readiness")).not.toContainText("100%");
   await expect(workflow.getByTestId("curved-assembly-schematic")).toBeVisible();
-  await expect(workflow.locator(".sw-wd-steps button")).toHaveCount(5);
-  await expect(workflow.locator(".sw-wd-steps button[aria-current='step']")).toContainText("Define");
-  await expect(workflow.locator(".sw-wd-tools").getByRole("textbox", { name: /^Well name/ })).toHaveValue("");
+  await expect(designTools(page).locator(".sw-wd-steps button")).toHaveCount(5);
+  await expect(designTools(page).locator(".sw-wd-steps button[aria-current='step']")).toContainText("Define");
+  await expect(designTools(page).getByRole("textbox", { name: /^Well name/ })).toHaveValue("");
   await workflow.getByRole("button", { name: "Example well" }).click();
   await expect(workflow.getByTestId("curved-assembly-schematic")).toBeVisible();
 });
@@ -120,7 +122,7 @@ test("edit existing component properties, keep edits across phases, undo and exp
   await openBuilder(page);
   const workflow = page.getByTestId("well-design-workflow");
   await workflow.getByRole("button", { name: "Edit properties", exact: true }).click();
-  const selector = workflow.getByRole("combobox", { name: "Component to edit" });
+  const selector = designTools(page).getByRole("combobox", { name: "Component to edit" });
   await expect(selector).toBeFocused();
   await selector.selectOption("production-casing-1");
   const inspector = page.getByTestId("assembly-inspector");
@@ -145,13 +147,13 @@ test("edit existing component properties, keep edits across phases, undo and exp
   await expect(inspector.getByRole("alert")).toHaveCount(0);
   await page.screenshot({ path: "output/playwright/builder-edit-properties.png" });
 
-  await selectDesignStep(workflow, "Review");
-  await selectDesignStep(workflow, "Assemble");
+  await selectDesignStep(designTools(page), "Review");
+  await selectDesignStep(designTools(page), "Assemble");
   await expect(label).toHaveValue("Edited production string");
-  await selectDesignStep(workflow, "Geology & pressure");
+  await selectDesignStep(designTools(page), "Geology & pressure");
   await page.getByLabel("Pore pressure at 2620 m (SG)").fill("1.62");
   await page.getByLabel("Pore pressure at 2620 m (SG)").press("Enter");
-  await selectDesignStep(workflow, "Assemble");
+  await selectDesignStep(designTools(page), "Assemble");
   await expect(workflow.getByRole("button", { name: "Rebuild from design" })).toBeVisible();
   await expect(label).toHaveValue("Edited production string");
   await page.getByRole("button", { name: "Undo", exact: true }).click();
@@ -160,8 +162,8 @@ test("edit existing component properties, keep edits across phases, undo and exp
   await expect(label).toHaveValue("Edited production string");
 
   const pendingDownload = page.waitForEvent("download");
-  await workflow.locator(".sw-asm-draft-tools summary").click();
-  await workflow.getByRole("button", { name: "Export JSON" }).click();
+  await designTools(page).locator(".sw-asm-draft-tools summary").click();
+  await designTools(page).getByRole("button", { name: "Export JSON" }).click();
   const download = await pendingDownload;
   const path = await download.path();
   if (!path) throw new Error("Assembly export did not produce a downloaded file.");
@@ -172,7 +174,7 @@ test("edit existing component properties, keep edits across phases, undo and exp
   await expect(label).toHaveValue("Edited production string");
   page.once("dialog", (dialog) => dialog.accept());
   await workflow.getByRole("button", { name: "Rebuild schematic" }).click();
-  await workflow.getByRole("combobox", { name: "Component to edit" }).selectOption("production-casing-1");
+  await designTools(page).getByRole("combobox", { name: "Component to edit" }).selectOption("production-casing-1");
   await expect(label).toHaveValue(original);
   await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeDisabled();
 });
@@ -276,7 +278,7 @@ test("design a well from data: propose casing from pressures, inspect loads, the
   await page.getByRole("button", { name: "Schematic", exact: true }).click();
   const workflow = page.getByTestId("well-design-workflow");
   await expect(workflow.getByTestId("design-readiness")).toContainText("100% data · no errors");
-  const step = (name: string) => selectDesignStep(workflow, name);
+  const step = (name: string) => selectDesignStep(designTools(page), name);
   await expect(page.getByTestId("wd-readiness")).toHaveCount(0);
 
   await step("Geology & pressure");
@@ -329,8 +331,7 @@ test("design a well from data: propose casing from pressures, inspect loads, the
 
 test("offset wells: rank FORGE, start a pad well beside it, adopt its design and re-check it", async ({ page }) => {
   await gotoApp(page, "/builder/");
-  const workflow = page.getByTestId("well-design-workflow");
-  await selectDesignStep(workflow, "Offset wells");
+  await selectDesignStep(designTools(page), "Offset wells");
   const library = page.getByTestId("offset-library");
   const forge = library.locator(".sw-ow-list button", { hasText: "16A(78)-32" });
   await expect(forge).toHaveAttribute("data-verdict", "poor");
@@ -345,19 +346,19 @@ test("offset wells: rank FORGE, start a pad well beside it, adopt its design and
   await expect(result.locator(".sw-ow-changes li").first()).toBeVisible();
   await expect(result).toContainText("Every string passes");
 
-  await selectDesignStep(workflow, "Casing");
+  await selectDesignStep(designTools(page), "Casing");
   await expect(page.getByTestId("kick-tolerance")).toBeVisible();
   await expect(page.getByTestId("effective-ratings")).toContainText("yield at");
-  await selectDesignStep(workflow, "Review");
+  await selectDesignStep(designTools(page), "Review");
   await expect(page.getByTestId("wd-coverage")).toContainText("Not checked");
 
-  await selectDesignStep(workflow, "Offset wells");
+  await selectDesignStep(designTools(page), "Offset wells");
   await library.getByRole("button", { name: "Save this design" }).click();
   await expect(library.locator(".sw-ow-list li")).toHaveCount(2);
   const storedLibrary = await page.evaluate(() => JSON.parse(localStorage.getItem("subsurface-demo-wells") ?? "null"));
   expect(storedLibrary).toMatchObject({ version: 1, offsets: [expect.objectContaining({ id: expect.any(String), brief: expect.any(Object) })] });
   await reloadApp(page);
-  await selectDesignStep(workflow, "Offset wells");
+  await selectDesignStep(designTools(page), "Offset wells");
   await expect(library.locator(".sw-ow-list li")).toHaveCount(2);
   await page.screenshot({ path: "output/playwright/offset-wells.png", fullPage: true });
   const results = await new AxeBuilder({ page }).include(".sw-wd").analyze();
@@ -370,8 +371,7 @@ test("corrupt saved offset data is reported and does not break the builder", asy
   await expect(page.getByTestId("curved-assembly-schematic")).toBeVisible();
   await expect(page.getByTestId("well-library-error")).toContainText("could not be loaded");
   await expect(page.getByTestId("well-library-error")).toContainText("legacyOffsets[0] must be an object");
-  const workflow = page.getByTestId("well-design-workflow");
-  await selectDesignStep(workflow, "Offset wells");
+  await selectDesignStep(designTools(page), "Offset wells");
   await expect(page.getByTestId("offset-library").locator(".sw-ow-list li")).toHaveCount(1);
 });
 
@@ -399,8 +399,7 @@ test("a blocked library write is reported and is not shown as durably saved", as
     };
   });
   await gotoApp(page, "/builder/");
-  const workflow = page.getByTestId("well-design-workflow");
-  await selectDesignStep(workflow, "Offset wells");
+  await selectDesignStep(designTools(page), "Offset wells");
   const library = page.getByTestId("offset-library");
   await library.getByRole("button", { name: "Save this design" }).click();
   await expect(page.getByTestId("well-library-error")).toContainText("could not be updated");

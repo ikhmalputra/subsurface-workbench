@@ -75,9 +75,10 @@ test("curved canvas accepts native palette drops and wall picks reveal editing t
   await gotoApp(page, "/builder/");
   const workflow = page.getByTestId("well-design-workflow");
   const canvas = workflow.getByTestId("curved-assembly-schematic");
-  await workflow.locator(".sw-asm-draft-tools summary").click();
-  await workflow.getByRole("button", { name: "Blank well", exact: true }).click();
-  await workflow.getByRole("button", { name: "Add parts", exact: true }).click();
+  const designTools = page.getByTestId("tool-design");
+  await designTools.locator(".sw-asm-draft-tools summary").click();
+  await designTools.getByRole("button", { name: "Blank well", exact: true }).click();
+  await designTools.getByRole("button", { name: "Add parts", exact: true }).click();
   const target = await canvas.locator(".sw-curved-centerline").evaluate((element) => {
     const path = element as SVGPathElement;
     const point = path.getPointAtLength(path.getTotalLength() * 0.6);
@@ -86,20 +87,20 @@ test("curved canvas accepts native palette drops and wall picks reveal editing t
     return { x: screen.x - svg.x, y: screen.y - svg.y };
   });
 
-  await workflow.locator('.sw-asm-tile[data-catalog-id="surface-casing"]').dragTo(canvas, { targetPosition: target });
+  await designTools.locator('.sw-asm-tile[data-catalog-id="surface-casing"]').dragTo(canvas, { targetPosition: target });
   const component = canvas.locator('[data-item-id="surface-casing-1"]');
   await expect(component).toBeVisible();
-  const bottom = workflow.getByTestId("assembly-inspector").getByLabel("Bottom MD (m)", { exact: true });
+  const bottom = designTools.getByTestId("assembly-inspector").getByLabel("Bottom MD (m)", { exact: true });
   const before = Number(await bottom.inputValue());
   expect(before).toBeGreaterThan(0);
   await component.focus();
   await page.keyboard.press("ArrowDown");
   await expect(bottom).toHaveValue(String(before + 5));
-  await workflow.getByRole("button", { name: "Undo", exact: true }).click();
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
   await expect(bottom).toHaveValue(String(before));
-  await workflow.getByRole("combobox", { name: "Component to edit", exact: true }).selectOption("");
+  await designTools.getByRole("combobox", { name: "Component to edit", exact: true }).selectOption("");
   await workflow.getByRole("button", { name: "Zoom in Curved well construction", exact: true }).click();
-  await workflow.locator(".sw-wd-steps button").filter({ hasText: "Plan" }).click();
+  await designTools.locator(".sw-wd-steps button").filter({ hasText: "Plan" }).click();
   await expect(bottom).toBeHidden();
   const point = await component.locator(".sw-curved-wall").first().evaluate((element) => {
     const path = element as SVGPathElement;
@@ -112,7 +113,8 @@ test("curved canvas accepts native palette drops and wall picks reveal editing t
   await expect(component).toHaveAttribute("aria-pressed", "true");
 });
 
-for (const width of [1440, 1024, 768, 390]) {
+// Desktop-only product (Ikhmal, 2026-10-13): the dock is checked at desktop widths.
+for (const width of [1440, 1024]) {
     test(`design dock controls remain unobstructed at ${width}px across all tools`, async ({ page }) => {
       test.setTimeout(90000);
       await page.setViewportSize({ width, height: 1000 });

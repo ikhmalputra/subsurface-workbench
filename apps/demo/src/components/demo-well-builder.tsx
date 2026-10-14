@@ -8,7 +8,7 @@ import { loadSavedOffsetLibrary, parseSavedOffsetLibrary, serializeSavedOffsetLi
 
 const storageKey = "subsurface-demo-wells";
 
-export function DemoWellBuilder() {
+export function DemoWellBuilder({ toolsContainer }: { readonly toolsContainer?: HTMLElement | null } = {}) {
   const [savedOffsets, setSavedOffsets] = useState<readonly OffsetWell[]>([]);
   const [storageError, setStorageError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -53,6 +53,7 @@ export function DemoWellBuilder() {
       assetBaseUrl="/well-components"
       offsets={[forgeOffsetWell, ...savedOffsets]}
       onOffsetsChange={updateOffsets}
+      toolsContainer={toolsContainer}
     />
   </>;
 }

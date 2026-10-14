@@ -2,7 +2,8 @@ import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { gotoApp } from "./support/app";
 
-for (const width of [1440, 1024, 390]) {
+// Desktop-only product (Ikhmal, 2026-10-13): desktop widths.
+for (const width of [1440, 1024]) {
   test(`drawing fits the canvas and zoom changes actual geometry at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
     await gotoApp(page, "/builder/");
@@ -47,7 +48,8 @@ for (const width of [1440, 1024, 390]) {
   });
 }
 
-for (const width of [1440, 1024, 390]) {
+// Desktop-only product (Ikhmal, 2026-10-13): desktop widths.
+for (const width of [1440, 1024]) {
   test(`vertical schematic uses the available canvas without shrinking at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
     await gotoApp(page, "/builder/");

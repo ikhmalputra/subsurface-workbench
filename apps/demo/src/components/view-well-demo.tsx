@@ -23,6 +23,7 @@ import { planDraft, tryPlan } from "../lib/trajectory-draft";
 import { studyHighlights } from "../lib/study-draft";
 import { mergeAssembly } from "../lib/well-revision";
 import { WellAssemblyBuilder } from "@ikhmalputra/subsurface-react/examples";
+import { DemoWellBuilder } from "./demo-well-builder";
 import type { BuildHoldInput } from "@ikhmalputra/subsurface-core";
 import { WellSeismicSection, useSceneSeismic, useSegy, useWellOnSection } from "./well-seismic";
 import { RecordCard, useWell, wells } from "./wells";
@@ -39,10 +40,10 @@ interface VolumeCuts { readonly along: number; readonly offset: number; readonly
 const FULL_VOLUME: VolumeCuts = { along: 100, offset: 100, depth: 100 };
 const cutAt = (start: number, end: number, percent: number) => start + (end - start) * Math.max(percent, 2) / 100;
 
-type Layout = "section" | "edit" | "split" | "seismic" | "earth" | "schematic" | "scene" | "curved" | "profile" | "trajectory" | "well3d";
+type Layout = "section" | "edit" | "design" | "split" | "seismic" | "earth" | "schematic" | "scene" | "curved" | "profile" | "trajectory" | "well3d";
 
 /** The seven panes this route can show. A preset is a set of them, not an alternative to them. */
-type PaneId = "wellsection" | "edit" | "curved" | "profile" | "schematic" | "seismic" | "earth" | "survey" | "well3d" | "cutaway" | "plan" | "section";
+type PaneId = "wellsection" | "edit" | "design" | "curved" | "profile" | "schematic" | "seismic" | "earth" | "survey" | "well3d" | "cutaway" | "plan" | "section";
 
 /**
  * Which panes each preset shows.
@@ -58,6 +59,8 @@ const panesFor: Readonly<Record<Layout, readonly PaneId[]>> = {
   section: ["wellsection"],
   // The builder over the active revision: its parts and properties are the Construction tool.
   edit: ["edit"],
+  // The design brief's own canvas; its phases and steps are the Design brief tool.
+  design: ["design"],
   curved: ["curved"],
   profile: ["profile"],
   schematic: ["schematic"],
@@ -77,6 +80,7 @@ const panesFor: Readonly<Record<Layout, readonly PaneId[]>> = {
 const layouts: readonly { value: Layout; label: string }[] = [
   { value: "section", label: "Well section · construction, log & survey" },
   { value: "edit", label: "Edit · builder canvas" },
+  { value: "design", label: "Design · brief canvas" },
   { value: "split", label: "2.5D + 3D" },
   { value: "seismic", label: "2.5D + seismic" },
   { value: "earth", label: "3D well + seismic + survey" },
@@ -294,16 +298,21 @@ export function ViewWellDemo() {
         toolbar; the inspector and the well file are panels from the tray; the depth command line
         floats at the foot. Everything can be dragged where it is useful. */}
     <FloatingToolbar id="view-well-tools" label="view tools" defaultStyle={{ left: "calc(var(--dock-left, 0px) + 8px)", top: "calc(var(--dock-top, 0px) + var(--band-row, 50px))" }} className="demo-toolbar">
-      <div className="sw-asm-canvas-modes" role="group" aria-label="Canvas view">
+      {/* The brief's canvas carries its own Curved / Schematic / 3D modes, so in the Design view the
+          sheet offers only the way back and the way to the editor. */}
+      {layout === "design" ? <div className="sw-asm-canvas-modes" role="group" aria-label="Sheet views">
+        <CommandButton kind="selection" aria-pressed={false} onClick={() => setLayout("section")}>Section</CommandButton>
+        <CommandButton kind="selection" aria-pressed onClick={() => undefined}>Design</CommandButton>
+      </div> : <div className="sw-asm-canvas-modes" role="group" aria-label="Canvas view">
         <CommandButton kind="selection" aria-pressed={layout === "section"} onClick={() => setLayout("section")}>Section</CommandButton>
         <CommandButton kind="selection" aria-pressed={layout === "curved"} onClick={() => setLayout("curved")}>Curved</CommandButton>
         <CommandButton kind="selection" aria-pressed={layout === "schematic"} onClick={() => setLayout("schematic")}>Schematic</CommandButton>
         <CommandButton kind="selection" aria-pressed={layout === "scene"} onClick={() => setLayout("scene")}>3D view</CommandButton>
         <CommandButton kind="selection" aria-pressed={layout === "edit"} onClick={() => { setLayout("edit"); if (!tools.open.has("construction")) tools.openPanel("construction"); }}>Edit</CommandButton>
         <CommandButton kind="selection" aria-pressed={showFormations} disabled={!design.formations?.length || (layout !== "section" && layout !== "curved" && layout !== "schematic" && layout !== "edit")} onClick={() => setShowFormations((value) => !value)}>Formations</CommandButton>
-      </div>
+      </div>}
       <CommandButton icon="link" type="button" className="demo-toggle" aria-pressed={link.linked} onClick={() => link.setLinked(!link.linked)} title="Zoom, pan and the depth cursor follow across the schematic, seismic section and mud log">{link.linked ? "Depth views linked" : "Depth views independent"}</CommandButton>
-      <CommandButton icon="view" type="button" className="demo-tool-button" aria-expanded={inspectorVisible} aria-controls="well-inspector" onClick={() => setInspectorVisible(!inspectorVisible)}>{inspectorVisible ? "Hide inspector" : "Show inspector"}</CommandButton>
+      {layout !== "design" && <CommandButton icon="view" type="button" className="demo-tool-button" aria-expanded={inspectorVisible} aria-controls="well-inspector" onClick={() => setInspectorVisible(!inspectorVisible)}>{inspectorVisible ? "Hide inspector" : "Show inspector"}</CommandButton>}
       <Link className="demo-edit-action" href={`/view-well/?well=${encodeURIComponent(wellId)}${highlighted ? `&component=${encodeURIComponent(highlighted)}` : ""}&tool=edit-well`}>Edit well</Link>
       {/* The volume tools are a panel of their own, docked under the inspector by default: inside
           the toolbar they unfolded over the scene's own controls. */}
@@ -340,6 +349,7 @@ export function ViewWellDemo() {
           if (state.selectedId !== (highlighted ?? null)) setSelectedId(state.selectedId);
           updateAssemblyDraft(sourceDesign.id, state);
         }} /></Pane>
+      <Pane id="design" deferUntilShown keep={false} className="demo-fill demo-design-pane"><DemoWellBuilder toolsContainer={tools.designHost} /></Pane>
       <Pane id="curved" deferUntilShown className="demo-fill demo-section-view"><CurvedAssemblySchematic assembly={assembly} survey={design.survey} formations={showFormations ? design.formations : undefined} assetBaseUrl="/well-components" selectedId={highlighted} onSelect={setSelectedId} /></Pane>
       <Pane id="profile" deferUntilShown className="demo-fill demo-section-view"><InteractiveViewport name="Curved well section"><CurvedSchematic key={design.id} design={design} components={components} selectedId={picked?.id ?? ""} onSelect={setSelectedId} mode={sectionMode} onModeChange={setSectionMode} layersVisible /></InteractiveViewport></Pane>
       <Pane id="schematic" deferUntilShown className="demo-fill"><AssemblySchematic assembly={assembly} survey={design.survey} formations={showFormations ? design.formations : undefined} assetBaseUrl="/well-components" selectedId={highlighted} onSelect={(id) => setSelectedId(id)} exploded={exploded} onExplodedChange={setExploded} title="Construction schematic" {...schematicLink} /></Pane>
@@ -361,7 +371,8 @@ export function ViewWellDemo() {
         markers={shoeMarkers} /></Pane>
       <Pane id="cutaway" className="demo-fill" deferUntilShown><AssemblyScene assembly={assembly} assetBaseUrl="/well-components" selectedId={highlighted} onSelect={(id) => setSelectedId(id)} exploded={exploded} onExplodedChange={setExploded} title="Construction cutaway" /></Pane>
     </PaneGrid>
-    <FloatingPanel id="inspector" title="Inspector" detail={`${components.length} source records`} open={inspectorVisible} onOpenChange={setInspectorVisible} defaultStyle={{ right: 12, top: 104, width: 320 }} defaultDock="right" className="demo-inspector-float">
+    {/* The inspector describes the active well; the Design view is the brief's own draft, so the dock is the design tool's. */}
+    {layout !== "design" && <FloatingPanel id="inspector" title="Inspector" detail={`${components.length} source records`} open={inspectorVisible} onOpenChange={setInspectorVisible} defaultStyle={{ right: 12, top: 104, width: 320 }} defaultDock="right" className="demo-inspector-float">
       <aside id="well-inspector" className="demo-side" aria-label="Component inspector">
         <div className="demo-inspector-tabs" role="group" aria-label="Inspector panels">
           {([["tools", "Tools"], ["properties", "Properties"], ["components", "Components"], ["basis", "Evidence"]] as const).map(([value, label]) => <CommandButton kind="selection" key={value} type="button" aria-pressed={inspectorTab === value} onClick={() => setInspectorTab(value)}>{label}</CommandButton>)}
@@ -422,7 +433,7 @@ export function ViewWellDemo() {
           <p>Construction widths are exaggerated for readability. Unknown dimensions are not certified design values.</p>
         </section>
       </aside>
-    </FloatingPanel>
+    </FloatingPanel>}
     <FloatingPanel id="well-file" title="Well file" detail={operations ? `${operations.days.length} daily reports / ${operations.runs.length} service runs / logs & survey` : "No operational records attached"} open={fileOpen} onOpenChange={setFileOpen} defaultDock="bottom" defaultStyle={{ left: "calc(var(--dock-left, 0px) + 12px)", bottom: "calc(var(--dock-bottom, 0px) + 84px)", width: "min(1120px, calc(100vw - 24px))" }} className="demo-records-drawer">
       <WellFile key={design.id} operations={operations} components={components} selected={picked} onSelectComponent={setSelectedId} logUrl={logUrl} survey={design.survey} formations={design.formations} seismic={seismic} link={link} openTab={fileTab} />
     </FloatingPanel>

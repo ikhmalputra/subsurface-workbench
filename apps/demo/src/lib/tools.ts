@@ -13,17 +13,17 @@ export type ToolVerb = "view" | "create" | "edit" | "delete";
 export const toolVerbs: readonly ToolVerb[] = ["view", "create", "edit", "delete"];
 
 /** The panels tools open. Route workspaces become panels on the sheet; the rest already are. */
-export type ToolPanelId = "section" | "brief" | "report" | "field" | "correlation" | "cross-section" | "petrophysics" | "production" | "linked-data" | "sandbox" | "inspector" | "well-file" | "kick" | "cement" | "time" | "hydraulics" | "planner" | "stations" | "survey-summary" | "study" | "evidence" | "construction" | "well-properties" | "component-records" | "formations" | "records-data" | "field-register" | "field-trajectory";
+export type ToolPanelId = "section" | "report" | "field" | "correlation" | "cross-section" | "petrophysics" | "production" | "linked-data" | "sandbox" | "inspector" | "well-file" | "kick" | "cement" | "time" | "hydraulics" | "planner" | "stations" | "survey-summary" | "study" | "evidence" | "construction" | "well-properties" | "component-records" | "formations" | "records-data" | "field-register" | "field-trajectory" | "design";
 
 /**
  * Documents: the workspaces that fill the sheet. One is open at a time, like the active drawing;
  * opening another puts the current one away. Each had a route of its own; the route now forwards
  * to the sheet with `?tool=<document>`, which is also the deep link.
  */
-export const documents: readonly ToolPanelId[] = ["section", "brief", "report", "field", "correlation", "cross-section", "petrophysics", "production", "linked-data", "sandbox"];
+export const documents: readonly ToolPanelId[] = ["section", "report", "field", "correlation", "cross-section", "petrophysics", "production", "linked-data", "sandbox"];
 export const documentLabels: Readonly<Record<string, string>> = {
   section: "Well section", trajectory: "Survey", study: "Drilling study", evidence: "Study evidence", planner: "Trajectory planner", stations: "Station editor", "survey-summary": "Survey summary", brief: "Design brief", report: "Well report", field: "Field",
-  correlation: "Correlation", "cross-section": "Cross-section", "edit-well": "Edit well", construction: "Construction", "well-properties": "Well properties", "component-records": "Component records", formations: "Formations", "records-data": "Records & data", "field-register": "Well register", "field-trajectory": "Field trajectory", petrophysics: "Petrophysics", production: "Production", "linked-data": "Linked data", sandbox: "WebGPU sandbox",
+  correlation: "Correlation", "cross-section": "Cross-section", "edit-well": "Edit well", construction: "Construction", "well-properties": "Well properties", "component-records": "Component records", formations: "Formations", "records-data": "Records & data", "field-register": "Well register", "field-trajectory": "Field trajectory", design: "Design brief", petrophysics: "Petrophysics", production: "Production", "linked-data": "Linked data", sandbox: "WebGPU sandbox",
 };
 /** The route each document used to be, for the forwarders and for anything still linking there. */
 export const documentRoutes: Readonly<Record<string, string>> = {
@@ -32,7 +32,7 @@ export const documentRoutes: Readonly<Record<string, string>> = {
 };
 export const SHEET = "/view-well/";
 /** The sheet URL that opens a document, keeping any query the caller carries (a well, a component). */
-export function documentHref(document: ToolPanelId | "trajectory" | "edit-well", query?: Readonly<Record<string, string | undefined>>): string {
+export function documentHref(document: ToolPanelId | "trajectory" | "edit-well" | "brief", query?: Readonly<Record<string, string | undefined>>): string {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(query ?? {})) if (value !== undefined && key !== "tool") params.set(key, value);
   if (document !== "section") params.set("tool", document);
@@ -103,7 +103,7 @@ export const toolObjects: readonly ToolObject[] = [
     verbs: { view: { panel: "inspector", where: "Formations on the section", tab: "tools" }, create: { panel: "formations", where: "Formations" }, edit: { panel: "formations", where: "Formations" }, delete: { panel: "formations", where: "Formations" } } },
   { id: "pressure", label: "Pressure window", group: "geology", aliases: ["pore", "fracture"],
     supply: () => derived("in the design brief"),
-    verbs: { view: { panel: "brief", where: "Geology & pressure" }, edit: { panel: "brief", where: "Geology & pressure" } } },
+    verbs: { view: { panel: "design", where: "Geology & pressure" }, edit: { panel: "design", where: "Geology & pressure" } } },
   { id: "log", label: "Mud log (LAS)", group: "measurements", aliases: ["las", "mudlog", "logs"],
     supply: (well) => wellCapabilities(well).mudLog ? supplied("attached, depth in feet") : missing(),
     verbs: { view: { panel: "well-file", where: "Mud log", tab: "log" }, create: { panel: "records-data", where: "Records & data · attach" }, delete: { panel: "records-data", where: "Records & data · detach" } } },
@@ -118,13 +118,13 @@ export const toolObjects: readonly ToolObject[] = [
     verbs: { view: { panel: "well-file", where: "Service & BHA runs", tab: "runs" } }, hostOwned: "runs are reported, not authored here" },
   { id: "brief", label: "Design brief", group: "design", aliases: ["design", "builder"],
     supply: () => derived("design draft"),
-    verbs: { view: { panel: "brief", where: "Schematic" }, create: { panel: "brief", where: "New design" }, edit: { panel: "brief", where: "Define · Plan · Design" } } },
+    verbs: { view: { panel: "design", where: "Schematic" }, create: { panel: "design", where: "New design" }, edit: { panel: "design", where: "Define · Plan · Design" } } },
   { id: "checks", label: "Design checks", group: "design",
     supply: () => derived("computed from the brief"),
-    verbs: { view: { panel: "brief", where: "Review" } } },
+    verbs: { view: { panel: "design", where: "Review" } } },
   { id: "offsets", label: "Offset wells", group: "design", aliases: ["offset"],
     supply: () => derived("offset library"),
-    verbs: { view: { panel: "brief", where: "Offset wells" }, create: { panel: "brief", where: "Offset wells · register" } } },
+    verbs: { view: { panel: "design", where: "Offset wells" }, create: { panel: "design", where: "Offset wells · register" } } },
   { id: "study", label: "Drilling study", group: "evidence", aliases: ["analysis", "studies"],
     supply: (well) => wellCapabilities(well).mudLog ? derived("log and operations in scope") : missing("needs a drilling log"),
     verbs: { view: { panel: "study", where: "Saved studies" }, create: { panel: "study", where: "New study" }, edit: { panel: "study", where: "Scope · Check inputs · Review evidence · Findings" } } },
@@ -186,8 +186,8 @@ export const domainTools: readonly DomainTool[] = [
   T("planner", "Trajectory planner", "drilling", "built", "Target", "Build-and-hold design through a target with a DLS limit, previewed on the section", "kick-off, target", { panel: "planner", also: ["stations"] }),
   T("stations", "Station editor", "drilling", "built", "ListOrdered", "Edit MD, inclination, azimuth; positions recomputed and previewed on the section", "survey", { panel: "stations" }),
   T("anticollision", "Anti-collision", "drilling", "planned", "Crosshair", "Separation factor against offset wellbores", "offset surveys, tool error models"),
-  T("casing-design", "Casing design", "drilling", "built", "Cylinder", "Strings, setting depths, API 5C3 ratings with derating", "casing scheme, pressures", { panel: "brief", where: "Design · Casing" }),
-  T("pressure-window", "Pressure window", "drilling", "built", "Gauge", "Pore, fracture and mud weight vs TVD with provenance", "pressure data", { panel: "brief", where: "Plan · Geology & pressure" }),
+  T("casing-design", "Casing design", "drilling", "built", "Cylinder", "Strings, setting depths, API 5C3 ratings with derating", "casing scheme, pressures", { panel: "design", where: "Design · Casing" }),
+  T("pressure-window", "Pressure window", "drilling", "built", "Gauge", "Pore, fracture and mud weight vs TVD with provenance", "pressure data", { panel: "design", where: "Plan · Geology & pressure" }),
   T("kick-tolerance", "Kick tolerance", "drilling", "built", "Flame", "IADC kick tolerance below a shoe from the host's shoe and hole records and your gradient and mud weight", "shoe, hole size; fracture gradient and mud weight typed", { panel: "kick" }),
   T("cement-design", "Cement volumes", "drilling", "built", "Container", "Annular cement volume per string from the host's diameters, split at the previous shoe", "casing and hole geometry; top of cement if not reported", { panel: "cement" }),
   T("hydraulics", "Hydraulics", "drilling", "built", "Waves", "Annular velocity by section and bit hydraulics from typed flow, mud and nozzles", "hole sections; flow, mud and nozzles typed", { panel: "hydraulics" }),
@@ -234,7 +234,7 @@ export const domainTools: readonly DomainTool[] = [
   T("pressure-history", "Pressure history", "reservoir", "planned", "Gauge", "Reservoir pressure against time by zone", "pressure surveys"),
   // Completions and intervention
   T("completion", "Completion schematic", "completions", "built", "Cylinder", "Tubing, packers, valves, nipples, mandrels and gauges on the section and in 3D", "completion components", { panel: "section" }),
-  T("completion-builder", "Completion builder", "completions", "built", "Hammer", "Parts from the catalogue with placement rules", "catalogue", { panel: "brief", where: "Add parts" }),
+  T("completion-builder", "Completion builder", "completions", "built", "Hammer", "Parts from the catalogue with placement rules", "catalogue", { panel: "design", where: "Add parts" }),
   T("perforations", "Perforations", "completions", "planned", "Crosshair", "Perforated intervals with date, gun and shot density", "perforation records"),
   T("sand-control", "Sand control", "completions", "planned", "Grid3x3", "Screens and gravel-pack intervals", "completion records"),
   T("stimulation", "Stimulation", "completions", "planned", "Zap", "Fracture and acid treatments by stage", "treatment records"),
@@ -255,14 +255,14 @@ export const domainTools: readonly DomainTool[] = [
   // Geomechanics
   T("stress", "Stress regime", "geomechanics", "planned", "Compass", "Sv, SHmax and Shmin against depth", "density log, LOT/FIT, image logs"),
   T("stability", "Wellbore stability", "geomechanics", "planned", "ShieldCheck", "Collapse and fracture mud weights along the trajectory", "stresses, rock strength"),
-  T("fracture-gradient", "Fracture gradient", "geomechanics", "partial", "Gauge", "LOT/FIT points and the fitted gradient", "LOT/FIT records", { panel: "brief", where: "Plan · Geology & pressure" }),
+  T("fracture-gradient", "Fracture gradient", "geomechanics", "partial", "Gauge", "LOT/FIT points and the fitted gradient", "LOT/FIT records", { panel: "design", where: "Plan · Geology & pressure" }),
   T("sand-risk", "Sand production risk", "geomechanics", "planned", "TrendingDown", "Critical drawdown by depth", "rock strength"),
   // Field, data and reference
   T("field-register", "Well register", "field", "built", "Rows3", "Which wells are in the field comparison and which is inspected, with the field's three documents", "the field project", { panel: "field-register" }),
   T("field-trajectory", "Field trajectory", "field", "built", "Route", "The inspected well's construction and a pinned MD on its path, with its position in the field", "survey, construction", { panel: "field-trajectory" }),
   T("map", "Field map", "field", "built", "Map", "Wells on a map with layers, bathymetry and the offshore scene", "locations, layers", { panel: "field", where: "1 · Locate wells", also: ["field-register", "field-trajectory"] }),
   T("gis-import", "GIS import", "field", "built", "Download", "Vector and raster layers added to the field", "files", { panel: "field", where: "Layers" }),
-  T("offsets", "Offset wells", "field", "built", "Database", "Comparable wells, nine-factor match, adoption into a brief", "offset records", { panel: "brief", where: "Define · Offset wells" }),
+  T("offsets", "Offset wells", "field", "built", "Database", "Comparable wells, nine-factor match, adoption into a brief", "offset records", { panel: "design", where: "Define · Offset wells" }),
   T("reference", "Reference and datum", "field", "partial", "Globe", "CRS, depth datum, elevation and units", "reference metadata", { panel: "well-properties", where: "Well properties" }),
   T("sources", "Data sources", "field", "partial", "Database", "Every dataset registered for the well with its provenance", "the host registry", { panel: "records-data", where: "Records & data" }),
   T("report", "Well report", "field", "built", "Printer", "The as-drilled report from sourced records", "report spec", { panel: "report" }),

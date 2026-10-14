@@ -145,4 +145,14 @@ says "not supplied" when they are not there.
   own log and names which of GR, NPHI, RHOB, RT and DT it carries and which are not supplied
   (`WorkspaceRoute`); FORGE's mud log carries drilling curves only, so the synthetic example stays a
   fixture and nothing is substituted.
-- **5. The brief** and **8. The report** — not started (the report stays a document by design).
+- **5. The brief** — done. The brief's schematic canvas is the sheet's **Design** view (the
+  design workflow's own Curved / Schematic / 3D modes stay with it, so the sheet's view group
+  shows only Section and Design there); its phases, steps, forms and the builder's parts and
+  properties portal into the **Design brief** tool (right, 420px) through the SDK's new
+  `WellDesignWorkflow.toolsContainer`. The sheet's inspector stays out of the Design view — it
+  describes the active well, not the brief. `?tool=brief` opens the Design view with the tool.
+- **8. The report** stays a document by design.
+
+Every former route is now either the sheet's view or a tool over it; the documents that remain
+(report, field map, correlation, cross-section, petrophysics, production, linked data, sandbox)
+fill the sheet because they are pictures of other things than the active well's section.

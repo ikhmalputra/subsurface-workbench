@@ -1896,3 +1896,6 @@ line.sw-wd-grid { stroke: #e7ece9; stroke-width: 1; }
 @media (pointer: coarse) {
   [data-sw-density] { --sw-control-height: 44px; }
 }
+
+/* A host dock holds the design tools: the workspace is the canvas alone. */
+.sw-wd-host-dock .sw-wd-workspace { grid-template-columns: minmax(0, 1fr); }
