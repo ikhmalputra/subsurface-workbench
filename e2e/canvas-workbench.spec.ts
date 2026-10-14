@@ -48,7 +48,7 @@ test("editing tools never replace or remount the canvas and changes reach both d
   const curved = page.getByTestId("curved-assembly-schematic");
   await curved.evaluate((element) => element.setAttribute("data-mount-check", "same-canvas"));
   // Every editing tool docks beside the sheet; the builder's canvas is the same element throughout.
-  for (const [domain, tool] of [["Drilling", "Well properties"], ["Drilling", "Component records"], ["Geology", "Formation tops"], ["Field & data", "Data sources"], ["Drilling", "Construction editor"]] as const) {
+  for (const [domain, tool] of [["Drilling", "Properties"], ["Drilling", "Components"], ["Geology", "Tops"], ["Field & data", "Sources"], ["Drilling", "Construction"]] as const) {
     await openTool(page, domain, tool);
     await expect(curved).toHaveAttribute("data-mount-check", "same-canvas");
   }

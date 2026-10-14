@@ -38,7 +38,7 @@ test("View well opens the selected record and uses edits as the active revision"
   await expect(page.locator(".demo-toolbar").getByRole("link", { name: "Edit well", exact: true })).toHaveAttribute("href", "/view-well/?well=s-profile&tool=edit-well");
   await page.locator(".demo-toolbar").getByRole("link", { name: "Edit well", exact: true }).click();
   await expect(page).toHaveURL(/well=s-profile.*tool=edit-well$/);
-  await openTool(page, "Drilling", "Well properties");
+  await openTool(page, "Drilling", "Properties");
   await expect(page.getByTestId("tool-well-properties").getByRole("heading", { level: 3 })).toContainText("S-profile");
 });
 
@@ -55,7 +55,7 @@ test("full well edits recompute trajectory and reach construction, source record
   expect(tools).not.toBeNull();
   expect(tools!.x).toBeGreaterThan(drawing!.x);
 
-  await openTool(page, "Drilling", "Well properties");
+  await openTool(page, "Drilling", "Properties");
   await expect(schematic).toBeVisible();
   await page.getByLabel("Well name", { exact: true }).fill("My FORGE revision");
   await page.getByLabel("Well name", { exact: true }).press("Tab");
@@ -68,7 +68,7 @@ test("full well edits recompute trajectory and reach construction, source record
   await page.getByLabel("Total depth (m MD)", { exact: true }).press("Tab");
 
   // The trajectory is the station editor's: edited stations preview on the section until applied.
-  await openTool(page, "Drilling", "Station editor");
+  await openTool(page, "Drilling", "Stations");
   const stations = page.getByTestId("tool-stations");
   await stations.getByRole("button", { name: "Edit these stations" }).click();
   await expect(schematic).toBeVisible();
@@ -85,18 +85,18 @@ test("full well edits recompute trajectory and reach construction, source record
   await stations.getByRole("button", { name: "Apply to active well" }).click();
   await expect(page.getByTestId("trajectory-preview")).toHaveCount(0);
 
-  await openTool(page, "Drilling", "Component records");
+  await openTool(page, "Drilling", "Components");
   await expect(schematic).toBeVisible();
   await page.getByLabel("Component record", { exact: true }).selectOption("production-hole");
   await page.getByLabel("Component description", { exact: true }).fill("User revised hole record");
   await page.getByLabel("Component description", { exact: true }).press("Tab");
-  await openTool(page, "Geology", "Formation tops");
+  await openTool(page, "Geology", "Tops");
   await expect(schematic).toBeVisible();
   const formation = page.getByLabel("Formation name", { exact: true });
   await formation.fill("Revised formation");
   await formation.press("Tab");
 
-  await openTool(page, "Field & data", "Data sources");
+  await openTool(page, "Field & data", "Sources");
   await expect(schematic).toBeVisible();
   await page.getByLabel("Headline", { exact: true }).fill("User revised daily report");
   await page.getByLabel("Headline", { exact: true }).press("Tab");
@@ -138,12 +138,12 @@ test("full well edits recompute trajectory and reach construction, source record
   await expect(report).not.toContainText("two FIT results");
   await openNavigation(page);
   await page.getByRole("link", { name: "View well", exact: true }).click();
-  await openTool(page, "Drilling", "Construction editor");
+  await openTool(page, "Drilling", "Construction");
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Restore original well" }).click();
-  await openTool(page, "Drilling", "Well properties");
+  await openTool(page, "Drilling", "Properties");
   await expect(page.getByLabel("Well name", { exact: true })).not.toHaveValue("My FORGE revision");
-  await openTool(page, "Drilling", "Station editor");
+  await openTool(page, "Drilling", "Stations");
   // The editor may already be editing (a draft survives the restore); either way the restored
   // station is the source's.
   const editAgain = stations.getByRole("button", { name: "Edit these stations" });

@@ -7,7 +7,7 @@ import type { CommandIconName } from "@ikhmalputra/subsurface-react/ui";
 import { Activity, Anchor, AudioWaveform, Box, Boxes, Calculator, Calendar, ClipboardList, Columns3, Compass, Container, Crosshair, Cylinder, Database, Download, Droplets, FlaskConical, Flame, Gauge, GitBranch, Globe, Grid3x3, Hammer, Layers, ListOrdered, Map, Mountain, Printer, Radio, Route, Rows3, Ruler, Scale, Scan, ScatterChart, ShieldCheck, Sigma, Split, Target, Thermometer, Timer, TrendingDown, Waves, Wrench, Zap, type LucideIcon } from "lucide-react";
 import { FloatingPanel } from "./floating";
 import { useWorkspace } from "./workspace-provider";
-import { SHEET, documentHref, documentLabels, documentRoutes, domainTools, findToolObject, isDocument, ribbonDomains, subDomains, toolGroupLabels, toolObjects, toolVerbs, type DomainTool, type SubDomain, type ToolGroup, type ToolPanelId, type ToolVerb } from "../lib/tools";
+import { SHEET, documentHref, documentLabels, documentRoutes, domainTools, findToolObject, isDocument, ribbonDomains, ribbonGroups, subDomains, toolGroupLabels, toolObjects, toolVerbs, type DomainTool, type SubDomain, type ToolGroup, type ToolPanelId, type ToolVerb } from "../lib/tools";
 import { ViewWellDemo } from "./view-well-demo";
 import { ViewWellUsage } from "./view-well-usage";
 import { PetrophysicsDemo } from "./petrophysics-demo";
@@ -249,14 +249,27 @@ export function ToolsRibbon({ headExtra }: { readonly headExtra?: ReactNode }) {
         {ribbonDomains.map((entry) => <CommandButton key={entry.id} kind="selection" role="tab" aria-selected={domain === entry.id} className="demo-ribbon-tab" onClick={() => setDomain(entry.id)}>{entry.label}</CommandButton>)}
       </div>
       <div className="demo-ribbon-tools" role="group" aria-label={`${subDomains.find((entry) => entry.id === domain)?.label} tools`}>
-        {visible.map((tool) => {
-          const Icon = ribbonIcons[tool.icon] ?? Layers;
-          return <CommandButton key={tool.id} kind="selection" className="demo-ribbon-tool" data-status={tool.status} aria-label={tool.label}
-            title={`${tool.does}${tool.status === "partial" ? " (partial)" : ""}`} onClick={() => setEcho(tools.launch(tool))}>
-            <span className="demo-ribbon-icon"><Icon size={20} strokeWidth={1.6} aria-hidden="true" /></span>
-            <span>{tool.label}</span>
-          </CommandButton>;
-        })}
+        {visible.reduce<{ name: string; members: DomainTool[] }[]>((groups, tool) => {
+          // `Map` is the lucide icon here; the clusters are a plain ordered list.
+          const name = ribbonGroups[tool.id] ?? subDomains.find((entry) => entry.id === domain)?.label ?? "Tools";
+          const group = groups.find((entry) => entry.name === name);
+          if (group) group.members.push(tool); else groups.push({ name, members: [tool] });
+          return groups;
+        }, []).map(({ name, members }) => <div key={name} className="demo-ribbon-group" role="group" aria-label={`${name} tools`}>
+          <div className="demo-ribbon-group-tools">
+            {members.map((tool) => {
+              const Icon = ribbonIcons[tool.icon] ?? Layers;
+              // The visible label is short under its group caption; the accessible name carries the
+              // group so "Section" here is never the sheet's "Section" view button.
+              return <CommandButton key={tool.id} kind="selection" className="demo-ribbon-tool" data-status={tool.status} aria-label={`${name} · ${tool.label}`}
+                title={`${tool.does}${tool.status === "partial" ? " (partial)" : ""}`} onClick={() => setEcho(tools.launch(tool))}>
+                <span className="demo-ribbon-icon"><Icon size={20} strokeWidth={1.6} aria-hidden="true" /></span>
+                <span>{tool.label}</span>
+              </CommandButton>;
+            })}
+          </div>
+          <span className="demo-ribbon-group-caption" aria-hidden="true">{name}</span>
+        </div>)}
       </div>
     </div>
   </FloatingPanel>;

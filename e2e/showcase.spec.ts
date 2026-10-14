@@ -3,7 +3,7 @@ import type { Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { SCENE_READY, SOFTWARE_RENDERING } from "./support/timing";
 import { waitForScene } from "./support/scene";
-import { gotoApp, openNavigation, selectWellView } from "./support/app";
+import { gotoApp, openNavigation, selectWellView, openTool } from "./support/app";
 
 async function horizontalOverflow(page: Page) {
   return page.evaluate(() => Array.from(document.body.querySelectorAll<HTMLElement>("*"))
@@ -140,7 +140,7 @@ test("trajectory math is verified, the planner hits a dragged target and station
   await waitForScene(page);
   await expect(page.getByTestId("well-scene-dls-legend")).toBeVisible();
 
-  await page.getByRole("button", { name: "Trajectory planner", exact: true }).click();
+  await openTool(page, "Drilling", "Planner");
   await expect(page.getByTestId("trajectory-preview")).toContainText("build & hold plan");
   await selectWellView(page, "trajectory", ["plan", "section"]);
   const holdBefore = await page.getByLabel("Solved build and hold geometry").textContent();

@@ -19,7 +19,8 @@ import { SCENE_READY } from "./timing";
 export async function openTool(page: Page, domain: string, name: string) {
   const ribbon = page.locator('[data-float="ribbon"]');
   await ribbon.getByRole("tab", { name: domain, exact: true }).click();
-  await ribbon.getByRole("button", { name, exact: true }).click();
+  // A ribbon button's accessible name is "<group> · <label>"; tests name the label.
+  await ribbon.getByRole("button", { name: new RegExp(`· ${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`) }).click();
 }
 
 export async function gotoApp(page: Page, url: string): Promise<Response | null> {

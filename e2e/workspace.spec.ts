@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { closeNavigation, gotoApp, openAppearance, openNavigation } from "./support/app";
+import { closeNavigation, gotoApp, openAppearance, openNavigation, openTool } from "./support/app";
 
 test("workspace preserves source-well context and appearance across compatible views", async ({ page }) => {
   await gotoApp(page, "/trajectory/");
@@ -16,7 +16,7 @@ test("workspace preserves source-well context and appearance across compatible v
   const depth = await context.locator("span").filter({ hasText: /^Depth:/ }).innerText();
   expect(depth).not.toContain("not selected");
   // Opening the planner previews a trajectory on the section and leaves the pinned depth alone.
-  await page.getByRole("button", { name: "Trajectory planner", exact: true }).click();
+  await openTool(page, "Drilling", "Planner");
   await expect(page.getByTestId("trajectory-preview")).toBeVisible();
   await expect(context.locator("span").filter({ hasText: /^Depth:/ })).toHaveText(depth);
 

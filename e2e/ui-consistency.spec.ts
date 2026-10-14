@@ -27,7 +27,7 @@ test("the well editing tools support themes, docking beside the sheet and the co
   await expect(page.getByRole("button", { name: "Example", exact: true })).toHaveCount(0);
   const canvas = page.getByTestId("curved-assembly-schematic");
   await expect(canvas).toBeVisible();
-  for (const [domain, tool, testId] of [["Drilling", "Construction editor", "tool-construction"], ["Drilling", "Well properties", "tool-well-properties"], ["Drilling", "Component records", "tool-component-records"], ["Geology", "Formation tops", "tool-formations"], ["Field & data", "Data sources", "tool-records-data"]] as const) {
+  for (const [domain, tool, testId] of [["Drilling", "Construction", "tool-construction"], ["Drilling", "Properties", "tool-well-properties"], ["Drilling", "Components", "tool-component-records"], ["Geology", "Tops", "tool-formations"], ["Field & data", "Sources", "tool-records-data"]] as const) {
     await openTool(page, domain, tool);
     const panel = page.getByTestId(testId);
     await expect(panel).toBeVisible();

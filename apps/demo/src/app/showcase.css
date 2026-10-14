@@ -1507,11 +1507,15 @@ body { background: var(--swc-bg-2); }
 .demo-ribbon-tab:hover { color: var(--sw-ink); background: var(--sw-hover); }
 .demo-ribbon-tab[aria-selected="true"] { color: var(--sw-ink); border-bottom-color: var(--sw-accent); font-weight: 600; }
 .demo-ribbon-tab:focus-visible { outline: 2px solid var(--sw-focus); outline-offset: -2px; }
-.demo-ribbon-tools { display: flex; gap: 2px; padding: 4px 8px; overflow-x: auto; scrollbar-width: thin; }
-.demo-ribbon-tool { flex: 0 0 auto; display: grid; justify-items: center; align-content: start; gap: 3px; width: 76px; min-height: 64px; padding: 5px 3px 3px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--sw-ink); font: 10.5px/1.15 "IBM Plex Sans", sans-serif; text-align: center; cursor: pointer; }
+.demo-ribbon-tools { display: flex; gap: 0; padding: 2px 6px 0; overflow-x: auto; scrollbar-width: thin; align-items: stretch; }
+.demo-ribbon-group { display: grid; grid-template-rows: minmax(0, 1fr) auto; justify-items: center; padding: 0 4px; border-right: 1px solid var(--sw-line); }
+.demo-ribbon-group:last-child { border-right: 0; }
+.demo-ribbon-group-tools { display: flex; gap: 1px; align-items: start; }
+.demo-ribbon-group-caption { padding: 1px 0 2px; font: 600 9px "IBM Plex Mono", monospace; letter-spacing: .12em; text-transform: uppercase; color: var(--sw-muted); white-space: nowrap; }
+.demo-ribbon-tool { flex: 0 0 auto; display: grid; justify-items: center; align-content: start; gap: 2px; width: 60px; min-height: 60px; padding: 5px 2px 2px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--sw-ink); font: 10.5px/1.15 "IBM Plex Sans", sans-serif; text-align: center; cursor: pointer; }
 .demo-ribbon-icon { display: grid; place-items: center; width: 22px; height: 22px; }
 .demo-ribbon-tool svg { color: var(--sw-accent); }
-.demo-ribbon-tool span { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.demo-ribbon-tool > span:last-child { display: block; max-width: 100%; font-size: 10.5px; line-height: 1.15; text-align: center; white-space: normal; overflow-wrap: normal; }
 .demo-ribbon-tool:hover:not([aria-disabled]) { background: var(--sw-hover); border-color: var(--sw-line); }
 .demo-ribbon-tool:focus-visible { outline: 2px solid var(--sw-focus); outline-offset: -2px; }
 .demo-ribbon-tool[data-status="partial"] svg { color: var(--sw-warning); }
