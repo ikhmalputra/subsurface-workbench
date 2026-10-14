@@ -4,7 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { DragEvent, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { scaleLinear } from "d3-scale";
 import { useDepthZoom } from "./depth-zoom.js";
-import { getCatalogEntry, mdAtTvd, moveComponent, placeComponent, stringsAtDepth } from "@ikhmalputra/subsurface-core";
+import { getCatalogEntry, mdAtTvd, moveComponent, placeComponent, stringsAtDepth, tvdAtSurveyMd } from "@ikhmalputra/subsurface-core";
 import type { AssemblyCatalogEntry, AssemblyIssue, AssemblyItem, FormationLayer, SurveyPoint, WellAssembly, WellComponent } from "@ikhmalputra/subsurface-core";
 import { Boxes, Maximize2, ZoomIn, ZoomOut } from "lucide-react";
 import { assetUrl, catalogIdFromDrag } from "./assembly-palette.js";
@@ -44,6 +44,8 @@ export interface AssemblySchematicProps {
   readonly depthGestures?: boolean;
   /** Measured depth drawn as a cursor line, e.g. the pointer depth in a linked seismic section or log. */
   readonly cursorDepthM?: number | null;
+  /** Depth intervals to mark across the drawing, e.g. a brushed log interval. MD metres. */
+  readonly highlights?: readonly { readonly id: string; readonly topM: number; readonly baseM: number; readonly label: string }[];
   /**
    * Render as a track on a shared depth axis.
    *
@@ -135,7 +137,7 @@ function itemSummary(item: AssemblyItem) {
   return `${formatInches(item.odIn)} · ${formatDepth(item.topM)}`;
 }
 
-export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, issues = [], onSelect, onDropComponent, onMoveComponent, onRemoveComponent, title = "Well construction schematic", formations = [], survey, exploded: explodedProp, defaultExploded = false, onExplodedChange, depthWindow: depthWindowProp, onDepthWindowChange, cursorDepthM = null, onCursorDepthChange, frame: trackFrame, depthGestures = true, records, formationColumn }: AssemblySchematicProps) {
+export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, issues = [], onSelect, onDropComponent, onMoveComponent, onRemoveComponent, title = "Well construction schematic", formations = [], survey, exploded: explodedProp, defaultExploded = false, onExplodedChange, depthWindow: depthWindowProp, onDepthWindowChange, cursorDepthM = null, onCursorDepthChange, frame: trackFrame, depthGestures = true, records, formationColumn, highlights = [] }: AssemblySchematicProps) {
   const [explodedState, setExplodedState] = useState(defaultExploded);
   const exploded = explodedProp ?? explodedState;
   const toggleExploded = () => { const next = !exploded; if (explodedProp === undefined) setExplodedState(next); onExplodedChange?.(next); };
@@ -150,14 +152,8 @@ export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, i
     .map((record) => ({ id: record.id as string, label: record.name, topM: record.topDepthM, bottomM: Math.min(record.bottomDepthM, assembly.totalDepthM), odIn: record.outerDiameterMm! / 25.4, record }))
     .sort((a, b) => a.topM - b.topM), [records, assembly.totalDepthM]);
   const holeAt = (depthM: number) => holes.find((hole) => hole.topM <= depthM && hole.bottomM >= depthM);
-  const tvdAt = (mdM: number) => {
-    if (!survey || survey.length < 2) return null;
-    for (let index = 1; index < survey.length; index++) {
-      const a = survey[index - 1]!, b = survey[index]!;
-      if (mdM <= b.mdM) return a.tvdM + (mdM - a.mdM) / (b.mdM - a.mdM || 1) * (b.tvdM - a.tvdM);
-    }
-    return mdM <= survey.at(-1)!.mdM + 1e-6 ? survey.at(-1)!.tvdM : null;
-  };
+  // TVD on the surveyed (curved) path, not a straight chord between stations.
+  const tvdAt = (mdM: number) => survey && survey.length >= 2 ? tvdAtSurveyMd(survey, mdM) : null;
   const maxOd = Math.max(30, ...assembly.items.map((item) => item.odIn), ...holes.map((hole) => hole.odIn));
   const pxPerIn = Math.min(3.6, (W * 0.42 - 70) / (maxOd * 2));
   const r = (inches: number) => inches * pxPerIn;
@@ -655,7 +651,7 @@ export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, i
               {hanger && <rect {...interactive(hanger)} x={CX - 16} y={sy + height * 0.45} width={32} height={height * 0.5} className={`${interactive(hanger).className} sw-asm-hit`} />}
             </g>;
           })}
-          {!stack.length && <g className="sw-asm-surface-slot"><rect x={CX - 60} y={44} width={120} height={70} rx={6} /><text x={CX} y={84} textAnchor="middle">Drop wellhead</text></g>}
+          {!stack.length && onDropComponent && <g className="sw-asm-surface-slot"><rect x={CX - 60} y={44} width={120} height={70} rx={6} /><text x={CX} y={84} textAnchor="middle">Drop wellhead</text></g>}
         </g>
         <g clipPath={`url(#${clip})`}>
           {holes.map((hole, index) => {
@@ -689,6 +685,13 @@ export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, i
           <rect x={RULER_X - 60} y={band.a - 9} width={50} height={16} rx={3} /><text x={RULER_X - 35} y={band.a + 2.5} textAnchor="middle">{Math.round(band.topM).toLocaleString("en-US")}</text>
           {band.b - band.a > 22 && <><rect x={RULER_X - 60} y={band.b - 7} width={50} height={16} rx={3} /><text x={RULER_X - 35} y={band.b + 4.5} textAnchor="middle">{Math.round(band.bottomM).toLocaleString("en-US")}</text></>}
         </g>}
+        {highlights.filter((band) => band.baseM >= top && band.topM <= bottom).map((band) => {
+          const y0 = y(Math.max(top, band.topM)), y1 = y(Math.min(bottom, band.baseM));
+          return <g key={band.id} className="sw-asm-highlight" pointerEvents="none" data-highlight={band.id}>
+            <rect x={62} width={Math.max(0, LABEL_X - 82)} y={y0} height={Math.max(2, y1 - y0)} />
+            <text x={66} y={y0 + 12}>{band.label}</text>
+          </g>;
+        })}
         {cursorDepthM !== null && cursorDepthM >= top && cursorDepthM <= bottom && <g className="sw-asm-cursor" aria-hidden data-testid="assembly-cursor">
           <line x1={62} x2={LABEL_X - 20} y1={y(cursorDepthM)} y2={y(cursorDepthM)} />
           <rect x={LABEL_X - 92} y={y(cursorDepthM) - 17} width={72} height={15} rx={3} /><text x={LABEL_X - 56} y={y(cursorDepthM) - 6} textAnchor="middle">{formatDepth(cursorDepthM)}</text>

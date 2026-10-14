@@ -19,8 +19,8 @@
       "import": "./dist/ui.js"
     },
     "./gis": {
-      "types": "./dist/gis-map.d.ts",
-      "import": "./dist/gis-map.js"
+      "types": "./dist/wells-map.d.ts",
+      "import": "./dist/wells-map.js"
     },
     "./gis.css": "./dist/gis.css",
     "./state": {

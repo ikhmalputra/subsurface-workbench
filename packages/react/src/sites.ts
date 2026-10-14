@@ -3,7 +3,10 @@ import { reprojectGisXY } from "@ikhmalputra/subsurface-core/gis";
 import type { GeographicXY } from "@ikhmalputra/subsurface-core/gis";
 import { createMockTrajectory } from "@ikhmalputra/subsurface-core/sandbox";
 import { prepareGisDocument } from "@ikhmalputra/subsurface-core/gis";
-import { researchDesign, sProfileDesign } from "@ikhmalputra/subsurface-core";
+import { briefToWellDesign, exampleWellBrief, mdAtSurveyTvd, mdAtTvd, researchDesign, sProfileDesign } from "@ikhmalputra/subsurface-core";
+import type { WellDesign, WellDesignBrief } from "@ikhmalputra/subsurface-core";
+import { syntheticReservoirLogs } from "@ikhmalputra/subsurface-core/contracts";
+import type { SyntheticLogs } from "@ikhmalputra/subsurface-core/contracts";
 import type { WellsMapSite } from "./wells-map.js";
 import type { SiteSceneSurface, SiteSceneWell } from "./site-scene.js";
 
@@ -49,14 +52,7 @@ export function forgeSite(): WorldSite {
   const components = getWellComponents(forgeDesign);
   const shoes = components.filter((component) => component.kind === "Casing").map((component) => ({ mdM: component.bottomDepthM, label: `${component.name.split(" / ").pop()?.trim()} shoe` }));
   const granite = forgeDesign.formations?.find((layer) => layer.id === "granite");
-  const mdAtTvd = (tvd: number) => {
-    for (let i = 1; i < survey.length; i++) {
-      const a = survey[i - 1]!, b = survey[i]!;
-      if (tvd >= a.tvdM && tvd <= b.tvdM) return a.mdM + (tvd - a.tvdM) / (b.tvdM - a.tvdM || 1) * (b.mdM - a.mdM);
-    }
-    return null;
-  };
-  const topMd = granite ? mdAtTvd(granite.topTvdM) : null;
+  const topMd = granite ? mdAtSurveyTvd(survey, granite.topTvdM) : null;
   const well: SiteSceneWell = {
     id: "forge", label: "16A(78)-32", provenance: "documented",
     xyz: Float64Array.from(survey.flatMap((point) => [point.eastingM ?? 0, point.northingM ?? 0, point.tvdM])),
@@ -169,6 +165,75 @@ export function equatorSite(project: EquatorField = equatorField()): WorldSite {
     wells, surfaces, hasSeismic: false,
     seismicNote: "No seismic is supplied for this field.",
     caveat: "Synthetic: generated trajectories at assumed locations, illustrative water depths and interpreted Sand R1 picks. Surfaces between wells are interpolated for display only.",
+  };
+}
+
+/** Field-wide fluid contacts of the synthetic Sand R1, metres below the sea surface. */
+export const EQUATOR_CONTACTS = Object.freeze({ gocTvdssM: 2235, owcTvdssM: 2310 });
+
+/**
+ * Synthetic open-hole logs for each Equator well, from the rock-and-fluid model in core: logged
+ * from 250 m above its Sand R1 top pick to 80 m below its base pick, on its own trajectory, with
+ * the field's contacts by depth below sea. The structurally high wells (A and D) carry a gas cap;
+ * every well has an oil leg over water. All of it is synthetic and labelled so.
+ */
+export function equatorPetrophysics(project: EquatorField = equatorField()): readonly { readonly wellId: string; readonly label: string; readonly logs: SyntheticLogs }[] {
+  return project.records.map((record, index) => {
+    const water = project.waterDepthsM[record.well.id]!;
+    const depths = record.well.depthsMdM;
+    const stations = Array.from(depths, (mdM, i) => ({ mdM, tvdssM: record.well.xyz[i * 3 + 2]! + water }));
+    const top = record.tops.find((pick) => pick.id === "reservoir-top")!.mdM, base = record.tops.find((pick) => pick.id === "reservoir-base")!.mdM;
+    const logs = syntheticReservoirLogs({
+      wellId: record.well.id, stations,
+      loggedFromMdM: Math.max(depths[0]!, top - 250), loggedToMdM: Math.min(depths[depths.length - 1]!, base + 80),
+      sand: { topMdM: top, baseMdM: base, name: "Sand R1" }, contacts: EQUATOR_CONTACTS, seed: 75 + index * 67,
+    });
+    return { wellId: record.well.id, label: record.well.label, logs };
+  });
+}
+
+/**
+ * Kestrel A-7, the SDK's example development well, as a site: a planned J-profile from an offshore
+ * Malaysian platform with offset-derived pressures, a proposed casing scheme, cement and a gas-lift
+ * completion. It is a design, not a drilled well, and every part of it says so.
+ */
+export function kestrelSite(brief: WellDesignBrief = exampleWellBrief()): WorldSite & { readonly brief: WellDesignBrief; readonly design: WellDesign } {
+  const design = briefToWellDesign(brief, "synthetic");
+  const survey = design.survey ?? [];
+  const { latitude, longitude } = brief.location;
+  if (latitude === null || longitude === null) throw new RangeError("Kestrel A-7 needs a surface location.");
+  const head = reprojectGisXY([longitude, latitude], "EPSG:4326", "EPSG:32650");
+  const toLonLat = (east: number, north: number) => reprojectGisXY([head[0] + east, head[1] + north], "EPSG:32650", "EPSG:4326");
+  const reservoir = brief.geology.formations.find((formation) => formation.reservoir);
+  const reservoirMd = reservoir ? mdAtTvd(brief, reservoir.topTvdM) : null;
+  const shoes = brief.sections.filter((section) => section.role !== "conductor").map((section) => ({ mdM: section.shoeMdM, label: `${section.label.split(" ")[0]} shoe` }));
+  const well: SiteSceneWell = {
+    id: "kestrel-a7", label: brief.identity.name, provenance: "synthetic",
+    xyz: Float64Array.from(survey.flatMap((point) => [point.eastingM, point.northingM, point.tvdM])),
+    mdM: Float64Array.from(survey.map((point) => point.mdM)),
+    markers: [...shoes, ...(reservoir && reservoirMd !== null ? [{ mdM: reservoirMd, label: `${reservoir.name} top` }] : [])],
+    intervals: reservoir && reservoirMd !== null ? [{ topMdM: reservoirMd, baseMdM: brief.totalDepthMdM, label: reservoir.name, color: RESERVOIR.top }] : [],
+  };
+  const rkb = brief.datum.elevationAboveMslM ?? 0;
+  const mudline = rkb + (brief.location.waterDepthM ?? 0);
+  const surfaces: SiteSceneSurface[] = [
+    { id: "sea", label: "Sea surface", provenance: "synthetic", role: "reference", color: "#3f8fc0", note: `Mean sea level, ${rkb} m below the rig floor.`, geometry: { kind: "plane", depthM: rkb } },
+    { id: "seabed", label: "Seabed", provenance: "synthetic", role: "reference", color: "#6b7f6a", note: `Flat at the brief's ${brief.location.waterDepthM} m water depth. Not bathymetry.`, geometry: { kind: "plane", depthM: mudline } },
+    ...(reservoir ? [{ id: "reservoir-top", label: `${reservoir.name} top`, provenance: "synthetic" as const, role: "horizon" as const, color: RESERVOIR.top, note: `Flat at the brief's ${reservoir.topTvdM} m TVD top. The brief gives one depth per formation, not a mapped surface.`, geometry: { kind: "plane" as const, depthM: reservoir.topTvdM } }] : []),
+  ];
+  return {
+    map: {
+      id: "kestrel", label: `${brief.identity.name} (design)`, provenance: "synthetic",
+      summary: `1 planned well · ${brief.sections.length} strings · pressures, cement, completion`,
+      wells: [{ id: "kestrel-a7", label: brief.identity.name, head: [longitude, latitude], path: survey.map((point) => toLonLat(point.eastingM, point.northingM)) }],
+    },
+    projectWellId: null,
+    depthLabel: `m TVD below RKB (${rkb} m above MSL)`,
+    originLabel: `wellhead · ${brief.location.crs}`,
+    wells: [well], surfaces, hasSeismic: false,
+    seismicNote: "No seismic: this is a planned well from a design brief.",
+    caveat: `Synthetic design. ${brief.identity.name} is the SDK's example development well in the ${brief.identity.field} field: a planned trajectory, offset-derived pore and fracture pressures, a proposed casing scheme, cement and a gas-lift completion. Nothing here was drilled.`,
+    brief, design,
   };
 }
 

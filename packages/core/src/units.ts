@@ -43,7 +43,9 @@ export type Duration = Seconds | Minutes | Hours | Days;
 export const METRES_PER_INTERNATIONAL_FOOT = 0.3048;
 export const METRES_PER_US_SURVEY_FOOT = 1200 / 3937;
 
-const FEET_PER_METRE = 1 / METRES_PER_INTERNATIONAL_FOOT;
+export const FEET_PER_METRE = 1 / METRES_PER_INTERNATIONAL_FOOT;
+/** Inches from millimetres (exactly 25.4 mm to the inch): pipe and hole diameters come in both. */
+export const millimetresToInches = (valueMm: number): number => valueMm / 25.4;
 
 /**
  * Depth in metres from a depth in international feet, and back.

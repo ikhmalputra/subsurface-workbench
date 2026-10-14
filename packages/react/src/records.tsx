@@ -2,7 +2,7 @@
 
 import { useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
-import { scaleLinear } from "d3-scale";
+import { scaleLinear, scaleLog } from "d3-scale";
 import { useDepthZoom } from "./depth-zoom.js";
 import { daysVsDepth, feetToMetres, intervalsOverlap, lasCurve, metresToFeet, type DayCategory, type HoleSectionRecord, type LasFile, type RunKind, type ServiceRun, type WellDay, type WellOperations } from "@ikhmalputra/subsurface-core";
 import { AccessibleTable } from "./accessible-table.js";
@@ -312,12 +312,17 @@ export function HoleSectionLog({ operations, selectedComponentId = null, onSelec
   </section>;
 }
 
+/** Track scale ends: whole numbers stay whole; densities and porosities keep their decimals. */
+const scaleLabel = (value: number) => Math.abs(value) >= 10 || Number.isInteger(value) ? Math.round(value).toLocaleString("en-US") : value.toFixed(2).replace(/0$/, "");
+
 export interface LogTrackSpec {
   readonly mnemonic: string;
   readonly label?: string;
   readonly color?: string;
   readonly min?: number;
   readonly max?: number;
+  /** "log" for curves read on a logarithmic grid, such as resistivity; min and max must be positive. */
+  readonly scale?: "linear" | "log";
 }
 
 export interface LogInterval extends DepthRange {
@@ -338,6 +343,8 @@ export interface LogTracksProps {
   readonly onSelectDepth?: (depthFt: number) => void;
   /** Reports the depth under the pointer (ft), `null` when it leaves. */
   readonly onCursorChange?: (depthFt: number | null) => void;
+  /** With this, Shift + drag selects an interval (ft) instead of zooming to it: a brush. */
+  readonly onBrush?: (range: DepthRange) => void;
   /** Controlled depth window `[top, base]` in ft; `null` shows the full log. Leave `undefined` for an independent view. */
   readonly depthWindowFt?: readonly [number, number] | null;
   /** Reports zoom and pan (buttons, Ctrl/⌘ + wheel, wheel) so other depth views can follow. */
@@ -367,7 +374,7 @@ function percentile(values: readonly number[], p: number) {
 }
 
 /** Multi-track depth log (LAS) with casing markers, an interval column, hover readout and click-to-depth. */
-export function LogTracks({ las, tracks, markers = [], intervals = [], selectedRange = null, cursorFt = null, onSelectDepth, onCursorChange, depthWindowFt, onDepthWindowChange, height = 620, title = "Depth log", frame: trackFrame, depthGestures = true }: LogTracksProps) {
+export function LogTracks({ las, tracks, markers = [], intervals = [], selectedRange = null, cursorFt = null, onSelectDepth, onCursorChange, onBrush, depthWindowFt, onDepthWindowChange, height = 620, title = "Depth log", frame: trackFrame, depthGestures = true }: LogTracksProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const index = las.curves[0];
   const depths = useMemo(() => (index?.values ?? []).map((value) => value ?? Number.NaN), [index]);
@@ -423,6 +430,7 @@ export function LogTracks({ las, tracks, markers = [], intervals = [], selectedR
     window: zoomed ? [view.top, view.base] : null,
     axis: () => ({ extent: [first, last], plot: trackFrame ? [trackFrame.top, height - trackFrame.bottom] : [headerH + 4, height - 6], minSpan: Math.max(step * 4, 20) }),
     onWindow: setWindow,
+    ...(onBrush ? { onBrush: ([topFt, baseFt]: readonly [number, number]) => onBrush({ topFt, baseFt }) } : {}),
   });
 
   function onKey(event: KeyboardEvent<HTMLDivElement>) {
@@ -464,7 +472,8 @@ export function LogTracks({ las, tracks, markers = [], intervals = [], selectedR
         </g>}
         {resolved.map((track, t) => {
           const left = depthW + intervalW + t * trackW;
-          const x = scaleLinear().domain([track.min, track.max]).range([left + 6, left + trackW - 6]).clamp(true);
+          const logScale = track.scale === "log" && track.min > 0 && track.max > 0;
+          const x = (logScale ? scaleLog() : scaleLinear()).domain([track.min, track.max]).range([left + 6, left + trackW - 6]).clamp(true);
           let d = "", pen = false;
           for (const [depth, i] of visible) {
             const value = track.values[i];
@@ -475,8 +484,8 @@ export function LogTracks({ las, tracks, markers = [], intervals = [], selectedR
           return <g key={track.mnemonic}>
             <line x1={left} x2={left} y1={0} y2={height} className="sw-logs-sep" />
             <text x={left + trackW / 2} y={16} textAnchor="middle" className="sw-logs-label" fill={track.color ?? "#147a65"}>{track.label ?? track.mnemonic}</text>
-            <text x={left + 6} y={34} className="sw-logs-unit">{int(track.min)}</text>
-            <text x={left + trackW - 6} y={34} textAnchor="end" className="sw-logs-unit">{int(track.max)} {track.curve?.unit ?? "?"}</text>
+            <text x={left + 6} y={34} className="sw-logs-unit">{scaleLabel(track.min)}</text>
+            <text x={left + trackW - 6} y={34} textAnchor="end" className="sw-logs-unit">{scaleLabel(track.max)} {track.curve?.unit ?? "?"}</text>
             <line x1={left + 6} x2={left + trackW - 6} y1={40} y2={40} stroke={track.color ?? "#147a65"} strokeWidth={2} />
             <path d={d} fill="none" stroke={track.color ?? "#147a65"} strokeWidth={1.1} vectorEffect="non-scaling-stroke" />
           </g>;

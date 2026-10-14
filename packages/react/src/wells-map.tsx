@@ -47,6 +47,11 @@ export interface WellsMapProps {
   readonly selectedWellId: string | null;
   /** A site (and well) chosen on the map; null when the reader returns to the world view. */
   readonly onSelect: (siteId: string | null, wellId: string | null) => void;
+  /**
+   * A point on a well to mark, such as where a linked depth cursor sits on the well's path in plan,
+   * with the words to show beside it. The host places it; the map does not interpolate paths.
+   */
+  readonly cursor?: { readonly at: GeographicXY; readonly label: string } | null;
 }
 
 function localUrl(value: string): string {
@@ -70,10 +75,11 @@ function siteBounds(site: WellsMapSite): [[number, number], [number, number]] {
 
 const WORLD = { center: [-176, 16] as [number, number], zoom: 1.35 };
 
-export function WellsMap({ sites, workerUrl, basemapUrl, basemapAttribution, selectedSiteId, selectedWellId, onSelect }: WellsMapProps) {
+export function WellsMap({ sites, workerUrl, basemapUrl, basemapAttribution, selectedSiteId, selectedWellId, onSelect, cursor: depthCursor = null }: WellsMapProps) {
   const element = useRef<HTMLDivElement>(null);
   const map = useRef<GeographicMap | null>(null);
   const markers = useRef<Marker[]>([]);
+  const depthMarker = useRef<{ marker: Marker; text: HTMLElement } | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [globe, setGlobe] = useState(true);
@@ -195,6 +201,30 @@ export function WellsMap({ sites, workerUrl, basemapUrl, basemapAttribution, sel
     });
     return () => { cancelled = true; };
   }, [ready, sites, selectedSiteId, selectedWellId]);
+
+  // The host's cursor point: one marker, moved rather than rebuilt, so it can follow a pointer.
+  useEffect(() => {
+    const instance = map.current;
+    if (!ready || !instance) return;
+    if (!depthCursor) { depthMarker.current?.marker.remove(); depthMarker.current = null; return; }
+    if (depthMarker.current) {
+      depthMarker.current.marker.setLngLat([...depthCursor.at]);
+      depthMarker.current.text.textContent = depthCursor.label;
+      return;
+    }
+    let cancelled = false;
+    void import("maplibre-gl").then((library) => {
+      if (cancelled || depthMarker.current) return;
+      const dot = document.createElement("div");
+      dot.className = "sw-wells-map-depth";
+      const text = document.createElement("span");
+      text.textContent = depthCursor.label;
+      dot.append(text);
+      depthMarker.current = { marker: new library.Marker({ element: dot, anchor: "center" }).setLngLat([...depthCursor.at]).addTo(instance), text };
+    });
+    return () => { cancelled = true; };
+  }, [ready, depthCursor]);
+  useEffect(() => () => { depthMarker.current?.marker.remove(); depthMarker.current = null; }, []);
 
   // A chosen site flies into view; nothing chosen returns to the world.
   useEffect(() => {

@@ -7,7 +7,7 @@ import { parse } from "parse5";
 
 // Which exported app to serve. Lets the old demo and the new workbench run side by side during the
 // migration, so both Playwright projects can exercise their own app in one CI run.
-const app = process.env.SERVE_APP ?? "demo";
+const app = process.env.SERVE_APP ?? "deck";
 const root = fileURLToPath(new URL(`../apps/${app}/out/`, import.meta.url));
 const types = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".png": "image/png", ".json": "application/json", ".woff2": "font/woff2", ".svg": "image/svg+xml", ".txt": "text/plain", ".ico": "image/x-icon" };
 

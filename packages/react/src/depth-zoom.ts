@@ -42,6 +42,11 @@ export interface DepthZoomOptions {
   readonly ignore?: string;
   /** A plain wheel scrolls the page here while the surface can still scroll itself. */
   readonly canScroll?: () => boolean;
+  /**
+   * Shift + drag selects an interval instead of zooming to it, when the host wants a brush: return
+   * true to take the interval, false to let the box zoom as usual.
+   */
+  readonly onBrush?: (range: DepthWindow) => boolean;
 }
 
 const IGNORE = "button, input, select, textarea, a, [role='button'], [data-depth-zoom='ignore']";
@@ -112,7 +117,9 @@ export class DepthZoom {
       select(group).call(brush.move, null);
       const scale = this.currentScale();
       const top = scale.invert(from), base = scale.invert(to);
-      if (Math.abs(base - top) > 0) this.emit(Math.min(top, base), Math.max(top, base));
+      if (!(Math.abs(base - top) > 0)) return;
+      if (this.options.onBrush?.([Math.min(top, base), Math.max(top, base)])) return;
+      this.emit(Math.min(top, base), Math.max(top, base));
     });
     this.box = { svg, group, brush };
     select(group).call(brush);
@@ -189,7 +196,7 @@ export class DepthZoom {
  * Attach a DepthZoom to an element for as long as `enabled`, keeping it in step with the window the
  * component is showing. `axis` and `onWindow` may change every render; the zoom reads the latest.
  */
-export function useDepthZoom(surface: RefObject<Element | null>, options: DepthZoomOptions & { readonly enabled?: boolean; readonly window: DepthWindow | null }) {
+export function useDepthZoom(surface: RefObject<Element | null>, options: Omit<DepthZoomOptions, "onBrush"> & { readonly enabled?: boolean; readonly window: DepthWindow | null; readonly onBrush?: (range: DepthWindow) => void }) {
   const latest = useRef(options);
   latest.current = options;
   const instance = useRef<DepthZoom | null>(null);
@@ -202,6 +209,7 @@ export function useDepthZoom(surface: RefObject<Element | null>, options: DepthZ
       onWindow: (window) => latest.current.onWindow(window),
       ignore: latest.current.ignore,
       canScroll: () => latest.current.canScroll?.() ?? false,
+      onBrush: (range) => { const brush = latest.current.onBrush; if (!brush) return false; brush(range); return true; },
     });
     instance.current = zoomer;
     zoomer.sync(latest.current.window);

@@ -32,6 +32,5 @@ export type { AccessibleTableColumn, AccessibleTableProps } from "./accessible-t
 export { useDepthZoom, usePlotZoom } from "./depth-zoom.js";
 export { useDepthLink } from "./depth-link.js";
 export { useSubsurfaceSelector } from "./state.js";
-export { ComponentPalette, WELL_COMPONENT_MIME, assetUrl, catalogIdFromDrag } from "./assembly-palette.js";
-export type { ComponentPaletteProps } from "./assembly-palette.js";
+export { WELL_COMPONENT_MIME, assetUrl, catalogIdFromDrag } from "./assembly-palette.js";
 export { formatDepth, formatInches } from "./assembly-format.js";

@@ -12,12 +12,18 @@ import { InteractiveViewport } from "./viewport.js";
 export interface CurvedAssemblySchematicProps extends Pick<AssemblySchematicProps, "assembly" | "assetBaseUrl" | "selectedId" | "issues" | "onSelect" | "onDropComponent" | "onMoveComponent" | "onRemoveComponent" | "records"> {
   readonly survey?: readonly SurveyPoint[];
   readonly formations?: readonly FormationLayer[];
+  /** Measured depth drawn as a ring across the path, e.g. the pointer depth in a linked view. */
+  readonly cursorMdM?: number | null;
+  /** Reports the measured depth on the path nearest the pointer, `null` when it leaves. */
+  readonly onCursorMdChange?: (mdM: number | null) => void;
+  /** Called with the measured depth on the path nearest a click that does not land on a component. */
+  readonly onSelectMd?: (mdM: number) => void;
 }
 
 const reportedMaterial = (value: string | undefined) => value && !/not reported/i.test(value) ? value : null;
 
 /** Vertical section of the actual survey; tubular widths are exaggerated for legibility. */
-export function CurvedAssemblySchematic({ assembly, survey, formations = [], selectedId, issues = [], onSelect, onDropComponent, onMoveComponent, onRemoveComponent, records }: CurvedAssemblySchematicProps) {
+export function CurvedAssemblySchematic({ assembly, survey, formations = [], selectedId, issues = [], onSelect, onDropComponent, onMoveComponent, onRemoveComponent, records, cursorMdM = null, onCursorMdChange, onSelectMd }: CurvedAssemblySchematicProps) {
   const svg = useRef<SVGSVGElement>(null);
   const [size, setSize] = useState({ width: 800, height: 570 });
   useEffect(() => {
@@ -54,8 +60,9 @@ export function CurvedAssemblySchematic({ assembly, survey, formations = [], sel
     const maxY = Math.max(1, ...samples.map((point) => point.tvd));
     const holeOds = (records ?? []).filter((record) => record.kind === "Hole" && record.outerDiameterMm !== null).map((record) => record.outerDiameterMm! / 25.4);
     const radius = Math.max(12, ...assembly.items.map((item) => item.odIn * 1.8), ...holeOds.map((od) => od * 1.8));
-    // Room on the right for shoe labels, and below for the departure axis.
-    const availableWidth = Math.max(1, size.width - 300 - radius * 2);
+    // Room on the right for shoe labels (less of it in a narrow drawing), and below for the departure axis.
+    const labelRoom = Math.max(214, Math.min(300, size.width * 0.4));
+    const availableWidth = Math.max(1, size.width - labelRoom - radius * 2);
     const availableHeight = Math.max(1, size.height - 110);
     const scale = Math.min(availableWidth / Math.max(maxX - minX, 1), availableHeight / Math.max(maxY - minY, 1));
     const x = scaleLinear().domain([minX, minX + availableWidth / scale]).range([70 + radius, 70 + radius + availableWidth]);
@@ -78,8 +85,8 @@ export function CurvedAssemblySchematic({ assembly, survey, formations = [], sel
       const out = points.map((md) => offset(md, outer)), back = [...points].reverse().map((md) => offset(md, inner));
       return [...out, ...back].map((point, index) => `${index ? "L" : "M"}${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(" ") + " Z";
     };
-    const departures = scaleLinear().domain([minX, maxX]).nice().ticks(5).filter((tick) => tick >= minX - 1 && tick <= maxX + 1);
-    return { path, band, center, offset, xOf, departures, position, samples: samples.map((point) => ({ ...center(point.md), md: point.md })), y, first, last, endMd, hasCoverage };
+    const departures = scaleLinear().domain([minX, maxX]).nice().ticks(Math.max(2, Math.min(5, Math.floor(availableWidth / 70)))).filter((tick) => tick >= minX - 1 && tick <= maxX + 1);
+    return { path, band, center, offset, xOf, departures, position, samples: samples.map((point) => ({ ...center(point.md), md: point.md })), y, first, last, endMd, hasCoverage, labelRoom };
   }, [assembly.totalDepthM, assembly.items, survey, size, records]);
   const holes = (records ?? []).filter((record) => record.kind === "Hole" && record.outerDiameterMm !== null);
   const holeAt = (md: number) => holes.find((hole) => hole.topDepthM <= md && hole.bottomDepthM >= md);
@@ -97,7 +104,7 @@ export function CurvedAssemblySchematic({ assembly, survey, formations = [], sel
       return { item, color: spec.color, at, ly, tvd, tubing: spec.slot === "tubing" };
     });
   })();
-  const labelX = size.width - 214;
+  const labelX = size.width - Math.min(214, geometry.labelRoom - 4);
   const mdStep = (() => { const raw = assembly.totalDepthM / 6, power = 10 ** Math.floor(Math.log10(raw)), unit = raw / power; return (unit < 1.5 ? 1 : unit < 3.5 ? 2.5 : unit < 7.5 ? 5 : 10) * power; })();
   const lastStation = survey?.at(-1);
   const selected = assembly.items.find((item) => item.id === selectedId);
@@ -115,7 +122,14 @@ export function CurvedAssemblySchematic({ assembly, survey, formations = [], sel
   }}>
     <InteractiveViewport name="Curved well construction">
       <svg ref={svg} viewBox={`0 0 ${size.width} ${size.height}`} role="group" aria-label="Construction following the well trajectory" data-testid="curved-assembly-schematic" data-revision={assembly.revision}
-        onClick={(event) => { if (!(event.target as Element).closest(".sw-curved-item")) onSelect?.(null); }}
+        onClick={(event) => {
+          if ((event.target as Element).closest(".sw-curved-item")) return;
+          onSelect?.(null);
+          const depth = onSelectMd ? pointerDepth(event.clientX, event.clientY) : null;
+          if (depth !== null) onSelectMd?.(depth);
+        }}
+        onPointerMove={onCursorMdChange ? (event) => onCursorMdChange(pointerDepth(event.clientX, event.clientY)) : undefined}
+        onPointerLeave={onCursorMdChange ? () => onCursorMdChange(null) : undefined}
         onDragOver={(event) => { if (onDropComponent && catalogIdFromDrag(event)) { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; } }}
         onDrop={(event) => {
           const id = catalogIdFromDrag(event), depth = pointerDepth(event.clientX, event.clientY);
@@ -206,12 +220,21 @@ export function CurvedAssemblySchematic({ assembly, survey, formations = [], sel
             {record?.rawBottomDepthFt ? <text x={labelX + 9} y={ly + 26} className="sw-curved-label-detail">Reported {record.rawBottomDepthFt.toLocaleString("en-US")} ft{reportedMaterial(record.material) ? ` · ${reportedMaterial(record.material)!.split(" / ")[0]}` : ""}</text> : null}
           </g>;
         })}
+        {geometry.hasCoverage && cursorMdM !== null && cursorMdM >= geometry.first.mdM && cursorMdM <= geometry.endMd && (() => {
+          // The cursor crosses the whole drawn well at that depth, so it reads against every string.
+          const reach = radiusMax + 10, a = geometry.offset(cursorMdM, -reach), b = geometry.offset(cursorMdM, reach), at = geometry.center(cursorMdM);
+          return <g className="sw-curved-cursor" pointerEvents="none" data-cursor-md={Math.round(cursorMdM)}>
+            <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} />
+            <circle cx={at.x} cy={at.y} r={4} />
+            <text x={b.x + 6} y={b.y + 4}>{formatDepth(cursorMdM)} MD · {formatDepth(geometry.position(cursorMdM).tvd)} TVD</text>
+          </g>;
+        })()}
         {geometry.hasCoverage && (() => {
           const end = geometry.center(geometry.endMd);
           return <text x={end.x - 6} y={end.y + 18} textAnchor="end" className="sw-curved-td">TD {formatDepth(geometry.endMd)} MD · {formatDepth(geometry.position(geometry.endMd).tvd)} TVD{lastStation ? ` · inc ${lastStation.inclinationDeg.toFixed(1)}°` : ""}</text>;
         })()}
         <g className="sw-curved-departure" aria-hidden="true">
-          <line x1={70} x2={size.width - 230} y1={size.height - 50} y2={size.height - 50} />
+          <line x1={70} x2={size.width - geometry.labelRoom + 70} y1={size.height - 50} y2={size.height - 50} />
           {geometry.departures.map((tick) => <g key={tick}><line x1={geometry.xOf(tick)} x2={geometry.xOf(tick)} y1={size.height - 50} y2={size.height - 45} /><text x={geometry.xOf(tick)} y={size.height - 34} textAnchor="middle">{Math.round(tick).toLocaleString("en-US")}</text></g>)}
         </g>
         <text x={size.width / 2} y={size.height - 12} textAnchor="middle" className="sw-curved-axis">Departure along the section, m · TVD, m · true scale in depth and departure · widths exaggerated</text>

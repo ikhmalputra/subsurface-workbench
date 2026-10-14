@@ -240,3 +240,30 @@ test("a production string's burst is a tubing leak on the packer fluid, growing 
   const unset = { ...brief, completion: { ...brief.completion!, packerFluidSg: undefined } };
   assert.match(analyzeSection(unset, index).loads.burstCase, /packer fluid not set: mud weight assumed/);
 });
+
+test("a design brief becomes a drawable well: planned path, holes, strings, cement, completion and layers", async () => {
+  const { briefToWellDesign, exampleWellBrief, wellComponentsToAssembly } = await import("./index.ts");
+  const brief = exampleWellBrief();
+  const design = briefToWellDesign(brief);
+  assert.equal(design.provenance, "synthetic");
+  assert.equal(design.surveyStatus, "planned");
+  assert.equal(design.totalDepthM, brief.totalDepthMdM);
+  assert.equal(design.survey!.at(-1)!.mdM, brief.totalDepthMdM, "the plan reaches TD, held straight past its last station");
+  for (const section of brief.sections) {
+    const string = design.components!.find((component) => component.id === section.id)!;
+    assert.equal(string.kind, "Casing");
+    assert.equal(string.bottomDepthM, section.shoeMdM);
+    assert.ok(Math.abs(string.outerDiameterMm! - section.odIn * 25.4) < 1e-9);
+    assert.ok(design.components!.some((component) => component.id === `${section.id}-hole` && component.bottomDepthM === section.shoeMdM));
+    assert.equal(design.components!.some((component) => component.id === `${section.id}-cement`), section.cement !== null);
+  }
+  const hole = (id: string) => design.components!.find((component) => component.id === `${id}-hole`)!;
+  assert.equal(hole("production").topDepthM, brief.sections.find((section) => section.id === "intermediate-2")!.shoeMdM, "a hole starts at the shoe it is drilled out of");
+  assert.equal(hole("conductor").topDepthM, 115, "the conductor hole starts at the mudline");
+  assert.ok(design.components!.some((component) => component.kind === "Packer" && component.topDepthM === brief.completion!.packerMdM));
+  assert.deepEqual(design.formations!.slice(0, 2).map((layer) => layer.id), ["air-gap", "water"]);
+  assert.equal(design.formations!.find((layer) => layer.name === "K-10 reservoir")!.interpretation, "Reservoir");
+  // The strings keep their section ids through to the drawing, so an analysis finds its string.
+  const assembly = wellComponentsToAssembly({ id: design.id, name: design.wellName!, totalDepthM: design.totalDepthM, components: design.components! });
+  for (const section of brief.sections) assert.ok(assembly.items.some((item) => item.id === section.id), section.id);
+});

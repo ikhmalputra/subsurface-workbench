@@ -146,3 +146,4 @@ export function seismicVolumeFromBuffer(headerValue: unknown, buffer: ArrayBuffe
   for (let index = 0; index < count; index += 1) samples[index] = view.getFloat32(index * 4, true);
   return validateSeismicVolume(header, samples);
 }
+export * from "./petrophysics-synthetic.ts";

@@ -183,3 +183,58 @@ mud log `3883add7fe1a6ab745b32b059f191ff519b895be2008409bf87fec60ec84acde`
   sit at most ~50 m off the straight section. PSDM depths come from the
   processor's velocity model and are not tied to check-shots or sonic logs, so
   the well and the image can disagree in depth.
+
+## Open-hole logs (petrophysics)
+
+`tools/survey/build_forge_openhole.py` writes
+`packages/fixtures/data/forge-16a-openhole-1ft.las` (LAS 2.0, 5,951 depths at
+1 ft from 5,000 to 10,950 ft MD, 24 curves, about 1 MB). The deck's Logs
+module ("Open hole") and the Petrophysics module read it on FORGE; the lens
+reads it at the depth cursor.
+
+```sh
+python3 -I tools/survey/build_forge_openhole.py /tmp/subsurface-forge16a-openhole
+# fetched R08_TB_TCOM.las … FMI_P32.las
+# packages/fixtures/data/forge-16a-openhole-1ft.las: 5951 depths, 24 curves, 1,048,430 bytes
+```
+
+- **Source.** GDR 1292, *Utah FORGE: Well 16A(78)-32 Logs* (2021-03-08,
+  DOI 10.15121/1777912, CC BY 4.0), https://gdr.openei.org/submissions/1292.
+  The Schlumberger package `16A(78)-32 Schlumberger.zip` is 6.34 GB; the
+  script reads only its central directory (about 18 KB) and four members by
+  HTTP range request (about 2 MB compressed), and downloads the separate
+  spectral gamma-ray LAS whole. Any source already in the folder is reused.
+
+  | Saved as | Member or file | Bytes | SHA-256 |
+  | --- | --- | ---: | --- |
+  | `R08_TB_TCOM.las` | `Wireline Field Data/A1008700.01_University_of_Utah_Forge_R08_L001Up_TB_TCOM.las` | 2,160,162 | `65d81e34ebaf02570e270cbf9f664c928fc72e054bb0294445360445eecfc25e` |
+  | `PNS.las` | `Processed Deliverables/…_ThrubitDipole_PNS_result_5000-10940ft.las` | 1,718,599 | `0918c3f07cf46d2a2bc4bf013e7114fd4d627e6b32f008393082b175464db44a` |
+  | `IsoMechPro.las` | `Processed Deliverables/…_ThrubitDipole_IsoMechPro_result_6000-10942ft.las` | 2,738,052 | `00d9160483224b46dda9dce387f23a12effaba087e63b722d1579e67bb7a868b` |
+  | `FMI_P32.las` | `Processed Deliverables/…_TBFMI_Interpretation_5040-10870ft_FracAnalysis_P32.las` | 211,174 | `c80244cfb5f98b6c4fe8d8f7e8eda19ac5d22d3b5ad0ee5e09ffc920f1d403fe` |
+  | `Spectral.las` | `UnivUtah_Forge-16A-78-32_Spectral.las` (plain file) | 5,282,127 | `77fcf0b6fb503310a33302ce8dcc3b79b072411b96dd690792d24d5bab989a80` |
+
+  Member paths sit under `16A(78)-32 Schlumberger/` in the zip; the script
+  holds them in full. It stops if any SHA-256 differs.
+- **Curves.** GR (thru-bit), CGR, K, TH, U (HNGS), NPHI and NPHI_SAN (thermal
+  neutron, percent ÷ 100), DPHI and SPHI (as delivered), DTC, DTS, RT10 and
+  RT90 (array induction), C13 and C24 (calipers), BS, DEVI, P32 (FMI fracture
+  intensity), UCS, YME_STA, PR and the SV/SHMIN/PP gradients (IsoMechPro). Each
+  value is the mean of the source samples in [depth, depth + 1) ft with nulls
+  excluded: nothing interpolated, smoothed or recomputed. The `~P` section
+  carries each source's path and SHA-256, the decimation rule and the licence.
+- **No bulk density.** The package holds no RHOB curve; DPHI comes as the
+  processor delivered it (sandstone matrix, 2.65 g/cm³). In granite that matrix
+  is wrong by design, so the deck labels it and reads porosity three ways.
+- **What the data does not support, and how the deck treats it.**
+  - Above the 9 5/8 in shoe, and wherever BS reads over 9 in, the tools logged
+    through casing: those feet are left out.
+  - RT10 is pinned at 1,950 Ω·m on most of the open hole, the tool's ceiling:
+    the 90 in curve is used and the clipped feet are counted.
+  - C13 reads a steady ~0.5 in over the 8 3/4 in bit through the whole open hole
+    while C24 reads on gauge. Ovality is therefore counted only where the arm
+    pairs part by 0.25 in more than their median gap; enlargement only where
+    both pairs read over the bit by 0.5 in.
+  - Uranium below zero (a spectral-processing artefact) is kept as delivered
+    and counted.
+  - The logs were run on 29 Dec 2020; on earlier days of the time replay the
+    deck shows them as not logged yet.

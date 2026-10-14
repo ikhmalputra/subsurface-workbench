@@ -284,3 +284,148 @@ export function schlumbergerMNToCurves(
   if (!metadata.wellId.trim() || !metadata.idPrefix.trim()) throw new TypeError("M–N curve metadata requires a well ID and non-empty ID prefix.");
   return { m: curve("m"), n: curve("n") };
 }
+
+// ── Interpretation: shale volume, porosity and pay ───────────────────────────────────────────
+
+/**
+ * Clean and shale gamma-ray lines for a logged interval: by default its 5th and 95th percentiles,
+ * the way an interpreter reads them off a histogram when no core or zone picks are given.
+ */
+export function gammaRayLines(values: ArrayLike<number>, lowFraction = 0.05, highFraction = 0.95): { readonly clean: number; readonly shale: number } {
+  const finite = Array.from(values).filter(Number.isFinite).sort((a, b) => a - b);
+  if (finite.length < 2) throw new RangeError("Gamma-ray lines need at least two reported samples.");
+  if (!(lowFraction >= 0 && highFraction <= 1 && lowFraction < highFraction)) throw new RangeError("Gamma-ray line fractions must satisfy 0 ≤ low < high ≤ 1.");
+  const at = (fraction: number) => finite[Math.min(finite.length - 1, Math.floor(fraction * finite.length))]!;
+  const clean = at(lowFraction), shale = at(highFraction);
+  if (!(shale > clean)) throw new RangeError("The shale line must read above the clean line.");
+  return { clean, shale };
+}
+
+export type ShaleVolumeMethod = "linear" | "larionov-tertiary" | "larionov-older";
+
+/**
+ * Shale volume from gamma ray, 0–1. Linear is the gamma-ray index itself; Larionov's corrections
+ * lower it for unconsolidated (Tertiary) and consolidated (older) rocks:
+ *   IGR = (GR − GRclean) / (GRshale − GRclean)
+ *   Tertiary: Vsh = 0.083 · (2^(3.7·IGR) − 1)      Older: Vsh = 0.33 · (2^(2·IGR) − 1)
+ */
+export function shaleVolumeFromGamma(gammaRay: number, lines: { readonly clean: number; readonly shale: number }, method: ShaleVolumeMethod = "linear"): number {
+  const index = Math.min(1, Math.max(0, (gammaRay - lines.clean) / (lines.shale - lines.clean)));
+  const vsh = method === "linear" ? index : method === "larionov-tertiary" ? 0.083 * (2 ** (3.7 * index) - 1) : 0.33 * (2 ** (2 * index) - 1);
+  return Math.min(1, Math.max(0, vsh));
+}
+
+/** Density porosity, v/v: (ρma − ρb) / (ρma − ρf). Sandstone matrix and fresh filtrate by default. */
+export function densityPorosity(bulkDensity: number, matrixDensity = 2.65, fluidDensity = 1.0): number {
+  if (!(matrixDensity > fluidDensity)) throw new RangeError("Matrix density must exceed fluid density.");
+  return (matrixDensity - bulkDensity) / (matrixDensity - fluidDensity);
+}
+
+/**
+ * Porosity from density and neutron (both v/v, neutron in matrix units). Where gas makes the
+ * neutron read low (density porosity above neutron: the crossover), the root-mean-square of the
+ * two; otherwise their mean.
+ */
+export function neutronDensityPorosity(densityPorosityValue: number, neutronPorosity: number): number {
+  return densityPorosityValue > neutronPorosity
+    ? Math.sqrt((densityPorosityValue ** 2 + neutronPorosity ** 2) / 2)
+    : (densityPorosityValue + neutronPorosity) / 2;
+}
+
+export interface NetPayCutoffs {
+  readonly vshMax: number;
+  readonly porosityMin: number;
+  readonly swMax: number;
+}
+
+export interface NetPaySample {
+  readonly mdM: number;
+  readonly vsh: number;
+  /** Null where the porosity is not usable (bad hole, missing input). */
+  readonly porosity: number | null;
+  readonly sw: number | null;
+}
+
+export interface NetPaySummary {
+  readonly grossM: number;
+  /** Shale volume and porosity pass. */
+  readonly netM: number;
+  /** Net, and water saturation passes too. */
+  readonly payM: number;
+  readonly netToGross: number | null;
+  /** Thickness-weighted means over net (porosity) and pay (saturation). */
+  readonly porosityNet: number | null;
+  readonly swPay: number | null;
+  /** Σ φ·(1 − Sw)·h over pay, metres: the hydrocarbon column. */
+  readonly hydrocarbonColumnM: number;
+  readonly unusableSamples: number;
+}
+
+/**
+ * Gross, net sand and net pay over a run of samples, each standing for the depth halfway to its
+ * neighbours. A sample without a usable porosity counts in gross but can be neither net nor pay.
+ */
+export function netPaySummary(samples: readonly NetPaySample[], cutoffs: NetPayCutoffs): NetPaySummary {
+  let gross = 0, net = 0, pay = 0, porositySum = 0, swSum = 0, column = 0, unusable = 0;
+  samples.forEach((sample, index) => {
+    // Each sample stands for the depth halfway to its neighbours; the end samples, half a step inward.
+    const before = samples[index - 1]?.mdM ?? sample.mdM, after = samples[index + 1]?.mdM ?? sample.mdM;
+    const h = Math.max(0, (after - before) / 2);
+    gross += h;
+    if (sample.porosity === null) { unusable++; return; }
+    if (sample.vsh > cutoffs.vshMax || sample.porosity < cutoffs.porosityMin) return;
+    net += h; porositySum += sample.porosity * h;
+    if (sample.sw === null || sample.sw > cutoffs.swMax) return;
+    pay += h; swSum += sample.sw * h; column += sample.porosity * (1 - sample.sw) * h;
+  });
+  return {
+    grossM: gross, netM: net, payM: pay, netToGross: gross > 0 ? net / gross : null,
+    porosityNet: net > 0 ? porositySum / net : null, swPay: pay > 0 ? swSum / pay : null,
+    hydrocarbonColumnM: column, unusableSamples: unusable,
+  };
+}
+
+// ── Crystalline-rock and quality helpers ─────────────────────────────────────────────────────
+
+/** Dynamic Poisson's ratio from the velocity ratio Vp/Vs (= shear over compressional slowness): ν = (r² − 2) / (2(r² − 1)). */
+export function poissonFromVelocityRatio(vpOverVs: number): number {
+  if (!(vpOverVs > Math.SQRT2)) throw new RangeError("Vp/Vs must exceed √2 for a positive Poisson's ratio.");
+  const r2 = vpOverVs ** 2;
+  return (r2 - 2) / (2 * (r2 - 1));
+}
+
+/** Geometric mean, the right average for resistivity; null with no positive values. */
+export function geometricMean(values: ArrayLike<number>): number | null {
+  let sum = 0, count = 0;
+  for (let i = 0; i < values.length; i++) { const value = values[i]!; if (value > 0 && Number.isFinite(value)) { sum += Math.log(value); count++; } }
+  return count ? Math.exp(sum / count) : null;
+}
+
+/** Pearson correlation of two equal-length series over the pairs where both are finite; null below three pairs. */
+export function correlation(x: ArrayLike<number>, y: ArrayLike<number>): number | null {
+  if (x.length !== y.length) throw new RangeError("Correlation needs two series of the same length.");
+  const pairs: [number, number][] = [];
+  for (let i = 0; i < x.length; i++) if (Number.isFinite(x[i]!) && Number.isFinite(y[i]!)) pairs.push([x[i]!, y[i]!]);
+  if (pairs.length < 3) return null;
+  const mx = pairs.reduce((sum, [a]) => sum + a, 0) / pairs.length, my = pairs.reduce((sum, [, b]) => sum + b, 0) / pairs.length;
+  let sxy = 0, sxx = 0, syy = 0;
+  for (const [a, b] of pairs) { sxy += (a - mx) * (b - my); sxx += (a - mx) ** 2; syy += (b - my) ** 2; }
+  return sxx > 0 && syy > 0 ? sxy / Math.sqrt(sxx * syy) : null;
+}
+
+/**
+ * A reading pinned at a tool's limit is not a measurement: induction tools clip at their highest
+ * resistivity, for one. True where the value is within `tolerance` of the limit.
+ */
+export const atToolLimit = (value: number, limit: number, tolerance = 1e-3 * Math.abs(limit)) => Math.abs(value - limit) <= tolerance;
+
+/**
+ * The value a curve is clipped at, if it is: its maximum, when at least `share` of the reported
+ * samples sit on it. An induction log pinned at its ceiling across much of a resistive granite is
+ * the case this is for. Null when the curve does not repeat its maximum that often.
+ */
+export function clippedAt(values: ArrayLike<number>, share = 0.01): number | null {
+  let max = -Infinity, count = 0, total = 0;
+  for (let i = 0; i < values.length; i++) { const value = values[i]!; if (!Number.isFinite(value)) continue; total++; if (value > max) { max = value; count = 1; } else if (value === max) count++; }
+  return total > 0 && count / total >= share && count > 1 ? max : null;
+}

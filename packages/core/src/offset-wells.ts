@@ -4,6 +4,7 @@ import { feetToMetres } from "./units.ts";
 import {
   analyzeSection,
   defaultDesignBasis,
+  PPG_PER_SG,
   mdAtTvd,
   pressureAt,
   temperatureAt,
@@ -17,7 +18,6 @@ import {
   type WellDesignBrief,
 } from "./well-design.ts";
 
-const PPG_PER_SG = 8.345;
 const round1 = (value: number) => Math.round(value * 10) / 10;
 const round2 = (value: number) => Math.round(value * 100) / 100;
 const ppgToSg = (ppg: number) => round2(ppg / PPG_PER_SG);

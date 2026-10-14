@@ -63,3 +63,33 @@ test("wells without a declared location are listed, not placed", () => {
   assert.deepEqual(list.map((well) => well.id).sort(), ["research", "s-profile"]);
   for (const well of list) assert.match(well.reason, /No surface location/);
 });
+
+test("Kestrel A-7 is a planned, synthetic site: its well, shoes, reservoir and the sea are where the brief puts them", async () => {
+  const { kestrelSite } = await import("../dist/sites.js");
+  const site = kestrelSite();
+  assert.equal(site.map.provenance, "synthetic");
+  assert.match(site.caveat, /Nothing here was drilled/);
+  assert.ok(Math.abs(site.wells[0].mdM.at(-1) - site.brief.totalDepthMdM) < 0.5);
+  assert.ok(site.wells[0].markers.some((marker) => marker.label === "7\" shoe"));
+  assert.deepEqual(site.surfaces.map((surface) => surface.id), ["sea", "seabed", "reservoir-top"]);
+  assert.equal(site.surfaces[1].geometry.depthM, 115);
+  const [lon, lat] = site.map.wells[0].head;
+  assert.ok(Math.abs(lon - 114.231) < 1e-9 && Math.abs(lat - 5.412) < 1e-9);
+  assert.equal(site.map.wells[0].path.length, site.design.survey.length);
+});
+
+test("every Equator well gets logs across its own Sand R1, and the field's contacts decide its fluids", async () => {
+  const { equatorPetrophysics, equatorField, EQUATOR_CONTACTS } = await import("../dist/sites.js");
+  const project = equatorField();
+  const wells = equatorPetrophysics(project);
+  assert.equal(wells.length, 4);
+  for (const [index, entry] of wells.entries()) {
+    const record = project.records[index];
+    const top = record.tops.find((pick) => pick.id === "reservoir-top").mdM;
+    assert.equal(entry.logs.well.provenance, "synthetic");
+    assert.equal(entry.logs.well.tops[0].mdM, top);
+    // A well whose sand top is above the GOC has a gas cap; every well reaches the OWC.
+    assert.equal(entry.logs.contactsMdM.goc !== null, record.reservoirTopDepth < EQUATOR_CONTACTS.gocTvdssM, record.well.label);
+    assert.ok(entry.logs.contactsMdM.owc !== null, record.well.label);
+  }
+});

@@ -3,7 +3,7 @@
 Original code and synthetic Blender asset: MIT, Ikhmal Putra Manan.
 No F3 data, PPDM schemas or documentation are bundled.
 
-The bundled `forge-data.json` fixture is adapted from Utah FORGE public records,
+The bundled FORGE fixtures are adapted from Utah FORGE public records,
 licensed CC BY 4.0, https://creativecommons.org/licenses/by/4.0/:
 
 - McLennan et al. (2021), Utah FORGE Well 16A(78)-32 drilling data, Energy and
@@ -12,6 +12,13 @@ licensed CC BY 4.0, https://creativecommons.org/licenses/by/4.0/:
 - Duane Winkler, Leroy Swearingen and John McLennan (March 2021), Drilling Summary
 	of the Utah FORGE Well 16A(78)-32, GDR 1296:
 	https://gdr.openei.org/submissions/1296.
+
+- Bill Gilmour, Joseph Wooden, Fred Pulka, Brett Rose (Horizon Well Logging),
+	Clifton Barker (Sanvean Technologies) and Erik Borchardt (Schlumberger),
+	Utah FORGE: Well 16A(78)-32 Logs (2021), DOI 10.15121/1777912, GDR 1292:
+	https://gdr.openei.org/submissions/1292. Adapted as
+	`packages/fixtures/data/forge-16a-openhole-1ft.las`: selected curves binned to
+	1 ft means, neutron porosity converted from percent to fraction.
 
 Changes: XLSX station extraction, explicit unit conversion, report-page record
 transcription and approximate sediment/granite contact projection. No endorsement

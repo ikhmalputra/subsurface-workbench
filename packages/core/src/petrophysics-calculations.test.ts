@@ -142,3 +142,43 @@ test("Schlumberger M-N leaves unmatched exact-MD samples visible as missing", ()
     [120, "missing", "One or more input curves have no sample at this MD."],
   ]);
 });
+
+test("shale volume, porosity and net pay follow their textbook definitions", async () => {
+  const { densityPorosity, gammaRayLines, netPaySummary, neutronDensityPorosity, shaleVolumeFromGamma } = await import("./petrophysics-calculations.ts");
+  const lines = gammaRayLines(Float64Array.from({ length: 101 }, (_, i) => 20 + i));
+  assert.deepEqual(lines, { clean: 25, shale: 115 });
+  assert.equal(shaleVolumeFromGamma(70, lines), 0.5);
+  assert.equal(shaleVolumeFromGamma(10, lines), 0);
+  assert.ok(Math.abs(shaleVolumeFromGamma(70, lines, "larionov-tertiary") - 0.083 * (2 ** 1.85 - 1)) < 1e-12);
+  assert.ok(Math.abs(shaleVolumeFromGamma(70, lines, "larionov-older") - 0.33) < 1e-12);
+  assert.equal(densityPorosity(2.65), 0);
+  assert.ok(Math.abs(densityPorosity(2.32) - 0.2) < 1e-12);
+  assert.ok(Math.abs(neutronDensityPorosity(0.3, 0.1) - Math.sqrt(0.05)) < 1e-12, "gas crossover: root mean square");
+  assert.equal(neutronDensityPorosity(0.2, 0.3), 0.25);
+  // Ten samples a metre apart: four are pay, two more are net water sand, one has no porosity.
+  const samples = [0.6, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.6, 0.1, 0.6].map((vsh, i) => ({ mdM: 1000 + i, vsh, porosity: i === 8 ? null : 0.2, sw: i < 5 ? 0.3 : 0.9 }));
+  const summary = netPaySummary(samples, { vshMax: 0.4, porosityMin: 0.1, swMax: 0.5 });
+  assert.equal(summary.grossM, 9);
+  assert.equal(summary.netM, 6);
+  assert.equal(summary.payM, 4);
+  assert.equal(summary.unusableSamples, 1);
+  assert.ok(Math.abs(summary.hydrocarbonColumnM - 4 * 0.2 * 0.7) < 1e-12);
+  assert.ok(Math.abs(summary.swPay! - 0.3) < 1e-12);
+  assert.throws(() => gammaRayLines([50, 50, 50]), /shale line/);
+});
+
+test("crystalline helpers: Poisson from Vp/Vs, geometric mean, correlation and tool-limit flags", async () => {
+  const { atToolLimit, correlation, geometricMean, poissonFromVelocityRatio } = await import("./petrophysics-calculations.ts");
+  assert.ok(Math.abs(poissonFromVelocityRatio(Math.sqrt(3)) - 0.25) < 1e-12, "Vp/Vs √3 is ν 0.25");
+  assert.throws(() => poissonFromVelocityRatio(1.2), /√2/);
+  assert.ok(Math.abs(geometricMean([10, 1000])! - 100) < 1e-9);
+  assert.equal(geometricMean([0, -1]), null);
+  assert.ok(Math.abs(correlation([1, 2, 3, 4], [2, 4, 6, 8])! - 1) < 1e-12);
+  assert.ok(Math.abs(correlation([1, 2, 3, 4], [8, 6, 4, 2])! + 1) < 1e-12);
+  assert.equal(correlation([1, 2], [3, 4]), null);
+  assert.equal(atToolLimit(1950, 1950), true);
+  assert.equal(atToolLimit(1940, 1950), false);
+  const { clippedAt } = await import("./petrophysics-calculations.ts");
+  assert.equal(clippedAt([10, 1950, 1950, 300, 1950, Number.NaN]), 1950);
+  assert.equal(clippedAt([1, 2, 3, 4, 5]), null);
+});

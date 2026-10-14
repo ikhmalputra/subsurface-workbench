@@ -29,7 +29,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # Core and asset tests import source directly and lint reads source, so they run before the
       # build for fast feedback. The React tests import dist, so they wait for the build.
-      - run: pnpm test && pnpm test:asset && pnpm lint
+      - run: pnpm test && pnpm test:asset && pnpm lint && pnpm typecheck && pnpm test:deck
       - run: pnpm audit --audit-level high
       - run: pnpm build
       - run: pnpm test:render-adapters

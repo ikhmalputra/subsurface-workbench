@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
-import { scaleLinear } from "d3-scale";
+import { useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
+import { scaleLinear, scaleLog } from "d3-scale";
 import {
   flattenPetrophysicsWells,
   pairPetrophysicsCurves,
@@ -30,25 +30,49 @@ export interface PetrophysicsCrossplotProps {
   readonly onBrushChange?: (range: readonly [number, number] | null) => void;
   readonly onSelectMd?: (mdM: number) => void;
   readonly title?: string;
+  /** Axis ranges, data units; a reversed pair reverses the axis (density is read top-down, say). Default: the data's extent. */
+  readonly xDomain?: readonly [number, number];
+  readonly yDomain?: readonly [number, number];
+  /** A colour per sample, by MD, e.g. by computed water saturation. */
+  readonly pointColor?: (mdM: number) => string | undefined;
+  /** Drawn beneath the samples in the plot's scales, e.g. lithology lines on a density–neutron chart. */
+  readonly overlay?: (scale: { readonly x: (value: number) => number; readonly y: (value: number) => number }) => ReactNode;
+  /** Draw only the samples inside `depthRangeMdM`, and at most this many of them (evenly thinned). */
+  readonly onlyInRange?: boolean;
+  readonly maxPoints?: number;
+  /** "log" for a curve read on a logarithmic grid, such as resistivity; samples at or below zero are left out. */
+  readonly xScale?: "linear" | "log";
+  readonly yScale?: "linear" | "log";
 }
 
-export function PetrophysicsCrossplot({ xCurve, yCurve, depthRangeMdM = null, onBrushChange, onSelectMd, title }: PetrophysicsCrossplotProps) {
+export function PetrophysicsCrossplot({ xCurve, yCurve, depthRangeMdM = null, onBrushChange, onSelectMd, title, xDomain: xFixed, yDomain: yFixed, pointColor, overlay, onlyInRange = false, maxPoints = Infinity, xScale = "linear", yScale = "linear" }: PetrophysicsCrossplotProps) {
   if (xCurve.wellId !== yCurve.wellId) throw new TypeError("Petrophysics crossplot curves must belong to the same well.");
   const svg = useRef<SVGSVGElement>(null);
   const start = useRef<readonly [number, number] | null>(null);
   const [keyboardIndex, setKeyboardIndex] = useState<number | null>(null);
-  const points = pairPetrophysicsCurves(xCurve, yCurve);
+  const points = pairPetrophysicsCurves(xCurve, yCurve).filter((point) => (xScale !== "log" || point.x > 0) && (yScale !== "log" || point.y > 0));
   const isInDepthRange = (mdM: number) => depthRangeMdM === null || (mdM >= depthRangeMdM[0] && mdM <= depthRangeMdM[1]);
   const visible = depthRangeMdM
     ? points.filter((point) => point.mdM >= depthRangeMdM[0] && point.mdM <= depthRangeMdM[1])
     : points;
   const xExtent = points.reduce((extent, point) => [Math.min(extent[0], point.x), Math.max(extent[1], point.x)] as const, [Infinity, -Infinity] as const);
   const yExtent = points.reduce((extent, point) => [Math.min(extent[0], point.y), Math.max(extent[1], point.y)] as const, [Infinity, -Infinity] as const);
-  const xDomain = !points.length ? [0, 1] as const : xExtent[0] === xExtent[1] ? [xExtent[0] - 0.5, xExtent[1] + 0.5] as const : xExtent;
-  const yDomain = !points.length ? [0, 1] as const : yExtent[0] === yExtent[1] ? [yExtent[0] - 0.5, yExtent[1] + 0.5] as const : yExtent;
+  const xDomain = xFixed ?? (!points.length ? [0, 1] as const : xExtent[0] === xExtent[1] ? [xExtent[0] - 0.5, xExtent[1] + 0.5] as const : xExtent);
+  const yDomain = yFixed ?? (!points.length ? [0, 1] as const : yExtent[0] === yExtent[1] ? [yExtent[0] - 0.5, yExtent[1] + 0.5] as const : yExtent);
+  const drawn = (() => {
+    const shown = onlyInRange ? visible : points;
+    if (shown.length <= maxPoints) return shown;
+    const stride = Math.ceil(shown.length / maxPoints);
+    return shown.filter((_, index) => index % stride === 0);
+  })();
   const left = 54, right = 376, top = 18, bottom = 216;
-  const x = scaleLinear().domain(xDomain).range([left, right]);
-  const y = scaleLinear().domain(yDomain).range([bottom, top]);
+  const x = (xScale === "log" ? scaleLog() : scaleLinear()).domain(xDomain).range([left, right]);
+  const y = (yScale === "log" ? scaleLog() : scaleLinear()).domain(yDomain).range([bottom, top]);
+  // With fixed axes a sample can fall outside them: it is drawn hollow on the frame, not dropped.
+  const plotX = (value: number) => Math.min(right, Math.max(left, x(value)));
+  const plotY = (value: number) => Math.min(bottom, Math.max(top, y(value)));
+  const outside = (point: { readonly x: number; readonly y: number }) => x(point.x) < left || x(point.x) > right || y(point.y) < top || y(point.y) > bottom;
+  const offScale = (xFixed || yFixed) ? drawn.filter(outside).length : 0;
   const pointAt = (event: PointerEvent<SVGSVGElement>) => {
     if (!svg.current) return null;
     const matrix = svg.current.getScreenCTM();
@@ -66,7 +90,7 @@ export function PetrophysicsCrossplot({ xCurve, yCurve, depthRangeMdM = null, on
     const to = pointAt(event);
     if (!from || !to) return;
     const selected = visible.filter((point) => {
-      const px = x(point.x), py = y(point.y);
+      const px = plotX(point.x), py = plotY(point.y);
       return px >= Math.min(from[0], to[0]) && px <= Math.max(from[0], to[0])
         && py >= Math.min(from[1], to[1]) && py <= Math.max(from[1], to[1]);
     });
@@ -101,11 +125,16 @@ export function PetrophysicsCrossplot({ xCurve, yCurve, depthRangeMdM = null, on
       <rect x={left} y={top} width={right - left} height={bottom - top} className="sw-petro-analysis-plot" />
       <line x1={left} x2={right} y1={bottom} y2={bottom} className="sw-petro-analysis-axis" />
       <line x1={left} x2={left} y1={top} y2={bottom} className="sw-petro-analysis-axis" />
-      {points.map((point, index) => <circle key={point.mdM} cx={x(point.x)} cy={y(point.y)} r={index === keyboardIndex ? 6 : isInDepthRange(point.mdM) ? 3 : 2} className={index === keyboardIndex ? "sw-petro-analysis-point-keyboard" : isInDepthRange(point.mdM) ? "sw-petro-analysis-point" : "sw-petro-analysis-point-muted"}><title>{`MD ${fmt(point.mdM, 1)} m · ${xCurve.mnemonic} ${fmt(point.x)} ${xCurve.unit} · ${yCurve.mnemonic} ${fmt(point.y)} ${yCurve.unit}`}</title></circle>)}
+      {(xFixed || yFixed) && <g className="sw-petro-analysis-ticks" aria-hidden="true">
+        {x.ticks(xScale === "log" ? 4 : 5).filter((tick, index, all) => xScale !== "log" || all.length < 8 || Math.log10(tick) % 1 === 0).map((tick) => <text key={`x${tick}`} x={x(tick)} y={bottom + 13} textAnchor="middle">{fmt(tick, 2)}</text>)}
+        {y.ticks(yScale === "log" ? 4 : 5).filter((tick, index, all) => yScale !== "log" || all.length < 8 || Math.log10(tick) % 1 === 0).map((tick) => <text key={`y${tick}`} x={left - 5} y={y(tick) + 3} textAnchor="end">{fmt(tick, 2)}</text>)}
+      </g>}
+      {overlay && <g className="sw-petro-analysis-overlay" pointerEvents="none">{overlay({ x: (value) => x(value), y: (value) => y(value) })}</g>}
+      {drawn.map((point) => { const focused = keyboardIndex !== null && points[keyboardIndex] === point; const colour = pointColor?.(point.mdM); const off = outside(point); return <circle key={point.mdM} cx={plotX(point.x)} cy={plotY(point.y)} r={focused ? 6 : isInDepthRange(point.mdM) ? 3 : 2} className={focused ? "sw-petro-analysis-point-keyboard" : off ? "sw-petro-analysis-point-off" : isInDepthRange(point.mdM) ? "sw-petro-analysis-point" : "sw-petro-analysis-point-muted"} style={colour && !focused ? (off ? { stroke: colour } : { fill: colour }) : undefined} onClick={onSelectMd ? () => onSelectMd(point.mdM) : undefined}><title>{`MD ${fmt(point.mdM, 1)} m · ${xCurve.mnemonic} ${fmt(point.x)} ${xCurve.unit} · ${yCurve.mnemonic} ${fmt(point.y)} ${yCurve.unit}`}</title></circle>; })}
       <text x={(left + right) / 2} y="243" textAnchor="middle">{xCurve.mnemonic} ({xCurve.unit})</text>
       <text x="12" y={(top + bottom) / 2} transform={`rotate(-90 12 ${(top + bottom) / 2})`} textAnchor="middle">{yCurve.mnemonic} ({yCurve.unit})</text>
     </svg>
-    <p role="status">{visible.length} of {points.length} paired samples in linked depth range</p>
+    <p role="status">{visible.length} of {points.length} paired samples in linked depth range{offScale ? ` · ${offScale} beyond the axes, drawn hollow on the frame` : ""}</p>
     <AccessibleTable
       label={`${label} paired samples`}
       description="Only samples with exactly equal measured-depth keys are paired. Missing samples and unmatched depths are not interpolated."

@@ -1,3 +1,4 @@
+import { millimetresToInches } from "./units.ts";
 import type { ComponentKind, WellComponent } from "./index.ts";
 
 /**
@@ -570,7 +571,7 @@ export function assemblyToWellComponents(assembly: WellAssembly): readonly WellC
 }
 
 const toolCatalog: Partial<Record<ComponentKind, string>> = { Packer: "packer", "Safety valve": "safety-valve", "Gas lift mandrel": "gas-lift-mandrel", Gauge: "gauge", "Landing nipple": "landing-nipple" };
-const toInches = (millimetres: number | null) => millimetres === null ? null : Math.round(millimetres / 25.4 * 1000) / 1000;
+const toInches = (millimetres: number | null) => millimetres === null ? null : Math.round(millimetresToInches(millimetres) * 1000) / 1000;
 
 /**
  * Present existing `WellComponent` records (documented, planned or synthetic) as a read-only

@@ -4,9 +4,8 @@ import { InfoTip } from "./info-tip.js";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent, ReactNode, RefObject, MouseEvent as ReactMouseEvent } from "react";
 import { scaleLinear } from "d3-scale";
-import type { BuildHoldInput, BuildHoldPlan, BuildHoldTarget, ComputedStation, FormationLayer, SurveyStationInput, TrajectoryIssue, TrajectorySummary } from "@ikhmalputra/subsurface-core";
+import type { BuildHoldTarget, ComputedStation, FormationLayer } from "@ikhmalputra/subsurface-core";
 import { AccessibleTable } from "./accessible-table.js";
-import { CommandButton } from "./ui.js";
 
 /**
  * Trajectory engineering views. Every view takes stations computed by
@@ -376,125 +375,4 @@ export function TrajectoryLog({ survey, selectedMdM, onSelectMd, dlsLimitDegPer3
     <p className="sw-sr-only">{survey.length} supplied trajectory stations from {metres(survey[0]?.mdM ?? 0)} to {metres(survey.at(-1)?.mdM ?? 0)} m measured depth; maximum dogleg severity {degrees(maxDlsActual, 1)} per 30 m.</p>
     <AccessibleTable label="trajectory survey log" description="Computed inclination, azimuth and dogleg severity at supplied measured-depth stations." columns={[{ label: "MD", unit: "m" }, { label: "Inclination", unit: "°" }, { label: "Azimuth", unit: "°" }, { label: "DLS", unit: "°/30 m" }]} rowCount={survey.length} getRows={(start, end) => survey.slice(start, end).map((station) => [station.mdM, station.inclinationDeg, station.azimuthDeg, station.dlsDegPer30m])} />
   </figure>;
-}
-
-/** Key results of a computed trajectory. */
-export function TrajectorySummaryPanel({ summary, dlsLimitDegPer30m, footer }: { readonly summary: TrajectorySummary; readonly dlsLimitDegPer30m?: number; readonly footer?: ReactNode }) {
-  const over = dlsLimitDegPer30m !== undefined && summary.maxDlsDegPer30m > dlsLimitDegPer30m + 1e-9;
-  const items: [string, string, string?][] = [
-    ["TD (MD)", `${metres(summary.totalDepthMdM)} m`],
-    ["TD (TVD)", `${metres(summary.totalDepthTvdM)} m`],
-    ["Closure", `${metres(summary.closureDistanceM)} m`, `@ ${degrees(summary.closureAzimuthDeg, 1)}`],
-    ["Kickoff", summary.kickoffMdM == null ? "—" : `${metres(summary.kickoffMdM, 0)} m MD`],
-    ["Max inclination", degrees(summary.maxInclinationDeg)],
-    ["Max DLS", `${summary.maxDlsDegPer30m.toFixed(2)}°/30 m`, `at ${metres(summary.maxDlsMdM, 0)} m MD`],
-  ];
-  return <section className="sw-traj-summary" aria-label="Trajectory summary" data-testid="trajectory-summary">
-    <dl>{items.map(([label, value, detail]) => <div key={label} data-over={label === "Max DLS" && over ? true : undefined}><dt>{label}</dt><dd>{value}{detail && <small>{detail}</small>}</dd></div>)}</dl>
-    {footer}
-  </section>;
-}
-
-function NumberCell({ value, onCommit, label, invalid, step = "any", digits = 2 }: { value: number; onCommit: (value: number) => void; label: string; invalid?: boolean; step?: string; digits?: number }) {
-  const [draft, setDraft] = useState<string | null>(null);
-  const commit = () => {
-    if (draft === null) return;
-    const next = Number(draft);
-    setDraft(null);
-    if (draft.trim() !== "" && Number.isFinite(next) && next !== value) onCommit(next);
-  };
-  return <input type="number" inputMode="decimal" step={step} aria-label={label} aria-invalid={invalid || undefined} value={draft ?? Number(value.toFixed(digits))} onChange={(event) => setDraft(event.target.value)} onBlur={commit} onKeyDown={(event) => { if (event.key === "Enter") { commit(); (event.target as HTMLInputElement).blur(); } if (event.key === "Escape") setDraft(null); }} />;
-}
-
-export interface SurveyTableProps {
-  readonly survey: readonly ComputedStation[];
-  /** Pass `onChange` to make MD, inclination and azimuth editable; positions always come from the math. */
-  readonly onChange?: (stations: readonly SurveyStationInput[]) => void;
-  readonly issues?: readonly TrajectoryIssue[];
-  readonly selectedMdM?: number | null;
-  readonly onSelectMd?: (mdM: number) => void;
-  readonly dlsLimitDegPer30m?: number;
-  readonly maxHeight?: number;
-}
-
-/** Survey station table with minimum-curvature results; editable when `onChange` is given. */
-export function SurveyTable({ survey, onChange, issues = [], selectedMdM, onSelectMd, dlsLimitDegPer30m, maxHeight = 420 }: SurveyTableProps) {
-  const body = useRef<HTMLDivElement>(null);
-  const editable = !!onChange;
-  const stations = survey.map(({ mdM, inclinationDeg, azimuthDeg }) => ({ mdM, inclinationDeg, azimuthDeg }));
-  let selectedIndex = -1;
-  if (selectedMdM != null) {
-    let best = Infinity;
-    survey.forEach((station, index) => { const distance = Math.abs(station.mdM - selectedMdM); if (distance < best) { best = distance; selectedIndex = index; } });
-  }
-  useEffect(() => {
-    const row = body.current?.querySelector<HTMLElement>(`[data-index="${selectedIndex}"]`);
-    const container = body.current;
-    if (!row || !container || container.contains(document.activeElement)) return;
-    const top = row.offsetTop - container.clientHeight / 3;
-    container.scrollTo({ top: Math.max(0, top) });
-  }, [selectedIndex]);
-  const update = (index: number, patch: Partial<SurveyStationInput>) => onChange?.(stations.map((station, position) => position === index ? { ...station, ...patch } : station));
-  const insertAfter = (index: number) => {
-    const current = stations[index]!;
-    const next = stations[index + 1];
-    const mdM = next ? (current.mdM + next.mdM) / 2 : current.mdM + 30;
-    onChange?.([...stations.slice(0, index + 1), { mdM: Math.round(mdM * 100) / 100, inclinationDeg: next ? (current.inclinationDeg + next.inclinationDeg) / 2 : current.inclinationDeg, azimuthDeg: current.azimuthDeg }, ...stations.slice(index + 1)]);
-  };
-  const remove = (index: number) => { if (stations.length > 2 && index > 0) onChange?.(stations.filter((_, position) => position !== index)); };
-  const issueFor = (index: number, field: TrajectoryIssue["field"]) => issues.find((issue) => issue.index === index && issue.field === field);
-  return <div className="sw-traj-table" data-testid="survey-table" data-editable={editable || undefined}>
-    <div className="sw-traj-table-scroll" ref={body} style={{ maxHeight }} tabIndex={0} role="region" aria-label="Survey stations">
-      <table>
-        <caption className="sw-sr-only">Survey stations with minimum-curvature positions</caption>
-        <thead><tr><th scope="col">#</th><th scope="col">MD m</th><th scope="col">Inc °</th><th scope="col">Azi °</th><th scope="col">TVD m</th><th scope="col">N m</th><th scope="col">E m</th><th scope="col">VS m</th><th scope="col">DLS °/30 m</th>{editable && <th scope="col"><span className="sw-sr-only">Actions</span></th>}</tr></thead>
-        <tbody>{survey.map((station, index) => {
-          const over = dlsLimitDegPer30m !== undefined && station.dlsDegPer30m > dlsLimitDegPer30m + 1e-9;
-          const rowIssue = issues.find((issue) => issue.index === index);
-          return <tr key={index} data-index={index} aria-selected={index === selectedIndex} data-over={over || undefined} title={rowIssue?.message} onClick={() => onSelectMd?.(station.mdM)}>
-            <th scope="row">{index + 1}</th>
-            {editable ? <>
-              <td><NumberCell label={`Station ${index + 1} measured depth`} value={station.mdM} invalid={!!issueFor(index, "mdM")} onCommit={(mdM) => update(index, { mdM })} /></td>
-              <td><NumberCell label={`Station ${index + 1} inclination`} value={station.inclinationDeg} invalid={!!issueFor(index, "inclinationDeg")} onCommit={(inclinationDeg) => update(index, { inclinationDeg })} /></td>
-              <td><NumberCell label={`Station ${index + 1} azimuth`} value={station.azimuthDeg} invalid={!!issueFor(index, "azimuthDeg")} onCommit={(azimuthDeg) => update(index, { azimuthDeg })} /></td>
-            </> : <><td>{metres(station.mdM, 2)}</td><td>{station.inclinationDeg.toFixed(2)}</td><td>{station.azimuthDeg.toFixed(2)}</td></>}
-            <td>{metres(station.tvdM, 2)}</td><td>{metres(station.northingM, 2)}</td><td>{metres(station.eastingM, 2)}</td><td>{metres(station.verticalSectionM, 2)}</td>
-            <td className="sw-traj-dls">{index === 0 ? "—" : station.dlsDegPer30m.toFixed(2)}</td>
-            {editable && <td className="sw-traj-actions"><CommandButton icon="add" type="button" aria-label={`Insert a station after ${index + 1}`} onClick={(event) => { event.stopPropagation(); insertAfter(index); }}></CommandButton><CommandButton icon="remove" type="button" aria-label={`Delete station ${index + 1}`} disabled={index === 0 || stations.length <= 2} onClick={(event) => { event.stopPropagation(); remove(index); }}></CommandButton></td>}
-          </tr>;
-        })}</tbody>
-      </table>
-    </div>
-    {issues.length > 0 && <ul className="sw-traj-issues" aria-label="Survey issues">{issues.slice(0, 6).map((issue) => <li key={`${issue.index}-${issue.field}`} data-severity={issue.severity}><CommandButton kind="selection" type="button" onClick={() => { const station = survey[issue.index]; if (station) onSelectMd?.(station.mdM); }}>Station {issue.index + 1}</CommandButton> {issue.message}</li>)}{issues.length > 6 && <li>+{issues.length - 6} more</li>}</ul>}
-  </div>;
-}
-
-export interface BuildHoldFormProps {
-  readonly value: BuildHoldInput;
-  readonly onChange: (value: BuildHoldInput) => void;
-  readonly plan?: BuildHoldPlan | null;
-  readonly error?: string | null;
-}
-
-/** Inputs for `planBuildHold` with the solved geometry beside them. */
-export function BuildHoldForm({ value, onChange, plan, error }: BuildHoldFormProps) {
-  const field = (label: string, unit: string, current: number, apply: (next: number) => BuildHoldInput, hint?: string) => <label className="sw-traj-field"><span>{label}<small>{unit}</small></span><NumberCell label={`${label} (${unit})`} value={current} onCommit={(next) => onChange(apply(next))} digits={2} />{hint && <em>{hint}</em>}</label>;
-  return <section className="sw-traj-form" aria-label="Build and hold planner" data-testid="build-hold-form">
-    <div className="sw-traj-fields">
-      {field("Kickoff", "m MD", value.kickoffMdM, (kickoffMdM) => ({ ...value, kickoffMdM }), "vertical above")}
-      {field("Build rate", "°/30 m", value.buildRateDegPer30m, (buildRateDegPer30m) => ({ ...value, buildRateDegPer30m }))}
-      {field("Target TVD", "m", value.target.tvdM, (tvdM) => ({ ...value, target: { ...value.target, tvdM } }))}
-      {field("Target north", "m", value.target.northingM, (northingM) => ({ ...value, target: { ...value.target, northingM } }))}
-      {field("Target east", "m", value.target.eastingM, (eastingM) => ({ ...value, target: { ...value.target, eastingM } }))}
-      {field("Drill past target", "m", value.extensionM ?? 0, (extensionM) => ({ ...value, extensionM }))}
-    </div>
-    {error ? <p className="sw-traj-error" role="alert">{error}</p> : plan && <dl className="sw-traj-solved" aria-label="Solved build and hold geometry">
-      <div><dt>Hold inclination</dt><dd>{degrees(plan.holdInclinationDeg)}</dd></div>
-      <div><dt>Azimuth</dt><dd>{degrees(plan.azimuthDeg)}</dd></div>
-      <div><dt>Build radius</dt><dd>{metres(plan.radiusM, 0)} m</dd></div>
-      <div><dt>End of build</dt><dd>{metres(plan.endOfBuildMdM, 0)} m MD · {metres(plan.endOfBuildTvdM, 0)} m TVD</dd></div>
-      <div><dt>Hold length</dt><dd>{metres(plan.holdLengthM, 0)} m</dd></div>
-      <div><dt>Target MD</dt><dd>{metres(plan.targetMdM, 1)} m</dd></div>
-    </dl>}
-  </section>;
 }

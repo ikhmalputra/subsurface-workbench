@@ -5,5 +5,5 @@ export { InfoTip } from "./info-tip.js";
 export type { InfoTipProps } from "./info-tip.js";
 export { AccessibleTable } from "./accessible-table.js";
 export type { AccessibleTableColumn, AccessibleTableProps } from "./accessible-table.js";
-export { RESERVOIR, equatorField, equatorSite, forgeSite, unlocatedWells } from "./sites.js";
+export { EQUATOR_CONTACTS, RESERVOIR, equatorField, equatorPetrophysics, equatorSite, forgeSite, kestrelSite, unlocatedWells } from "./sites.js";
 export type { EquatorField, WorldSite } from "./sites.js";

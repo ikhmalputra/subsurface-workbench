@@ -82,6 +82,17 @@ export interface SiteSceneProps {
   readonly seismicNote?: string;
   readonly selectedWellId?: string | null;
   readonly onSelectWell?: (id: string) => void;
+  /** A measured depth on one well to mark with a ring, e.g. a linked depth cursor. */
+  readonly cursor?: { readonly wellId: string; readonly mdM: number } | null;
+  /**
+   * How far each well had been drilled, by well id, metres MD: its path, intervals and picks are
+   * drawn only above that depth. Wells not named are drawn whole. Applied without a rebuild.
+   */
+  readonly reach?: Readonly<Record<string, number>> | null;
+  /** Picks to hide, by well id and marker label: a shoe whose string had not yet been run, say. */
+  readonly hiddenMarkers?: Readonly<Record<string, readonly string[]>> | null;
+  /** An interval to light up along one well, e.g. a brushed log interval. MD metres. */
+  readonly highlight?: { readonly wellId: string; readonly topMdM: number; readonly baseMdM: number; readonly color?: string } | null;
 }
 
 interface Layers { readonly wells: boolean; readonly seismic: boolean; readonly horizons: boolean; readonly reference: boolean; readonly labels: boolean }
@@ -136,7 +147,7 @@ function pointAtMd(well: SiteSceneWell, md: number): [number, number, number] | 
 
 const fmt = (value: number) => Math.round(value).toLocaleString("en-US");
 
-export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = [], seismic = null, seismicClip, seismicNote, selectedWellId = null, onSelectWell }: SiteSceneProps) {
+export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = [], seismic = null, seismicClip, seismicNote, selectedWellId = null, onSelectWell, cursor = null, reach = null, hiddenMarkers = null, highlight = null }: SiteSceneProps) {
   const host = useRef<HTMLDivElement>(null);
   const ids = useId();
   const [ready, setReady] = useState(false);
@@ -158,7 +169,12 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
   const engine = useRef<{
     layers(next: Layers): void; slices(next: Slices): void; style(map: SeismicColorMap, gain: number): void;
     select(id: string | null): void; fit(): void; look(view: NamedView): void;
+    cursor(at: { readonly wellId: string; readonly mdM: number } | null): void;
+    reach(depths: Readonly<Record<string, number>> | null, hidden: Readonly<Record<string, readonly string[]>> | null): void;
+    highlight(band: SiteSceneProps["highlight"]): void;
   } | null>(null);
+  const reachRef = useRef({ reach, hiddenMarkers });
+  reachRef.current = { reach, hiddenMarkers };
   const pick = useEffectEvent((id: string) => onSelectWell?.(id));
 
   useEffect(() => {
@@ -268,6 +284,8 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
     // ── Wells ────────────────────────────────────────────────────────────────────────────────
     const wellMaterials = new Map<string, THREE.MeshStandardMaterial>();
     const wellTubes: THREE.Mesh[] = [];
+    /** Everything drawn along a well, with the MD it spans, so a reach can cut it. */
+    const alongWells: { readonly wellId: string; readonly object: THREE.Object3D; readonly start: number; readonly end: number; readonly segments?: number; readonly marker?: string }[] = [];
     wells.forEach((well, index) => {
       const colour = WELL_COLOURS[index % WELL_COLOURS.length]!;
       const points: THREE.Vector3[] = [];
@@ -276,8 +294,10 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
       const curve = new THREE.CatmullRomCurve3(points, false, "centripetal");
       const material = keep(new THREE.MeshStandardMaterial({ color: colour, roughness: 0.45, metalness: 0.1, emissive: colour, emissiveIntensity: 0 }));
       wellMaterials.set(well.id, material);
-      const tube = new THREE.Mesh(keep(new THREE.TubeGeometry(curve, Math.min(1200, points.length * 3), radius, 10, false)), material);
+      const tubeSegments = Math.min(1200, points.length * 3);
+      const tube = new THREE.Mesh(keep(new THREE.TubeGeometry(curve, tubeSegments, radius, 10, false)), material);
       tube.userData.well = well;
+      alongWells.push({ wellId: well.id, object: tube, start: well.mdM[0]!, end: well.mdM[well.mdM.length - 1]!, segments: tubeSegments });
       groups.wells.add(tube);
       wellTubes.push(tube);
       pickables.push(tube);
@@ -295,6 +315,7 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
         if (sub.length < 2) continue;
         const band = new THREE.Mesh(keep(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(sub, false, "centripetal"), sub.length * 2, radius * 1.75, 12, false)), keep(new THREE.MeshStandardMaterial({ color: interval.color, roughness: 0.6 })));
         band.userData.well = well;
+        alongWells.push({ wellId: well.id, object: band, start: interval.topMdM, end: interval.baseMdM, segments: sub.length * 2 });
         groups.wells.add(band);
         pickables.push(band);
       }
@@ -305,9 +326,21 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
         const ring = new THREE.Mesh(keep(new THREE.SphereGeometry(radius * 2.1, 14, 10)), keep(new THREE.MeshStandardMaterial({ color: "#1d232b", roughness: 0.5 })));
         ring.position.copy(position);
         groups.wells.add(ring);
-        label(marker.label, position.clone().add(new THREE.Vector3(radius * 5, 0, 0)), "pick", 1, { wellId: well.id, layer: "wells" });
+        const pick = label(marker.label, position.clone().add(new THREE.Vector3(radius * 5, 0, 0)), "pick", 1, { wellId: well.id, layer: "wells" });
+        alongWells.push({ wellId: well.id, object: ring, start: marker.mdM, end: marker.mdM, marker: marker.label }, { wellId: well.id, object: pick, start: marker.mdM, end: marker.mdM, marker: marker.label });
       }
     });
+
+    let highlightMesh: THREE.Mesh | null = null;
+    // ── The linked depth cursor: one ring, moved along whichever well it is on ─────────────
+    const cursorColour = token("--sw-cursor", "#1d4ed8");
+    const cursorRing = new THREE.Mesh(keep(new THREE.TorusGeometry(radius * 3.4, radius * 0.7, 10, 32)), keep(new THREE.MeshBasicMaterial({ color: cursorColour, depthTest: false, transparent: true })));
+    const cursorDot = new THREE.Mesh(keep(new THREE.SphereGeometry(radius * 1.9, 14, 10)), keep(new THREE.MeshBasicMaterial({ color: cursorColour, depthTest: false, transparent: true })));
+    cursorRing.renderOrder = cursorDot.renderOrder = 10;
+    cursorRing.visible = cursorDot.visible = false;
+    scene.add(cursorRing, cursorDot);
+    const cursorLabel = label("", new THREE.Vector3(), "pick", 4, { className: "is-cursor", colour: cursorColour });
+    cursorLabel.visible = false;
 
     // ── Seismic ──────────────────────────────────────────────────────────────────────────────
     const gainUniform = uniform(1);
@@ -502,6 +535,50 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
       },
       fit() { fitTo(whole, home.clone().normalize()); },
       look(named) { cube.look(named); invalidate(); },
+      reach(depths, hidden) {
+        for (const item of alongWells) {
+          if (item.marker !== undefined && hidden?.[item.wellId]?.includes(item.marker)) { item.object.visible = false; continue; }
+          const limit = depths?.[item.wellId];
+          if (limit === undefined) { item.object.visible = true; if (item.segments && item.object instanceof THREE.Mesh) item.object.geometry.setDrawRange(0, Infinity); continue; }
+          if (!item.segments || !(item.object instanceof THREE.Mesh)) { item.object.visible = item.end <= limit; continue; }
+          const part = THREE.MathUtils.clamp((limit - item.start) / Math.max(1e-6, item.end - item.start), 0, 1);
+          const total = item.object.geometry.index?.count ?? 0;
+          item.object.geometry.setDrawRange(0, part >= 1 ? total : Math.ceil(part * item.segments) * (total / item.segments));
+          item.object.visible = part > 0;
+        }
+        invalidate();
+      },
+      highlight(band) {
+        if (highlightMesh) { scene.remove(highlightMesh); highlightMesh.geometry.dispose(); (highlightMesh.material as THREE.Material).dispose(); highlightMesh = null; }
+        const well = band ? wells.find((entry) => entry.id === band.wellId) : undefined;
+        if (band && well) {
+          const points: THREE.Vector3[] = [];
+          const step = Math.max(1, (band.baseMdM - band.topMdM) / 80);
+          for (let md = band.topMdM; md <= band.baseMdM + 1e-6; md += step) { const p = pointAtMd(well, Math.min(md, band.baseMdM)); if (p) points.push(at(...p)); }
+          if (points.length >= 2) {
+            highlightMesh = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points, false, "centripetal"), points.length * 2, radius * 2.6, 14, false), new THREE.MeshBasicMaterial({ color: band.color ?? cursorColour, transparent: true, opacity: 0.55, depthWrite: false }));
+            highlightMesh.renderOrder = 9;
+            scene.add(highlightMesh);
+          }
+        }
+        invalidate();
+      },
+      cursor(target) {
+        const well = target ? wells.find((entry) => entry.id === target.wellId) : undefined;
+        const p = well && target ? pointAtMd(well, target.mdM) : null;
+        cursorRing.visible = cursorDot.visible = cursorLabel.visible = p !== null;
+        if (p && well && target) {
+          const position = at(...p);
+          // The ring lies across the well: its axis along the path at that depth.
+          const ahead = pointAtMd(well, target.mdM + 5) ?? pointAtMd(well, target.mdM - 5) ?? p;
+          const along = at(...ahead).sub(position);
+          if (along.lengthSq() > 0) cursorRing.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), along.normalize());
+          cursorRing.position.copy(position); cursorDot.position.copy(position);
+          cursorLabel.position.copy(position.clone().add(new THREE.Vector3(radius * 6, radius * 3, 0)));
+          cursorLabel.element.textContent = `${fmt(target.mdM)} m MD · depth ${fmt(p[2])} m`;
+        }
+        invalidate();
+      },
     };
     started.ready.then((backend) => { element.dataset.backend = backend; setReady(true); invalidate(); }, (cause) => setError(`The site scene could not start: ${cause instanceof Error ? cause.message : String(cause)}`));
     return () => {
@@ -511,6 +588,7 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
       renderer.domElement.removeEventListener("pointerleave", leave);
       renderer.domElement.removeEventListener("pointerdown", press);
       renderer.domElement.removeEventListener("pointerup", release);
+      if (highlightMesh) { highlightMesh.geometry.dispose(); (highlightMesh.material as THREE.Material).dispose(); }
       labels.dispose();
       for (const item of disposables) item.dispose();
       started.dispose(); renderer.domElement.remove();
@@ -523,6 +601,10 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
   useEffect(() => { if (ready) engine.current?.slices(slices); }, [ready, slices]);
   useEffect(() => { if (ready) engine.current?.style(colorMap, gain); }, [ready, colorMap, gain]);
   useEffect(() => { if (ready) engine.current?.select(selectedWellId); }, [ready, selectedWellId]);
+  useEffect(() => { if (ready) engine.current?.cursor(cursor); }, [ready, cursor?.wellId, cursor?.mdM]);
+  useEffect(() => { if (ready) engine.current?.highlight(highlight); }, [ready, highlight?.wellId, highlight?.topMdM, highlight?.baseMdM, highlight?.color]);
+  const reachKey = `${reach ? Object.entries(reach).map(([id, md]) => `${id}:${md}`).join("|") : ""}/${hiddenMarkers ? Object.entries(hiddenMarkers).map(([id, labels]) => `${id}:${labels.join(",")}`).join("|") : ""}`;
+  useEffect(() => { if (ready) engine.current?.reach(reachRef.current.reach, reachRef.current.hiddenMarkers); }, [ready, reachKey]);
 
   const toggle = (key: keyof Layers) => setLayers((current) => ({ ...current, [key]: !current[key] }));
   const horizons = surfaces.filter((surface) => surface.role === "horizon");

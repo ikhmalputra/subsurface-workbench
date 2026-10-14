@@ -7,17 +7,23 @@ domain); see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 **State, October 2026.** The previous application and its UI were purged for a total redo. What
 remains is the foundation the new application is built on: the calculations, the 2D and 3D views,
-the map solution, the data, and a typed rewrite in progress. There is no application in the
-repository until the new one is built.
+the map solution and the data. The new application, `apps/deck`, is
+being built on them by the phases in [the rebuild plan](docs/REBUILD_PLAN.md); phases 0 to 3 are in
+place: the deck, twenty-three modules linked by one signal bus with visible links, a time rail
+that replays FORGE day by day, live engineering with what-if, apply and undo on the Kestrel A-7
+design, and petrophysics on synthetic logs.
 
 ## Packages
 
 | Package | What it holds |
 | --- | --- |
-| `@ikhmalputra/subsurface-core` | Calculations and data: minimum-curvature trajectory and build-and-hold planner; casing scheme, API 5C3 ratings, load cases, cement and kick tolerance; Archie and Schlumberger M–N; LAS 2.0 and SEG-Y parsing; CRS and GIS (WGS84, Web Mercator, WGS84 and NAD83 UTM); validated contracts; state and URL deep links; the FORGE, S-profile and research wells |
+| `@ikhmalputra/subsurface-core` | Calculations and data: minimum-curvature trajectory and build-and-hold planner; casing scheme, API 5C3 ratings, load cases, cement and kick tolerance; shale volume (linear, Larionov), density and density–neutron porosity, Archie, net pay and
+Schlumberger M–N; bit and annular hydraulics (API RP 13D, `/hydraulics`) on reported, derived or
+absent values (`/known`); LAS 2.0 and SEG-Y parsing; a well's state on any day from its dated
+reports (`wellAsOf`); a design brief as a drawable well (`briefToWellDesign`); what-if edit
+history (`createEditHistory`); synthetic rock-model logs (`syntheticReservoirLogs`); CRS and GIS (WGS84, Web Mercator, WGS84 and NAD83 UTM); validated contracts; state and URL deep links; the FORGE, S-profile and research wells |
 | `@ikhmalputra/subsurface-react` | Views: the well section, construction schematic and curved construction, log tracks, trajectory plots, seismic section (`/2d`); well, assembly, offshore and site scenes (`/3d`); the wells map and field GIS map (`/gis`); the site adapters that place FORGE and the Equator field (root) |
-| `@ikhmalputra/subsurface-fixtures` | The FORGE survey and its source files: mud log (LAS), PSDM section (SEG-Y) and the well-centred PSDM sub-volume, under `data/` |
-| `kernel`, `calc`, `scene`, `render`, `views` | The typed rewrite: known/derived values and unit-tagged quantities, trajectory and hydraulics, headless placement of components on the survey, the three.js frame, a schematic view |
+| `packages/fixtures` | Data only: the FORGE source files the tests and the deck read (mud log LAS, PSDM section SEG-Y, PSDM sub-volume), CC BY 4.0 |
 
 Neither package has been published.
 
@@ -30,11 +36,18 @@ pnpm install --frozen-lockfile
 pnpm build
 pnpm lint
 pnpm typecheck
-pnpm test                 # core, kernel, calc, scene, render
+pnpm test                 # core
 pnpm test:render-adapters # React views rendered to static markup
-pnpm test:views
 pnpm test:asset
 pnpm test:packages        # packs both packages and renders them in a clean consumer
+pnpm test:deck            # the deck's grid rules
+```
+
+To open the deck, build it and serve it on http://127.0.0.1:3100:
+
+```sh
+pnpm build
+node tools/serve.mjs
 ```
 
 There are no browser end-to-end tests, by decision.

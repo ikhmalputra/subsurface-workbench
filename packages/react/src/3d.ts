@@ -1,8 +1,6 @@
 "use client";
 
 export { default as WellScene } from "./well-scene.js";
-export { OffshoreScene } from "./offshore-scene.js";
-export type { OffshoreSceneProps } from "./offshore-scene.js";
 export type { WellSceneProps, SceneSeismicVolume, SceneSeismicSection, SceneVolumeView } from "./well-scene.js";
 export { SiteScene, triangulatePlan } from "./site-scene.js";
 export type { SiteSceneProps, SiteSceneWell, SiteSceneSurface, SiteSurfaceGeometry, SiteProvenance } from "./site-scene.js";

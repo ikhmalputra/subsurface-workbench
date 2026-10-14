@@ -117,3 +117,14 @@ test("a vertical well has no kickoff, and a single excursion above tolerance is 
   ]);
   assert.equal(summarizeTrajectory(noisy).kickoffMdM, 600);
 });
+
+test("TVD at an MD and the MD at a TVD agree on the curved path, and say null outside the survey", async () => {
+  const { computeMinimumCurvature, mdAtSurveyTvd, tvdAtSurveyMd } = await import("./trajectory.ts");
+  const survey = computeMinimumCurvature([{ mdM: 0, inclinationDeg: 0, azimuthDeg: 0 }, { mdM: 500, inclinationDeg: 0, azimuthDeg: 0 }, { mdM: 1500, inclinationDeg: 60, azimuthDeg: 90 }]);
+  for (const md of [250, 700, 1100, 1499]) {
+    const tvd = tvdAtSurveyMd(survey, md)!;
+    assert.ok(Math.abs(mdAtSurveyTvd(survey, tvd)! - md) < 1e-6, `${md}`);
+  }
+  assert.equal(tvdAtSurveyMd(survey, 1600), null);
+  assert.equal(mdAtSurveyTvd(survey, 5000), null);
+});

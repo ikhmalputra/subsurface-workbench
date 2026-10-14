@@ -219,6 +219,32 @@ export function surveyPointAtMd(survey: readonly SurveyPoint[], mdM: number): Su
   return upper.mdM === mdM ? upper : interpolateSurveyPoint(lower, upper, mdM);
 }
 
+/** TVD at a measured depth along the survey's curved path; null outside its coverage. */
+export function tvdAtSurveyMd(survey: readonly SurveyPoint[], mdM: number): number | null {
+  if (!survey.length || !Number.isFinite(mdM) || mdM < survey[0]!.mdM || mdM > survey.at(-1)!.mdM) return null;
+  return surveyPointAtMd(survey, mdM).tvdM;
+}
+
+/**
+ * The first measured depth at which the survey reaches a TVD, on its curved path; null if it never
+ * does. A well that turns back up crosses a TVD twice: the shallower crossing is the one returned.
+ */
+export function mdAtSurveyTvd(survey: readonly SurveyPoint[], tvdM: number): number | null {
+  for (let index = 1; index < survey.length; index++) {
+    const a = survey[index - 1]!, b = survey[index]!;
+    if (a.tvdM === tvdM) return a.mdM;
+    if ((a.tvdM - tvdM) * (b.tvdM - tvdM) > 0) continue;
+    let low = a.mdM, high = b.mdM;
+    const rising = b.tvdM >= a.tvdM;
+    for (let step = 0; step < 40; step++) {
+      const middle = (low + high) / 2;
+      if ((interpolateSurveyPoint(a, b, middle).tvdM < tvdM) === rising) low = middle; else high = middle;
+    }
+    return (low + high) / 2;
+  }
+  return null;
+}
+
 /** Index of the first station of a sustained departure from vertical, or -1 if the well never leaves it. */
 export function sustainedDepartureIndex(stations: readonly { readonly mdM: number; readonly inclinationDeg: number }[], toleranceDeg = 2, sustainM = 90): number {
   if (!(toleranceDeg >= 0) || !(sustainM >= 0)) throw new RangeError("Kickoff tolerance and sustained interval must be non-negative.");

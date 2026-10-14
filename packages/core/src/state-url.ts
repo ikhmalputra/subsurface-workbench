@@ -1,7 +1,7 @@
 import { createInitialSubsurfaceState, createSubsurfaceStore } from "./state.ts";
 import type { MdWindow, SpatialXYZ, SubsurfaceState, SubsurfaceStore, Unsubscribe } from "./state.ts";
 
-const fields = ["v", "well", "component", "md", "xyz", "inline", "crossline", "depth", "camera", "target", "zoom", "window", "linked", "planeOrigin", "planeNormal", "logCurve", "logMode", "logDomain", "logRadius"] as const;
+const fields = ["v", "well", "component", "md", "xyz", "inline", "crossline", "depth", "camera", "target", "zoom", "window", "linked", "planeOrigin", "planeNormal", "logCurve", "logMode", "logDomain", "logRadius", "time"] as const;
 
 /** Owns only prefixed query keys; unrelated query parameters and the hash are preserved. */
 export function stateToUrl(state: SubsurfaceState, input: string | URL, prefix = "sw."): URL {
@@ -21,6 +21,7 @@ export function stateToUrl(state: SubsurfaceState, input: string | URL, prefix =
   const interpretation = state.interpretation;
   if (interpretation?.slicePlane) { put("planeOrigin", interpretation.slicePlane.origin); put("planeNormal", interpretation.slicePlane.normal); }
   if (interpretation?.logStyle) { const log = interpretation.logStyle; put("logCurve", log.curveId); put("logMode", log.mode); put("logDomain", log.domain); put("logRadius", log.radiusRange); }
+  put("time", state.time?.cursorMs ?? null);
   return url;
 }
 
@@ -73,6 +74,7 @@ export function stateFromUrl(input: string | URL, prefix = "sw."): SubsurfaceSta
     seismicSlices: { inline: num("inline"), crossline: num("crossline"), time_depth: num("depth") },
     viewState: { position: xyz("camera") ?? initial.viewState.position, target: xyz("target") ?? initial.viewState.target, zoom: num("zoom") ?? 1 },
     depthLink: { linked: linked === null || linked === 1, window, pinnedMdM: md, hoverMdM: null },
+    time: { cursorMs: num("time") },
     ...(origin || hasLog ? { interpretation: {
       slicePlane: origin && normal ? { origin, normal } : null,
       logStyle: curveId && (mode === "color" || mode === "radius" || mode === "color-radius") && domain && radius ? { curveId, mode, domain: [domain[0]!, domain[1]!] as const, radiusRange: [radius[0]!, radius[1]!] as const } : null,

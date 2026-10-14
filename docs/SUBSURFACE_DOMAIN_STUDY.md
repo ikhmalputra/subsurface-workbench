@@ -1,200 +1,103 @@
-# Subsurface domain study — the sub-domains and the tools each needs
+# Subsurface domain study — what the deck has, what overlaps, what to build next
 
-Ikhmal, 12 Oct 2026: *every page we built was there to show several functions. Now there is one
-giant page, and every tool is an icon you click. Study the subsurface domain and its sub-domains,
-and build all the tools for it.*
+Rewritten 15 Oct 2026, after phase 3 of [the rebuild](REBUILD_PLAN.md) and a redundancy cleanup.
+The rule that decides every row: a tool runs on real records, on the user's own input, or on data
+labelled synthetic; nothing is invented. So the order to build in is set by **which real, openly
+licensed data exists**, not by which tool is most famous.
 
-A tool is `verb object` (view, create, edit or delete one object of the well), opening the object's
-data if the host has it. This study supplies the inventory: the subsurface domain as the industry divides it, the tools
-each sub-domain works with day to day, and for each tool what it needs from the host and what the
-repository has. The ribbon on the sheet is this document rendered as icons: a tab per sub-domain,
-an icon per tool, live when built and greyed when not — so the scope is on screen, not in a plan.
+## 1. What the deck has today
 
-Status key: **built** (opens today), **partial** (the calculation or a view exists but not as a
-tool), **planned** (nothing yet; the row says what the host must supply before it can be built).
-Nothing in a planned tool will be simulated when it is built: each one reads host records or the
-user's own input, and says "not supplied" otherwise.
+| Sub-domain | Modules on the deck | Runs on |
+| --- | --- | --- |
+| Place | Globe, Site in 3D | FORGE (documented), Equator (synthetic), Kestrel A-7 (synthetic design) |
+| Well and drilling | Well section, Well in 3D, Construction (straight or along the path), Cutaway, Plan view, Vertical section, Drilling record (days vs depth, hole sections, runs, daily reports), time rail | FORGE records; Kestrel design |
+| Data | Logs, Seismic section | FORGE open-hole logs (GDR 1292), mud log and PSDM; Equator synthetic open-hole logs |
+| Petrophysics | Petrophysics. Crystalline on FORGE: porosity three ways, spectral-gamma mineralogy (Th/K), FMI fracture intensity against resistivity, Vp/Vs and Poisson's ratio, data-quality flags. Clastic on Equator: Vsh linear/Larionov, density and density–neutron porosity, Archie, net pay, crossplot, core plugs | FORGE 16A(78)-32 wireline logs (documented); Equator synthetic logs |
+| Engineering | Strings (recorded ratings on FORGE; live loads on Kestrel), Pressure window, Kick tolerance, Cement, Hydraulics, what-if with apply and undo | Kestrel design brief |
 
-## 1. Drilling engineering
+After the cleanup the code is two packages (`core`, `react`) and a data folder; every calculation
+has one implementation in core.
 
-The well as it is drilled: geometry, construction, loads, time.
+## 2. Overlaps between modules (merged 15 Oct 2026)
 
-| Tool | Does | Needs from the host | Status |
+| Overlap | Why it overlapped | What was done |
+| --- | --- | --- |
+| Site card · Globe · lens | The site list and facts were on the globe, in ⌘K and in the lens | Site module dropped. The globe chooses the site, ⌘K chooses sites and wells, the lens carries provenance; flying to a site opens and stages the site in 3D |
+| Schematic · Curved construction | Two projections of the same construction records | One **Construction** module with a Straight / Along the path switch (remembered per browser); selection, cursor and issues carry across |
+| Days vs depth · Hole sections · Runs · Daily history | Four readings of one drilling record | One **Drilling record** tile with four tabs and one set of links |
+| String · Loads | String was one row of Loads, in detail | One **Strings** module: on a design, the loads table with the selected row's pipe and derating; on a drilled well, the recorded string and its API ratings |
+| Well section · Construction | The section carries the construction as a track | Kept apart: the section is the multi-track depth view, Construction the drawing with exploded and detail modes |
+
+The SDK lost the components only tests used (`GisMap` and its import tools, trajectory layer and
+bathymetry; `OffshoreScene`; `SurveyTable`, `BuildHoldForm`, `TrajectorySummaryPanel`;
+`ComponentPalette`) and 177 CSS rules that only they used.
+
+## 3. What working teams use, by sub-domain
+
+Practitioner context, from the commercial and open suites (Landmark EDT, SLB DrillPlan/Techlog,
+Petrel, Geolog, IP, PROSPER/PIPESIM, MBAL). Each line names what the tool needs.
+
+- **Drilling.** Trajectory and survey (stations, CRS, declination) — *built*. **Anti-collision**
+  (ISCWSA error models, separation factor; offset surveys and survey tool codes). **Torque and
+  drag** (soft-string; surveys, string, mud, friction; recorded hookload and torque to calibrate).
+  **Hydraulics with rheology** (Bingham, power law, Herschel–Bulkley: ECD, annular losses,
+  surge/swab; Fann readings). Casing design — *built* (screening). Tubular thermal loads (WellCat;
+  temperature profiles).
+- **Geology.** Correlation and tops. **Structure and isopach maps** (gridding tops at ≥ 3 wells).
+  Faults and 3D grids. Facies.
+- **Geophysics.** **Well tie / synthetic seismogram** (sonic, density, checkshot, wavelet). Horizon
+  tracking. Time–depth conversion. Attributes (RMS, coherence). AVO and inversion.
+- **Petrophysics.** Vsh, porosity, Archie — *built*. **Shaly-sand saturation** (Simandoux,
+  Indonesia, dual water). **Permeability** (Timur, Coates, core poro-perm). **Pickett plot**.
+  **Monte Carlo** on parameters.
+- **Reservoir.** **Probabilistic volumetrics** (GRV × NTG × φ × (1−Sw) / Bo). **Decline curves**
+  (Arps; rates by well). **Material balance** (p/z, Havlena–Odeh). **PVT correlations** (Standing,
+  Vasquez–Beggs; z-factor).
+- **Production.** **IPR and VLP, nodal analysis** (reservoir pressure, PI, tubing, PVT); gas-lift
+  design.
+- **Integrity.** **Barrier schematic** (NORSOK D-010 envelopes on the construction). Annulus
+  pressure and MAASP. Cement evaluation (CBL/VDL, ultrasonic).
+- **Geomechanics.** **1D mechanical earth model** (Sv from density; pore pressure by Eaton; Shmin
+  from LOT/FIT; SHmax from breakouts). Wellbore-stability mud window.
+
+## 4. Real, openly licensed data, and what each unlocks
+
+| Dataset | Licence | Inside | Unlocks |
 | --- | --- | --- | --- |
-| Well section | the schematic, the log and the survey on one depth axis | components, survey, LAS | **built** |
-| Survey | stations → positions by minimum curvature, plan/section/log views, verification against published positions | survey stations | **built** |
-| Trajectory planner | build-and-hold design through a target, DLS limit | kick-off, target | **built** |
-| Station editor | edit MD/inc/azi, recompute positions | survey | **built** |
-| Anti-collision | separation factor against offset wellbores, ellipses of uncertainty | offset surveys, tool error models | planned |
-| Casing design | strings, setting depths, API 5C3 burst/collapse/tension with derating | casing scheme, pressures | **built** (design brief) |
-| Pressure window | pore, fracture, mud weight vs TVD with provenance per point | pressure data | **built** (design brief) |
-| Kick tolerance | IADC two-condition kick tolerance below a chosen shoe: shoe TVD, hole size and next TD from the host; fracture gradient, mud weight and kick intensity typed; against the operator minimum | shoe, hole sections; pressures typed | **built** (ribbon · Drilling) |
-| Cement volumes | annular volume per string from the shoe to the top of cement, split at the previous shoe; a leg without a reported diameter is named as left out | casing OD, bit sizes; top of cement if not reported | **built** (ribbon · Drilling) |
-| Hydraulics | annular velocity by hole section and bit hydraulics (TFA, nozzle velocity, pressure drop, HHP, impact) from typed flow, mud and nozzles; ECD not computed without rheology | hole sections; flow, mud, nozzles typed | **built** (ribbon · Drilling) |
-| Torque and drag | hookload and torque vs depth for the string in the hole | string weights, friction factors | planned |
-| Drilling performance | ROP/WOB/RPM vs depth from the mud log, interval statistics | LAS | **built** (section log track, drilling study) |
-| Days vs depth | the time-depth curve with runs and trouble marked | daily reports, runs | **built** |
-| Daily reports | the operational record with citations | daily reports | **built** (view only — host-authored) |
-| Runs and BHAs | run intervals, outcomes, footage | runs | **built** (view only — host-authored) |
-| Time breakdown | days by activity category and per hole section from the daily reports, trouble from run outcomes; NPT proper needs the host's NPT coding | daily reports, runs | **built** (ribbon · Drilling) |
-| Drilling study | question, two intervals, evidence, finding with uncertainty | LAS, operations | **built** |
+| **Utah FORGE** (GDR / OEDI) | CC BY 4.0 — commercial use with attribution | 16A(78)-32 wireline logs ([GDR 1292](https://gdr.openei.org/submissions/1292): GR, spectral density, neutron, induction resistivity, sonic, FMI, UBI, CBL, temperature; LAS/DLIS); 1 s and 10 s drilling data ([1283](https://gdr.openei.org/submissions/1283)); temperature surveys ([1421](https://gdr.openei.org/submissions/1421)); wells 58-32 ([1006](https://gdr.openei.org/submissions/1006)) and 16B(78)-32 ([1531](https://gdr.openei.org/submissions/1531), [1516](https://gdr.openei.org/submissions/1516)); field trajectories ([1440](https://gdr.openei.org/submissions/1440)); stress logging ([1032](https://gdr.openei.org/submissions/1032)) | Real petrophysics on FORGE; anti-collision across 16A, 16B, 58-32; torque and drag calibrated on 1 s hookload and torque; 1D MEM; thermal loads; cement evaluation |
+| **FORCE 2020** ([Zenodo 4351156](https://zenodo.org/records/4351156)) | CC BY 4.0 (underlying data NLOD 2.0) | LAS for 118 Norwegian wells with labelled lithology, casing depths, tops | Clastic petrophysics on real logs, correlation, facies |
+| **Sodir FactPages** | NLOD 2.0 — commercial use with attribution | Wellbore headers and coordinates, tops, monthly production by field | Field decline curves, map layers |
+| **BOEM Gulf of America** | US federal, normally public domain | Directional surveys for released wellbores; production by lease and well | Anti-collision at real pad density; decline curves |
+| **Groningen** ([YoDa](https://public.yoda.uu.nl/geo/UU01/1QH0MW.html)) | CC BY 4.0 (to confirm on the record) | 371 wells, > 6,000 logs, tops, PSDM, faults, pressure data | Mapping, volumetrics, gas p/z material balance |
+| **Equinor Volve** | Equinor Open Data Licence (CC BY-based; no selling; share-alike-like) | Logs for 24 wells, 3D/4D seismic, WITSML drilling, production 2008–2016 | Decline, material balance, well tie — needs a legal read before shipping |
+| NLOG, KGS, F3, Teapot Dome | Terms unclear or availability unconfirmed | — | Not until the terms are confirmed |
 
-## 2. Geology
+## 5. Recommended next tools, in order
 
-The rock the well goes through, and the correlation between wells.
+Each is a real tool on real data, with no overlap with what is built.
 
-| Tool | Does | Needs from the host | Status |
-| --- | --- | --- | --- |
-| Formation tops | tops and bases on TVD, drawn on every depth view | formations / marker set | **built** (view, edit in the editor) |
-| Lithology column | lithology by interval beside the section | lithology log | planned |
-| Well correlation | wells side by side on a datum, tops linked | several wells' tops | **built** (field tool) |
-| Cross-section | wells on a spatial line with tops and the surface | locations, tops, surface | **built** (field tool) |
-| Structure map | contours of a top across the field | tops at ≥3 wells, or a surface grid | planned |
-| Isopach map | thickness of an interval across the field | tops at ≥3 wells | planned |
-| Core description | core intervals and descriptions on depth | core records | planned |
-| Facies | facies by interval from logs or core | facies log | planned |
+1. ~~**Real petrophysics on FORGE**~~ — *built* 15 Oct 2026 (see
+   [the source record](FORGE_SOURCE_RECORD.md#open-hole-logs-petrophysics)).
+2. **Anti-collision** — the three FORGE wellbores (16A, 16B, 58-32) from GDR 1440, ISCWSA error
+   ellipses and separation factor, drawn on the globe, the site in 3D and a ladder plot.
+3. **Torque and drag** — soft-string model on the FORGE string and survey, calibrated against the
+   1 s hookload and torque in GDR 1283.
+4. **1D mechanical earth model** — the FORGE open-hole fixture already carries Schlumberger's
+   UCS, static Young's modulus, Poisson's ratio and Sv/Shmin/pore-pressure gradients, and the
+   caliper arm pairs show where the hole goes oval. Add Shmin from the stress tests (GDR 1032) to
+   check them against, for a measured pressure window instead of a design one.
+5. **Decline curves** — Arps on Sodir or BOEM production, one field or lease at a time.
+6. **Barrier schematic** — NORSOK D-010 envelopes drawn on the construction already built.
 
-## 3. Geophysics
+Shaly-sand saturation, permeability and Monte Carlo extend the clastic petrophysics, which still
+runs on synthetic logs; FORCE 2020 would give it real ones. Hydraulics with rheology waits for a source with Fann readings.
 
-The seismic image and the well's place in it.
+## 6. Libraries to know
 
-| Tool | Does | Needs from the host | Status |
-| --- | --- | --- | --- |
-| Seismic section | SEG-Y section along the well, well projected on it, linked by depth | SEG-Y, section geometry | **built** |
-| Seismic volume | the cube around the well, cut along, across and by depth; volume render | sub-volume | **built** |
-| Horizon interpretation | pick and edit horizons on the section | interpretation records | **partial** (`interpretation.ts`, slices only) |
-| Fault picking | fault sticks on the section | fault records | planned |
-| Well-to-seismic tie | synthetic seismogram from sonic and density, matched to the trace | sonic, density, wavelet | planned |
-| Velocity model / time-depth | TWT ↔ depth from checkshot or velocity | checkshot / VSP | planned |
-| Attributes | amplitude, phase, frequency extracted along a horizon | volume + horizon | planned |
+Python: lasio (MIT), dlisio (LGPL-3.0), welly (Apache-2.0), segyio (LGPL-3.0), welleng
+(Apache-2.0, ISCWSA error models), xtgeo (LGPL-3.0), petbox-dca (MIT), bruges (Apache-2.0).
+Browser: @equinor/esv-intersection, @equinor/videx-wellog, @equinor/videx-3d (all MIT). Data
+platform: OSDU (record shapes, not calculations).
 
-## 4. Petrophysics
-
-What the logs say about the rock and its fluids.
-
-| Tool | Does | Needs from the host | Status |
-| --- | --- | --- | --- |
-| Log viewer | curves on tracks by depth, templates, zones | LAS / curves | **built** (developer example; well-keyed is the gap) |
-| Depth shift and QC | align runs, flag bad hole | curves, caliper | planned |
-| Shale volume | Vsh from gamma ray (linear / Larionov) | GR | **partial** (`petrophysics-calculations`) |
-| Porosity | density, neutron, sonic porosity | RHOB, NPHI, DT | **partial** |
-| Water saturation | Archie and variants with a, m, n and Rw | RT, porosity, Rw | **partial** |
-| Permeability | from porosity transforms or core | porosity, core | planned |
-| Net pay and cutoffs | net/gross by cutoffs on Vsh, porosity, Sw | computed curves | **partial** (analysis view) |
-| Crossplot and histogram | curve vs curve, distributions, by zone | curves | **built** (developer example) |
-| Zonation | zones from tops or picked on logs | tops | **partial** |
-
-## 5. Reservoir engineering
-
-The volumes and the pressures.
-
-| Tool | Does | Needs from the host | Status |
-| --- | --- | --- | --- |
-| Volumetrics | GRV × N/G × φ × (1−Sw) / Bo, with each term's source | surfaces or GRV, petrophysical averages, PVT | planned |
-| Fluid properties (PVT) | Bo, Rs, viscosity vs pressure | PVT report | planned |
-| Material balance | p/z and drive indices | production, pressures, PVT | planned |
-| Well test analysis | pressure transient diagnostic (log-log, derivative) | PTA data | planned |
-| Decline curve | Arps fit and forecast on production | production rates | planned |
-| Pressure history | reservoir pressure vs time by zone | pressure surveys | planned |
-
-## 6. Completions and intervention
-
-How the well is equipped to produce, and what has been done to it.
-
-| Tool | Does | Needs from the host | Status |
-| --- | --- | --- | --- |
-| Completion schematic | tubing, packers, SSSV, nipples, mandrels, gauges on the section and in 3D | completion components | **built** |
-| Completion builder | drag parts from the catalogue, placement rules | catalogue | **built** |
-| Perforations | perforated intervals with date, gun, shots per foot | perforation records | planned |
-| Sand control | screens, gravel pack intervals | completion records | planned |
-| Stimulation | fracture / acid treatments by stage | treatment records | planned |
-| Intervention history | workovers and interventions by date and depth | intervention records | planned |
-
-## 7. Production and surveillance
-
-What the well does over time.
-
-| Tool | Does | Needs from the host | Status |
-| --- | --- | --- | --- |
-| Production history | rates, pressures, events over time | surveillance document | **built** (developer example; well-keyed is the gap) |
-| Well tests | rate and pressure tests over time | test records | planned |
-| Artificial lift | lift system and its settings | lift records | planned |
-| Production log (PLT) | flow contribution by depth | PLT | planned |
-| Injection | injection rates and pressures | injection records | planned |
-| Allocation | well production allocated from measured streams | allocation factors | planned |
-
-## 8. Well integrity
-
-Whether the well is sound.
-
-| Tool | Does | Needs from the host | Status |
-| --- | --- | --- | --- |
-| Barrier schematic | primary and secondary barrier envelopes on the construction (NORSOK D-010) | barrier definitions | planned (the construction schematic is the canvas) |
-| Annulus pressures | A/B/C annulus pressure history against limits | annulus monitoring | planned |
-| Cement evaluation | CBL/VDL on the section against cemented intervals | cement bond log | planned |
-| Casing wear and corrosion | wall loss by depth from calipers | caliper logs | planned |
-| Integrity status | current status and open anomalies | integrity register | planned |
-
-## 9. Geomechanics
-
-Whether the hole stays open.
-
-| Tool | Does | Needs from the host | Status |
-| --- | --- | --- | --- |
-| Stress regime | Sv, SHmax, Shmin vs depth | density log, LOT/FIT, image logs | planned |
-| Wellbore stability | collapse and fracture mud weights vs trajectory | stresses, rock strength | planned |
-| Fracture gradient | LOT/FIT points and the fitted gradient | LOT/FIT records | **partial** (pressure window) |
-| Sand production risk | critical drawdown by depth | rock strength | planned |
-
-## 10. Field, data and reference
-
-The things every sub-domain stands on.
-
-| Tool | Does | Needs from the host | Status |
-| --- | --- | --- | --- |
-| Field map | wells on a map with layers, bathymetry, 3D offshore scene | locations, layers | **built** |
-| GIS import | vector and raster layers added to the field | files | **built** |
-| Offset well library | comparable wells, nine-factor match, adoption into a brief | offset records | **built** |
-| Reference and datum | CRS, depth datum, elevation, units; the frame registry | reference metadata | **partial** (`frames.ts` built, not wired) |
-| Data sources | every dataset registered for the well, its provenance and citation | the host registry | **partial** (well file, inspector facts) |
-| Well report | the as-drilled report from sourced records, print-ready | report spec | **built** |
-| Export | brief, study, revision as JSON for the host | — | **built** |
-| Units and conversions | metres/feet, both feet, pressure and density units | — | **built** (`units.ts`) |
-
-## 11. The count
-
-| Sub-domain | built | partial | planned |
-| --- | --- | --- | --- |
-| Drilling engineering | 14 | 0 | 2 |
-| Geology | 3 | 0 | 5 |
-| Geophysics | 2 | 1 | 4 |
-| Petrophysics | 2 | 5 | 2 |
-| Reservoir engineering | 0 | 0 | 6 |
-| Completions and intervention | 2 | 0 | 4 |
-| Production and surveillance | 1 | 0 | 5 |
-| Well integrity | 0 | 0 | 5 |
-| Geomechanics | 0 | 1 | 3 |
-| Field, data and reference | 6 | 2 | 0 |
-| **Total** | **30** | **9** | **36** |
-
-The repository is a drilling-engineering and field tool with the beginnings of petrophysics and
-geophysics. Reservoir engineering, integrity and geomechanics are empty. That is the order the
-planned tools should be built in once the host data exists: each planned row names what it needs.
-
-## 12. How this reaches the sheet
-
-The tool registry (`apps/demo/src/lib/tools.ts`) carries every row above with its sub-domain,
-status and icon. The ribbon docked at the top of the sheet shows a tab per sub-domain and an icon
-per tool; a built tool opens its panel, a partial tool opens the nearest thing it has, a planned
-tool is greyed with its "needs" line as the tooltip. The palette keeps the verb matrix.
-
-
-## Ribbon rule (2026-10-14)
-
-Only working tools are ribbon buttons, and every button opens something of its own: a panel, a
-view of the sheet, a tab of the well file, or a step of the brief. Planned tools are a count in
-the ribbon's title ("17 drilling tools · 2 planned") and rows in the tables above with what they
-need; sub-domains with nothing working (reservoir, integrity, geomechanics) are not ribbon tabs
-until they have a tool. Merged into one button: the seven petrophysics entries (one module);
-Reference, Units and Export (parts of Well properties and the Construction editor); GIS import
-(part of the map); Fracture gradient (the pressure window carries the typed gradient).
+Licence and availability claims above were checked on the publishers' pages on 15 Oct 2026 except
+where marked "to confirm".

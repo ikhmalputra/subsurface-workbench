@@ -1,5 +1,0 @@
-{
-  "extends": "../../tsconfig.sdk.json",
-  "compilerOptions": { "jsx": "react-jsx", "outDir": "dist", "rootDir": "src", "skipLibCheck": true },
-  "include": ["src/index.ts", "src/use-selection.ts", "src/schematic.tsx"]
-}

@@ -7,17 +7,17 @@
     "node": "24.21.0"
   },
   "scripts": {
-    "build": "pnpm --filter @ikhmalputra/subsurface-kernel build && pnpm --filter @ikhmalputra/subsurface-fixtures build && pnpm --filter @ikhmalputra/subsurface-calc build && pnpm --filter @ikhmalputra/subsurface-scene build && pnpm --filter @ikhmalputra/subsurface-render build && pnpm --filter @ikhmalputra/subsurface-views build && pnpm --filter @ikhmalputra/subsurface-core build && pnpm --filter @ikhmalputra/subsurface-react build",
-    "lint": "eslint packages --max-warnings 0",
+    "build": "pnpm --filter @ikhmalputra/subsurface-core build && pnpm --filter @ikhmalputra/subsurface-react build && pnpm --filter deck build",
+    "lint": "eslint packages apps --max-warnings 0",
     "render:catalog": "blender --background --python tools/blender/catalog.py && node tools/compress-models.mjs",
     "compress:models": "node tools/compress-models.mjs",
     "build:world": "node tools/build-world.mjs",
-    "test": "node --test packages/core/src/*.test.ts packages/kernel/src/*.test.ts packages/calc/src/*.test.ts packages/scene/src/*.test.ts packages/render/src/*.test.ts",
+    "test": "node --test packages/core/src/*.test.ts",
+    "test:deck": "node --test apps/deck/test/*.test.ts",
     "test:asset": "node --test tools/asset.test.mjs",
     "test:packages": "node tools/verify-packages.mjs",
     "test:render-adapters": "node --test packages/react/test/*.test.mjs",
-    "test:views": "node --test packages/views/test/*.test.mjs",
-    "typecheck": "pnpm --filter @ikhmalputra/subsurface-core build && pnpm --filter @ikhmalputra/subsurface-react build"
+    "typecheck": "pnpm --filter @ikhmalputra/subsurface-core build && pnpm --filter @ikhmalputra/subsurface-react build && pnpm --filter deck typecheck"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

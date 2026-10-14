@@ -191,3 +191,5 @@ export function lasCurve(las: LasFile, mnemonic: string): LasCurve | undefined {
   const wanted = mnemonic.toUpperCase();
   return las.curves.find((curve) => curve.mnemonic.toUpperCase() === wanted) ?? las.curves.find((curve) => curve.mnemonic.toUpperCase().endsWith(`_${wanted}`));
 }
+
+export * from "./well-history.ts";
