@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.sdk.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": [
+    "src/index.ts",
+    "src/quantity.ts",
+    "src/known.ts",
+    "src/depth.ts",
+    "src/selection.ts"
+  ]
+}

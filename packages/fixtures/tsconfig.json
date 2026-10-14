@@ -1,0 +1,5 @@
+{
+  "extends": "../../tsconfig.sdk.json",
+  "compilerOptions": { "resolveJsonModule": true, "outDir": "dist", "rootDir": "src" },
+  "include": ["src/index.ts", "src/forge.ts"]
+}

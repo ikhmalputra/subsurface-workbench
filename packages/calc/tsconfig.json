@@ -1,0 +1,5 @@
+{
+  "extends": "../../tsconfig.sdk.json",
+  "compilerOptions": { "outDir": "dist", "rootDir": "src" },
+  "include": ["src/index.ts", "src/angle.ts", "src/interpolate.ts", "src/trajectory.ts", "src/hydraulics.ts"]
+}

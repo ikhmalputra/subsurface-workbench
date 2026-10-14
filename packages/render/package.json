@@ -1,0 +1,42 @@
+{
+  "name": "@ikhmalputra/subsurface-render",
+  "version": "0.0.0",
+  "type": "module",
+  "license": "MIT",
+  "author": "Ikhmal Putra Manan",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "dependencies": {
+    "@ikhmalputra/subsurface-kernel": "workspace:*",
+    "@ikhmalputra/subsurface-calc": "workspace:*",
+    "@ikhmalputra/subsurface-scene": "workspace:*"
+  },
+  "peerDependencies": {
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@ikhmalputra/subsurface-fixtures": "workspace:*",
+    "@types/three": "0.180.0",
+    "three": "0.186.1"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./frame": {
+      "types": "./dist/frame.d.ts",
+      "import": "./dist/frame.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && cp ../../LICENSE LICENSE"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

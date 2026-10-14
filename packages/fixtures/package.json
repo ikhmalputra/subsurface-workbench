@@ -1,0 +1,16 @@
+{
+  "name": "@ikhmalputra/subsurface-fixtures",
+  "version": "0.0.0",
+  "type": "module",
+  "license": "MIT",
+  "author": "Ikhmal Putra Manan",
+  "sideEffects": false,
+  "files": ["dist", "LICENSE", "README.md"],
+  "dependencies": { "@ikhmalputra/subsurface-kernel": "workspace:*" },
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./forge": { "types": "./dist/forge.d.ts", "import": "./dist/forge.js" }
+  },
+  "scripts": { "build": "tsc -p tsconfig.json && cp src/forge-data.json dist/forge-data.json && cp ../../LICENSE LICENSE" },
+  "publishConfig": { "access": "public" }
+}
