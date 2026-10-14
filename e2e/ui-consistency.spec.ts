@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { budget } from "./support/timing";
-import { gotoApp, openAppearance } from "./support/app";
+import { gotoApp, openAppearance, openTool } from "./support/app";
 
 const routes = ["/", "/view-well/", "/trajectory/", "/builder/", "/edit-well/", "/analysis/", "/map/", "/correlation/", "/cross-section/", "/petrophysics/", "/production/", "/linked-data/", "/sandbox/", "/well-report/"];
 
@@ -18,41 +18,32 @@ async function auditExpandedCommands(page: Page) {
   expect(defects).toEqual([]);
 }
 
-test("full well editor tabs support themes and keyboard navigation", async ({ page }) => {
+test("the well editing tools support themes, docking beside the sheet and the command audit", async ({ page }) => {
   test.setTimeout(budget(180_000));
   await gotoApp(page, "/edit-well/?well=forge");
   await openAppearance(page);
-  const tabs = page.getByRole("tablist", { name: "Well editor" });
   await expect(page.getByRole("button", { name: "Export JSON", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Blank well", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Example", exact: true })).toHaveCount(0);
-  await expect(page.getByTestId("curved-assembly-schematic")).toBeVisible();
-  expect(await page.locator(".demo-edit-commandbar").evaluate((element) => element.getBoundingClientRect().height)).toBeLessThan(100);
-  await tabs.getByRole("tab", { name: "Construction", exact: true }).focus();
-  await page.keyboard.press("ArrowRight");
-  await expect(tabs.getByRole("tab", { name: "Well properties", exact: true })).toBeFocused();
-  await expect(tabs.getByRole("tab", { name: "Well properties", exact: true })).toHaveAttribute("aria-selected", "true");
-  for (const tab of ["Construction", "Well properties", "Trajectory", "Component records", "Formations", "Records & data"]) {
-    await tabs.getByRole("tab", { name: tab, exact: true }).click();
-    await expect(page.getByTestId("curved-assembly-schematic")).toBeVisible();
-    if (["Well properties", "Component records", "Formations"].includes(tab)) {
-      await expect(page.getByRole("region", { name: "Curved well construction", exact: true })).toBeVisible();
-      const geometry = await page.locator(".demo-edit-canvas").evaluate((element) => {
-        const canvas = element.getBoundingClientRect();
-        const tools = element.closest(".demo-edit-workbench")!.querySelector(".demo-edit-tool-panel")!.getBoundingClientRect();
-        return { canvasRight: canvas.right, toolsLeft: tools.left };
-      });
-      expect(geometry.canvasRight).toBeLessThanOrEqual(geometry.toolsLeft);
-      expect(await page.locator(".demo-edit-inspector input").first().evaluate((element) => getComputedStyle(element).borderTopStyle)).toBe("solid");
-    }
+  const canvas = page.getByTestId("curved-assembly-schematic");
+  await expect(canvas).toBeVisible();
+  for (const [domain, tool, testId] of [["Drilling", "Construction editor", "tool-construction"], ["Drilling", "Well properties", "tool-well-properties"], ["Drilling", "Component records", "tool-component-records"], ["Geology", "Formation tops", "tool-formations"], ["Field & data", "Data sources", "tool-records-data"]] as const) {
+    await openTool(page, domain, tool);
+    const panel = page.getByTestId(testId);
+    await expect(panel).toBeVisible();
+    await expect(canvas).toBeVisible();
+    // The tool docks beside the sheet, never over the drawing.
+    const drawing = (await canvas.boundingBox())!, dock = (await panel.boundingBox())!;
+    expect(drawing.x + drawing.width).toBeLessThanOrEqual(dock.x + 1);
+    if (testId !== "tool-construction") expect(await panel.locator("input").first().evaluate((element) => getComputedStyle(element).borderTopStyle)).toBe("solid");
     for (const theme of ["light", "dark", "high-contrast"]) {
       await page.getByRole("combobox", { name: "Theme", exact: true }).selectOption(theme);
       await auditExpandedCommands(page);
-      const result = await new AxeBuilder({ page }).include("#well-edit-panel").analyze();
-      expect(result.violations.map((issue) => ({ tab, theme, id: issue.id, nodes: issue.nodes.map((node) => node.target) }))).toEqual([]);
+      const result = await new AxeBuilder({ page }).include(`[data-float="${testId}"]`).analyze();
+      expect(result.violations.map((issue) => ({ tool, theme, id: issue.id, nodes: issue.nodes.map((node) => node.target) }))).toEqual([]);
     }
+    await page.locator(`[data-float="${testId}"]`).getByRole("button", { name: /^Dismiss/ }).click();
   }
-  // Desktop-only product (Ikhmal, 2026-10-13): the phone containment pass is out of scope.
 });
 
 for (const route of routes) {

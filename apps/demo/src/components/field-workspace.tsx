@@ -1,21 +1,19 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { useMemo } from "react";
 import { GisMap } from "@ikhmalputra/subsurface-react/gis";
 import { MultiWellCorrelation, WellCrossSection } from "@ikhmalputra/subsurface-react/2d";
 import { useSubsurfaceSelector } from "@ikhmalputra/subsurface-react/state";
 import { defaultFieldCutoffs, fieldCorrelationWells, fieldLogs, screenFieldInterval } from "../lib/field-project";
 import { useWorkspace } from "./workspace-provider";
-import { FieldTrajectoryInspector } from "./field-trajectory-inspector";
-import { CommandButton, CommandIcon } from "@ikhmalputra/subsurface-react/ui";
+import { CommandButton } from "@ikhmalputra/subsurface-react/ui";
 
 const OffshoreScene = dynamic(() => import("@ikhmalputra/subsurface-react/3d").then((module) => module.OffshoreScene), { ssr: false });
 export type FieldTool = "spatial" | "correlation" | "section";
 
 export function FieldWorkspace({ tool }: { tool: FieldTool }) {
-  const { fieldProject: project, fieldStore: store, fieldWellIds: ids, setFieldWellIds, fieldOptions, updateFieldOptions, fieldGisState, setFieldGisState } = useWorkspace();
+  const { fieldProject: project, fieldStore: store, fieldWellIds: ids, fieldOptions, updateFieldOptions, fieldGisState, setFieldGisState } = useWorkspace();
   const active = useSubsurfaceSelector(store, (state) => state.activeAsset);
   const { log, flatten, focusInterval, view, offset, endpoints, cutoffs } = fieldOptions;
   const selected = project.records.filter((record) => ids.includes(record.well.id));
@@ -33,34 +31,11 @@ export function FieldWorkspace({ tool }: { tool: FieldTool }) {
   const validSection = selected.length >= 2 && endpoints[0] !== endpoints[1] && endpoints.every((id) => ids.includes(id));
   function focusWell(id: string) { store.focusAsset(id, null, "field"); }
   return <section className="demo-field-workspace" aria-label="Connected Field workspace" data-testid="field-workspace">
-    <header className="demo-field-header"><div><h1>Equator field</h1><p>One project · four wells · shared selection and source stations</p></div><strong>SYNTHETIC ENGINEERING SCENARIO</strong></header>
-    <p className="demo-gis-notice">Assumed UTM 50N locations, generated surveys/logs, synthetic casing and completion records, interpreted Sand R1 top/base and illustrative water depths. No measured bathymetry, production, pressure, saturation or reserves are supplied. Field selection is independent of the documented well workspace.</p>
-    <nav aria-label="Field tools" className="demo-field-tools">
-      <Link href="/view-well/?tool=field" aria-current={tool === "spatial" ? "page" : undefined}><CommandIcon name="locate" />1 · Locate wells</Link>
-      <Link href="/view-well/?tool=correlation" aria-current={tool === "correlation" ? "page" : undefined}><CommandIcon name="layers" />2 · Compare intervals</Link>
-      <Link href="/view-well/?tool=cross-section" aria-current={tool === "section" ? "page" : undefined}><CommandIcon name="view" />3 · Spatial section</Link>
-    </nav>
-    <div className="demo-field-register" role="group" aria-label="Field well selection">
-      {project.records.map(({ well }) => <div key={well.id}>
-        <label><input type="checkbox" checked={ids.includes(well.id)} onChange={(event) => setFieldWellIds(event.target.checked ? [...ids, well.id] : ids.filter((id) => id !== well.id))} />Include {well.label}</label>
-        <CommandButton icon="inspect" aria-pressed={active.wellId === well.id} onClick={() => focusWell(well.id)}>Inspect {well.label}</CommandButton>
-      </div>)}
-    </div>
-    <p role="status" className="demo-correlation-status">{activeRecord ? `${activeRecord.well.label} selected${active.depth_md !== null ? ` / ${active.depth_md.toFixed(1)} m MD below seabed wellhead` : ""}` : "Choose a well to inspect its location."} · {selected.length} wells included in comparison/section.</p>
+    {/* The register, the field documents' links and the trajectory inspector are the field's tools, docked beside this document. */}
+    <header className="demo-field-header"><div><h1>Equator field</h1><p>{tool === "spatial" ? "Locate wells" : tool === "correlation" ? "Compare intervals" : "Spatial section"} · {selected.length} of {project.records.length} wells included{activeRecord ? ` · ${activeRecord.well.label} inspected` : ""}</p></div><strong>SYNTHETIC ENGINEERING SCENARIO</strong></header>
     {tool === "spatial" && <>
       <div className="demo-field-controls"><label>Spatial view <select value={view} onChange={(event) => updateFieldOptions({ view: event.target.value === "map" ? "map" : "3d" })}><option value="map">3D geographic map</option><option value="3d">Offshore overview</option></select></label></div>
-      {view === "3d" ? <OffshoreScene model={project.model} origin={project.origin} waterDepthsM={project.waterDepthsM} selectedWellId={active.wellId} onSelectWell={focusWell} /> : <GisMap document={project.model.document} store={store} workerUrl="/gis/maplibre-gl-worker.mjs" trajectories3d={trajectories3d} gisState={fieldGisState} onGisStateChange={setFieldGisState}>
-        {activeRecord ? <FieldTrajectoryInspector key={activeRecord.well.id} record={activeRecord} waterDepthM={project.waterDepthsM[activeRecord.well.id]!} mdM={active.depth_md} store={store} /> : <p className="demo-gis-notice">Select a well or click an embedded 3D path to inspect its trajectory.</p>}
-      </GisMap>}
-      <section className="demo-offshore-details" data-testid="offshore-details" aria-label="Selected offshore well">
-        <h2>{activeRecord?.well.label ?? "Select a well to inspect its location"}</h2>
-        {activeRecord && <dl>
-          <div><dt>Longitude / latitude</dt><dd>{activeRecord.stations[0]!.geographic.map((value) => `${value.toFixed(6)}°`).join(" / ")}</dd></div>
-          <div><dt>Water depth</dt><dd>{project.waterDepthsM[activeRecord.well.id]} m below sea surface</dd></div>
-          <div><dt>Terminal MD / TVD below wellhead</dt><dd>{activeRecord.stations.at(-1)!.mdM.toFixed(1)} m / {activeRecord.stations.at(-1)!.xyz[2].toFixed(1)} m</dd></div>
-          <div><dt>Reference</dt><dd>EPSG:32650 · MD/TVD from seabed wellhead · section depth from sea surface</dd></div>
-        </dl>}
-      </section>
+      {view === "3d" ? <OffshoreScene model={project.model} origin={project.origin} waterDepthsM={project.waterDepthsM} selectedWellId={active.wellId} onSelectWell={focusWell} /> : <GisMap document={project.model.document} store={store} workerUrl="/gis/maplibre-gl-worker.mjs" trajectories3d={trajectories3d} gisState={fieldGisState} onGisStateChange={setFieldGisState} />}
     </>}
     {tool === "correlation" && <>
       <h2>Compare Sand R1 intervals—not map distance</h2>

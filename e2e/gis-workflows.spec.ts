@@ -56,8 +56,7 @@ test("local vectors support CRS import, styles, identify, measurement and Field 
   expect(errors).toEqual([]); expect(external).toEqual([]);
 });
 
-test("invalid imports report errors and a projected local vector fits on a phone", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+test("invalid imports report errors and a projected local vector is identified", async ({ page }) => {
   await gotoApp(page, "/map/");
   await expect(page.getByTestId("gis-map")).toHaveAttribute("data-ready", "true");
   const tools = page.getByTestId("gis-tools");
@@ -70,7 +69,6 @@ test("invalid imports report errors and a projected local vector fits on a phone
   await tools.getByText("Feature attributes · 1").click();
   await tools.getByLabel("Inspect feature in utm.geojson").selectOption("wellhead");
   await expect(tools.getByTestId("gis-identification")).toContainText("local UTM");
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
 test("local TIFF renders, samples and replaces the illustrative seabed on the same map canvas", async ({ page }) => {

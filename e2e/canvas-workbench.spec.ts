@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { gotoApp, openNavigation } from "./support/app";
+import { gotoApp, openNavigation, openTool } from "./support/app";
 
 for (const route of ["/view-well/?well=s-profile", "/edit-well/?well=s-profile", "/builder/"]) {
   test(`${route} opens with a dominant curved canvas and immediate view controls`, async ({ page }) => {
@@ -14,10 +14,16 @@ for (const route of ["/view-well/?well=s-profile", "/edit-well/?well=s-profile",
       await expect(modes.getByRole("button", { name: "Section", exact: true })).toHaveAttribute("aria-pressed", "true");
       await modes.getByRole("button", { name: "Curved", exact: true }).click();
     }
+    if (route.startsWith("/edit")) {
+      // The editor is the sheet's Edit view: the builder's curved drawing with the Construction tool beside it.
+      await expect(modes.getByRole("button", { name: "Edit", exact: true })).toHaveAttribute("aria-pressed", "true");
+      await expect(page.getByTestId("tool-construction")).toBeVisible();
+      await modes.getByRole("button", { name: "Curved", exact: true }).click();
+    }
     const canvas = page.getByTestId("curved-assembly-schematic");
     await expect(canvas).toBeVisible();
     await expect(modes.getByRole("button", { name: "Curved", exact: true })).toHaveAttribute("aria-pressed", "true");
-    const dock = page.locator(route.startsWith("/view") ? "#well-inspector" : route.startsWith("/edit") ? ".demo-edit-tool-panel" : ".sw-wd-tools");
+    const dock = page.locator(route.startsWith("/view") ? "#well-inspector" : route.startsWith("/edit") ? '[data-float="tool-construction"]' : ".sw-wd-tools");
     const drawing = (await canvas.boundingBox())!, tools = (await dock.boundingBox())!;
     expect(drawing.y).toBeLessThan(360);
     expect(drawing.height).toBeGreaterThan(400);
@@ -33,9 +39,6 @@ for (const route of ["/view-well/?well=s-profile", "/edit-well/?well=s-profile",
     await expect(canvas).toBeVisible();
     const result = await new AxeBuilder({ page }).analyze();
     expect(result.violations.map((issue) => ({ id: issue.id, nodes: issue.nodes.map((node) => node.target) }))).toEqual([]);
-    await page.setViewportSize({ width: 390, height: 844 });
-    await expect(canvas).toBeVisible();
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
     expect(errors).toEqual([]);
   });
 }
@@ -44,9 +47,9 @@ test("editing tools never replace or remount the canvas and changes reach both d
   await gotoApp(page, "/edit-well/?well=s-profile");
   const curved = page.getByTestId("curved-assembly-schematic");
   await curved.evaluate((element) => element.setAttribute("data-mount-check", "same-canvas"));
-  const tabs = page.getByRole("tablist", { name: "Well editor" });
-  for (const tab of ["Well properties", "Trajectory", "Component records", "Formations", "Records & data", "Construction"]) {
-    await tabs.getByRole("tab", { name: tab, exact: true }).click();
+  // Every editing tool docks beside the sheet; the builder's canvas is the same element throughout.
+  for (const [domain, tool] of [["Drilling", "Well properties"], ["Drilling", "Component records"], ["Geology", "Formation tops"], ["Field & data", "Data sources"], ["Drilling", "Construction editor"]] as const) {
+    await openTool(page, domain, tool);
     await expect(curved).toHaveAttribute("data-mount-check", "same-canvas");
   }
   const id = await curved.locator("[data-item-id]").first().getAttribute("data-item-id");
@@ -59,15 +62,13 @@ test("editing tools never replace or remount the canvas and changes reach both d
   await label.fill("Canvas-driven edit");
   await inspector.getByRole("button", { name: "Apply changes" }).click();
   await expect(curved.locator(`[data-item-id="${id}"]`)).toHaveAttribute("aria-label", /Canvas-driven edit/);
-  await page.getByRole("button", { name: "Schematic", exact: true }).click();
+  // The edit is the revision: the sheet's own schematic draws it too.
+  const views = page.getByRole("group", { name: "Canvas view", exact: true });
+  await views.getByRole("button", { name: "Schematic", exact: true }).click();
   await expect(page.getByTestId("assembly-schematic").locator(`[data-item-id="${id}"]`).first()).toHaveAttribute("aria-label", /Canvas-driven edit/);
+  await views.getByRole("button", { name: "Edit", exact: true }).click();
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   await expect(label).toHaveValue(original);
-  await page.setViewportSize({ width: 390, height: 844 });
-  for (const tab of ["Well properties", "Trajectory", "Component records", "Formations", "Records & data"]) {
-    await tabs.getByRole("tab", { name: tab, exact: true }).click();
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
-  }
 });
 
 test("curved canvas accepts native palette drops and wall picks reveal editing tools", async ({ page }) => {

@@ -15,6 +15,13 @@ import { SCENE_READY } from "./timing";
  * `html[data-sw-hydrated]` is set by the application frame in an effect, so waiting for it means
  * React is mounted and effects have run.
  */
+/** Open a tool from the ribbon: its sub-domain tab, then its button. The ribbon is docked top by default. */
+export async function openTool(page: Page, domain: string, name: string) {
+  const ribbon = page.locator('[data-float="ribbon"]');
+  await ribbon.getByRole("tab", { name: domain, exact: true }).click();
+  await ribbon.getByRole("button", { name, exact: true }).click();
+}
+
 export async function gotoApp(page: Page, url: string): Promise<Response | null> {
   const response = await page.goto(url);
   await expect(page.locator("html[data-sw-hydrated='true']"), "the application should hydrate before being driven")
@@ -34,10 +41,11 @@ async function forwarded(page: Page): Promise<void> {
   if (new URL(page.url()).pathname.replace(/\/$/, "") === "/view-well") {
     const tool = new URL(page.url()).searchParams.get("tool") ?? "section";
     // The survey is not a document: it is the section with the summary and the station editor beside it.
-    const document = tool === "trajectory" || tool === "study" ? "section" : tool;
+    const document = tool === "trajectory" || tool === "study" || tool === "edit-well" ? "section" : tool;
     await expect(page.locator(`.demo-tool-page[data-document="${document}"]`), `the "${document}" document should open on the sheet`).toBeAttached({ timeout: SCENE_READY });
     if (tool === "trajectory") await expect(page.getByTestId("tool-stations"), "the station editor should open with the survey").toBeAttached({ timeout: SCENE_READY });
     if (tool === "study") await expect(page.getByTestId("tool-study"), "the study tool should open with the section").toBeAttached({ timeout: SCENE_READY });
+    if (tool === "edit-well") await expect(page.getByTestId("tool-construction"), "the construction tool should open with the Edit view").toBeAttached({ timeout: SCENE_READY });
   }
 }
 

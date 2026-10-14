@@ -26,10 +26,8 @@ test("one Field project preserves selected wells, depth and tool settings throug
   await expect(page.getByTestId("workspace-context")).toContainText("Documented record");
 });
 
-test("phone Field tools fit and guard an empty comparison", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+test("an empty comparison is guarded", async ({ page }) => {
   await gotoApp(page, "/correlation/");
   for (const name of ["A", "B", "C", "D"]) await page.getByRole("checkbox", { name: `Include Equator ${name}` }).uncheck();
   await expect(page.getByRole("alert").filter({ hasText: "at least two" })).toBeVisible();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });

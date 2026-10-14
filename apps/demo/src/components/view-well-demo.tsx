@@ -21,6 +21,8 @@ import { FloatingPanel, FloatingToolbar } from "./floating";
 import { useTools } from "./tools";
 import { planDraft, tryPlan } from "../lib/trajectory-draft";
 import { studyHighlights } from "../lib/study-draft";
+import { mergeAssembly } from "../lib/well-revision";
+import { WellAssemblyBuilder } from "@ikhmalputra/subsurface-react/examples";
 import type { BuildHoldInput } from "@ikhmalputra/subsurface-core";
 import { WellSeismicSection, useSceneSeismic, useSegy, useWellOnSection } from "./well-seismic";
 import { RecordCard, useWell, wells } from "./wells";
@@ -37,10 +39,10 @@ interface VolumeCuts { readonly along: number; readonly offset: number; readonly
 const FULL_VOLUME: VolumeCuts = { along: 100, offset: 100, depth: 100 };
 const cutAt = (start: number, end: number, percent: number) => start + (end - start) * Math.max(percent, 2) / 100;
 
-type Layout = "section" | "split" | "seismic" | "earth" | "schematic" | "scene" | "curved" | "profile" | "trajectory" | "well3d";
+type Layout = "section" | "edit" | "split" | "seismic" | "earth" | "schematic" | "scene" | "curved" | "profile" | "trajectory" | "well3d";
 
 /** The seven panes this route can show. A preset is a set of them, not an alternative to them. */
-type PaneId = "wellsection" | "curved" | "profile" | "schematic" | "seismic" | "earth" | "survey" | "well3d" | "cutaway" | "plan" | "section";
+type PaneId = "wellsection" | "edit" | "curved" | "profile" | "schematic" | "seismic" | "earth" | "survey" | "well3d" | "cutaway" | "plan" | "section";
 
 /**
  * Which panes each preset shows.
@@ -54,6 +56,8 @@ const panesFor: Readonly<Record<Layout, readonly PaneId[]>> = {
   // One depth axis with the construction, the mud log and the survey as tracks on it. The other
   // presets are alternatives; this is the one where the depth link can actually be seen.
   section: ["wellsection"],
+  // The builder over the active revision: its parts and properties are the Construction tool.
+  edit: ["edit"],
   curved: ["curved"],
   profile: ["profile"],
   schematic: ["schematic"],
@@ -72,6 +76,7 @@ const panesFor: Readonly<Record<Layout, readonly PaneId[]>> = {
 
 const layouts: readonly { value: Layout; label: string }[] = [
   { value: "section", label: "Well section · construction, log & survey" },
+  { value: "edit", label: "Edit · builder canvas" },
   { value: "split", label: "2.5D + 3D" },
   { value: "seismic", label: "2.5D + seismic" },
   { value: "earth", label: "3D well + seismic + survey" },
@@ -94,6 +99,10 @@ export function ViewWellDemo() {
   const cameraIsAutomatic = camera.zoom === automaticCamera.zoom && camera.position.every((value, i) => value === automaticCamera.position[i]) && camera.target.every((value, i) => value === automaticCamera.target[i]);
   const wellId = workspaceWell.id;
   const [linkError, setLinkError] = useState<string | null>(null);
+  // The link validation reads the live revisions through a ref: re-running the URL sync on every
+  // revision re-read the URL's state and clobbered a selection the builder had just made.
+  const revisionsRef = useRef(revisions);
+  revisionsRef.current = revisions;
   useLayoutEffect(() => {
     const url = new URL(window.location.href);
     const requestedId = url.searchParams.has("sw.v") ? null : url.searchParams.get("well");
@@ -101,7 +110,9 @@ export function ViewWellDemo() {
     if (requestedId && !requested) {
       setLinkError(`Unknown linked well: ${requestedId}`);
     }
-    if (requested) {
+    // The URL names the well once; this runs again on every revision (to re-validate the linked
+    // component against it), and must not clear a selection the builder just made.
+    if (requested && requested.design.id !== store.getState().activeAsset.wellId) {
       store.focusAsset(requested.design.id, null, "url");
     }
     const host = browserStateUrlHost();
@@ -127,7 +138,7 @@ export function ViewWellDemo() {
       const { wellId, componentId } = state.activeAsset;
       const well = wells.find((entry) => entry.design.id === wellId);
       if (wellId !== null && !well) throw new Error(`Unknown linked well: ${wellId}`);
-      if (componentId !== null && well && !getWellComponents(revisions[well.design.id]?.design ?? well.design).some((component) => component.id === componentId)) throw new Error(`Unknown linked component: ${componentId}`);
+      if (componentId !== null && well && !getWellComponents(revisionsRef.current[well.design.id]?.design ?? well.design).some((component) => component.id === componentId)) throw new Error(`Unknown linked component: ${componentId}`);
       const curveId = state.interpretation?.logStyle?.curveId;
       if (curveId && curveId !== "synthetic-porosity") throw new Error(`Unknown linked log: ${curveId}`);
     },
@@ -138,7 +149,7 @@ export function ViewWellDemo() {
       return { ...initial, activeAsset: { ...initial.activeAsset, wellId: requested?.design.id ?? store.getState().activeAsset.wellId } };
     },
     });
-  }, [store, revisions]);
+  }, [store]);
   // The section opens first. It is the view in which the schematic is the centre and every other
   // record is read against it; the drawings and the 3D views are alternative renderings of the
   // same construction and sit one click away in the same strip.
@@ -148,7 +159,7 @@ export function ViewWellDemo() {
   const { design: sourceDesign, components, operations, logUrl, seismic } = useWell(wellId);
   // A trajectory draft — the planner's or the station editor's — is drawn in place of the source
   // survey until it is applied or discarded, with the construction unchanged.
-  const { trajectoryDrafts, updateTrajectoryDraft, studyDrafts } = useWorkspace();
+  const { trajectoryDrafts, updateTrajectoryDraft, studyDrafts, applyRevision, assemblyDrafts, updateAssemblyDraft } = useWorkspace();
   const draft = trajectoryDrafts[sourceDesign.id];
   const design = useMemo(() => draft ? designWithTrajectory(sourceDesign, draft.stations, draft.mode === "plan" ? { name: "Build & hold plan", note: "Planned trajectory, shown as a preview; not applied." } : { name: "Edited stations", note: "Edited stations, shown as a preview; not applied." }) : sourceDesign, [sourceDesign, draft]);
   const plan = useMemo(() => draft?.mode === "plan" ? tryPlan(draft.plan).plan : null, [draft]);
@@ -201,7 +212,8 @@ export function ViewWellDemo() {
   const selectedId = active.componentId;
   const setSelectedId = (id: string | null) => {
     store.selectComponent(id, "view-well");
-    if (id) { setInspectorVisible(true); setInspectorTab("properties"); }
+    // In the Edit view the builder's own properties are the inspector; the sheet's stays where it is.
+    if (id && layout !== "edit") { setInspectorVisible(true); setInspectorTab("properties"); }
   };
   const picked = components.find((component) => component.id === selectedId);
   const highlighted = !picked ? null : assembly.items.some((item) => item.id === picked.id) ? picked.id : picked.parentId ?? null;
@@ -213,6 +225,11 @@ export function ViewWellDemo() {
   const tools = useTools();
   // The study's two intervals are bands across every track while the study tool is open.
   const studyDraft = studyDrafts[sourceDesign.id];
+  // Coming back to a well in the Edit view finds the builder's draft where it was left, selection included.
+  const draftSelection = assemblyDrafts[sourceDesign.id]?.selectedId ?? null;
+  useEffect(() => {
+    if (layout === "edit" && draftSelection && store.getState().activeAsset.componentId === null) store.selectComponent(draftSelection, "edit-draft");
+  }, [sourceDesign.id, layout]);
   const studyBands = useMemo(() => tools.open.has("study") && studyDraft ? studyHighlights(studyDraft) : undefined, [tools.open, studyDraft]);
   const inspectorRequest = tools.requests.inspector, fileRequest = tools.requests["well-file"];
   const sectionRequest = tools.requests.section;
@@ -282,7 +299,8 @@ export function ViewWellDemo() {
         <CommandButton kind="selection" aria-pressed={layout === "curved"} onClick={() => setLayout("curved")}>Curved</CommandButton>
         <CommandButton kind="selection" aria-pressed={layout === "schematic"} onClick={() => setLayout("schematic")}>Schematic</CommandButton>
         <CommandButton kind="selection" aria-pressed={layout === "scene"} onClick={() => setLayout("scene")}>3D view</CommandButton>
-        <CommandButton kind="selection" aria-pressed={showFormations} disabled={!design.formations?.length || (layout !== "section" && layout !== "curved" && layout !== "schematic")} onClick={() => setShowFormations((value) => !value)}>Formations</CommandButton>
+        <CommandButton kind="selection" aria-pressed={layout === "edit"} onClick={() => { setLayout("edit"); if (!tools.open.has("construction")) tools.openPanel("construction"); }}>Edit</CommandButton>
+        <CommandButton kind="selection" aria-pressed={showFormations} disabled={!design.formations?.length || (layout !== "section" && layout !== "curved" && layout !== "schematic" && layout !== "edit")} onClick={() => setShowFormations((value) => !value)}>Formations</CommandButton>
       </div>
       <CommandButton icon="link" type="button" className="demo-toggle" aria-pressed={link.linked} onClick={() => link.setLinked(!link.linked)} title="Zoom, pan and the depth cursor follow across the schematic, seismic section and mud log">{link.linked ? "Depth views linked" : "Depth views independent"}</CommandButton>
       <CommandButton icon="view" type="button" className="demo-tool-button" aria-expanded={inspectorVisible} aria-controls="well-inspector" onClick={() => setInspectorVisible(!inspectorVisible)}>{inspectorVisible ? "Hide inspector" : "Show inspector"}</CommandButton>
@@ -312,6 +330,16 @@ export function ViewWellDemo() {
         <WellSection assembly={assembly} components={components} survey={survey} stations={design.survey} formations={design.formations} totalDepthM={design.totalDepthM}
           operations={operations} logUrl={logUrl} selectedId={highlighted ?? null} onSelect={(id) => setSelectedId(id)} onSelectMd={selectAtMd} link={link} showFormations={showFormations} markers={planMarkers} dlsLimitDegPer30m={draft?.dlsLimitDegPer30m} highlights={studyBands} />
       </Pane>
+      {/* The builder over the active revision. Its parts and properties portal into the Construction
+          tool; a construction change becomes the revision, so every other view draws it at once. */}
+      <Pane id="edit" deferUntilShown keep={false} className="demo-fill demo-edit-pane"><WellAssemblyBuilder embedded workbench survey={sourceDesign.survey} formations={sourceDesign.formations} formationsVisible={showFormations} toolsContainer={tools.constructionHost} onToolsRequested={() => { if (!tools.open.has("construction")) tools.openPanel("construction"); }} assetBaseUrl="/well-components"
+        editorState={{ ...(assemblyDrafts[sourceDesign.id] ?? { past: [], present: assembly, future: [] }), selectedId: highlighted ?? null }}
+        onEditorStateChange={(state) => {
+          const previous = assemblyDrafts[sourceDesign.id]?.present ?? assembly;
+          if (state.present !== previous) applyRevision(sourceDesign.id, { ...(revisions[sourceDesign.id] ?? { design: sourceDesign, operations, logUrl: logUrl ?? null }), design: mergeAssembly(sourceDesign, previous, state.present) });
+          if (state.selectedId !== (highlighted ?? null)) setSelectedId(state.selectedId);
+          updateAssemblyDraft(sourceDesign.id, state);
+        }} /></Pane>
       <Pane id="curved" deferUntilShown className="demo-fill demo-section-view"><CurvedAssemblySchematic assembly={assembly} survey={design.survey} formations={showFormations ? design.formations : undefined} assetBaseUrl="/well-components" selectedId={highlighted} onSelect={setSelectedId} /></Pane>
       <Pane id="profile" deferUntilShown className="demo-fill demo-section-view"><InteractiveViewport name="Curved well section"><CurvedSchematic key={design.id} design={design} components={components} selectedId={picked?.id ?? ""} onSelect={setSelectedId} mode={sectionMode} onModeChange={setSectionMode} layersVisible /></InteractiveViewport></Pane>
       <Pane id="schematic" deferUntilShown className="demo-fill"><AssemblySchematic assembly={assembly} survey={design.survey} formations={showFormations ? design.formations : undefined} assetBaseUrl="/well-components" selectedId={highlighted} onSelect={(id) => setSelectedId(id)} exploded={exploded} onExplodedChange={setExploded} title="Construction schematic" {...schematicLink} /></Pane>

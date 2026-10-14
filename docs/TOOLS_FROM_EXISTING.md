@@ -128,4 +128,21 @@ says "not supplied" when they are not there.
   log, its samples and the runs/daily registers for the interval under review, opened by step 2's
   "Review evidence". The sheet's section bands the draft's two intervals while the study tool is
   open. `?tool=study` opens the section with the study tool; `analysis-workspace.tsx` is gone.
-- **4–8** — not started.
+- **4. The editor** — done. The builder draws in the sheet's **Edit** view (a view like Section or
+  Curved) over the active revision; its parts, properties and undo portal into the **Construction**
+  tool (right, with Export full well and Restore original). **Well properties**, **Component
+  records**, **Formations** (ribbon: Formation tops) and **Records & data** (ribbon: Data sources)
+  are right tools of their own; each edits the revision through `useRevisionEditor`. The trajectory
+  tab is gone — the Station editor and the planner are the trajectory's tools. `?tool=edit-well`
+  opens the Edit view with the Construction tool; `edit-well-demo.tsx` is gone. Applying a revision
+  no longer clears the selection, the pinned depth or the depth window unless they no longer hold.
+- **6. The field** — done. **Well register** (right: include/inspect per well, the field's three
+  documents, the status line) and **Field trajectory** (right: the inspected well's position and
+  the construction/MD inspector) are tools in `field-tools.tsx`; the map, correlation and
+  cross-section documents keep only their plots and a one-line header. The map opens with both
+  tools, the correlation and cross-section with the register only (their plots need the width).
+- **7. Petrophysics on the well** — the module's availability note now reads the active well's
+  own log and names which of GR, NPHI, RHOB, RT and DT it carries and which are not supplied
+  (`WorkspaceRoute`); FORGE's mud log carries drilling curves only, so the synthetic example stays a
+  fixture and nothing is substituted.
+- **5. The brief** and **8. The report** — not started (the report stays a document by design).

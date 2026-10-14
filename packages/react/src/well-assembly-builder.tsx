@@ -50,17 +50,20 @@ export interface WellAssemblyBuilderProps {
   /** Optional host dock, kept mounted while switching tools. */
   readonly toolsContainer?: HTMLElement | null;
   readonly onToolsRequested?: () => void;
+  /** Show formation layers; when given, the host's own control owns the toggle and the builder's is not shown. */
+  readonly formationsVisible?: boolean;
 }
 
 /** Reference composition of the assembly capabilities. Copy it, or compose the pieces yourself. */
-export function WellAssemblyBuilder({ assetBaseUrl, initialAssembly, initialSelectedId = null, onChange, editorState, onEditorStateChange, embedded = false, workbench = false, survey, formations, toolsContainer, onToolsRequested }: WellAssemblyBuilderProps) {
+export function WellAssemblyBuilder({ assetBaseUrl, initialAssembly, initialSelectedId = null, onChange, editorState, onEditorStateChange, embedded = false, workbench = false, survey, formations, toolsContainer, onToolsRequested, formationsVisible }: WellAssemblyBuilderProps) {
   const [localHistory, dispatch] = useReducer(reducer, undefined, () => ({ past: [], present: initialAssembly ?? exampleAssembly(), future: [], selectedId: initialSelectedId }));
   const history = editorState ?? localHistory;
   const selectedId = history.present.items.some((item) => item.id === history.selectedId) ? history.selectedId : null;
   const componentSelect = useRef<HTMLSelectElement>(null);
   const [show3d, setShow3d] = useState(false);
   const [canvasMode, setCanvasMode] = useState<"curved" | "schematic">("curved");
-  const [showFormations, setShowFormations] = useState(false);
+  const [ownFormations, setShowFormations] = useState(false);
+  const showFormations = formationsVisible ?? ownFormations;
   const [tool, setTool] = useState<"properties" | "library" | "checks">("properties");
   const [status, setStatus] = useState<{ text: string; tone: "ok" | "error" }>({ text: "Select a component in the drawing or Edit properties to change its label, depths and sizes. Add new parts from the library.", tone: "ok" });
   const assembly = history.present;

@@ -1647,3 +1647,46 @@ body { background: var(--swc-bg-2); }
 .demo-workspace-bar .demo-drawing-status { flex: 0 0 auto; }
 .demo-workspace-bar .demo-drawing-status label, .demo-workspace-bar .demo-drawing-status button[data-ui-kind="command"][type] { flex: 0 0 auto; }
 .demo-workspace-bar .demo-drawing-status output { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---- the well editor as tools: the builder in the sheet's Edit view, its tools docked right ---- */
+.demo-edit-pane { display: grid; min-height: 0; background: var(--sw-paper); }
+.demo-edit-pane > .sw-asm { min-height: 0; padding: 0; }
+/* The sheet's own view group chooses the view; the builder's duplicate stays out of the way. */
+.demo-edit-pane .sw-asm-canvas-modes { display: none; }
+.demo-edit-tool { display: grid; align-content: start; gap: 0; padding: 0; border: 0; background: transparent; overflow: visible; font-size: 12px; }
+.demo-edit-tool.demo-edit-inspector { border: 0; border-radius: 0; }
+.demo-edit-tool .demo-edit-panehead h3 { margin: 0; color: var(--sw-ink); font: 600 13px var(--sw-font-ui); }
+.demo-edit-tool .demo-edit-fieldgroup { font-size: 12px; }
+.demo-edit-tool .demo-panel { margin: 0; border: 0; border-radius: 0; padding: var(--sw-space-3); }
+.demo-edit-tool .demo-well-fields { grid-template-columns: minmax(0, 1fr); gap: var(--sw-space-3); }
+.demo-edit-tool :is(.demo-panel > label, .demo-well-field) { display: grid; gap: var(--sw-space-2); font-size: 12px; color: var(--sw-muted); }
+.demo-edit-tool :is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"]), textarea, select) { width: 100%; box-sizing: border-box; border: 1px solid var(--sw-line); border-radius: var(--sw-radius-control); background: var(--sw-paper); color: var(--sw-ink); padding: 6px 8px; }
+.demo-edit-tool input[type="number"] { font-family: var(--sw-font-data); }
+.demo-edit-tool details > summary { cursor: pointer; padding: var(--sw-space-3); color: var(--sw-muted); font-size: 12px; }
+.demo-edit-tool details[open] > summary { color: var(--sw-ink); }
+.demo-edit-tool .demo-well-json { border: 0; margin: 0; padding: var(--sw-space-3); }
+.demo-edit-tool .demo-edit-record-pick { display: grid; gap: var(--sw-space-2); padding: 0 0 var(--sw-space-3); border: 0; background: transparent; }
+.demo-edit-tool .demo-edit-actions { padding: var(--sw-space-3); border-top: 1px solid var(--sw-line); }
+.demo-edit-foot { display: grid; gap: 4px; padding: 8px 12px; border-top: 1px solid var(--sw-line); color: var(--sw-muted); font-size: 11px; }
+.demo-edit-foot .demo-edit-revision { font: 600 10px "IBM Plex Mono", monospace; letter-spacing: .1em; text-transform: uppercase; }
+.demo-edit-tools-host { min-width: 0; }
+.demo-edit-tools-host .sw-asm-tools { border: 0; }
+
+/* ---- the field's tools: register and trajectory inspector beside its documents ---- */
+.demo-field-tool { display: grid; align-content: start; gap: var(--sw-space-3); padding: 0; border: 0; background: transparent; overflow: visible; }
+.demo-field-tool-head { display: grid; gap: 4px; }
+.demo-field-tool-head h3 { margin: 0; font-size: 14px; }
+.demo-field-tool-head p { margin: 0; font-size: 12px; line-height: 1.5; color: var(--sw-muted); }
+.demo-field-tool-head strong { font: 10px "IBM Plex Mono", monospace; letter-spacing: .08em; color: var(--sw-warning); }
+.demo-field-tool .demo-gis-notice { font-size: 11.5px; line-height: 1.5; }
+.demo-field-tool .demo-field-tools { display: grid; gap: var(--sw-space-2); }
+.demo-field-tool .demo-field-tools a { display: flex; align-items: center; gap: 8px; padding: 8px 10px; }
+.demo-field-tool .demo-field-register { grid-template-columns: minmax(0, 1fr); gap: var(--sw-space-2); }
+.demo-field-tool .demo-field-register > div { grid-template-columns: minmax(0, 1fr) auto; align-items: center; padding: 6px 8px; }
+.demo-field-tool .demo-correlation-status { margin: 0; font-size: 12px; }
+.demo-field-tool .demo-offshore-details { padding: 10px 12px; }
+.demo-field-tool .demo-offshore-details h3 { margin: 0 0 8px; font-size: 13px; }
+.demo-field-tool .demo-offshore-details dl { grid-template-columns: minmax(0, 1fr); gap: var(--sw-space-2); }
+.demo-field-tool .demo-field-trajectory { padding: 10px 12px; }
+.demo-field-tool .demo-field-trajectory h2 { font-size: 13px; }
+.demo-field-tool .demo-field-trajectory input[type="number"] { width: 110px; }

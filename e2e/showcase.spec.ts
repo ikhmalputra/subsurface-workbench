@@ -214,7 +214,8 @@ test("view-well follows the trajectory with the cited FORGE record and shares se
   await page.screenshot({ path: "output/playwright/showcase-view-well-curved.png", fullPage: true });
 });
 
-test("showcase pages fit a phone viewport", async ({ page }) => {
+// Desktop-only product (Ikhmal, 2026-10-13): phone layout is out of scope.
+test.skip("showcase pages fit a phone viewport", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   for (const path of ["/", "/view-well/", "/builder/", "/trajectory/"]) {
     await gotoApp(page, path);

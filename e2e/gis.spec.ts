@@ -56,7 +56,8 @@ test("geographic Field map shares four well identities with the underwater scene
   expect(axe.violations.map((violation) => violation.id)).toEqual([]);
   await page.getByRole("combobox", { name: "Spatial view" }).selectOption("3d");
   await expect(page.getByTestId("offshore-scene")).toHaveAttribute("data-selected-well", "offshore-3");
-  await expect(detail).toHaveCount(0);
+  // The trajectory inspector is the field's tool, not the map's: it stays beside the 3D scene.
+  await expect(detail).toBeVisible();
   await page.getByRole("combobox", { name: "Spatial view" }).selectOption("map");
   await page.getByRole("button", { name: "Inspect Equator D" }).click();
   await expect(detail).toHaveAttribute("data-well-id", "offshore-4");
@@ -65,7 +66,8 @@ test("geographic Field map shares four well identities with the underwater scene
   expect(errors).toEqual([]);
 });
 
-test("geographic Field map fits a phone", async ({ page }) => {
+// Desktop-only product (Ikhmal, 2026-10-13): phone layout is out of scope.
+test.skip("geographic Field map fits a phone", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await gotoApp(page, "/map/");
   await page.getByRole("combobox", { name: "Spatial view" }).selectOption("map");

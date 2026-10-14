@@ -1,5 +1,6 @@
 "use client";
 
+import { getWellComponents } from "@ikhmalputra/subsurface-core";
 import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
 import { createInitialSubsurfaceState, createSubsurfaceStore } from "@ikhmalputra/subsurface-core/state";
 import type { SubsurfaceStore } from "@ikhmalputra/subsurface-core/state";
@@ -105,10 +106,17 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     if (!source) throw new Error(`Unknown revision well: ${id}`);
     const next = authoredRevision(revision, revisions[id]?.design ?? source.design);
     setRevisions((current) => ({ ...current, [id]: next }));
-    if (store.getState().activeAsset.wellId === id) {
-      store.selectComponent(null, "well-revision");
-      store.pinDepth(id, null, "well-revision");
-      store.setDepthWindow(null, "well-revision");
+    // The editor is tools over the sheet now: an edit keeps the selection, the pinned depth and
+    // the depth window the reader is working in, unless the selected component is gone or the
+    // well's total depth no longer holds the window.
+    const active = store.getState().activeAsset;
+    if (active.wellId === id) {
+      const components = getWellComponents(next.design);
+      if (active.componentId !== null && !components.some((component) => component.id === active.componentId)) store.selectComponent(null, "well-revision");
+      const pinned = store.getState().depthLink.pinnedMdM;
+      if (pinned !== null && pinned > next.design.totalDepthM) store.pinDepth(id, null, "well-revision");
+      const window = store.getState().depthLink.window;
+      if (window && window[1] > next.design.totalDepthM) store.setDepthWindow(null, "well-revision");
     }
   }
   function restoreSource(id: string) {

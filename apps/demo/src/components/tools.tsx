@@ -26,7 +26,8 @@ import { EvidenceTool, StudyTool } from "./study-tools";
 import { DemoWellBuilder } from "./demo-well-builder";
 import { WellReportDemo } from "./well-report-demo";
 import { FieldWorkspace } from "./field-workspace";
-import { EditWellDemo } from "./edit-well-demo";
+import { ComponentRecordsTool, ConstructionTool, FormationsTool, RecordsDataTool, WellPropertiesTool } from "./edit-tools";
+import { FieldRegisterTool, FieldTrajectoryTool } from "./field-tools";
 import { CementVolumesTool, HydraulicsTool, KickToleranceTool, TimeBreakdownTool } from "./drilling-tools";
 import { StationEditorTool, SurveySummaryTool, TrajectoryPlannerTool } from "./survey-tools";
 
@@ -54,6 +55,9 @@ interface ToolsState {
   readonly ribbonOpen: boolean;
   /** A phone-width viewport: the ribbon floats, and the workspace bar stays a toolbar of its own. */
   readonly phone: boolean;
+  /** Where the builder portals its parts and properties: the Construction tool's body while it is open. */
+  readonly constructionHost: HTMLElement | null;
+  readonly setConstructionHost: (element: HTMLElement | null) => void;
   readonly setRibbonOpen: (open: boolean) => void;
   /** Open a sub-domain tool from the ribbon; returns the line to echo. */
   readonly launch: (tool: DomainTool) => string;
@@ -70,10 +74,10 @@ export function useTools(): ToolsState {
 }
 
 /** The calculators and editors dock beside the inspector, the station table under the sheet; the documents fill it. */
-const sidePanels: ReadonlySet<ToolPanelId> = new Set(["kick", "cement", "time", "hydraulics", "planner", "stations", "survey-summary", "study", "evidence"]);
+const sidePanels: ReadonlySet<ToolPanelId> = new Set(["kick", "cement", "time", "hydraulics", "planner", "stations", "survey-summary", "study", "evidence", "construction", "well-properties", "component-records", "formations", "records-data", "field-register", "field-trajectory"]);
 const bottomPanels: ReadonlySet<ToolPanelId> = new Set(["stations", "evidence"]);
 /** Side tools that need more than the inspector's width. */
-const dockSizes: Readonly<Partial<Record<ToolPanelId, number>>> = { study: 380 };
+const dockSizes: Readonly<Partial<Record<ToolPanelId, number>>> = { study: 380, construction: 380, "well-properties": 360, "component-records": 360, formations: 360, "records-data": 380, "field-register": 320, "field-trajectory": 400 };
 
 export function ToolsProvider({ children }: { readonly children: ReactNode }) {
   const { well } = useWorkspace();
@@ -82,6 +86,7 @@ export function ToolsProvider({ children }: { readonly children: ReactNode }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [ribbonOpen, setRibbonOpen] = useState(true);
   const [link, setLink] = useState<string | null>(null);
+  const [constructionHost, setConstructionHost] = useState<HTMLElement | null>(null);
   const router = useRouter();
   // A phone has no room for a docked ribbon; it starts as a tray tab there, and the frame keeps
   // the workspace bar out of the ribbon's title row for as long as the viewport stays that narrow.
@@ -97,7 +102,10 @@ export function ToolsProvider({ children }: { readonly children: ReactNode }) {
   // One document at a time: opening one puts the others away, the way a drawing is the active
   // drawing. Side panels stack beside it; the well view's own panels are asked for by request.
   const openPanel = (panel: ToolPanelId, tab?: string) => {
-    if (isDocument(panel)) setOpen((current) => { const next = new Set<ToolPanelId>(); for (const id of current) if (!isDocument(id)) next.add(id); next.add(panel); return next; });
+    if (isDocument(panel)) {
+      setOpen((current) => { const next = new Set<ToolPanelId>(); for (const id of current) if (!isDocument(id)) next.add(id); next.add(panel); return next; });
+      if (tab) setRequests((current) => ({ ...current, [panel]: { nonce: (current[panel]?.nonce ?? 0) + 1, tab } }));
+    }
     // A side tool works over the section: with the sheet empty, the section opens under it.
     else if (sidePanels.has(panel)) setOpen((current) => { if (current.has(panel)) return current; const next = new Set(current); if (![...current].some(isDocument)) next.add("section"); next.add(panel); return next; });
     else {
@@ -128,7 +136,7 @@ export function ToolsProvider({ children }: { readonly children: ReactNode }) {
     for (const extra of tool.open.also ?? []) openPanel(extra);
     return `${tool.label}${tool.open.where ? ` · ${tool.open.where}` : ""}${tool.status === "partial" ? " · partial" : ""}`;
   };
-  return <ToolsContext.Provider value={{ open, document, link, setLink, requests, paletteOpen, setPaletteOpen, ribbonOpen, setRibbonOpen, phone, launch, openPanel, closePanel, run }}>
+  return <ToolsContext.Provider value={{ open, document, link, setLink, requests, paletteOpen, setPaletteOpen, ribbonOpen, setRibbonOpen, phone, constructionHost, setConstructionHost, launch, openPanel, closePanel, run }}>
     <Suspense fallback={null}><ToolDeepLink /></Suspense>
     {children}
   </ToolsContext.Provider>;
@@ -151,8 +159,14 @@ function ToolDeepLink() {
     if (tool === "trajectory") { if (tools.document !== "section") tools.openPanel("section"); tools.openPanel("survey-summary"); tools.openPanel("stations"); return; }
     // The study is the section with its steps beside it and its evidence under it.
     if (tool === "study") { if (tools.document !== "section") tools.openPanel("section"); tools.openPanel("study"); return; }
+    // The editor is the section's Edit view with the construction tool beside it.
+    if (tool === "edit-well") { tools.openPanel("section", "edit"); tools.openPanel("construction"); return; }
     const wanted = tool && isDocument(tool) ? tool : "section";
     if (tools.document !== wanted) tools.openPanel(wanted);
+    // The field's documents come with the field's tools: the register and the trajectory inspector.
+    // The correlation and the cross-section keep their width for the plots; the trajectory inspector stays a ribbon tool there.
+    if (wanted === "field" || wanted === "correlation" || wanted === "cross-section") tools.openPanel("field-register");
+    if (wanted === "field") tools.openPanel("field-trajectory");
   }, [pathname, tool]); // tools.openPanel is stable per provider
   return null;
 }
@@ -250,7 +264,6 @@ function DocumentBody({ document }: { readonly document: ToolPanelId }) {
     case "field": return <FieldWorkspace tool="spatial" />;
     case "correlation": return <FieldWorkspace tool="correlation" />;
     case "cross-section": return <FieldWorkspace tool="section" />;
-    case "edit-well": return <EditWellDemo />;
     case "petrophysics": return <WorkspaceRoute current="/petrophysics/"><PetrophysicsDemo /></WorkspaceRoute>;
     case "production": return <WorkspaceRoute current="/production/"><ProductionSurveillanceDemo /></WorkspaceRoute>;
     case "linked-data": return <WorkspaceRoute current="/linked-data/"><LinkedDataDemo /></WorkspaceRoute>;
@@ -277,6 +290,13 @@ export function ToolPanels() {
           {panel === "survey-summary" && <SurveySummaryTool />}
           {panel === "study" && <StudyTool />}
           {panel === "evidence" && <EvidenceTool />}
+          {panel === "construction" && <ConstructionTool />}
+          {panel === "well-properties" && <WellPropertiesTool />}
+          {panel === "component-records" && <ComponentRecordsTool />}
+          {panel === "formations" && <FormationsTool />}
+          {panel === "records-data" && <RecordsDataTool />}
+          {panel === "field-register" && <FieldRegisterTool />}
+          {panel === "field-trajectory" && <FieldTrajectoryTool />}
           {isDocument(panel) && <DocumentBody document={panel} />}
         </div>
       </Suspense>

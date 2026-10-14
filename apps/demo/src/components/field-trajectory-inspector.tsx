@@ -34,7 +34,7 @@ export function FieldTrajectoryInspector({ record, waterDepthM, mdM, store }: {
         <div><dt>Outside / inside diameter</dt><dd>{selected.outerDiameterMm} / {selected.innerDiameterMm ?? "not supplied"} mm</dd></div>
       </dl><p>{selected.description}</p>
     </section>}
-    <details><summary>Construction register · {design.components?.length} synthetic records</summary><div className="demo-table-scroll"><table>
+    <details><summary>Construction register · {design.components?.length} synthetic records</summary><div className="demo-table-scroll" tabIndex={0} role="region" aria-label="Construction register"><table>
       <thead><tr><th>Component</th><th>MD interval (m)</th><th>OD / ID (mm)</th></tr></thead>
       <tbody>{design.components?.map((component) => <tr key={component.id}><td><CommandButton kind="selection" aria-pressed={selectedId === component.id} onClick={() => { pin((component.topDepthM + component.bottomDepthM) / 2); store.selectComponent(component.id, "field-construction"); }}>{component.name}</CommandButton></td><td>{component.topDepthM.toFixed(1)}–{component.bottomDepthM.toFixed(1)}</td><td>{component.outerDiameterMm} / {component.innerDiameterMm ?? "—"}</td></tr>)}</tbody>
     </table></div></details>

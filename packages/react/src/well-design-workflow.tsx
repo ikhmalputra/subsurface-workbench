@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { computeMinimumCurvature, designReadiness, designToAssembly, emptyWellBrief, exampleBuildHold, exampleWellBrief, forgeOffsetWell, planBuildHold, proposeCasingScheme, regradeFailingStrings, summarizeTrajectory, tvdAtMd, validateDesign } from "@ikhmalputra/subsurface-core";
 import type { BuildHoldInput, DesignStage, FormationLayer, OffsetWell, WellAssembly, WellDesignBrief } from "@ikhmalputra/subsurface-core";
 import { ArrowLeft, ArrowRight, Download, FilePlus2, Hammer, Sparkles } from "lucide-react";
@@ -54,13 +55,15 @@ export interface WellDesignWorkflowProps {
   readonly offsets?: readonly OffsetWell[];
   /** Receives saved, imported, and removed user offsets. The host owns persistence and validation. */
   readonly onOffsetsChange?: (offsets: readonly OffsetWell[]) => void;
+  /** Where to render the design tools (phases, steps, forms, the builder's parts and properties) instead of beside the canvas: a host's own dock. */
+  readonly toolsContainer?: HTMLElement | null;
 }
 
 /**
  * Reference composition of a schematic-first well-design flow. The live assembly is the starting
  * workspace; the design brief, checks and review remain available as separate workflow phases.
  */
-export function WellDesignWorkflow({ assetBaseUrl, initialBrief, initialBuildHold, onBriefChange, onAssemblyChange, offsets = defaultOffsets, onOffsetsChange }: WellDesignWorkflowProps) {
+export function WellDesignWorkflow({ assetBaseUrl, initialBrief, initialBuildHold, onBriefChange, onAssemblyChange, offsets = defaultOffsets, onOffsetsChange, toolsContainer }: WellDesignWorkflowProps) {
   const [offsetId, setOffsetId] = useState<string | null>(null);
   const library = offsets;
   const [brief, setBriefState] = useState<WellDesignBrief>(() => initialBrief ?? exampleWellBrief());
@@ -176,26 +179,7 @@ export function WellDesignWorkflow({ assetBaseUrl, initialBrief, initialBuildHol
     case "assemble": main = null; aside = null; break;
   }
 
-  return <div className="sw-wd" data-testid="well-design-workflow">
-    <header className="sw-wd-bar">
-      <div className="sw-wd-title"><small>{isExample ? "EXAMPLE WELL · SCHEMATIC" : "WELL SCHEMATIC"}</small><div className="sw-title"><strong>{brief.identity.name || "Untitled well"}</strong><InfoTip label="About the well schematic">Select a component or use Edit properties to change its label, depths and sizes. Edits and undo history stay intact when switching tools. Design inputs are separate: rebuilding from the brief replaces component edits.</InfoTip></div></div>
-      <span className="sw-wd-status" data-testid="design-readiness">{readiness.percentComplete}% data · {errorCount ? `${errorCount} errors` : "no errors"}</span>
-      <span className="sw-wd-draft-note">Independent draft · export before leaving to keep it</span>
-      <div className="sw-wd-bar-actions">
-        <CommandButton type="button" className="sw-asm-button" onClick={startBlank}><FilePlus2 size={15} /> New design</CommandButton>
-        <CommandButton type="button" className="sw-asm-button" onClick={startExample}><Sparkles size={15} /> Example well</CommandButton>
-        <CommandButton type="button" className="sw-asm-button" onClick={exportBrief}><Download size={15} /> Export brief</CommandButton>
-        <CommandButton type="button" className="sw-asm-button is-primary" onClick={() => step === "assemble" ? rebuildAssembly() : go("assemble")}><Hammer size={15} /> {step === "assemble" ? "Rebuild schematic" : "View schematic"}</CommandButton>
-      </div>
-    </header>
-    <div className="sw-wd-workspace">
-      <section className="sw-wd-canvas" aria-label="Well construction canvas">
-        <div className="sw-wd-assemble">
-          {assemblyBrief !== brief && <p className="sw-wd-note" role="status">Design inputs have changed. Your schematic edits are preserved. <CommandButton icon="reset" type="button" className="sw-asm-button" onClick={rebuildAssembly}>Rebuild from design</CommandButton></p>}
-          {assembled.assembly ? <WellAssemblyBuilder key={assemblyKey} workbench survey={assemblySurvey} formations={assemblyLayers} toolsContainer={constructionTools} onToolsRequested={() => setStep("assemble")} assetBaseUrl={assetBaseUrl} initialAssembly={assembled.assembly} onChange={(assembly) => { setAssemblyEdited(true); onAssemblyChange?.(assembly); }} />
-            : <p className="sw-wd-error" role="alert">This design cannot be assembled yet: {assembled.error}</p>}
-        </div>
-      </section>
+  const tools = (
       <aside className="sw-wd-tools" aria-label="Well design tools">
         <div className="sw-wd-tool-navigation">
         <nav className="sw-wd-steps" aria-label="Design phases"><ol>{phases.map((phase, at) => {
@@ -231,6 +215,28 @@ export function WellDesignWorkflow({ assetBaseUrl, initialBrief, initialBuildHol
           </>}
         </div>
       </aside>
+  );
+  return <div className={`sw-wd${toolsContainer ? " sw-wd-host-dock" : ""}`} data-testid="well-design-workflow">
+    <header className="sw-wd-bar">
+      <div className="sw-wd-title"><small>{isExample ? "EXAMPLE WELL · SCHEMATIC" : "WELL SCHEMATIC"}</small><div className="sw-title"><strong>{brief.identity.name || "Untitled well"}</strong><InfoTip label="About the well schematic">Select a component or use Edit properties to change its label, depths and sizes. Edits and undo history stay intact when switching tools. Design inputs are separate: rebuilding from the brief replaces component edits.</InfoTip></div></div>
+      <span className="sw-wd-status" data-testid="design-readiness">{readiness.percentComplete}% data · {errorCount ? `${errorCount} errors` : "no errors"}</span>
+      <span className="sw-wd-draft-note">Independent draft · export before leaving to keep it</span>
+      <div className="sw-wd-bar-actions">
+        <CommandButton type="button" className="sw-asm-button" onClick={startBlank}><FilePlus2 size={15} /> New design</CommandButton>
+        <CommandButton type="button" className="sw-asm-button" onClick={startExample}><Sparkles size={15} /> Example well</CommandButton>
+        <CommandButton type="button" className="sw-asm-button" onClick={exportBrief}><Download size={15} /> Export brief</CommandButton>
+        <CommandButton type="button" className="sw-asm-button is-primary" onClick={() => step === "assemble" ? rebuildAssembly() : go("assemble")}><Hammer size={15} /> {step === "assemble" ? "Rebuild schematic" : "View schematic"}</CommandButton>
+      </div>
+    </header>
+    <div className="sw-wd-workspace">
+      <section className="sw-wd-canvas" aria-label="Well construction canvas">
+        <div className="sw-wd-assemble">
+          {assemblyBrief !== brief && <p className="sw-wd-note" role="status">Design inputs have changed. Your schematic edits are preserved. <CommandButton icon="reset" type="button" className="sw-asm-button" onClick={rebuildAssembly}>Rebuild from design</CommandButton></p>}
+          {assembled.assembly ? <WellAssemblyBuilder key={assemblyKey} workbench survey={assemblySurvey} formations={assemblyLayers} toolsContainer={constructionTools} onToolsRequested={() => setStep("assemble")} assetBaseUrl={assetBaseUrl} initialAssembly={assembled.assembly} onChange={(assembly) => { setAssemblyEdited(true); onAssemblyChange?.(assembly); }} />
+            : <p className="sw-wd-error" role="alert">This design cannot be assembled yet: {assembled.error}</p>}
+        </div>
+      </section>
+      {toolsContainer ? createPortal(tools, toolsContainer) : tools}
     </div>
   </div>;
 }
