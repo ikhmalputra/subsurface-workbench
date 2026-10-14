@@ -7,7 +7,7 @@ import type { CommandIconName } from "@ikhmalputra/subsurface-react/ui";
 import { Activity, Anchor, AudioWaveform, Box, Boxes, Calculator, Calendar, ClipboardList, Columns3, Compass, Container, Crosshair, Cylinder, Database, Download, Droplets, FlaskConical, Flame, Gauge, GitBranch, Globe, Grid3x3, Hammer, Layers, ListOrdered, Map, Mountain, Printer, Radio, Route, Rows3, Ruler, Scale, Scan, ScatterChart, ShieldCheck, Sigma, Split, Target, Thermometer, Timer, TrendingDown, Waves, Wrench, Zap, type LucideIcon } from "lucide-react";
 import { FloatingPanel } from "./floating";
 import { useWorkspace } from "./workspace-provider";
-import { SHEET, documentHref, documentLabels, documentRoutes, domainTools, findToolObject, isDocument, subDomains, toolGroupLabels, toolObjects, toolVerbs, type DomainTool, type SubDomain, type ToolGroup, type ToolPanelId, type ToolVerb } from "../lib/tools";
+import { SHEET, documentHref, documentLabels, documentRoutes, domainTools, findToolObject, isDocument, ribbonDomains, subDomains, toolGroupLabels, toolObjects, toolVerbs, type DomainTool, type SubDomain, type ToolGroup, type ToolPanelId, type ToolVerb } from "../lib/tools";
 import { ViewWellDemo } from "./view-well-demo";
 import { ViewWellUsage } from "./view-well-usage";
 import { PetrophysicsDemo } from "./petrophysics-demo";
@@ -108,6 +108,11 @@ export function ToolsProvider({ children }: { readonly children: ReactNode }) {
     if (isDocument(panel)) {
       setOpen((current) => { const next = new Set<ToolPanelId>(); for (const id of current) if (!isDocument(id)) next.add(id); next.add(panel); return next; });
       if (tab) setRequests((current) => ({ ...current, [panel]: { nonce: (current[panel]?.nonce ?? 0) + 1, tab } }));
+    }
+    // A side tool opened with a tab is asked for that tab too (the brief's steps, for instance).
+    else if (sidePanels.has(panel) && tab) {
+      setOpen((current) => { if (current.has(panel)) return current; const next = new Set(current); if (![...current].some(isDocument)) next.add("section"); next.add(panel); return next; });
+      setRequests((current) => ({ ...current, [panel]: { nonce: (current[panel]?.nonce ?? 0) + 1, tab } }));
     }
     // A side tool works over the section: with the sheet empty, the section opens under it.
     else if (sidePanels.has(panel)) setOpen((current) => { if (current.has(panel)) return current; const next = new Set(current); if (![...current].some(isDocument)) next.add("section"); next.add(panel); return next; });
@@ -233,19 +238,21 @@ export function ToolsRibbon({ headExtra }: { readonly headExtra?: ReactNode }) {
   const tools = useTools();
   const [domain, setDomain] = useState<SubDomain>("drilling");
   const [echo, setEcho] = useState<string | null>(null);
-  const visible = domainTools.filter((tool) => tool.domain === domain);
-  const built = visible.filter((tool) => tool.status !== "planned").length;
-  return <FloatingPanel id="ribbon" title="Tool ribbon" detail={echo ?? `${built} of ${visible.length} ${subDomains.find((entry) => entry.id === domain)?.label.toLowerCase()} tools built`} open={tools.ribbonOpen} onOpenChange={tools.setRibbonOpen} defaultDock="top" dockSize={138} defaultStyle={{ left: "calc(var(--dock-left, 0px) + 12px)", top: "calc(var(--dock-top, 0px) + 100px)", width: "min(1100px, calc(100vw - 24px))" }} className="demo-ribbon-float" headExtra={headExtra}>
+  // Only working tools are buttons. What is not built yet is a count with its needs in the study,
+  // not a greyed button that opens nothing.
+  const visible = domainTools.filter((tool) => tool.domain === domain && tool.status !== "planned");
+  const planned = domainTools.filter((tool) => tool.domain === domain && tool.status === "planned").length;
+  const domainLabel = subDomains.find((entry) => entry.id === domain)?.label.toLowerCase();
+  return <FloatingPanel id="ribbon" title="Tool ribbon" detail={echo ?? `${visible.length} ${domainLabel} tools${planned ? ` · ${planned} planned` : ""}`} open={tools.ribbonOpen} onOpenChange={tools.setRibbonOpen} defaultDock="top" dockSize={138} defaultStyle={{ left: "calc(var(--dock-left, 0px) + 12px)", top: "calc(var(--dock-top, 0px) + 100px)", width: "min(1100px, calc(100vw - 24px))" }} className="demo-ribbon-float" headExtra={headExtra}>
     <div className="demo-ribbon" data-testid="tool-ribbon">
       <div className="demo-ribbon-tabs" role="tablist" aria-label="Sub-domains">
-        {subDomains.map((entry) => <CommandButton key={entry.id} kind="selection" role="tab" aria-selected={domain === entry.id} className="demo-ribbon-tab" onClick={() => setDomain(entry.id)}>{entry.label}</CommandButton>)}
+        {ribbonDomains.map((entry) => <CommandButton key={entry.id} kind="selection" role="tab" aria-selected={domain === entry.id} className="demo-ribbon-tab" onClick={() => setDomain(entry.id)}>{entry.label}</CommandButton>)}
       </div>
       <div className="demo-ribbon-tools" role="group" aria-label={`${subDomains.find((entry) => entry.id === domain)?.label} tools`}>
         {visible.map((tool) => {
           const Icon = ribbonIcons[tool.icon] ?? Layers;
           return <CommandButton key={tool.id} kind="selection" className="demo-ribbon-tool" data-status={tool.status} aria-label={tool.label}
-            title={tool.status === "planned" ? `${tool.label} — not built yet. Needs ${tool.needs}.` : `${tool.does}${tool.status === "partial" ? " (partial)" : ""}`}
-            aria-disabled={tool.status === "planned" || undefined} onClick={() => setEcho(tools.launch(tool))}>
+            title={`${tool.does}${tool.status === "partial" ? " (partial)" : ""}`} onClick={() => setEcho(tools.launch(tool))}>
             <span className="demo-ribbon-icon"><Icon size={20} strokeWidth={1.6} aria-hidden="true" /></span>
             <span>{tool.label}</span>
           </CommandButton>;

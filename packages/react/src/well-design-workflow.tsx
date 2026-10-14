@@ -57,13 +57,15 @@ export interface WellDesignWorkflowProps {
   readonly onOffsetsChange?: (offsets: readonly OffsetWell[]) => void;
   /** Where to render the design tools (phases, steps, forms, the builder's parts and properties) instead of beside the canvas: a host's own dock. */
   readonly toolsContainer?: HTMLElement | null;
+  /** Go to a step when this changes (by nonce): a host's tool that names a step of the brief. */
+  readonly requestedStep?: { readonly step: string; readonly nonce: number };
 }
 
 /**
  * Reference composition of a schematic-first well-design flow. The live assembly is the starting
  * workspace; the design brief, checks and review remain available as separate workflow phases.
  */
-export function WellDesignWorkflow({ assetBaseUrl, initialBrief, initialBuildHold, onBriefChange, onAssemblyChange, offsets = defaultOffsets, onOffsetsChange, toolsContainer }: WellDesignWorkflowProps) {
+export function WellDesignWorkflow({ assetBaseUrl, initialBrief, initialBuildHold, onBriefChange, onAssemblyChange, offsets = defaultOffsets, onOffsetsChange, toolsContainer, requestedStep }: WellDesignWorkflowProps) {
   const [offsetId, setOffsetId] = useState<string | null>(null);
   const library = offsets;
   const [brief, setBriefState] = useState<WellDesignBrief>(() => initialBrief ?? exampleWellBrief());
@@ -78,6 +80,7 @@ export function WellDesignWorkflow({ assetBaseUrl, initialBrief, initialBuildHol
   const [constructionTools, setConstructionTools] = useState<HTMLDivElement | null>(null);
   const toolContent = useRef<HTMLDivElement>(null);
   useEffect(() => { if (toolContent.current) toolContent.current.scrollTop = 0; }, [step]);
+  useEffect(() => { if (requestedStep && steps.some((value) => value.id === requestedStep.step)) setStep(requestedStep.step as Step); }, [requestedStep]);
   const readiness = useMemo(() => designReadiness(brief), [brief]);
   const errorCount = useMemo(() => validateDesign(brief).filter((issue) => issue.severity === "error").length, [brief]);
   const setBrief = (next: WellDesignBrief) => { setBriefState(next); setIsExample(false); onBriefChange?.(next); };

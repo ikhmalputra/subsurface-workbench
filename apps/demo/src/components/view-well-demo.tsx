@@ -254,6 +254,11 @@ export function ViewWellDemo() {
     setFileTab({ tab: fileRequest.tab, nonce: fileRequest.nonce });
   }, [fileRequest]);
   const [sceneOptionsOpen, setSceneOptionsOpen] = useState(false);
+  const sceneOptionsRequest = tools.requests["scene-options"];
+  useEffect(() => {
+    if (!sceneOptionsRequest) return;
+    setLayout("earth"); setSceneOptionsOpen(true);
+  }, [sceneOptionsRequest]);
   const [inspectorTab, setInspectorTab] = useState<"properties" | "components" | "basis" | "tools">("tools");
   const lastSurvey = design.survey?.at(-1);
 
@@ -349,7 +354,7 @@ export function ViewWellDemo() {
           if (state.selectedId !== (highlighted ?? null)) setSelectedId(state.selectedId);
           updateAssemblyDraft(sourceDesign.id, state);
         }} /></Pane>
-      <Pane id="design" deferUntilShown keep={false} className="demo-fill demo-design-pane"><DemoWellBuilder toolsContainer={tools.designHost} /></Pane>
+      <Pane id="design" deferUntilShown keep={false} className="demo-fill demo-design-pane"><DemoWellBuilder toolsContainer={tools.designHost} requestedStep={tools.requests.design?.tab ? { step: tools.requests.design.tab, nonce: tools.requests.design.nonce } : undefined} /></Pane>
       <Pane id="curved" deferUntilShown className="demo-fill demo-section-view"><CurvedAssemblySchematic assembly={assembly} survey={design.survey} formations={showFormations ? design.formations : undefined} assetBaseUrl="/well-components" selectedId={highlighted} onSelect={setSelectedId} /></Pane>
       <Pane id="profile" deferUntilShown className="demo-fill demo-section-view"><InteractiveViewport name="Curved well section"><CurvedSchematic key={design.id} design={design} components={components} selectedId={picked?.id ?? ""} onSelect={setSelectedId} mode={sectionMode} onModeChange={setSectionMode} layersVisible /></InteractiveViewport></Pane>
       <Pane id="schematic" deferUntilShown className="demo-fill"><AssemblySchematic assembly={assembly} survey={design.survey} formations={showFormations ? design.formations : undefined} assetBaseUrl="/well-components" selectedId={highlighted} onSelect={(id) => setSelectedId(id)} exploded={exploded} onExplodedChange={setExploded} title="Construction schematic" {...schematicLink} /></Pane>

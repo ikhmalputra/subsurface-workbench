@@ -187,3 +187,14 @@ The tool registry (`apps/demo/src/lib/tools.ts`) carries every row above with it
 status and icon. The ribbon docked at the top of the sheet shows a tab per sub-domain and an icon
 per tool; a built tool opens its panel, a partial tool opens the nearest thing it has, a planned
 tool is greyed with its "needs" line as the tooltip. The palette keeps the verb matrix.
+
+
+## Ribbon rule (2026-10-14)
+
+Only working tools are ribbon buttons, and every button opens something of its own: a panel, a
+view of the sheet, a tab of the well file, or a step of the brief. Planned tools are a count in
+the ribbon's title ("17 drilling tools · 2 planned") and rows in the tables above with what they
+need; sub-domains with nothing working (reservoir, integrity, geomechanics) are not ribbon tabs
+until they have a tool. Merged into one button: the seven petrophysics entries (one module);
+Reference, Units and Export (parts of Well properties and the Construction editor); GIS import
+(part of the map); Fracture gradient (the pressure window carries the typed gradient).
