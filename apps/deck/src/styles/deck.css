@@ -95,7 +95,7 @@ button { font: inherit; color: inherit; }
 .main { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 10px; min-height: 0; }
 
 .bar { display: flex; align-items: center; gap: 12px; padding-top: 8px; }
-.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: var(--t-14); letter-spacing: .01em; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: var(--t-14); letter-spacing: .01em; color: inherit; text-decoration: none; }
 .brand-mark { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; font-size: var(--t-13); font-weight: 700; color: #0b0f1e;
   background: conic-gradient(from 210deg, var(--signal-place), var(--signal-depth), var(--signal-time), var(--signal-object), var(--signal-place)); }
 .brand small { color: var(--ink-3); font-weight: 500; font-size: var(--t-12); }
@@ -432,6 +432,7 @@ button { font: inherit; color: inherit; }
 .mud-label { fill: var(--ink); font: 600 10.5px var(--font-mono); paint-order: stroke; stroke: var(--deck-bg); stroke-width: 3px; }
 .window .formation { fill: var(--ink-3); font: 10.5px var(--font-ui); }
 .window .formation.is-reservoir { fill: #d97706; font-weight: 600; }
+.window .cursor { pointer-events: none; }
 .window .cursor line { stroke: var(--signal-depth); stroke-width: 1.5; }
 .window .cursor text { fill: var(--signal-depth); font: 600 10.5px var(--font-mono); paint-order: stroke; stroke: var(--deck-bg); stroke-width: 3px; }
 .window-legend { margin: 0; padding: 4px 12px; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; font-size: var(--t-11); color: var(--ink-3); }
@@ -514,6 +515,9 @@ button { font: inherit; color: inherit; }
 .acx-plot { position: relative; min-width: 0; display: flex; flex-direction: column; flex: 1 0 300px; }
 .acx-plots.is-wide > .acx-plot { flex: 1 1 0; min-height: 420px; }
 .plot-area { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; }
+/* The plot draws at the size its box is given, so it must not also size the box: in flow, a box that
+   grew to fit a plot measured at a larger size could never shrink back (a resize left it 2,000 px tall). */
+.plot-area > svg { position: absolute; top: 0; left: 0; }
 .acx-plot svg { display: block; }
 .acx-grid line, .acx-grid circle { stroke: color-mix(in srgb, var(--ink-3) 35%, transparent); stroke-width: 1; }
 .acx-grid text { font: 10px var(--font-mono); fill: var(--ink-3); }

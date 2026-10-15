@@ -8,6 +8,7 @@
     "prebuild": "node ../../tools/sync-assets.mjs",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
+    "sdk:reference": "node scripts/sdk-reference.mjs",
     "test": "node --test test/*.test.ts"
   },
   "dependencies": {

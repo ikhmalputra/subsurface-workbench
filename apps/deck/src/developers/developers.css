@@ -1,0 +1,154 @@
+/* The Developers page: the landing page's night palette and type, plus code, live examples and the
+   reference. The SDK views read the --sw-* variables, set here as in the deck. */
+.dv {
+  --code-bg: #0a0e1b;
+  --sw-ink: #e8ebf7; --sw-muted: #9aa3c0; --sw-line: rgba(160, 172, 255, .16); --sw-grid: rgba(160, 172, 255, .08);
+  --sw-accent: #a78bfa; --sw-paper: transparent; --sw-surface: #10162a; --sw-hover: rgba(255, 255, 255, .06);
+  --sw-selected: rgba(167, 139, 250, .18); --sw-select: #ff8a3d; --sw-select-strong: #ffa060; --sw-cursor: #22d3ee;
+  --sw-focus: #22d3ee; --sw-text-halo: #0c1122; --sw-axis-text: #9aa3c0; --sw-well-text: #e8ebf7;
+  --sw-scene-axis: #5d6888; --sw-scene-grid: rgba(160, 172, 255, .12);
+}
+.dv code { font: 13.5px var(--mono); }
+.dv p code, .dv li code { padding: 1px 6px; border-radius: 6px; background: rgba(255, 255, 255, .06); color: var(--ink); font-size: .88em; }
+.dv-badge { margin-left: -14px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--edge-strong); color: var(--ink-2); font-size: 12.5px; font-weight: 500; }
+.lp-links a[aria-current="location"] { color: var(--ink); }
+.dv-hero { padding-bottom: 0; }
+.dv-hero .lp-stats { margin-top: 56px; }
+.dv-spin { animation: dv-spin 1s linear infinite; vertical-align: -2px; }
+@keyframes dv-spin { to { transform: rotate(360deg); } }
+
+/* ---- Code ---- */
+.dv-code { position: relative; margin: 0; min-width: 0; border-radius: 14px; border: 1px solid var(--edge); background: var(--code-bg); overflow: hidden; }
+.dv-code figcaption { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px; border-bottom: 1px solid var(--edge); color: var(--ink-3); font: 12.5px var(--mono); }
+.dv-code figcaption::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--grad); }
+.dv-copy { position: absolute; top: 7px; right: 8px; display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 7px; border: 1px solid var(--edge); background: rgba(255, 255, 255, .03); color: var(--ink-2); font: 12px var(--sans); cursor: pointer; }
+.dv-copy:hover { color: var(--ink); border-color: var(--edge-strong); }
+.dv-copy:focus-visible, .dv-tabs button:focus-visible, .dv-more:focus-visible { outline: 2px solid var(--signal-depth); outline-offset: 2px; }
+.dv-code pre { margin: 0; padding: 16px 18px 18px; overflow: auto; font: 13px/1.62 var(--mono); color: #c9cfe6; tab-size: 2; scrollbar-width: thin; }
+.dv-code:not(:has(figcaption)) pre { padding-right: 90px; }
+.tk-comment { color: #6f7896; font-style: italic; }
+.tk-string { color: #a5e3b6; }
+.tk-keyword { color: #c4a7ff; }
+.tk-number { color: #f8c38a; }
+.tk-tag { color: #7dd3fc; }
+.tk-prop { color: #f0abfc; }
+
+/* ---- Install ---- */
+.dv-steps { display: grid; gap: 18px; }
+.dv-step { display: grid; grid-template-columns: 44px 1fr; gap: 18px; padding: 24px; border-radius: 18px; border: 1px solid var(--edge); background: var(--glass); }
+.dv-step-n { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; background: var(--grad); color: #0b0f1e; }
+.dv-step h3 { margin: 0; font-size: 20px; font-weight: 600; }
+.dv-step > div > p { margin: 6px 0 16px; color: var(--ink-2); }
+
+/* ---- How it fits ---- */
+.dv-layers { display: grid; grid-template-columns: repeat(4, 1fr); gap: 22px; margin: 0; padding: 0; list-style: none; }
+.dv-layer { position: relative; display: grid; align-content: start; gap: 8px; padding: 22px; border-radius: 18px; border: 1px solid var(--edge); background: var(--glass); }
+.dv-layer:nth-child(2), .dv-layer:nth-child(3) { border-color: var(--edge-strong); background: linear-gradient(180deg, rgba(124, 92, 255, .12), var(--glass) 60%); }
+.dv-layer > svg:first-child { color: #a78bfa; }
+.dv-layer h3 { margin: 4px 0 0; font: 600 18px var(--sans); }
+.dv-layer:nth-child(2) h3, .dv-layer:nth-child(3) h3 { font-family: var(--mono); font-size: 16px; }
+.dv-layer p { margin: 0; color: var(--ink-2); font-size: 14.5px; }
+.dv-layer div { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.dv-layer em { font: normal 500 11.5px var(--mono); padding: 3px 8px; border-radius: 999px; background: rgba(255, 255, 255, .05); color: var(--ink-2); }
+.dv-layer-arrow { position: absolute; top: 50%; right: -20px; z-index: 2; color: var(--ink-3); transform: translateY(-50%); }
+.dv-rules { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; margin-top: 28px; border-radius: 16px; overflow: hidden; background: var(--edge); }
+.dv-rules div { padding: 20px 22px; background: var(--bg); }
+.dv-rules b { font-weight: 600; }
+.dv-rules p { margin: 6px 0 0; color: var(--ink-2); font-size: 14.5px; }
+
+/* ---- Examples ---- */
+.dv-tabs { display: flex; gap: 6px; padding: 6px; border-radius: 14px; border: 1px solid var(--edge); background: var(--glass); overflow-x: auto; }
+.dv-tabs button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 10px; height: 44px; padding: 0 14px; border: 0; border-radius: 10px; background: transparent; color: var(--ink-2); font: 500 14.5px var(--sans); white-space: nowrap; cursor: pointer; }
+.dv-tabs button span { font: 12px var(--mono); color: var(--ink-3); }
+.dv-tabs button:hover { color: var(--ink); background: rgba(255, 255, 255, .04); }
+.dv-tabs button[aria-selected="true"] { color: var(--ink); background: rgba(167, 139, 250, .16); box-shadow: inset 0 0 0 1px rgba(167, 139, 250, .45); }
+.dv-tabs button[aria-selected="true"] span { color: #a78bfa; }
+.dv-example { margin-top: 18px; }
+.dv-example > header { display: flex; justify-content: space-between; align-items: end; gap: 24px; margin-bottom: 16px; }
+.dv-example h3 { margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -.01em; }
+.dv-example header p { margin: 6px 0 0; max-width: 760px; color: var(--ink-2); }
+.dv-uses { display: flex; flex-wrap: wrap; justify-content: end; gap: 6px; max-width: 380px; }
+.dv-uses code { padding: 4px 9px; border-radius: 8px; border: 1px solid var(--edge); color: var(--ink-2); font-size: 12px; }
+/* The running result first, full width, and the file that makes it right below. */
+.dv-split { display: grid; gap: 14px; }
+.dv-split .dv-code pre { max-height: 520px; }
+.dv-result { position: relative; min-width: 0; min-height: 300px; padding: 46px 18px 18px; border-radius: 14px; border: 1px solid var(--edge-strong); background: var(--glass);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, .4); }
+.dv-live { position: absolute; top: 12px; left: 18px; display: inline-flex; align-items: center; gap: 6px; margin: 0; color: var(--ink-3); font: 12px var(--mono); }
+.dv-live svg { color: #a78bfa; fill: currentColor; }
+
+/* What the examples render. */
+.ex-console { display: grid; gap: 2px; padding: 16px 18px; border-radius: 12px; background: var(--code-bg); font: 12.5px/1.6 var(--mono); color: #c9cfe6; white-space: pre; overflow-x: auto; }
+.ex-prompt { color: #a78bfa; margin-bottom: 6px; }
+.ex-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 26px; margin-bottom: 10px; }
+.ex-controls label { display: inline-flex; align-items: center; gap: 10px; color: var(--ink-2); font-size: 14px; }
+.ex-controls input[type="range"] { width: 150px; accent-color: #a78bfa; }
+.ex-controls output { min-width: 84px; color: var(--ink); font: 13px var(--mono); }
+.ex-readout { margin: 0 0 12px; color: var(--ink-2); font: 13px/1.5 var(--mono); }
+.ex-controls .ex-readout { margin: 0; }
+.ex-readout.is-error { color: #fda4af; }
+.ex-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+.ex-pair.is-wide-left { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); }
+.ex-pair > * { min-width: 0; }
+.ex-schematic { max-height: 560px; overflow: auto; border-radius: 12px; scrollbar-width: thin; }
+.ex-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.ex-table th, .ex-table td { padding: 9px 8px; border-bottom: 1px solid var(--edge); text-align: left; }
+.ex-table thead th { color: var(--ink-3); font-weight: 500; font-size: 12.5px; }
+.ex-table tbody th { font-weight: 500; }
+.ex-table td { font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); }
+.ex-table td:nth-child(n+3) { text-align: right; color: var(--ink); }
+.ex-table thead th:nth-child(n+3) { text-align: right; }
+.ex-table td.is-fail { color: #fda4af; font-weight: 600; }
+.ex-table td.is-fail::after { content: " ✕"; }
+.ex-scene { position: relative; height: 600px; border-radius: 12px; overflow: hidden; }
+.ex-scene > * { height: 100%; }
+.ex-scene .sw-asm-scene { border: 0; background: transparent; }
+
+/* The schematic and cutaway are painted for paper by default; on this page they go dark, as in the deck. */
+.dv .sw-asm-schematic, .dv .sw-asm-scene { --sw-asm-ink: var(--ink); --sw-asm-muted: var(--ink-3); --sw-asm-line: var(--edge); }
+.dv .sw-asm-schematic { background: transparent; }
+.dv .sw-asm-schematic linearGradient[id$="-earth"] stop:first-child { stop-color: #1a2238; }
+.dv .sw-asm-schematic linearGradient[id$="-earth"] stop:last-child { stop-color: #121a2c; }
+.dv .sw-asm-borehole { fill: #0a0f1d; }
+.dv .sw-asm-formation-name { fill: #dfe4f5; stroke: rgba(10, 14, 28, .75); }
+.dv .sw-asm-stack-label { fill: var(--ink-2); }
+
+/* ---- Integrate ---- */
+.dv-guides { display: grid; gap: 14px; }
+.dv-guide { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 9fr); gap: 28px; align-items: start; padding: 22px; border-radius: 18px; border: 1px solid var(--edge); background: var(--glass); }
+.dv-guide h3 { margin: 0; font-size: 19px; font-weight: 600; }
+.dv-guide > div > p { margin: 8px 0 0; color: var(--ink-2); font-size: 15px; }
+.dv-guide .dv-code pre { max-height: 380px; }
+
+/* ---- Reference ---- */
+.dv-search { position: sticky; top: 66px; z-index: 5; display: flex; align-items: center; gap: 10px; height: 52px; padding: 0 16px; border-radius: 14px; border: 1px solid var(--edge-strong);
+  background: color-mix(in srgb, var(--bg) 86%, transparent); backdrop-filter: blur(16px); color: var(--ink-3); }
+.dv-search input { flex: 1; height: 100%; border: 0; background: transparent; color: var(--ink); font: 15px var(--sans); outline: none; }
+.dv-search:focus-within { border-color: var(--signal-depth); }
+.dv-ref-group { margin-top: 34px; }
+.dv-ref-group > header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 14px; }
+.dv-ref-group h3 { margin: 0; font: 600 17px var(--mono); }
+.dv-ref-group > header p { margin: 0; color: var(--ink-3); font-size: 14px; }
+.dv-ref-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.dv-ref { display: grid; align-content: start; gap: 8px; padding: 18px; border-radius: 14px; border: 1px solid var(--edge); background: rgba(255, 255, 255, .02); }
+.dv-ref > header { display: flex; justify-content: space-between; gap: 10px; }
+.dv-ref > header code { color: var(--ink); font-weight: 500; }
+.dv-ref > header span { color: var(--ink-3); font-size: 12.5px; white-space: nowrap; }
+.dv-ref > p { margin: 0; color: var(--ink-2); font-size: 14px; }
+.dv-ref-items { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+.dv-ref-item { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px 3px 4px; border-radius: 7px; background: rgba(255, 255, 255, .04); color: var(--ink-2); font: 12px var(--mono); }
+.dv-ref-item i { display: inline-grid; place-items: center; min-width: 20px; height: 17px; padding: 0 3px; border-radius: 4px; font: 600 10px var(--mono); font-style: normal; background: rgba(255, 255, 255, .06); color: var(--ink-3); }
+.dv-ref-item.is-component i { background: rgba(125, 211, 252, .14); color: #7dd3fc; }
+.dv-ref-item.is-hook i { background: rgba(240, 171, 252, .14); color: #f0abfc; }
+.dv-ref-item.is-function i { background: rgba(196, 167, 255, .14); color: #c4a7ff; }
+.dv-ref-item.is-class i { background: rgba(248, 195, 138, .14); color: #f8c38a; }
+.dv-more { height: 24px; padding: 0 9px; border-radius: 7px; border: 1px dashed var(--edge-strong); background: transparent; color: var(--ink-2); font: 12px var(--sans); cursor: pointer; }
+.dv-more:hover { color: var(--ink); }
+.dv-empty { color: var(--ink-3); }
+.dv-ref-key { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 26px 0 0; color: var(--ink-3); font-size: 13px; }
+
+/* ---- Foot ---- */
+.dv-foot { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 18px 32px; padding-bottom: 80px; }
+.dv-foot h2 { margin: 0; font-size: 34px; font-weight: 600; letter-spacing: -.02em; }
+.dv-foot p { margin: 8px 0 0; color: var(--ink-2); }
+.dv-foot .dv-fine { grid-column: 1 / -1; margin-top: 30px; padding-top: 22px; border-top: 1px solid var(--edge); color: var(--ink-3); font-size: 13px; }

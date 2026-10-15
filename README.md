@@ -40,10 +40,15 @@ pnpm test                 # core
 pnpm test:render-adapters # React views rendered to static markup
 pnpm test:asset
 pnpm test:packages        # packs both packages and renders them in a clean consumer
-pnpm test:deck            # the deck's grid rules
+pnpm test:deck            # the deck's grid rules, survey pasting, the landing page's module list,
+                          # and the Developers page's API reference and examples against the packages
 ```
 
-To open the deck, build it and serve it on http://127.0.0.1:3100:
+To open it, build and serve on http://127.0.0.1:3100: the landing page (what the deck is, its
+tools and how to use them) is at `/`, the deck itself at `/deck/`, and the Developers page
+(installing the packages, live examples, integration notes and the API reference) at
+`/developers/`. Its reference is generated from the built packages: after changing an export, run
+`pnpm --filter deck sdk:reference`.
 
 ```sh
 pnpm build

@@ -50,7 +50,7 @@ export function Dock({ onGhost }: { readonly onGhost: (ghost: Ghost | null) => v
         const open = !!tiles[spec.id];
         const waiting = missing(spec.id, siteId) !== null;
         return <button key={spec.id} type="button" className="dock-item" data-open={open || undefined} data-stage={stage === spec.id || undefined} data-waiting={waiting || undefined}
-          aria-label={`${spec.title}: ${spec.blurb}${open ? " (open)" : ""}`} title={`${spec.title} — ${spec.blurb}${open ? "\nOpen · click to stage" : "\nClick to open · drag onto the deck"}`}
+          aria-label={`${spec.title} (${spec.group}): ${spec.blurb}${open ? " (open)" : ""}`} title={`${spec.title} · ${spec.group}\n${spec.blurb}${open ? "\nOpen · click to stage" : "\nClick to open · drag onto the deck"}`}
           onPointerDown={down(spec.id)} onPointerMove={move} onPointerUp={up} onPointerCancel={() => { drag.current = null; setCarry(null); onGhost(null); }}>
           <Icon size={17} strokeWidth={1.7} aria-hidden="true" />
         </button>;
