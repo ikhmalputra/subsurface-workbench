@@ -18,7 +18,8 @@ const types = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/ja
 const compressible = new Set([".html", ".js", ".mjs", ".css", ".json", ".svg", ".txt", ".las", ".sgy", ".i8"]);
 const gzipped = new Map();
 function gzipOf(path, data) {
-  const key = `${path}:${data.byteLength}`;
+  // Keyed by content, not size: a rebuilt page can keep its length and change its asset hashes.
+  const key = `${path}:${createHash("sha1").update(data).digest("hex")}`;
   if (!gzipped.has(key)) gzipped.set(key, gzipSync(data, { level: 6 }));
   return gzipped.get(key);
 }

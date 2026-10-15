@@ -1,33 +1,34 @@
 import { useMemo, useRef, useState } from "react";
 import { scaleLinear, scaleLog } from "d3-scale";
-import { arpsCumulative, arpsRate, arpsTimeToRate, daysInMonth, effectiveDecline, fitArps } from "@ikhmalputra/subsurface-core";
+import { Download, FileUp, FolderOpen, Save, X } from "lucide-react";
+import { arpsRate } from "@ikhmalputra/subsurface-core";
+import type { fitArps } from "@ikhmalputra/subsurface-core";
 import { useFetched } from "../data/fetch.ts";
+import { analyse, analysesFile, forecastCsv, label, NAME, parseAnalysesFile, resultsOf, sameInputs } from "../data/dca.ts";
+import type { DcaInputs, Product, ProductionRecord, SavedAnalysis } from "../data/dca.ts";
+import { addAnalyses, deleteAnalysis, saveAnalysis, updateAnalysis, useSavedAnalyses } from "../data/analyses.ts";
 import { fmt } from "../format.ts";
 import { Loading } from "./Empty.tsx";
 import { useSize } from "./useSize.ts";
 import { BASE } from "../base.ts";
 
-interface Field { readonly name: string; readonly npdid: number; readonly month: readonly number[]; readonly oil: readonly (number | null)[]; readonly gas: readonly (number | null)[]; readonly oe: readonly (number | null)[]; readonly water: readonly (number | null)[] }
-interface Record { readonly source: { readonly url: string; readonly sha256: string; readonly retrieved: string; readonly publisher: string }; readonly licence: string; readonly fields: readonly Field[] }
-type Product = "oil" | "gas" | "oe";
-
-const parse = (buffer: ArrayBuffer) => JSON.parse(new TextDecoder().decode(buffer)) as Record;
-/** Volumes are million Sm³ a month (gas: billion); rates are Sm³ a day. */
-const SCALE: Readonly<globalThis.Record<Product, number>> = { oil: 1e6, gas: 1e9, oe: 1e6 };
-const UNIT: Readonly<globalThis.Record<Product, { rate: string; per: number; volume: string; volumePer: number }>> = {
-  oil: { rate: "Sm³/d", per: 1, volume: "MSm³", volumePer: 1e6 },
-  gas: { rate: "MSm³/d", per: 1e6, volume: "GSm³", volumePer: 1e9 },
-  oe: { rate: "Sm³ o.e./d", per: 1, volume: "MSm³ o.e.", volumePer: 1e6 },
-};
-const NAME: Readonly<globalThis.Record<Product, string>> = { oil: "Oil", gas: "Gas", oe: "Oil equivalent" };
-const yearOf = (month: number) => month / 12;
-const label = (month: number) => `${Math.floor(month / 12)}-${String(month % 12 + 1).padStart(2, "0")}`;
+const parse = (buffer: ArrayBuffer) => JSON.parse(new TextDecoder().decode(buffer)) as ProductionRecord;
+const fileName = (name: string, extension: string) => `${name.replace(/[^\w.-]+/g, "_").replace(/_+/g, "_").slice(0, 80) || "decline"}.${extension}`;
+function download(text: string, name: string, type: string) {
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob([text], { type }));
+  link.download = name;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+}
+const when = (time: number) => new Date(time).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 
 /**
  * Arps decline curves on the Norwegian shelf, field by field, from Sodir's monthly production. Drag
  * across the plot to choose the months to fit; the fitted curve runs on to the economic limit, and
  * the remaining and ultimate volumes follow. The data is Sodir's net saleable production, as
- * published; months the table does not list are gaps, not zeros.
+ * published; months the table does not list are gaps, not zeros. An analysis can be saved (kept in
+ * this browser), reopened, exported as a forecast CSV or as a file of analyses, and imported again.
  */
 export function Decline() {
   const { value: record, error } = useFetched(`${BASE}data/sodir-field-production.json`, parse);
@@ -36,59 +37,125 @@ export function Decline() {
   const [window, setWindow] = useState<readonly [number, number] | null>(null);
   const [limitText, setLimitText] = useState("");
   const [bMax, setBMax] = useState(1);
-  const field = record?.fields.find((entry) => entry.name === fieldName) ?? null;
-  const series = useMemo(() => !field ? null : field.month.map((month, i) => {
-    const volume = field[product][i] ?? null;
-    return { month, volume, rate: volume === null ? null : volume * SCALE[product] / daysInMonth(month), water: field.water[i] ?? null, oil: field.oil[i] ?? null };
-  }), [field, product]);
-  const span = series && series.length ? [series[0]!.month, series.at(-1)!.month] as const : null;
-  // By default, the last ten years in which the field produced this product.
-  const producedMonths = series?.filter((entry) => entry.rate !== null && entry.rate > 0).map((entry) => entry.month) ?? [];
-  const chosen = window ?? (producedMonths.length ? [Math.max(producedMonths[0]!, producedMonths.at(-1)! - 119), producedMonths.at(-1)!] as const : span);
-  const result = useMemo(() => {
-    if (!series || !chosen) return null;
-    const inside = series.filter((entry) => entry.month >= chosen[0] && entry.month <= chosen[1]);
-    const fit = fitArps(inside.map((entry) => yearOf(entry.month - chosen[0]) + 1 / 24), inside.map((entry) => entry.rate), { bMax });
-    return { inside, fit };
-  }, [series, chosen?.[0], chosen?.[1], bMax]);
+  const saved = useSavedAnalyses();
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [panel, setPanel] = useState<"none" | "save" | "list">("none");
+  const [nameText, setNameText] = useState(""), [noteText, setNoteText] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const file = useRef<HTMLInputElement>(null);
+  const inputs: DcaInputs = { field: fieldName, product, window, bMax, limit: Number(limitText) > 0 ? Number(limitText) : null };
+  const analysis = useMemo(() => record ? analyse(record, inputs) : null, [record, fieldName, product, window?.[0], window?.[1], bMax, inputs.limit]);
   const [box] = useSize<HTMLDivElement>();
-  if (record && field && series && !producedMonths.length) return <div className="dca"><p className="curtain-head">{field.name} reports no {NAME[product].toLowerCase()} in Sodir&apos;s table.</p><span className="log-sets" role="group" aria-label="Product">{(["oil", "gas", "oe"] as const).map((key) => <button key={key} type="button" aria-pressed={product === key} onClick={() => setProduct(key)}>{NAME[key]}</button>)}</span></div>;
-  if (!record || !field || !series || !span || !chosen) return <Loading>{error ? `The production table could not be read (${error}).` : "Reading Sodir's monthly production…"}</Loading>;
-  const unit = UNIT[product];
-  // The forecast runs on from the last month this product was produced, not the field's last month.
-  const lastMonth = producedMonths.at(-1)!;
-  const last = series.find((entry) => entry.month === lastMonth)!;
-  const lastRate = [...series].reverse().find((entry) => entry.rate !== null && entry.rate > 0)?.rate ?? null;
-  const limit = Number(limitText) > 0 ? Number(limitText) * unit.per : lastRate !== null ? lastRate * 0.05 : null;
-  const fit = result?.fit ?? null;
-  const tLast = yearOf(last.month - chosen[0]) + 1 / 24;
-  const toLimit = fit && limit !== null ? Math.min(50, arpsTimeToRate(fit, limit)) : null;
-  const produced = series.reduce((sum, entry) => sum + (entry.volume ?? 0), 0) * SCALE[product];
-  const remaining = fit && toLimit !== null && toLimit > tLast ? arpsCumulative(fit, toLimit) - arpsCumulative(fit, tLast) : 0;
-  const producing = last.month >= Math.max(...record.fields.map((entry) => entry.month.at(-1) ?? 0)) - 2;
-  const fieldLast = series.at(-1)!;
-  const lastYear = series.filter((entry) => entry.month > fieldLast.month - 12);
-  const water = lastYear.reduce((sum, entry) => sum + (entry.water ?? 0), 0), oil = lastYear.reduce((sum, entry) => sum + (entry.oil ?? 0), 0);
+  const open = saved.find((entry) => entry.id === openId) ?? null;
+
+  const restore = (entry: SavedAnalysis) => {
+    if (record && !record.fields.some((field) => field.name === entry.inputs.field)) { setMessage(`${entry.name}: ${entry.inputs.field} is not in this production table.`); return; }
+    setFieldName(entry.inputs.field); setProduct(entry.inputs.product); setWindow(entry.inputs.window); setBMax(entry.inputs.bMax);
+    setLimitText(entry.inputs.limit === null ? "" : String(entry.inputs.limit));
+    setOpenId(entry.id); setPanel("none"); setMessage(null);
+  };
+  const importFile = async (chosen: File | undefined) => {
+    if (!chosen) return;
+    try { const incoming = parseAnalysesFile(await chosen.text()); addAnalyses(incoming); setMessage(`Imported ${incoming.length} ${incoming.length === 1 ? "analysis" : "analyses"} from ${chosen.name}.`); }
+    catch (reason) { setMessage(`${chosen.name}: ${(reason as Error).message}`); }
+  };
+
+  const productButtons = (reset: boolean) => <span className="log-sets" role="group" aria-label="Product">
+    {(["oil", "gas", "oe"] as const).map((key) => <button key={key} type="button" aria-pressed={product === key} onClick={() => { setProduct(key); if (reset) { setLimitText(""); setWindow(null); } }}>{NAME[key]}</button>)}
+  </span>;
+  if (record && analysis?.kind === "no-product") return <div className="dca"><p className="curtain-head">{analysis.field.name} reports no {NAME[product].toLowerCase()} in Sodir&apos;s table.</p>{productButtons(false)}</div>;
+  if (!record || !analysis || analysis.kind !== "ok") return <Loading>{error ? `The production table could not be read (${error}).` : "Reading Sodir's monthly production…"}</Loading>;
+  const { field, series, span, chosen, fit, unit, last, limit, toLimit, producing } = analysis;
+  const results = resultsOf(analysis);
+  const current: DcaInputs & { window: readonly [number, number] } = { ...inputs, window: chosen };
+  const changedSinceSaved = open ? !sameInputs(open.inputs, current) : false;
+  const dataChanged = open ? open.source.sha256 !== record.source.sha256 : false;
+  const drift = open && results && !changedSinceSaved && Math.abs(open.results.eur - results.eur) > Math.max(1e-6, Math.abs(open.results.eur) * 1e-4);
+  const defaultName = `${field.name} ${NAME[product].toLowerCase()} · fit ${label(chosen[0])} to ${label(chosen[1])}`;
+  const value = (name: string): Omit<SavedAnalysis, "id" | "savedAt"> | null => results ? {
+    name: name.trim() || defaultName, note: noteText.trim(), inputs: current, results,
+    source: { publisher: record.source.publisher, retrieved: record.source.retrieved, sha256: record.source.sha256 },
+  } : null;
+  const startSave = () => { setNameText(open?.name ?? defaultName); setNoteText(open?.note ?? ""); setPanel(panel === "save" ? "none" : "save"); setMessage(null); };
+  // A copy saved beside the one it came from gets its own name: "… (2)", "… (3)".
+  const unique = (name: string) => { const names = new Set(saved.map((entry) => entry.name)); if (!names.has(name)) return name; let n = 2; while (names.has(`${name} (${n})`)) n++; return `${name} (${n})`; };
+  const commitNew = () => { const v = value(nameText); if (!v) return; const entry = saveAnalysis({ ...v, name: unique(v.name) }); setOpenId(entry.id); setPanel("none"); setMessage(`Saved “${entry.name}”.`); };
+  const commitUpdate = () => { const v = value(nameText); if (!v || !open) return; updateAnalysis(open.id, v); setPanel("none"); setMessage(`Updated “${v.name}”.`); };
+  const csv = (entry: SavedAnalysis | null) => {
+    const target = entry ? analyse(record, entry.inputs) : analysis;
+    if (target.kind !== "ok") { setMessage(`${entry?.name ?? "This analysis"}: its field or product is not in this production table.`); return; }
+    const name = entry?.name ?? (open && !changedSinceSaved ? open.name : defaultName);
+    download(forecastCsv(target, record, name), fileName(name, "csv"), "text/csv");
+  };
+
   return <div className="dca" ref={box}>
     <header className="acx-head">
       <label className="dca-field">Field <select value={fieldName} onChange={(event) => { setFieldName(event.target.value); setWindow(null); setLimitText(""); }}>{record.fields.map((entry) => <option key={entry.name} value={entry.name}>{entry.name}</option>)}</select></label>
-      <span className="log-sets" role="group" aria-label="Product">
-        {(["oil", "gas", "oe"] as const).map((key) => <button key={key} type="button" aria-pressed={product === key} onClick={() => { setProduct(key); setLimitText(""); setWindow(null); }}>{NAME[key]}</button>)}
-      </span>
-      <label className="dca-field">b ≤ <select value={bMax} onChange={(event) => setBMax(Number(event.target.value))} aria-label="Largest Arps exponent">{[[1, "1 (harmonic)"], [0.5, "0.5"], [0, "0 (exponential)"]].map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select></label>
+      {productButtons(true)}
+      <label className="dca-field">b ≤ <select value={bMax} onChange={(event) => setBMax(Number(event.target.value))} aria-label="Largest Arps exponent">{[[1, "1 (harmonic)"], [0.5, "0.5"], [0, "0 (exponential)"]].map(([option, text]) => <option key={option} value={option}>{text}</option>)}</select></label>
       <label className="dca-field">Economic limit <input type="number" min={0} step="any" value={limitText} placeholder={limit === null ? "" : fmt(limit / unit.per, unit.per > 1 ? 3 : 0)} onChange={(event) => setLimitText(event.target.value)} aria-label={`Economic limit, ${unit.rate}`} /> {unit.rate}</label>
+      <span className="dca-actions">
+        <button type="button" className="dsg-tool" onClick={startSave} disabled={!results} aria-expanded={panel === "save"} title={results ? "Keep this analysis: the field, window, b and limit, and what they give" : "Nothing to save: not enough months to fit"}><Save size={14} />Save</button>
+        <button type="button" className="dsg-tool" onClick={() => { setPanel(panel === "list" ? "none" : "list"); setMessage(null); }} aria-expanded={panel === "list"}><FolderOpen size={14} />Saved{saved.length ? ` · ${saved.length}` : ""}</button>
+        <button type="button" className="dsg-tool" onClick={() => csv(null)} disabled={!results} title="The history and the forecast, month by month, as a spreadsheet"><Download size={14} />CSV</button>
+      </span>
     </header>
-    <p className="curtain-head">{field.name} · {label(span[0])} to {label(span[1])} · {producing ? `producing ${NAME[product].toLowerCase()}` : `${NAME[product].toLowerCase()} last reported ${label(last.month)}`} · fit window {label(chosen[0])} to {label(chosen[1])} ({result?.fit?.samples ?? 0} months) · drag across the plot to choose it</p>
+
+    {open && <p className={`dca-open${changedSinceSaved ? " is-changed" : ""}`}>
+      <b>{open.name}</b>
+      <span>saved {when(open.savedAt)}{changedSinceSaved ? " · changed since it was saved" : " · as saved"}</span>
+      {open.note && <em>{open.note}</em>}
+      {dataChanged && <span className="dca-warn">Saved on Sodir data retrieved {open.source.retrieved}; this is the table retrieved {record.source.retrieved}.</span>}
+      {drift && <span className="dca-warn">Saved EUR {fmt(open.results.eur, 2)} {open.results.volumeUnit}; the same choices give {fmt(results!.eur, 2)} now.</span>}
+      {changedSinceSaved && <button type="button" className="dsg-tool" onClick={startSave}>Update or save as new…</button>}
+      <button type="button" className="dca-close" aria-label="Close the saved analysis (keeps it saved)" title="Close (it stays saved)" onClick={() => setOpenId(null)}><X size={13} /></button>
+    </p>}
+
+    {panel === "save" && <form className="dca-panel dca-save" onSubmit={(event) => { event.preventDefault(); if (open) commitUpdate(); else commitNew(); }}>
+      <label className="dca-field is-wide">Name <input value={nameText} onChange={(event) => setNameText(event.target.value)} placeholder={defaultName} autoFocus /></label>
+      <label className="dca-field is-wide">Note <input value={noteText} onChange={(event) => setNoteText(event.target.value)} placeholder="optional, e.g. post-2016 decline, excludes the late-life gas blowdown" /></label>
+      <p className="dca-summary">{field.name} · {NAME[product]} · fit {label(chosen[0])} to {label(chosen[1])} · b ≤ {bMax} · limit {results ? `${fmt(results.limit, unit.per > 1 ? 3 : 0)} ${unit.rate}${results.limitIsDefault ? " (default)" : ""}` : "—"}{results ? ` · EUR ${fmt(results.eur, 2)} ${unit.volume}` : ""}</p>
+      <span className="dsg-confirm">
+        {open ? <><button type="submit" className="is-primary">Update “{open.name}”</button><button type="button" onClick={commitNew}>Save as new</button></> : <button type="submit" className="is-primary">Save</button>}
+        <button type="button" onClick={() => setPanel("none")}>Cancel</button>
+      </span>
+    </form>}
+
+    {panel === "list" && <div className="dca-panel dca-list">
+      {saved.length === 0 && <p className="dca-empty">No saved analyses yet. Choose a field and a window, then Save. They are kept in this browser; export them to keep them elsewhere.</p>}
+      {saved.map((entry) => <article key={entry.id} className={entry.id === openId ? "is-open" : undefined}>
+        <div>
+          <b>{entry.name}</b>
+          <span>{entry.inputs.field} · {NAME[entry.inputs.product]} · fit {label(entry.inputs.window[0])} to {label(entry.inputs.window[1])} · b ≤ {entry.inputs.bMax} · saved {when(entry.savedAt)}</span>
+          <span className="dca-numbers">b {fmt(entry.results.b, 2)} · Di {fmt(entry.results.diNominalPct, 1)} %/yr · EUR {fmt(entry.results.eur, 2)} {entry.results.volumeUnit} · remaining {fmt(entry.results.remaining, 2)}{entry.results.yearsToLimit === null ? " · limit beyond 50 years" : ` over ${fmt(entry.results.yearsToLimit, 1)} years`}</span>
+          {entry.note && <em>{entry.note}</em>}
+        </div>
+        <span className="dsg-confirm">
+          {confirmDelete === entry.id
+            ? <>Delete it?<button type="button" className="is-danger" onClick={() => { deleteAnalysis(entry.id); if (openId === entry.id) setOpenId(null); setConfirmDelete(null); }}>Delete</button><button type="button" onClick={() => setConfirmDelete(null)}>Keep</button></>
+            : <><button type="button" className="is-primary" onClick={() => restore(entry)}>Open</button><button type="button" onClick={() => csv(entry)} title="History and forecast as CSV">CSV</button><button type="button" aria-label={`Delete ${entry.name}`} onClick={() => setConfirmDelete(entry.id)}><X size={13} /></button></>}
+        </span>
+      </article>)}
+      <footer>
+        <button type="button" className="dsg-tool" disabled={!saved.length} onClick={() => download(analysesFile(saved), "decline-analyses.dca.json", "application/json")}><Download size={14} />Export all</button>
+        <button type="button" className="dsg-tool" onClick={() => file.current?.click()}><FileUp size={14} />Import…</button>
+        <input ref={file} type="file" accept=".json,application/json" hidden onChange={(event) => { void importFile(event.target.files?.[0]); event.target.value = ""; }} />
+      </footer>
+    </div>}
+    {message && <p className="dca-message" role="status">{message}</p>}
+
+    <p className="curtain-head">{field.name} · {label(span[0])} to {label(span[1])} · {producing ? `producing ${NAME[product].toLowerCase()}` : `${NAME[product].toLowerCase()} last reported ${label(last.month)}`} · fit window {label(chosen[0])} to {label(chosen[1])} ({fit?.samples ?? 0} months) · drag across the plot to choose it</p>
     <dl className="petro-summary geo-summary">
       <div><dt>Arps fit</dt><dd>{fit ? `b ${fmt(fit.b, 2)} · ${fit.b === 0 ? "exponential" : fit.b === 1 ? "harmonic" : "hyperbolic"}` : "not enough months"}</dd></div>
-      <div><dt>Initial decline (nominal · effective)</dt><dd>{fit ? `${fmt(fit.di * 100, 1)} · ${fmt(effectiveDecline(fit) * 100, 1)} %/yr` : "—"}</dd></div>
+      <div><dt>Initial decline (nominal · effective)</dt><dd>{results ? `${fmt(results.diNominalPct, 1)} · ${fmt(results.diEffectivePct, 1)} %/yr` : "—"}</dd></div>
       <div><dt>qi at {label(chosen[0])} · R² (log)</dt><dd>{fit ? `${fmt(fit.qi / unit.per, unit.per > 1 ? 2 : 0)} ${unit.rate} · ${fmt(fit.r2Log, 3)}` : "—"}</dd></div>
-      <div><dt>Produced to {label(last.month)}</dt><dd>{fmt(produced / unit.volumePer, 2)} {unit.volume}</dd></div>
-      <div><dt>{producing ? "Remaining to the limit" : `Remaining on the trend (none reported since ${label(last.month)})`}</dt><dd>{fit && toLimit !== null ? `${fmt(remaining / unit.volumePer, 2)} ${unit.volume} · ${toLimit >= 50 ? "beyond 50 years" : `${fmt(Math.max(0, toLimit - tLast), 1)} years`}` : "—"}</dd></div>
-      <div><dt>EUR · water–oil ratio, last 12 months</dt><dd>{fmt((produced + remaining) / unit.volumePer, 2)} {unit.volume} · {oil > 0 ? fmt(water / oil, 2) : "no oil"}</dd></div>
+      <div><dt>Produced to {label(last.month)}</dt><dd>{fmt(analysis.produced / unit.volumePer, 2)} {unit.volume}</dd></div>
+      <div><dt>{producing ? "Remaining to the limit" : `Remaining on the trend (none reported since ${label(last.month)})`}</dt><dd>{fit && toLimit !== null ? `${fmt(analysis.remaining / unit.volumePer, 2)} ${unit.volume} · ${toLimit >= 50 ? "beyond 50 years" : `${fmt(Math.max(0, toLimit - analysis.tLast), 1)} years`}` : "—"}</dd></div>
+      <div><dt>EUR · water–oil ratio, last 12 months</dt><dd>{fmt((analysis.produced + analysis.remaining) / unit.volumePer, 2)} {unit.volume} · {analysis.waterOil !== null ? fmt(analysis.waterOil, 2) : "no oil"}</dd></div>
     </dl>
     <Plot series={series} chosen={chosen} fit={fit} limit={limit} toLimit={toLimit} unit={unit} onWindow={setWindow} />
-    <p className="petro-note">Source: {record.source.publisher}, table field_production_monthly, retrieved {record.source.retrieved}; {record.licence}. Net saleable volumes by calendar month, turned into rates by the days in each month. Arps (1945) fitted in log rate, b from 0 to {bMax === 0 ? "0 (exponential only)" : bMax}; months with no or zero production are left out of the fit. The forecast continues the fitted curve from the last reported month to the economic limit ({limitText ? "yours" : "5 % of the last reported rate until you set one"}), at most 50 years. Field-level decline mixes wells, workovers and new phases; read it as the field&apos;s trend, not a well&apos;s.</p>
+    <p className="petro-note">Source: {record.source.publisher}, table field_production_monthly, retrieved {record.source.retrieved}; {record.licence}. Net saleable volumes by calendar month, turned into rates by the days in each month. Arps (1945) fitted in log rate, b from 0 to {bMax === 0 ? "0 (exponential only)" : bMax}; months with no or zero production are left out of the fit. The forecast continues the fitted curve from the last reported month to the economic limit ({limitText ? "yours" : "5 % of the last reported rate until you set one"}), at most 50 years. Field-level decline mixes wells, workovers and new phases; read it as the field&apos;s trend, not a well&apos;s. Saved analyses stay in this browser.</p>
   </div>;
 }
 
