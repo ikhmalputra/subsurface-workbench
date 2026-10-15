@@ -21,6 +21,7 @@ import { actions, signals, useDeck } from "./store.ts";
 import { Tile, type Ghost } from "./Tile.tsx";
 import { TimeRail } from "./TimeRail.tsx";
 import { formatDate, useMoment } from "../data/history.ts";
+import { BASE } from "../base.ts";
 
 const GAP = 10;
 
@@ -56,7 +57,7 @@ function Bar() {
   const brush = useSubsurfaceSelector(signals, (state) => state.dataInteraction.depthRange);
   const moment = useMoment();
   return <header className="bar">
-    <a className="brand" href="/" title="What the deck is and how to use it"><span className="brand-mark" aria-hidden="true">S</span>Subsurface <small>deck</small></a>
+    <a className="brand" href={BASE} title="What the deck is and how to use it"><span className="brand-mark" aria-hidden="true">S</span>Subsurface <small>deck</small></a>
     <div className="chips" aria-label="Live signals" data-origin="bar">
       <span className="chip" style={{ ["--chip-colour" as string]: signalColour.place }}><i /><b>{site ? site.map.label : "World"}</b>{well && <span>· {well.label}</span>}
         {place && <button type="button" className="chip-edit" aria-label={`Edit ${place.label}`} title={place.kind === "design" ? "Edit this planned well in the Well designer" : place.kind === "recorded" ? "Edit this well's records in the Well editor" : "Edit this well in the Well editor: your changes sit over the record, which stays as it is"}

@@ -10,6 +10,7 @@ import type { GeographicXY } from "@ikhmalputra/subsurface-core/gis";
 import type { Place } from "../data/place.ts";
 import { Loading } from "./Empty.tsx";
 import { useWire } from "./wire.ts";
+import { BASE } from "../base.ts";
 
 const WellsMap = lazy(() => import("@ikhmalputra/subsurface-react/gis").then((module) => ({ default: module.WellsMap })));
 /** A well's path in plan as drilled by a depth: the stations above it and the point at it. */
@@ -49,7 +50,7 @@ export function Globe() {
   const drilled = moment && siteId === "forge" ? moment.asOf.drilledM : null;
   const shownSites = useMemo(() => drilled === null || !place ? mapSites : sitesDrilledTo(mapSites, place, drilled), [drilled, place, mapSites]);
   return <Suspense fallback={<Loading>Starting the globe…</Loading>}>
-    <WellsMap sites={shownSites} workerUrl="/gis/maplibre-gl-worker.mjs" basemapUrl="/gis/world-50m.json" basemapAttribution="Natural Earth"
+    <WellsMap sites={shownSites} workerUrl={`${BASE}gis/maplibre-gl-worker.mjs`} basemapUrl={`${BASE}gis/world-50m.json`} basemapAttribution="Natural Earth"
       selectedSiteId={siteId} selectedWellId={wellId} onSelect={(site, well) => actions.selectSite(site, well, "globe")} cursor={cursor}
       sectionLine={line} onSectionLineChange={(next) => actions.setSectionLine(next, "globe")} />
   </Suspense>;

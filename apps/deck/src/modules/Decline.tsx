@@ -5,6 +5,7 @@ import { useFetched } from "../data/fetch.ts";
 import { fmt } from "../format.ts";
 import { Loading } from "./Empty.tsx";
 import { useSize } from "./useSize.ts";
+import { BASE } from "../base.ts";
 
 interface Field { readonly name: string; readonly npdid: number; readonly month: readonly number[]; readonly oil: readonly (number | null)[]; readonly gas: readonly (number | null)[]; readonly oe: readonly (number | null)[]; readonly water: readonly (number | null)[] }
 interface Record { readonly source: { readonly url: string; readonly sha256: string; readonly retrieved: string; readonly publisher: string }; readonly licence: string; readonly fields: readonly Field[] }
@@ -29,7 +30,7 @@ const label = (month: number) => `${Math.floor(month / 12)}-${String(month % 12 
  * published; months the table does not list are gaps, not zeros.
  */
 export function Decline() {
-  const { value: record, error } = useFetched("/data/sodir-field-production.json", parse);
+  const { value: record, error } = useFetched(`${BASE}data/sodir-field-production.json`, parse);
   const [fieldName, setFieldName] = useState("STATFJORD");
   const [product, setProduct] = useState<Product>("oil");
   const [window, setWindow] = useState<readonly [number, number] | null>(null);

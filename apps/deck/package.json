@@ -7,6 +7,7 @@
     "dev": "vite",
     "prebuild": "node ../../tools/sync-assets.mjs",
     "build": "vite build",
+    "build:pages": "DECK_BASE=/subsurface-workbench/ vite build --outDir ../../output/pages --emptyOutDir && touch ../../output/pages/.nojekyll",
     "typecheck": "tsc --noEmit",
     "sdk:reference": "node scripts/sdk-reference.mjs",
     "test": "node --test test/*.test.ts"

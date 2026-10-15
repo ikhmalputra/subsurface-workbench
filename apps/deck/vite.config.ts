@@ -7,6 +7,8 @@ import react from "@vitejs/plugin-react";
 // deck is built from). Both build into out/ so tools/serve.mjs
 // (SERVE_APP=deck) serves them with the project's CSP.
 export default defineConfig({
+  // "/" by default; DECK_BASE=/subsurface-workbench/ builds for GitHub Pages, which serves the site in a subfolder.
+  base: process.env.DECK_BASE ?? "/",
   plugins: [react()],
   resolve: { dedupe: ["react", "react-dom", "three"] },
   server: { port: 5180, strictPort: true },

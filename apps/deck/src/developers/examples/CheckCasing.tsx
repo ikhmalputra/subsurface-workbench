@@ -46,7 +46,7 @@ export function CheckCasing() {
         </tr>)}</tbody>
       </table>
       <div className="ex-schematic">
-        <AssemblySchematic assembly={assembly} assetBaseUrl="/well-components" title="Kestrel A-7"
+        <AssemblySchematic assembly={assembly} assetBaseUrl={`${import.meta.env.BASE_URL}well-components`} title="Kestrel A-7"
           highlights={failing.map(({ section }) => ({
             id: section.id, topM: section.topMdM, baseM: section.shoeMdM, label: `${section.label} fails`,
           }))} />

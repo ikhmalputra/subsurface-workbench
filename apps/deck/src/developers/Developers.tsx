@@ -15,6 +15,7 @@ import cutawaySource from "./examples/Cutaway3D.tsx?raw";
 import linkViewsSource from "./guides/LinkViews.tsx?raw";
 import yourDataSource from "./guides/yourData.ts?raw";
 import serverSource from "./guides/server.ts?raw";
+import { BASE } from "../base.ts";
 
 /**
  * The Developers page: how to install the two packages the deck is built from, how they fit
@@ -22,7 +23,7 @@ import serverSource from "./guides/server.ts?raw";
  * reference generated from the packages' runtime exports (scripts/sdk-reference.mjs).
  */
 
-const DECK = "/deck/";
+const DECK = `${BASE}deck/`;
 // The 3D engine is only fetched when its example is opened.
 const Cutaway3D = lazy(() => import("./examples/Cutaway3D.tsx").then((module) => ({ default: module.Cutaway3D })));
 
@@ -193,7 +194,7 @@ export function Developers() {
   // data-sw-theme: the SDK's own dark theme for its views, refined by the variables in developers.css.
   return <div className="lp dv" data-sw-theme="dark">
     <nav className="lp-nav" aria-label="Page">
-      <a className="lp-brand" href="/"><span className="lp-mark" aria-hidden="true">S</span>Subsurface</a>
+      <a className="lp-brand" href={BASE}><span className="lp-mark" aria-hidden="true">S</span>Subsurface</a>
       <span className="dv-badge">Developers</span>
       <div className="lp-links">{NAV.map(([id, label]) => <a key={id} href={`#${id}`} aria-current={current === id ? "location" : undefined}>{label}</a>)}</div>
       <a className="lp-cta is-small" href={DECK}>Open the deck<ArrowRight size={15} aria-hidden="true" /></a>

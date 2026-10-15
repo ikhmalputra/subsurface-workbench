@@ -4,6 +4,7 @@ import {
   ListTree, Mountain, MousePointerClick, PencilRuler, Plus, Radar, Rotate3d, ScatterChart, ShieldAlert, ShieldCheck, Slice, TrendingDown, Waves,
 } from "lucide-react";
 import { Showcase3D } from "./Showcase3D.tsx";
+import { BASE } from "../base.ts";
 
 /**
  * The front door: Subsurface, discipline by discipline — seismic and geology, the rock, drilling and
@@ -11,7 +12,7 @@ import { Showcase3D } from "./Showcase3D.tsx";
  * the deck as it is built; the screenshots are the deck itself.
  */
 
-const DECK = "/deck/";
+const DECK = `${BASE}deck/`;
 
 type Kind = "FORGE" | "Designs" | "Recorded" | "Equator" | "Anywhere";
 interface Tool { readonly title: string; readonly icon: LucideIcon; readonly blurb: string; readonly on: readonly Kind[] }
@@ -71,32 +72,32 @@ const SIGNALS: readonly { readonly name: string; readonly colour: string; readon
 
 const STORIES: readonly { readonly kicker: string; readonly title: string; readonly body: string; readonly steps: readonly string[]; readonly image: string; readonly alt: string }[] = [
   {
-    kicker: "Geophysics & geology", title: "Seismic, horizons and wells in one frame", image: "/landing/forge.jpg", alt: "Utah FORGE in the deck at 2,400 m: the open-hole logs, the site in 3D with the seismic volume, the well in 3D and the seismic along the well",
+    kicker: "Geophysics & geology", title: "Seismic, horizons and wells in one frame", image: `${BASE}landing/forge.jpg`, alt: "Utah FORGE in the deck at 2,400 m: the open-hole logs, the site in 3D with the seismic volume, the well in 3D and the seismic along the well",
     body: "Utah FORGE's 3D seismic (anisotropic PSDM) with the granite reservoir top and the wells that drilled it. Move a slice in 3D and the seismic section follows; draw a line on the globe and get the section along it, with every well that passes near.",
     steps: ["Fly to Utah FORGE from the globe or ⌘K", "Drag the inline, crossline and depth slices in Site in 3D", "Draw a section line on the globe for a section through any wells"],
   },
   {
-    kicker: "Petrophysics & geomechanics", title: "Read the rock", image: "/landing/rock.jpg", alt: "FORGE 16A at 2,400 m: granite porosity three ways and fracture intensity, a 1D mechanical earth model against the mud used, and the open-hole logs",
+    kicker: "Petrophysics & geomechanics", title: "Read the rock", image: `${BASE}landing/rock.jpg`, alt: "FORGE 16A at 2,400 m: granite porosity three ways and fracture intensity, a 1D mechanical earth model against the mud used, and the open-hole logs",
     body: "Twenty-four open-hole curves on FORGE's granite: porosity three ways, fracture intensity from the image log, a mechanical earth model calibrated on 58-32's stresses that says where the hole collapses or breaks down. On the Equator field: shale volume, porosity, saturation and net pay over any interval you brush.",
     steps: ["Open Logs, Petrophysics and Geomechanics side by side", "Shift-drag the logs to brush an interval", "Every tile reads the same depth: hover once, read everywhere"],
   },
   {
-    kicker: "Drilling & well engineering", title: "Plan a well from the pore pressure up", image: "/landing/designer.jpg", alt: "The Well designer on the casing stage, each string with its burst, collapse, tension and kick-tolerance checks",
+    kicker: "Drilling & well engineering", title: "Plan a well from the pore pressure up", image: `${BASE}landing/designer.jpg`, alt: "The Well designer on the casing stage, each string with its burst, collapse, tension and kick-tolerance checks",
     body: "Place a well anywhere, enter the formations and the pore and fracture pressures, draw the trajectory, and the casing is proposed from the pressure window. Edit any string: safety factors, kick tolerance, cement and hydraulics update as you type, and every other module redraws.",
     steps: ["Press + New well, name it and place it", "Fill each stage; the rail shows what is still missing", "Propose the casing, then regrade or edit string by string"],
   },
   {
-    kicker: "Your data", title: "Bring your own wells in", image: "/landing/editor.jpg", alt: "The Well editor on FORGE 16A: each record marked with its source page, one edited string with a revert button",
+    kicker: "Your data", title: "Bring your own wells in", image: `${BASE}landing/editor.jpg`, alt: "The Well editor on FORGE 16A: each record marked with its source page, one edited string with a revert button",
     body: "Record a drilled well: paste the survey straight from a spreadsheet or a contractor's report, add the formation tops and the casing as run, import LAS logs. Or edit an existing well: the record is never overwritten, every row says whether it is the record's or yours, and any edit reverts.",
     steps: ["New well → Record a drilled well, or Edit on the place chip", "Paste the survey: columns and units are read from the header", "Every change is a named step: ⌘Z to undo"],
   },
   {
-    kicker: "Across the field", title: "Wells side by side, on the geology", image: "/landing/compare.jpg", alt: "Compare wells: five FORGE wells side by side on true depth below sea level, strings matched by colour",
+    kicker: "Across the field", title: "Wells side by side, on the geology", image: `${BASE}landing/compare.jpg`, alt: "Compare wells: five FORGE wells side by side on true depth below sea level, strings matched by colour",
     body: "Up to six wells next to each other on one depth scale and one diameter scale. On true depth below sea level, FORGE's five wells line up on the same granite; strings are matched by role and the table reads each one against a reference well.",
     steps: ["Open Compare wells and add the wells", "Switch to TVDSS to line them up on the geology", "Click a string to light it in every well"],
   },
   {
-    kicker: "Production", title: "Decline, field by field", image: "/landing/decline.jpg", alt: "Decline curves: Statfjord's monthly oil since 1979 on a log scale, an Arps fit over the last ten years and its forecast to the economic limit",
+    kicker: "Production", title: "Decline, field by field", image: `${BASE}landing/decline.jpg`, alt: "Decline curves: Statfjord's monthly oil since 1979 on a log scale, an Arps fit over the last ten years and its forecast to the economic limit",
     body: "Arps decline on the Norwegian Offshore Directorate's monthly production for 136 fields. Choose the months to fit by dragging across them; the remaining and ultimate volumes follow, and the forecast runs on to the economic limit you set.",
     steps: ["Open Decline curves and pick a field", "Drag across the months to fit", "Set an economic limit to read the remaining volume"],
   },
@@ -135,8 +136,8 @@ const SOURCES: readonly { readonly what: string; readonly from: string; readonly
 export function Landing() {
   return <div className="lp">
     <nav className="lp-nav" aria-label="Page">
-      <a className="lp-brand" href="/"><span className="lp-mark" aria-hidden="true">S</span>Subsurface</a>
-      <div className="lp-links"><a href="#disciplines">Disciplines</a><a href="#in-3d">3D</a><a href="#build">What it does</a><a href="#tools">Tools</a><a href="#start">How to use it</a><a href="#data">Data</a><a href="/developers/">Developers</a></div>
+      <a className="lp-brand" href={BASE}><span className="lp-mark" aria-hidden="true">S</span>Subsurface</a>
+      <div className="lp-links"><a href="#disciplines">Disciplines</a><a href="#in-3d">3D</a><a href="#build">What it does</a><a href="#tools">Tools</a><a href="#start">How to use it</a><a href="#data">Data</a><a href={`${BASE}developers/`}>Developers</a></div>
       <a className="lp-cta is-small" href={DECK}>Open the deck<ArrowRight size={15} aria-hidden="true" /></a>
     </nav>
 
@@ -148,7 +149,7 @@ export function Landing() {
         <a className="lp-cta" href={DECK}>Open the deck<ArrowRight size={17} aria-hidden="true" /></a>
         <a className="lp-ghost" href="#start">How to use it</a>
       </div>
-      <figure className="lp-shot is-hero"><img src="/landing/deck.jpg" alt="The deck on Utah FORGE: globe, site in 3D with seismic, well section and logs, linked by one depth cursor" width={1440} height={1000} /></figure>
+      <figure className="lp-shot is-hero"><img src={`${BASE}landing/deck.jpg`} alt="The deck on Utah FORGE: globe, site in 3D with seismic, well section and logs, linked by one depth cursor" width={1440} height={1000} /></figure>
       <dl className="lp-stats">
         <div><dt>{DISCIPLINES.length}</dt><dd>subsurface disciplines in one deck</dd></div>
         <div><dt>{TOOL_COUNT}</dt><dd>linked modules</dd></div>

@@ -16,7 +16,7 @@ test("the landing page lists exactly the deck's modules", () => {
 
 test("every screenshot the landing page shows is in the build", () => {
   const sources = read("../src/landing/Landing.tsx") + read("../src/landing/Showcase3D.tsx");
-  const images = [...sources.matchAll(/"\/landing\/([a-z0-9-]+\.jpg)"/g)].map((match) => match[1]!);
+  const images = [...sources.matchAll(/landing\/([a-z0-9-]+\.jpg)`/g)].map((match) => match[1]!);
   assert.ok(images.length >= 8);
   for (const image of images) assert.ok(readFileSync(new URL(`../public/landing/${image}`, import.meta.url)).byteLength > 10_000, image);
 });

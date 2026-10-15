@@ -9,6 +9,7 @@ import type { SceneSeismicVolume } from "@ikhmalputra/subsurface-react/3d";
 import { designForSite, siteOfDesign, useDesigns } from "./design.ts";
 import { recordedForSite, siteOfRecord, useRecordedWells } from "./records.ts";
 import { useFetched } from "./fetch.ts";
+import { BASE } from "../base.ts";
 
 /** The sites with records, built once. */
 const recordedSites: readonly WorldSite[] = [forgeSite(), equatorSite()];
@@ -52,14 +53,14 @@ const asCounts = (buffer: ArrayBuffer) => new Int8Array(buffer);
 
 /** The FORGE mud log, fetched once. */
 export function useForgeLog(enabled: boolean): { log: LasFile | null; status: "idle" | "loading" | "error" | "ready"; error: string | null } {
-  const loaded = useFetched(enabled ? "/data/forge-16a-mudlog-10ft.las" : null, decodeLas);
+  const loaded = useFetched(enabled ? `${BASE}data/forge-16a-mudlog-10ft.las` : null, decodeLas);
   return { log: loaded.value, status: !enabled ? "idle" : loaded.loading ? "loading" : loaded.error ? "error" : "ready", error: loaded.error };
 }
 
 /** The well-centred FORGE PSDM sub-volume, placed in the well's own frame (TVD below RKB). */
 export function useForgeVolume(enabled: boolean): { volume: SceneSeismicVolume | null; loading: boolean; error: string | null } {
   const meta = forgeSeismicSection, cut = meta.subVolume;
-  const loaded = useFetched(enabled && cut ? `/data/${cut.file}` : null, asCounts);
+  const loaded = useFetched(enabled && cut ? `${BASE}data/${cut.file}` : null, asCounts);
   const counts = loaded.value;
   const volume = useMemo((): SceneSeismicVolume | null => {
     if (!cut || !counts || counts.length !== cut.alongCount * cut.offsetCount * cut.samples) return null;
@@ -79,7 +80,7 @@ export function useForgeVolume(enabled: boolean): { volume: SceneSeismicVolume |
 /** The same PSDM sub-volume as a cube on the section's axes, for cutting inlines and crosslines. */
 export function useForgeCube(enabled: boolean): { cube: SeismicCube | null; loading: boolean; error: string | null } {
   const cut = forgeSeismicSection.subVolume;
-  const loaded = useFetched(enabled && cut ? `/data/${cut.file}` : null, asCounts);
+  const loaded = useFetched(enabled && cut ? `${BASE}data/${cut.file}` : null, asCounts);
   const counts = loaded.value;
   const cube = useMemo((): SeismicCube | null => !cut || !counts || counts.length !== cut.alongCount * cut.offsetCount * cut.samples ? null
     : { counts, alongCount: cut.alongCount, offsetCount: cut.offsetCount, sampleCount: cut.samples, amplitudePerCount: cut.amplitudePerCount, alongFromM: cut.alongFromM, offsetFromM: cut.offsetFromM, spacingM: cut.spacingM }, [cut, counts]);
