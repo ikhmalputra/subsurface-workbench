@@ -1,8 +1,9 @@
 import type { LucideIcon } from "lucide-react";
 
 /** A tile with nothing true to draw says what it is waiting for, never goes blank. */
-export function Empty({ icon: Icon, title, children }: { readonly icon: LucideIcon; readonly title: string; readonly children: string }) {
-  return <div className="empty"><Icon size={28} strokeWidth={1.4} aria-hidden="true" /><strong>{title}</strong><p>{children}</p></div>;
+export function Empty({ icon: Icon, title, children, action }: { readonly icon: LucideIcon; readonly title: string; readonly children: string; readonly action?: { readonly label: string; readonly run: () => void } }) {
+  return <div className="empty"><Icon size={28} strokeWidth={1.4} aria-hidden="true" /><strong>{title}</strong><p>{children}</p>
+    {action && <button type="button" className="retry" onClick={action.run}>{action.label}</button>}</div>;
 }
 
 export function Loading({ children }: { readonly children: string }) {

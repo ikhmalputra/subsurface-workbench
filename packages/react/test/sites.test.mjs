@@ -3,10 +3,12 @@ import test from "node:test";
 import { forgeDesign, forgeSeismicSection } from "@ikhmalputra/subsurface-core";
 import { equatorField, equatorSite, forgeSite, unlocatedWells, RESERVOIR } from "../dist/sites.js";
 
-test("FORGE is placed from its own NAD83 / UTM 12N wellhead, with the seismic cut outlined around it", () => {
+test("FORGE 16A stands on its licensed as-built wellhead, with the seismic cut outlined around it", () => {
   const site = forgeSite();
   const [well] = site.map.wells;
-  assert.ok(Math.abs(well.head[0] - -112.89643) < 1e-4 && Math.abs(well.head[1] - 38.50416) < 1e-4, `${well.head}`);
+  // 38°30′14.44783″ N, 112°53′47.06681″ W (Woolsey Land Surveying, 2023), within a metre or so on the map.
+  assert.ok(Math.abs(well.head[0] - -112.896407) < 2e-5 && Math.abs(well.head[1] - 38.504013) < 2e-5, `${well.head}`);
+  assert.deepEqual(site.map.wells.map((entry) => entry.label), ["16A(78)-32", "16B(78)-32", "58-32 (MU-ESW1)"]);
   assert.equal(site.map.provenance, "documented");
   assert.equal(well.path.length, forgeDesign.survey.length);
   const ring = site.map.footprints[0].ring;

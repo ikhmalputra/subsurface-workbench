@@ -52,6 +52,13 @@ export interface WellsMapProps {
    * with the words to show beside it. The host places it; the map does not interpolate paths.
    */
   readonly cursor?: { readonly at: GeographicXY; readonly label: string } | null;
+  /** A section line to draw, longitude/latitude ends. */
+  readonly sectionLine?: readonly [GeographicXY, GeographicXY] | null;
+  /**
+   * Offer "Draw section": the reader drags a line on the map (its ends snap to a wellhead within
+   * 14 px) and it is reported here; null when cleared. Without it the map draws no section tool.
+   */
+  readonly onSectionLineChange?: (line: readonly [GeographicXY, GeographicXY] | null) => void;
 }
 
 function localUrl(value: string): string {
@@ -75,7 +82,7 @@ function siteBounds(site: WellsMapSite): [[number, number], [number, number]] {
 
 const WORLD = { center: [-176, 16] as [number, number], zoom: 1.35 };
 
-export function WellsMap({ sites, workerUrl, basemapUrl, basemapAttribution, selectedSiteId, selectedWellId, onSelect, cursor: depthCursor = null }: WellsMapProps) {
+export function WellsMap({ sites, workerUrl, basemapUrl, basemapAttribution, selectedSiteId, selectedWellId, onSelect, cursor: depthCursor = null, sectionLine = null, onSectionLineChange }: WellsMapProps) {
   const element = useRef<HTMLDivElement>(null);
   const map = useRef<GeographicMap | null>(null);
   const markers = useRef<Marker[]>([]);
@@ -86,6 +93,11 @@ export function WellsMap({ sites, workerUrl, basemapUrl, basemapAttribution, sel
   const [cursor, setCursor] = useState<string | null>(null);
   const [zoom, setZoom] = useState(WORLD.zoom);
   const choose = useEffectEvent((siteId: string | null, wellId: string | null) => onSelect(siteId, wellId));
+  const [drawing, setDrawing] = useState(false);
+  const [draft, setDraft] = useState<readonly [GeographicXY, GeographicXY] | null>(null);
+  const report = useEffectEvent((line: readonly [GeographicXY, GeographicXY] | null) => onSectionLineChange?.(line));
+  const heads = useRef<readonly GeographicXY[]>([]);
+  heads.current = sites.flatMap((site) => site.wells.map((well) => well.head));
 
   useEffect(() => {
     let cancelled = false, instance: GeographicMap | null = null, resize: ResizeObserver | null = null;
@@ -104,6 +116,7 @@ export function WellsMap({ sites, workerUrl, basemapUrl, basemapAttribution, sel
           footprints: { type: "geojson", data: empty },
           paths: { type: "geojson", data: empty },
           heads: { type: "geojson", data: empty },
+          section: { type: "geojson", data: empty },
         },
         layers: [{ id: "water", type: "background", paint: { "background-color": "#dce7ef" } }],
       };
@@ -121,6 +134,8 @@ export function WellsMap({ sites, workerUrl, basemapUrl, basemapAttribution, sel
         { id: "footprint-fill", type: "fill", source: "footprints", minzoom: 8, paint: { "fill-color": "#5b7fa3", "fill-opacity": 0.12 } },
         { id: "footprint-line", type: "line", source: "footprints", minzoom: 8, paint: { "line-color": "#41698f", "line-width": 1.6, "line-dasharray": [4, 2] } },
         { id: "paths", type: "line", source: "paths", minzoom: 9, layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": ["case", ["get", "selected"], "#c2410c", "#1f6fb2"], "line-width": ["case", ["get", "selected"], 4, 2.6] } },
+        { id: "section-line", type: "line", source: "section", layout: { "line-cap": "round" }, paint: { "line-color": "#f59e0b", "line-width": 3, "line-dasharray": ["case", ["get", "draft"], ["literal", [2, 1.5]], ["literal", [1, 0]]] } },
+        { id: "section-ends", type: "circle", source: "section", filter: ["==", ["geometry-type"], "Point"], paint: { "circle-radius": 5, "circle-color": "#f59e0b", "circle-stroke-color": "#ffffff", "circle-stroke-width": 1.5 } },
         { id: "heads", type: "circle", source: "heads", paint: {
           "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 4, 10, ["case", ["get", "selected"], 8, 6]],
           "circle-color": ["match", ["get", "provenance"], "documented", "#0f766e", "user-authored", "#1f6fb2", "#b45309"],
@@ -226,6 +241,50 @@ export function WellsMap({ sites, workerUrl, basemapUrl, basemapAttribution, sel
   }, [ready, depthCursor]);
   useEffect(() => () => { depthMarker.current?.marker.remove(); depthMarker.current = null; }, []);
 
+  // Draw section: press, drag and release; the ends snap to a wellhead near the pointer.
+  useEffect(() => {
+    const instance = map.current;
+    if (!ready || !instance || !drawing) return;
+    const canvas = instance.getCanvas();
+    const snap = (point: { x: number; y: number }, at: GeographicXY): GeographicXY => {
+      let best: GeographicXY = at, distance = 14;
+      for (const head of heads.current) { const p = instance.project([...head] as [number, number]); const d = Math.hypot(p.x - point.x, p.y - point.y); if (d < distance) { distance = d; best = head; } }
+      return best;
+    };
+    let start: GeographicXY | null = null, startPoint: { x: number; y: number } | null = null;
+    instance.dragPan.disable();
+    canvas.style.cursor = "crosshair";
+    type Pointer = { point: { x: number; y: number }; lngLat: { lng: number; lat: number } };
+    const down = (event: Pointer) => { startPoint = event.point; start = snap(event.point, [event.lngLat.lng, event.lngLat.lat]); setDraft([start, start]); };
+    const move = (event: Pointer) => { if (start) setDraft([start, snap(event.point, [event.lngLat.lng, event.lngLat.lat])]); };
+    const up = (event: Pointer) => {
+      if (!start || !startPoint) return;
+      const from = start, end = snap(event.point, [event.lngLat.lng, event.lngLat.lat]);
+      const long = Math.hypot(event.point.x - startPoint.x, event.point.y - startPoint.y) > 8;
+      start = null; startPoint = null; setDraft(null);
+      if (long) { report([from, end]); setDrawing(false); }
+    };
+    const key = (event: KeyboardEvent) => { if (event.key === "Escape" && !(event.target as Element | null)?.closest?.("input, textarea, select")) { start = null; setDraft(null); setDrawing(false); } };
+    instance.on("mousedown", down); instance.on("mousemove", move); instance.on("mouseup", up);
+    window.addEventListener("keydown", key);
+    return () => {
+      instance.off("mousedown", down); instance.off("mousemove", move); instance.off("mouseup", up);
+      window.removeEventListener("keydown", key);
+      instance.dragPan.enable(); canvas.style.cursor = "";
+    };
+  }, [ready, drawing]);
+
+  // The section line (or the one being drawn) into its layer.
+  useEffect(() => {
+    const instance = map.current;
+    if (!ready || !instance) return;
+    const line = draft ?? sectionLine;
+    (instance.getSource("section") as GeoJSONSource | undefined)?.setData({ type: "FeatureCollection", features: line ? [
+      { type: "Feature" as const, properties: { draft: draft !== null }, geometry: { type: "LineString" as const, coordinates: line.map((p) => [...p]) } },
+      ...line.map((p) => ({ type: "Feature" as const, properties: { draft: draft !== null }, geometry: { type: "Point" as const, coordinates: [...p] } })),
+    ] : [] });
+  }, [ready, draft, sectionLine]);
+
   // A chosen site flies into view; nothing chosen returns to the world.
   useEffect(() => {
     const instance = map.current;
@@ -270,6 +329,10 @@ export function WellsMap({ sites, workerUrl, basemapUrl, basemapAttribution, sel
         <CommandButton kind="selection" aria-pressed={globe} onClick={() => setGlobe(true)}>Globe</CommandButton>
         <CommandButton kind="selection" aria-pressed={!globe} onClick={() => setGlobe(false)}>Flat</CommandButton>
       </span>
+      {onSectionLineChange && <span className="sw-scene-hud-segment" role="group" aria-label="Section">
+        <CommandButton kind="selection" aria-pressed={drawing} disabled={!ready} onClick={() => setDrawing((value) => !value)}>{drawing ? "Drag a line… (Esc)" : "Draw section"}</CommandButton>
+        {sectionLine && <CommandButton onClick={() => report(null)}>Clear</CommandButton>}
+      </span>}
     </div>
     {error && <p role="alert" className="sw-wells-map-error">{error}</p>}
     {!ready && !error && <p role="status" className="sw-wells-map-status">Starting the map…</p>}

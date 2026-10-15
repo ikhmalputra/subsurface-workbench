@@ -3,7 +3,8 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { forgeDesign } from "./index.ts";
-import { amplitudeClip, ebcdicToText, forgePsdmVolumeLayout, forgeSeismicSection, ibmToFloat, parseSegy, projectOntoSection, seismicColour, seismicDepthToTvd, seismicImage, segyTrace, tvdToSeismicDepth } from "./seismic.ts";
+import { amplitudeClip, cubeAlongLine, cubeSection, ebcdicToText, forgePsdmVolumeLayout, forgeSeismicSection, ibmToFloat, parseSegy, projectOntoSection, seismicColour, seismicDepthToTvd, seismicImage, segyTrace, tvdToSeismicDepth, wellOnCubeSection } from "./seismic.ts";
+import type { SeismicCube } from "./seismic.ts";
 
 const bytes = (path: string) => {
   const buffer = readFileSync(new URL(path, import.meta.url));
@@ -145,4 +146,60 @@ test("the bundled sub-volume is the same volume: its offset-0 row is the well-pa
   }
   assert.ok(compared > 500);
   assert.ok(subVolume.clippedFraction <= 0.0011);
+});
+
+test("a cube slice takes the nearest bin's own samples, dequantised, and says which bin", () => {
+  // 3 along × 2 offset × 2 samples; count = 100·sample + 10·offset + along.
+  const counts = new Int8Array(12);
+  for (let s = 0; s < 2; s++) for (let o = 0; o < 2; o++) for (let a = 0; a < 3; a++) counts[(s * 2 + o) * 3 + a] = 50 * s + 10 * o + a;
+  const cube: SeismicCube = { counts, alongCount: 3, offsetCount: 2, sampleCount: 2, amplitudePerCount: 0.5, alongFromM: -25, offsetFromM: 0, spacingM: 25 };
+  const inline = cubeSection(cube, "inline", 30);
+  assert.equal(inline.bin, 1);
+  assert.equal(inline.positionM, 25);
+  assert.equal(inline.traces.traceCount, 3);
+  assert.deepEqual(inline.traces.traces.map((trace) => trace.alongM), [-25, 0, 25]);
+  assert.deepEqual([...inline.traces.data], [10, 60, 11, 61, 12, 62].map((count) => count * 0.5));
+  const crossline = cubeSection(cube, "crossline", 900);
+  assert.equal(crossline.bin, 2, "a position past the cube snaps to its last bin");
+  assert.deepEqual(crossline.traces.traces.map((trace) => trace.offsetM), [0, 25]);
+  assert.deepEqual([...crossline.traces.data], [2, 52, 12, 62].map((count) => count * 0.5));
+  assert.throws(() => cubeSection({ ...cube, counts: new Int8Array(5) }, "inline", 0), /expected 3 × 2 × 2/);
+});
+
+test("a well re-projected onto a crossline is measured across it and off it", () => {
+  const path = [{ mdM: 100, alongM: 400, offsetM: -12, depthM: 900 }];
+  assert.deepEqual(wellOnCubeSection(path, { kind: "inline", positionM: 50 }), [{ mdM: 100, alongM: 400, offsetM: -62, depthM: 900 }]);
+  assert.deepEqual(wellOnCubeSection(path, { kind: "crossline", positionM: 375 }), [{ mdM: 100, alongM: -12, offsetM: 25, depthM: 900 }]);
+});
+
+test("FORGE: the volume's inline through the well is the published section to within half a count", () => {
+  const meta = forgeSeismicSection, cut = meta.subVolume!;
+  const bytes = readFileSync(new URL("../../fixtures/data/forge-16a-psdm-volume.i8", import.meta.url));
+  const cube: SeismicCube = { counts: new Int8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength), alongCount: cut.alongCount, offsetCount: cut.offsetCount, sampleCount: cut.samples, amplitudePerCount: cut.amplitudePerCount, alongFromM: cut.alongFromM, offsetFromM: cut.offsetFromM, spacingM: cut.spacingM };
+  const inline = cubeSection(cube, "inline", 0);
+  assert.equal(inline.positionM, 0);
+  const sgy = readFileSync(new URL("../../fixtures/data/forge-16a-psdm-section.sgy", import.meta.url));
+  const section = parseSegy(sgy.buffer.slice(sgy.byteOffset, sgy.byteOffset + sgy.byteLength));
+  assert.equal(section.traceCount, inline.traces.traceCount);
+  let worst = 0;
+  for (let t = 0; t < section.traceCount; t++) for (let s = 0; s < cut.samples; s++) {
+    const clip = 127 * cut.amplitudePerCount, value = Math.max(-clip, Math.min(clip, section.data[t * section.sampleCount + s]!));
+    worst = Math.max(worst, Math.abs(value - inline.traces.data[t * cut.samples + s]!));
+  }
+  assert.ok(worst <= cut.amplitudePerCount / 2 + 1e-9, `worst difference ${worst}`);
+});
+
+test("a cut along any line takes the nearest bins and is clipped to the cube", () => {
+  const counts = new Int8Array(12);
+  for (let s = 0; s < 2; s++) for (let o = 0; o < 2; o++) for (let a = 0; a < 3; a++) counts[(s * 2 + o) * 3 + a] = 50 * s + 10 * o + a;
+  const cube: SeismicCube = { counts, alongCount: 3, offsetCount: 2, sampleCount: 2, amplitudePerCount: 1, alongFromM: 0, offsetFromM: 0, spacingM: 10 };
+  // From well outside the cube, diagonally across it: the cube spans along −5…25 m and offset −5…15 m.
+  const line = cubeAlongLine(cube, { alongM: -20, offsetM: 0 }, { alongM: 40, offsetM: 0 }, 10);
+  assert.equal(line.lengthM, 60);
+  assert.deepEqual(line.inside, [15, 45]);
+  assert.deepEqual(line.traces.traces.map((trace) => trace.distanceM), [20, 30, 40]);
+  assert.deepEqual([...line.traces.data], [0, 50, 1, 51, 2, 52]);
+  const missed = cubeAlongLine(cube, { alongM: 100, offsetM: 100 }, { alongM: 200, offsetM: 100 });
+  assert.equal(missed.inside, null);
+  assert.equal(missed.traces.traceCount, 0);
 });

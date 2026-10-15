@@ -93,12 +93,22 @@ export interface SiteSceneProps {
   readonly hiddenMarkers?: Readonly<Record<string, readonly string[]>> | null;
   /** An interval to light up along one well, e.g. a brushed log interval. MD metres. */
   readonly highlight?: { readonly wellId: string; readonly topMdM: number; readonly baseMdM: number; readonly color?: string } | null;
+  /**
+   * Slice positions set from outside, in the volume's own units (inline: offset m; crossline: along
+   * m; depth: site m); null hides a slice, a missing key leaves it as it is. The scene follows them.
+   */
+  readonly slices?: Partial<SiteSlices> | null;
+  /** Called when a slice is moved here — by its slider or by dragging its handle — with all three and the one that moved. */
+  readonly onSlicesChange?: (slices: SiteSlices, moved: SliceKey) => void;
+  /** A vertical cutting plane between two plan points (site east/north, metres), e.g. a section line drawn on a map, down to `baseM`. */
+  readonly curtain?: { readonly from: readonly [number, number]; readonly to: readonly [number, number]; readonly baseM: number; readonly label: string } | null;
 }
 
 interface Layers { readonly wells: boolean; readonly seismic: boolean; readonly horizons: boolean; readonly reference: boolean; readonly labels: boolean }
-type SliceKey = "inline" | "crossline" | "depth";
+export type SliceKey = "inline" | "crossline" | "depth";
 /** Slice positions in the volume's own units — offset and along in metres, depth in site metres; null hides the slice. */
-type Slices = Readonly<Record<SliceKey, number | null>>;
+export type SiteSlices = Readonly<Record<SliceKey, number | null>>;
+type Slices = SiteSlices;
 
 const WELL_COLOURS = ["#1f6fb2", "#c2410c", "#0f766e", "#7c3aed", "#b45309", "#be185d"];
 
@@ -147,7 +157,7 @@ function pointAtMd(well: SiteSceneWell, md: number): [number, number, number] | 
 
 const fmt = (value: number) => Math.round(value).toLocaleString("en-US");
 
-export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = [], seismic = null, seismicClip, seismicNote, selectedWellId = null, onSelectWell, cursor = null, reach = null, hiddenMarkers = null, highlight = null }: SiteSceneProps) {
+export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = [], seismic = null, seismicClip, seismicNote, selectedWellId = null, onSelectWell, cursor = null, reach = null, hiddenMarkers = null, highlight = null, slices: given = null, onSlicesChange, curtain = null }: SiteSceneProps) {
   const host = useRef<HTMLDivElement>(null);
   const ids = useId();
   const [ready, setReady] = useState(false);
@@ -159,19 +169,49 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
   const [gain, setGain] = useState(1);
   const volumeFrame = useMemo(() => seismic ? { along: [seismic.alongStartM, seismic.alongEndM] as const, offset: [seismic.offsetStartM, seismic.offsetEndM] as const, depth: [seismic.topTvdM, seismic.baseTvdM] as const } : null, [seismic]);
   const [slices, setSlices] = useState<Slices>({ inline: 0, crossline: null, depth: null });
+  const clampTo = (value: number, [a, b]: readonly [number, number]) => Math.min(Math.max(value, Math.min(a, b)), Math.max(a, b));
+  const frameOf = (key: SliceKey) => !volumeFrame ? null : key === "inline" ? volumeFrame.offset : key === "crossline" ? volumeFrame.along : volumeFrame.depth;
+  /** Positions from outside, clamped to the volume; keys not given keep what is there. */
+  const merge = (base: Slices, from: Partial<Slices> | null): Slices => {
+    if (!from) return base;
+    const next = { ...base };
+    for (const key of ["inline", "crossline", "depth"] as const) {
+      const value = from[key], range = frameOf(key);
+      if (value === undefined) continue;
+      next[key] = value === null || !range ? null : clampTo(value, range);
+    }
+    return next;
+  };
   // A new volume starts with the inline through its origin (the well plane, for a well-centred cut),
-  // a crossline at the far end and a depth slice at its base, the way interpretation tools open one.
+  // a crossline at the far end and a depth slice at its base, the way interpretation tools open one;
+  // positions given from outside win.
+  const givenRef = useRef(given);
+  givenRef.current = given;
   useEffect(() => {
     if (!volumeFrame) return;
-    const clampTo = (value: number, [a, b]: readonly [number, number]) => Math.min(Math.max(value, Math.min(a, b)), Math.max(a, b));
-    setSlices({ inline: clampTo(0, volumeFrame.offset), crossline: volumeFrame.along[1] - (volumeFrame.along[1] - volumeFrame.along[0]) * 0.02, depth: volumeFrame.depth[1] - (volumeFrame.depth[1] - volumeFrame.depth[0]) * 0.01 });
+    setSlices(merge({ inline: clampTo(0, volumeFrame.offset), crossline: volumeFrame.along[1] - (volumeFrame.along[1] - volumeFrame.along[0]) * 0.02, depth: volumeFrame.depth[1] - (volumeFrame.depth[1] - volumeFrame.depth[0]) * 0.01 }, givenRef.current));
   }, [volumeFrame]);
+  useEffect(() => {
+    if (!volumeFrame || !given) return;
+    setSlices((current) => { const next = merge(current, given); return next.inline === current.inline && next.crossline === current.crossline && next.depth === current.depth ? current : next; });
+  }, [volumeFrame, given?.inline, given?.crossline, given?.depth]);
+  /** A slice moved here: kept, and reported to the host. */
+  const moveSlice = (key: SliceKey, value: number | null) => {
+    setSlices((current) => {
+      const range = frameOf(key);
+      const next = { ...current, [key]: value === null || !range ? null : clampTo(value, range) };
+      if (next[key] !== current[key]) queueMicrotask(() => onSlicesChange?.(next, key));
+      return next;
+    });
+  };
+  const dragSlice = useEffectEvent((key: SliceKey, value: number) => moveSlice(key, value));
   const engine = useRef<{
     layers(next: Layers): void; slices(next: Slices): void; style(map: SeismicColorMap, gain: number): void;
     select(id: string | null): void; fit(): void; look(view: NamedView): void;
     cursor(at: { readonly wellId: string; readonly mdM: number } | null): void;
     reach(depths: Readonly<Record<string, number>> | null, hidden: Readonly<Record<string, readonly string[]>> | null): void;
     highlight(band: SiteSceneProps["highlight"]): void;
+    curtain(plane: SiteSceneProps["curtain"]): void;
   } | null>(null);
   const reachRef = useRef({ reach, hiddenMarkers });
   reachRef.current = { reach, hiddenMarkers };
@@ -332,6 +372,7 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
     });
 
     let highlightMesh: THREE.Mesh | null = null;
+    let curtainGroup: THREE.Group | null = null, curtainLabel: ReturnType<typeof label> | null = null;
     // ── The linked depth cursor: one ring, moved along whichever well it is on ─────────────
     const cursorColour = token("--sw-cursor", "#1d4ed8");
     const cursorRing = new THREE.Mesh(keep(new THREE.TorusGeometry(radius * 3.4, radius * 0.7, 10, 32)), keep(new THREE.MeshBasicMaterial({ color: cursorColour, depthTest: false, transparent: true })));
@@ -346,13 +387,14 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
     const gainUniform = uniform(1);
     let lutBytes: Uint8Array | null = null, lutTexture: THREE.DataTexture | null = null;
     const sliceMeshes = new Map<SliceKey, { mesh: THREE.Mesh; edge: THREE.LineSegments }>();
-    let frameInverse: THREE.Matrix4 | null = null;
+    let frameInverse: THREE.Matrix4 | null = null, frameMatrix: THREE.Matrix4 | null = null;
+    const handles = new Map<SliceKey, THREE.Mesh>();
     if (seismic) {
       const { alongCount: nx, offsetCount: ny, sampleCount: nz } = seismic;
       if (seismic.counts.length !== nx * ny * nz) throw new Error(`Seismic volume has ${seismic.counts.length} counts, expected ${nx} × ${ny} × ${nz}.`);
       const corner = (a: number, o: number, d: number) => { const [e, n] = plan(a, o); return at(e, n, d); };
       const origin = corner(seismic.alongStartM, seismic.offsetStartM, seismic.topTvdM);
-      const frameMatrix = new THREE.Matrix4().makeBasis(
+      frameMatrix = new THREE.Matrix4().makeBasis(
         corner(seismic.alongEndM, seismic.offsetStartM, seismic.topTvdM).sub(origin),
         corner(seismic.alongStartM, seismic.offsetEndM, seismic.topTvdM).sub(origin),
         corner(seismic.alongStartM, seismic.offsetStartM, seismic.baseTvdM).sub(origin),
@@ -385,6 +427,12 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
         groups.seismic.add(mesh, edge);
         pickables.push(mesh);
         sliceMeshes.set(key, { mesh, edge });
+        // A handle on the slice's top edge: dragging it moves the slice; dragging anywhere else orbits.
+        const handle = new THREE.Mesh(keep(new THREE.SphereGeometry(radius * 4.5, 20, 14)), keep(new THREE.MeshBasicMaterial({ color: token("--sw-select", "#f59e0b"), depthTest: false, transparent: true, opacity: 0.95 })));
+        handle.renderOrder = 11;
+        handle.userData.handle = key;
+        groups.seismic.add(handle);
+        handles.set(key, handle);
       }
       const unit = keep(new THREE.BoxGeometry(1, 1, 1).translate(0.5, 0.5, 0.5));
       const box = new THREE.LineSegments(keep(new THREE.EdgesGeometry(unit)), keep(new THREE.LineBasicMaterial({ color: "#36404b", transparent: true, opacity: 0.55 })));
@@ -402,6 +450,7 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
     };
 
     // ── Drawing on demand ────────────────────────────────────────────────────────────────────
+    let engineSlices: Slices = { inline: null, crossline: null, depth: null };
     let frame = 0, layerState: Layers = { wells: true, seismic: true, horizons: true, reference: true, labels: true }, selected: string | null = null;
     function placeLabels() {
       labels.place(view, (entry) => {
@@ -470,17 +519,63 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
       const surface = hit.object.userData.surface as SiteSceneSurface | undefined;
       if (surface) return `${surface.label} · ${where} · ${surface.note}`;
       const slice = hit.object.userData.slice as SliceKey | undefined;
-      if (slice) { const amplitude = amplitudeAt(hit.point); return `${slice === "inline" ? "Inline" : slice === "crossline" ? "Crossline" : "Depth slice"} · ${where} · amplitude ${amplitude === null ? "not available" : amplitude.toFixed(3)}`; }
+      if (slice) { const amplitude = amplitudeAt(hit.point); return `${slice === "inline" ? "Inline" : slice === "crossline" ? "Crossline" : "Depth slice"} · ${where} · amplitude ${amplitude === null ? "not available" : amplitude.toFixed(3)} · drag its handle to move it`; }
       return where;
     };
+    // Dragging a slice handle: the pointer moves on the plane through the handle that holds the
+    // slice's axis and faces the camera most squarely; the slice follows the pointer along the axis.
+    const handleAt = (clientX: number, clientY: number) => {
+      const box = renderer.domElement.getBoundingClientRect();
+      ray.setFromCamera(new THREE.Vector2((clientX - box.left) / box.width * 2 - 1, -(clientY - box.top) / box.height * 2 + 1), view);
+      const shown = [...handles.values()].filter((handle) => handle.visible && groups.seismic.visible);
+      return ray.intersectObjects(shown, false)[0] ?? null;
+    };
+    let sliding: { readonly key: SliceKey; readonly axis: THREE.Vector3; readonly plane: THREE.Plane; readonly from: THREE.Vector3; readonly value: number; readonly span: number; readonly pointer: number } | null = null;
+    const pointOnPlane = (clientX: number, clientY: number, plane: THREE.Plane) => {
+      const box = renderer.domElement.getBoundingClientRect();
+      ray.setFromCamera(new THREE.Vector2((clientX - box.left) / box.width * 2 - 1, -(clientY - box.top) / box.height * 2 + 1), view);
+      return ray.ray.intersectPlane(plane, new THREE.Vector3());
+    };
     const move = (event: PointerEvent) => {
+      if (sliding) {
+        const point = pointOnPlane(event.clientX, event.clientY, sliding.plane);
+        if (point) dragSlice(sliding.key, sliding.value + point.sub(sliding.from).dot(sliding.axis) / sliding.axis.lengthSq() * sliding.span);
+        return;
+      }
       if (event.buttons) return;
       cancelAnimationFrame(hoverFrame);
-      hoverFrame = requestAnimationFrame(() => { const hit = hitAt(event.clientX, event.clientY); setReadout(hit ? describe(hit) : null); });
+      hoverFrame = requestAnimationFrame(() => {
+        const handle = handleAt(event.clientX, event.clientY);
+        renderer.domElement.style.cursor = handle ? "grab" : "";
+        if (handle) { const key = handle.object.userData.handle as SliceKey; setReadout(`${key === "inline" ? "Inline" : key === "crossline" ? "Crossline" : "Depth slice"} handle · drag to move the slice`); return; }
+        const hit = hitAt(event.clientX, event.clientY); setReadout(hit ? describe(hit) : null);
+      });
     };
     const leave = () => { cancelAnimationFrame(hoverFrame); setReadout(null); };
-    const press = (event: PointerEvent) => { down = [event.clientX, event.clientY]; };
+    const press = (event: PointerEvent) => {
+      down = [event.clientX, event.clientY];
+      const handle = event.button === 0 && seismic && frameMatrix ? handleAt(event.clientX, event.clientY) : null;
+      if (!handle || !seismic || !frameMatrix) return;
+      const key = handle.object.userData.handle as SliceKey;
+      const axis = new THREE.Vector3().setFromMatrixColumn(frameMatrix, key === "inline" ? 1 : key === "crossline" ? 0 : 2);
+      const look = view.getWorldDirection(new THREE.Vector3());
+      const facing = look.clone().sub(axis.clone().normalize().multiplyScalar(look.dot(axis.clone().normalize())));
+      if (facing.lengthSq() < 1e-8) return;
+      const range = key === "inline" ? [seismic.offsetStartM, seismic.offsetEndM] : key === "crossline" ? [seismic.alongStartM, seismic.alongEndM] : [seismic.topTvdM, seismic.baseTvdM];
+      const value = engineSlices[key];
+      if (value === null) return;
+      sliding = { key, axis, plane: new THREE.Plane().setFromNormalAndCoplanarPoint(facing.normalize(), handle.object.position), from: handle.object.position.clone(), value, span: range[1]! - range[0]!, pointer: event.pointerId };
+      controls.enabled = false;
+      renderer.domElement.setPointerCapture(event.pointerId);
+      renderer.domElement.style.cursor = "grabbing";
+      event.stopImmediatePropagation();
+    };
     const release = (event: PointerEvent) => {
+      if (sliding) {
+        if (renderer.domElement.hasPointerCapture(sliding.pointer)) renderer.domElement.releasePointerCapture(sliding.pointer);
+        sliding = null; down = null; controls.enabled = true; renderer.domElement.style.cursor = "";
+        return;
+      }
       if (!down || Math.hypot(event.clientX - down[0], event.clientY - down[1]) > 5) { down = null; return; }
       down = null;
       const well = hitAt(event.clientX, event.clientY)?.object.userData.well as SiteSceneWell | undefined;
@@ -488,7 +583,8 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
     };
     renderer.domElement.addEventListener("pointermove", move);
     renderer.domElement.addEventListener("pointerleave", leave);
-    renderer.domElement.addEventListener("pointerdown", press);
+    // Capture phase, so a press on a slice handle is seen before the orbit controls take it.
+    renderer.domElement.addEventListener("pointerdown", press, { capture: true });
     renderer.domElement.addEventListener("pointerup", release);
     renderer.domElement.setAttribute("aria-label", `${title}: 3D site view. Drag to orbit, right-drag to pan, wheel to zoom. Use the view buttons and layer controls for keyboard access.`);
 
@@ -499,6 +595,7 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
         invalidate();
       },
       slices(next) {
+        engineSlices = next;
         if (!seismic) return;
         const fraction = (value: number, a: number, b: number) => THREE.MathUtils.clamp((value - a) / (b - a), 0, 1);
         for (const [key, { mesh, edge }] of sliceMeshes) {
@@ -515,6 +612,13 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
           quad.forEach((p, i) => { const q = quad[(i + 1) % 4]!; edgePosition.setXYZ(i * 2, p[0]!, p[1]!, p[2]!); edgePosition.setXYZ(i * 2 + 1, q[0]!, q[1]!, q[2]!); });
           edgePosition.needsUpdate = true;
           edge.geometry.computeBoundingSphere();
+        }
+        for (const [key, handle] of handles) {
+          const value = next[key];
+          handle.visible = value !== null && frameMatrix !== null;
+          if (value === null || !frameMatrix) continue;
+          const f = key === "inline" ? fraction(value, seismic.offsetStartM, seismic.offsetEndM) : key === "crossline" ? fraction(value, seismic.alongStartM, seismic.alongEndM) : fraction(value, seismic.topTvdM, seismic.baseTvdM);
+          handle.position.set(...(key === "inline" ? [0.5, f, 0] : key === "crossline" ? [f, 0.5, 0] : [1, 0.5, f]) as [number, number, number]).applyMatrix4(frameMatrix);
         }
         invalidate();
       },
@@ -545,6 +649,25 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
           const total = item.object.geometry.index?.count ?? 0;
           item.object.geometry.setDrawRange(0, part >= 1 ? total : Math.ceil(part * item.segments) * (total / item.segments));
           item.object.visible = part > 0;
+        }
+        invalidate();
+      },
+      curtain(plane) {
+        if (curtainGroup) { scene.remove(curtainGroup); curtainGroup.traverse((item) => { if (item instanceof THREE.Mesh || item instanceof THREE.LineSegments) { item.geometry.dispose(); (item.material as THREE.Material).dispose(); } }); curtainGroup = null; }
+        if (curtainLabel) { labels.remove(curtainLabel); curtainLabel = null; }
+        if (plane) {
+          const [ae, an] = plane.from, [be, bn] = plane.to;
+          const corners = [at(ae, an, d0), at(be, bn, d0), at(be, bn, plane.baseM), at(ae, an, plane.baseM)];
+          const geometry = new THREE.BufferGeometry().setFromPoints(corners);
+          geometry.setIndex([0, 1, 2, 0, 2, 3]);
+          const colour = token("--sw-select", "#f59e0b");
+          const fill = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: colour, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false }));
+          const edge = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(corners.flatMap((p, i) => [p, corners[(i + 1) % 4]!])), new THREE.LineBasicMaterial({ color: colour }));
+          fill.renderOrder = 8;
+          curtainGroup = new THREE.Group();
+          curtainGroup.add(fill, edge);
+          scene.add(curtainGroup);
+          curtainLabel = label(plane.label, corners[1]!.clone(), "name", 3, { className: "is-seismic" });
         }
         invalidate();
       },
@@ -580,13 +703,16 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
         invalidate();
       },
     };
-    started.ready.then((backend) => { element.dataset.backend = backend; setReady(true); invalidate(); }, (cause) => setError(`The site scene could not start: ${cause instanceof Error ? cause.message : String(cause)}`));
+    // A scene closed before its renderer started (a rebuild, a closed tile) says nothing: its successor speaks.
+    let dead = false;
+    started.ready.then((backend) => { if (dead) return; element.dataset.backend = backend; setReady(true); invalidate(); }, (cause) => { if (!dead) setError(`The site scene could not start: ${cause instanceof Error ? cause.message : String(cause)}`); });
     return () => {
+      dead = true;
       cancelAnimationFrame(frame); cancelAnimationFrame(hoverFrame);
       observer.disconnect(); cube.dispose(); controls.dispose();
       renderer.domElement.removeEventListener("pointermove", move);
       renderer.domElement.removeEventListener("pointerleave", leave);
-      renderer.domElement.removeEventListener("pointerdown", press);
+      renderer.domElement.removeEventListener("pointerdown", press, { capture: true });
       renderer.domElement.removeEventListener("pointerup", release);
       if (highlightMesh) { highlightMesh.geometry.dispose(); (highlightMesh.material as THREE.Material).dispose(); }
       labels.dispose();
@@ -602,6 +728,7 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
   useEffect(() => { if (ready) engine.current?.style(colorMap, gain); }, [ready, colorMap, gain]);
   useEffect(() => { if (ready) engine.current?.select(selectedWellId); }, [ready, selectedWellId]);
   useEffect(() => { if (ready) engine.current?.cursor(cursor); }, [ready, cursor?.wellId, cursor?.mdM]);
+  useEffect(() => { if (ready) engine.current?.curtain(curtain); }, [ready, curtain?.from[0], curtain?.from[1], curtain?.to[0], curtain?.to[1], curtain?.baseM, curtain?.label]);
   useEffect(() => { if (ready) engine.current?.highlight(highlight); }, [ready, highlight?.wellId, highlight?.topMdM, highlight?.baseMdM, highlight?.color]);
   const reachKey = `${reach ? Object.entries(reach).map(([id, md]) => `${id}:${md}`).join("|") : ""}/${hiddenMarkers ? Object.entries(hiddenMarkers).map(([id, labels]) => `${id}:${labels.join(",")}`).join("|") : ""}`;
   useEffect(() => { if (ready) engine.current?.reach(reachRef.current.reach, reachRef.current.hiddenMarkers); }, [ready, reachKey]);
@@ -636,8 +763,8 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
         {(["inline", "crossline", "depth"] as const).map((key) => {
           const range = sliceRange(key)!, value = slices[key];
           return <div key={key} className="sw-site-slice">
-            <CommandButton kind="selection" aria-pressed={value !== null} onClick={() => setSlices((current) => ({ ...current, [key]: current[key] === null ? (range[0] + range[1]) / 2 : null }))}>{sliceNames[key]}</CommandButton>
-            <input id={`${ids}-${key}`} type="range" aria-label={`${sliceNames[key]} position`} min={Math.min(...range)} max={Math.max(...range)} step="any" value={value ?? (range[0] + range[1]) / 2} disabled={value === null} onChange={(event) => setSlices((current) => ({ ...current, [key]: Number(event.target.value) }))} />
+            <CommandButton kind="selection" aria-pressed={value !== null} onClick={() => moveSlice(key, value === null ? (range[0] + range[1]) / 2 : null)}>{sliceNames[key]}</CommandButton>
+            <input id={`${ids}-${key}`} type="range" aria-label={`${sliceNames[key]} position`} min={Math.min(...range)} max={Math.max(...range)} step="any" value={value ?? (range[0] + range[1]) / 2} disabled={value === null} onChange={(event) => moveSlice(key, Number(event.target.value))} />
             <output htmlFor={`${ids}-${key}`}>{value === null ? "off" : key === "depth" ? `${fmt(value)} m` : `${value >= 0 ? "+" : ""}${fmt(value)} m`}</output>
           </div>;
         })}

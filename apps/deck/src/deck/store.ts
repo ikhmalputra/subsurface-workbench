@@ -6,6 +6,8 @@ import { initialLayout, initialStage, minSizes, moduleById, moduleIds } from "..
 import type { Drop, Layout, Opening, Rect } from "./layout.ts";
 import { isLayout, planDropIn, planMove, planOpen, planResize, without } from "./layout.ts";
 import { wellIdFor } from "../data/place.ts";
+import { setActiveSite } from "../data/design.ts";
+import { setActiveEditWell } from "../data/records.ts";
 
 /**
  * Two stores. The core store is the signal bus every SDK view understands (selection, depth, the
@@ -40,6 +42,14 @@ export interface DeckState {
   /** One line on what the deck just did to make room, shown in the lens. */
   readonly note: { readonly text: string; readonly at: number } | null;
   readonly commandOpen: boolean;
+  /** The New well dialog. */
+  readonly newWellOpen: boolean;
+  /** A section line drawn on the map, longitude/latitude ends: the curtain tile cuts along it. */
+  readonly sectionLine: readonly [readonly [number, number], readonly [number, number]] | null;
+  /** Fused tiles, by "from>to": what the target draws of the source (e.g. the log curve's mnemonic). */
+  readonly fusions: Readonly<Record<string, string>>;
+  /** While a tile is dragged over a fusable target: the pair, for the target to say what a drop does. */
+  readonly fuseAim: { readonly from: ModuleId; readonly to: ModuleId } | null;
 }
 
 /** Theme and layout are this browser's preference; storage that fails only means they are not kept. */
@@ -67,7 +77,7 @@ const opening = (() => {
   return tiles.globe ? { tiles: swap(tiles, stage, "globe"), stage: "globe" as const } : storedLayout;
 })();
 
-let state: DeckState = { siteId: null, wellId: null, tiles: opening.tiles, stage: opening.stage, theme: storedTheme, lastUsed: {}, pulses: [], patch: false, note: null, commandOpen: false };
+let state: DeckState = { siteId: null, wellId: null, tiles: opening.tiles, stage: opening.stage, theme: storedTheme, lastUsed: {}, pulses: [], patch: false, note: null, commandOpen: false, newWellOpen: false, sectionLine: null, fusions: {}, fuseAim: null };
 const listeners = new Set<() => void>();
 const set = (next: Partial<DeckState>) => {
   state = { ...state, ...next };
@@ -143,10 +153,31 @@ function settle(opening: Opening | null, id: ModuleId, from: Origin) {
 }
 
 export const actions = {
+  /** Fuse one tile into another (or change what it fuses); the source tile stays where it was. */
+  fuse(from: ModuleId, to: ModuleId, value: string) {
+    set({ fusions: { ...state.fusions, [`${from}>${to}`]: value }, fuseAim: null });
+    pulse("view", from);
+  },
+  /** Pull a fusion back off. */
+  unfuse(key: string) {
+    set({ fusions: Object.fromEntries(Object.entries(state.fusions).filter(([entry]) => entry !== key)) });
+  },
+  aimFuse(aim: DeckState["fuseAim"]) {
+    if (aim?.from !== state.fuseAim?.from || aim?.to !== state.fuseAim?.to) set({ fuseAim: aim });
+  },
+  /** A section line drawn on the map: kept, and the curtain tile opens to show it. */
+  setSectionLine(line: DeckState["sectionLine"], from: Origin = "globe") {
+    set({ sectionLine: line });
+    if (line) actions.open("curtain", from);
+    pulse("view", from);
+  },
   /** Place: a site (and a well in it) everywhere at once. Choosing a site stages it in 3D. */
   selectSite(siteId: string | null, wellId: string | null = null, from: Origin = "bar") {
     const changed = siteId !== state.siteId || wellId !== state.wellId;
     const siteChanged = siteId !== state.siteId;
+    // On a planned well, its design becomes the one every module reads and edits.
+    setActiveSite(siteId);
+    setActiveEditWell(wellIdFor(siteId, wellId));
     set({ siteId, wellId });
     // A new place clears what belonged to the old one: the store drops its selection, cursor and window.
     if (changed) {
@@ -193,5 +224,16 @@ export const actions = {
   resetLayout() { set({ tiles: initialLayout, stage: initialStage }); if (state.siteId) actions.promote("site3d"); },
   setTheme(theme: "night" | "day") { write("deck-theme", theme); set({ theme }); },
   openCommand(open: boolean) { set({ commandOpen: open }); },
+  openNewWell(open: boolean) { set({ newWellOpen: open, commandOpen: false }); },
+  /** Go to a well with its editor on the stage. */
+  editWell(siteId: string, wellId: string | null = null, from: Origin = "bar") {
+    actions.selectSite(siteId, wellId, from);
+    actions.promote("editor");
+  },
+  /** Go to a planned well with its designer on the stage. */
+  designWell(siteId: string, from: Origin = "bar") {
+    actions.selectSite(siteId, null, from);
+    actions.promote("designer");
+  },
   setPatch(patch: boolean) { if (patch !== state.patch) set({ patch }); },
 };

@@ -1,4 +1,4 @@
-import { feetToMetres, findPipe, forgeSeismicSection, mdAtSurveyTvd, millimetresToInches, parseSegy, pipeRatings, projectOntoSection, steelGrades, tvdToSeismicDepth, wellPointAtMd } from "@ikhmalputra/subsurface-core";
+import { feetToMetres, findPipe, forge16aWellheads, forgeSeismicSection, mdAtSurveyTvd, millimetresToInches, parseSegy, pipeRatings, projectOntoSection, steelGrades, tvdToSeismicDepth, wellPointAtMd } from "@ikhmalputra/subsurface-core";
 import type { PipeRatings, ProjectedPoint, SegyFile, WellComponent } from "@ikhmalputra/subsurface-core";
 import { useFetched } from "./fetch.ts";
 import { forgeWell } from "./sites.ts";
@@ -26,7 +26,8 @@ export function useForgeSection(enabled: boolean): { file: SegyFile | null; erro
 
 /** Survey stations in UTM, at seismic depth, projected onto the section line. */
 export const wellOnSection: readonly ProjectedPoint[] = projectOntoSection(
-  survey.map((point) => ({ mdM: point.mdM, eastingM: meta.wellhead.eastingM + (point.eastingM ?? 0), northingM: meta.wellhead.northingM + (point.northingM ?? 0), depthM: tvdToSeismicDepth(point.tvdM, meta.rkbElevationM, meta.seismicDatumElevationM) })),
+  // 16A at its licensed as-built wellhead; the section line itself runs through the planned one.
+  survey.map((point) => ({ mdM: point.mdM, eastingM: forge16aWellheads.asBuilt.eastingM + (point.eastingM ?? 0), northingM: forge16aWellheads.asBuilt.northingM + (point.northingM ?? 0), depthM: tvdToSeismicDepth(point.tvdM, meta.rkbElevationM, meta.seismicDatumElevationM) })),
   { originEastingM: meta.wellhead.eastingM, originNorthingM: meta.wellhead.northingM, azimuthDeg: meta.section.azimuthDeg },
 );
 
@@ -82,3 +83,12 @@ export function stringRatings(component: WellComponent): StringRatings {
   if (!pipe) return { ...base, ratings: null, reason: "The reported OD and weight are not a size in the API 5CT table, so the wall is unknown." };
   return { ...base, ratings: pipeRatings(pipe.odIn, pipe.wallIn, grade), reason: null };
 }
+
+/**
+ * The formation tops as horizons across a seismic plane: each taken as planar at the depth the well
+ * met it, which is what the records support (they call the regional extent conceptual).
+ */
+export const formationHorizons = (forgeWell.design.formations ?? []).filter((layer) => layer.topTvdM > 50).map((layer) => ({
+  id: layer.id, label: `${layer.name} top · planar at the well's ${Math.round(layer.topTvdM).toLocaleString("en-US")} m TVD`,
+  depth: tvdToSeismicDepth(layer.topTvdM, meta.rkbElevationM, meta.seismicDatumElevationM), color: "#f59e0b",
+}));

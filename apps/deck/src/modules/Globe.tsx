@@ -1,5 +1,8 @@
 import { lazy, Suspense, useMemo } from "react";
-import { sites } from "../data/sites.ts";
+import { useSites } from "../data/sites.ts";
+import type { WorldSite } from "@ikhmalputra/subsurface-react";
+
+type WellsMapSite = WorldSite["map"];
 import { fmt } from "../format.ts";
 import { actions, useDeck } from "../deck/store.ts";
 import { useMoment } from "../data/history.ts";
@@ -9,20 +12,19 @@ import { Loading } from "./Empty.tsx";
 import { useWire } from "./wire.ts";
 
 const WellsMap = lazy(() => import("@ikhmalputra/subsurface-react/gis").then((module) => ({ default: module.WellsMap })));
-const mapSites = sites.map((site) => site.map);
 /** A well's path in plan as drilled by a depth: the stations above it and the point at it. */
-function sitesDrilledTo(place: Place, drilledM: number) {
+function sitesDrilledTo(mapSites: readonly WellsMapSite[], place: Place, drilledM: number) {
   return mapSites.map((site) => site.id !== place.siteId ? site : { ...site, wells: site.wells.map((well) => {
     if (well.id !== place.wellId) return well;
     const kept = (well.path ?? []).filter((_, index) => (place.stations[index]?.mdM ?? Infinity) <= drilledM);
-    const end = pointOnMap(place, drilledM);
+    const end = pointOnMap(mapSites, place, drilledM);
     return { ...well, path: drilledM <= 0 ? [] : end ? [...kept, end] : kept };
   }) });
 }
 
 /** Every located well on an offline globe. Choosing a site is the Place signal; the depth cursor rides the path. */
 /** Where a depth on a well lies in plan, on the map's own path for it (one point per station). */
-function pointOnMap(place: Place, mdM: number): GeographicXY | null {
+function pointOnMap(mapSites: readonly WellsMapSite[], place: Place, mdM: number): GeographicXY | null {
   const path = mapSites.find((site) => site.id === place.siteId)?.wells.find((well) => well.id === place.wellId)?.path;
   const stations = place.stations;
   if (!path || path.length !== stations.length || mdM < stations[0]!.mdM || mdM > stations.at(-1)!.mdM) return null;
@@ -35,16 +37,20 @@ function pointOnMap(place: Place, mdM: number): GeographicXY | null {
 
 export function Globe() {
   const siteId = useDeck((deck) => deck.siteId), wellId = useDeck((deck) => deck.wellId);
+  const line = useDeck((deck) => deck.sectionLine);
   const wire = useWire("globe");
+  const sites = useSites();
+  const mapSites = useMemo(() => sites.map((site) => site.map), [sites]);
   const place = wire.place;
   const md = place ? wire.cursor : null;
-  const at = md === null || !place ? null : pointOnMap(place, md);
+  const at = md === null || !place ? null : pointOnMap(mapSites, place, md);
   const cursor = useMemo(() => at && md !== null ? { at, label: `${fmt(md)} m MD` } : null, [at?.[0], at?.[1], md]);
   const moment = useMoment();
   const drilled = moment && siteId === "forge" ? moment.asOf.drilledM : null;
-  const shownSites = useMemo(() => drilled === null || !place ? mapSites : sitesDrilledTo(place, drilled), [drilled, place]);
+  const shownSites = useMemo(() => drilled === null || !place ? mapSites : sitesDrilledTo(mapSites, place, drilled), [drilled, place, mapSites]);
   return <Suspense fallback={<Loading>Starting the globe…</Loading>}>
     <WellsMap sites={shownSites} workerUrl="/gis/maplibre-gl-worker.mjs" basemapUrl="/gis/world-50m.json" basemapAttribution="Natural Earth"
-      selectedSiteId={siteId} selectedWellId={wellId} onSelect={(site, well) => actions.selectSite(site, well, "globe")} cursor={cursor} />
+      selectedSiteId={siteId} selectedWellId={wellId} onSelect={(site, well) => actions.selectSite(site, well, "globe")} cursor={cursor}
+      sectionLine={line} onSectionLineChange={(next) => actions.setSectionLine(next, "globe")} />
   </Suspense>;
 }

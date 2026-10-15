@@ -615,13 +615,16 @@ export function AssemblyScene({ assembly, assetBaseUrl, selectedId = null, onSel
     controls.addEventListener("end", () => { element.dataset.camera = `${camera.position.toArray().map((value) => value.toFixed(2)).join(",")}|${controls.target.toArray().map((value) => value.toFixed(2)).join(",")}`; });
     // Ambient occlusion gives the parts their crevices back; if the device cannot run it, the plain pass stands.
     let occlusion: AmbientOcclusion | null = null;
+    let dead = false;
     started.ready.then((backend) => {
+      if (dead) return;
       scene.environment = started.environment();
       try { occlusion = new AmbientOcclusion(renderer, scene, camera, { radius: 0.5 }); } catch { occlusion = null; }
       element.dataset.backend = backend;
       setReady(true);
-    }, (cause) => setFailure(`3D could not start (${cause instanceof Error ? cause.message : String(cause)}); the schematic remains fully editable.`));
+    }, (cause) => { if (!dead) setFailure(`3D could not start (${cause instanceof Error ? cause.message : String(cause)}); the schematic remains fully editable.`); });
     return () => {
+      dead = true;
       cancelAnimationFrame(frame);
       observer.disconnect();
       cube.dispose();

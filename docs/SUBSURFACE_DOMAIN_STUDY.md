@@ -78,16 +78,24 @@ Each is a real tool on real data, with no overlap with what is built.
 
 1. ~~**Real petrophysics on FORGE**~~ — *built* 15 Oct 2026 (see
    [the source record](FORGE_SOURCE_RECORD.md#open-hole-logs-petrophysics)).
-2. **Anti-collision** — the three FORGE wellbores (16A, 16B, 58-32) from GDR 1440, ISCWSA error
-   ellipses and separation factor, drawn on the globe, the site in 3D and a ladder plot.
-3. **Torque and drag** — soft-string model on the FORGE string and survey, calibrated against the
-   1 s hookload and torque in GDR 1283.
-4. **1D mechanical earth model** — the FORGE open-hole fixture already carries Schlumberger's
-   UCS, static Young's modulus, Poisson's ratio and Sv/Shmin/pore-pressure gradients, and the
-   caliper arm pairs show where the hole goes oval. Add Shmin from the stress tests (GDR 1032) to
-   check them against, for a measured pressure window instead of a design one.
-5. **Decline curves** — Arps on Sodir or BOEM production, one field or lease at a time.
-6. **Barrier schematic** — NORSOK D-010 envelopes drawn on the construction already built.
+2. ~~**Anti-collision**~~ — *built* 15 Oct 2026: centre-to-centre distance and the ISCWSA
+   separation factor (ladder and travelling cylinder) from the 16B (GDR 1516) and 58-32 (GDR 1006)
+   surveys, licensed as-built wellheads, and OWSG generic error models for each reported tool.
+3. ~~**Torque and drag**~~ — *built* 15 Oct 2026: a soft-string model (Johancsik et al. 1984) on
+   16A's survey, calibrated on the pick-up, slack-off and rotating weights of its daily reports
+   (block weight, pipe weight, cased and open-hole friction). The Pason log in GDR 1283 turned out
+   to be the 2022 re-entry; the 2020 1 s data (1.2 GB) was not fetched.
+4. ~~**1D mechanical earth model**~~ — *built* 15 Oct 2026: 16A's IsoMechPro pore pressure, Sv and
+   rock strength with horizontal stresses from 58-32's injection-calibrated profile (GDR 1032) or
+   16A's own model; collapse and breakdown of the inclined hole for every SHmax azimuth, against the
+   mud used and the oval hole seen.
+5. ~~**Decline curves**~~ — *built* 15 Oct 2026: Arps (b 0–1, fitted in log rate) on any of the
+   136 Norwegian fields' monthly production from Sodir (NLOD), with a draggable fit window, an
+   economic limit, remaining volume and EUR. Field level only: Sodir publishes no per-well rates.
+6. ~~**Barrier schematic**~~ — *built* 15 Oct 2026: primary and secondary envelopes on the
+   construction, each element with its record and every missing record listed as a gap. FORGE
+   follows the time rail (fluid column and BOP while drilling, production casing once completed);
+   Kestrel A-7's design, drilling or producing. NORSOK D-010's idea, none of its tables.
 
 Shaly-sand saturation, permeability and Monte Carlo extend the clastic petrophysics, which still
 runs on synthetic logs; FORCE 2020 would give it real ones. Hydraulics with rheology waits for a source with Fann readings.

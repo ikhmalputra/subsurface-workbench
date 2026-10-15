@@ -155,9 +155,15 @@ export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, i
   // TVD on the surveyed (curved) path, not a straight chord between stations.
   const tvdAt = (mdM: number) => survey && survey.length >= 2 ? tvdAtSurveyMd(survey, mdM) : null;
   const maxOd = Math.max(30, ...assembly.items.map((item) => item.odIn), ...holes.map((hole) => hole.odIn));
-  const pxPerIn = Math.min(3.6, (W * 0.42 - 70) / (maxOd * 2));
+  // Keep a readable label column (LABEL_ROOM px) and the ruler: in a narrow box the drawing shrinks
+  // and moves left rather than pushing its callouts off the right edge.
+  // RULER_MIN: the least x for the MD ruler (its ticks and title, and a TVD ruler where there is one).
+  const LABEL_ROOM = Math.min(160, Math.max(110, W * 0.42)), RULER_MIN = trackFrame ? 6 : survey && survey.length > 1 ? 112 : 58;
+  // As a track there is no ruler inside: the section's own depth column stands beside it.
+  const LEFT = trackFrame ? 50 : RULER_MIN + 44;
+  const pxPerIn = Math.max(0.3, Math.min(3.6, (W * 0.42 - 70) / (maxOd * 2), (W - LEFT - 34 - LABEL_ROOM - 12) / (maxOd * 2)));
   const r = (inches: number) => inches * pxPerIn;
-  const CX = W / 2;
+  const CX = Math.max(LEFT + r(maxOd), Math.min(W / 2, W - LABEL_ROOM - 12 - 34 - r(maxOd)));
   const RULER_X = CX - r(maxOd) - 44;
   const LABEL_X = CX + r(maxOd) + 34;
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -174,19 +180,61 @@ export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, i
   const td = assembly.totalDepthM;
   const [top, bottom] = depthWindow && depthWindow[1] <= td && depthWindow[1] - depthWindow[0] < td ? depthWindow : [0, td];
   const zoomed = bottom - top < td - 0.5;
-  const annotatedCount = shown.items.filter((item) => slot(item) !== "surface" && (zoomed || ["casing", "liner", "tubing", "sandface"].includes(slot(item)) || item.id === selectedId) && anchorDepth(item) >= top && anchorDepth(item) <= bottom).length;
+  const annotated = shown.items.filter((item) => slot(item) !== "surface" && (zoomed || ["casing", "liner", "tubing", "sandface"].includes(slot(item)) || item.id === selectedId) && anchorDepth(item) >= top && anchorDepth(item) <= bottom);
   const surfaceCount = shown.items.filter((item) => slot(item) === "surface").length;
   // As a track, the inset is dictated and the height is the box: a schematic that grew to fit
   // its annotations would stop sharing a scale with the tracks beside it.
   const Y0 = trackFrame ? trackFrame.top : Math.max(90, surfaceCount * 22 + 12);
   // Full record labels need a standalone drawing's width; a track keeps the compact ones.
   const rich = !!records && !trackFrame;
-  const labelGap = zoomed ? 78 : rich ? 96 : 60;
-  const H = trackFrame ? size.height : Math.max(size.height, annotatedCount * labelGap + 40);
-  const Y1 = H - (trackFrame ? trackFrame.bottom : 32);
-  const y = useMemo(() => scaleLinear().domain([top, bottom]).range([Y0, Y1]), [top, bottom, Y0, Y1]);
   const errors = new Set(issues.filter((issue) => issue.severity === "error" && issue.itemId).map((issue) => issue.itemId!));
   const warnings = new Set(issues.filter((issue) => issue.severity === "warning" && issue.itemId).map((issue) => issue.itemId!));
+  const stateOf = (member: AssemblyItem) => errors.has(member.id) ? "error" : warnings.has(member.id) ? "warning" : "ok";
+  const textX = LABEL_X + 12;
+
+  /** A callout's lines, wrapped to the room beside the drawing; at most `cap` detail lines. */
+  function labelText(members: readonly { item: AssemblyItem; anchor: number }[], cap = Infinity) {
+    const chosen = members.find((member) => member.item.id === selectedId) ?? members[0]!;
+    const item = chosen.item;
+    const state = members.some((member) => stateOf(member.item) === "error") ? "error" : members.some((member) => stateOf(member.item) === "warning") ? "warning" : "ok";
+    const position = members.indexOf(chosen);
+    const many = members.length > 1;
+    const title = item.label + (many ? ` ${position + 1}/${members.length}` : "") + (state !== "ok" ? (state === "error" ? "  ⨯" : "  !") : "");
+    const titleLines = wrapLabel(title, Math.max(12, Math.floor((W - textX - 16) / 6.4)));
+    if (zoomed) {
+      const detail = many ? `${formatInches(Math.max(...members.map((member) => member.item.odIn)))} · ${formatDepth(Math.min(...members.map((member) => anchorDepth(member.item))))}–${Math.round(Math.max(...members.map((member) => anchorDepth(member.item)))).toLocaleString("en-US")} m` : itemSummary(item);
+      return { chosen, state, many, position, title, titleLines, bodyLines: wrapLabel(detail, Math.max(14, Math.floor((W - textX - 16) / 6.1))).slice(0, cap) };
+    }
+    const cement = shown.items.find((value) => slot(value) === "cement" && value.hostId === item.id);
+    const record = recordOf.get(item.id);
+    const isString = ["casing", "liner", "tubing"].includes(slot(item));
+    const hole = isString && slot(item) !== "tubing" ? holeAt(item.bottomM - 0.5) : undefined;
+    const shoeTvd = tvdAt(item.bottomM);
+    const material = reported(record?.material);
+    const slurry = cement ? reported(recordOf.get(cement.id)?.material) : null;
+    const bodyLines = !rich ? [
+      `OD ${formatInches(item.odIn)} · ID ${item.idIn == null ? "not reported" : formatInches(item.idIn)}`,
+      `${slot(item) === "casing" || slot(item) === "liner" ? "Shoe" : slot(item) === "tubing" ? "Tail" : "Base"} ${formatDepth(item.bottomM)} MD · Top ${formatDepth(item.topM)}`,
+      ...(cement ? [`Cement TOC ${formatDepth(cement.topM)} MD`] : []),
+    ] : [
+      `OD ${formatInches(item.odIn)} · ID ${item.idIn == null ? "not reported" : formatInches(item.idIn)}`,
+      material || record?.sourcePage ? [material?.replaceAll(" / ", " · "), record?.sourcePage ? `p. ${record.sourcePage}` : null].filter(Boolean).join(" · ") : null,
+      `${slot(item) === "casing" || slot(item) === "liner" ? "Shoe" : slot(item) === "tubing" ? "Tail" : "Base"} ${formatDepth(item.bottomM)} MD${shoeTvd !== null && Math.abs(shoeTvd - item.bottomM) > 0.5 ? ` · ${formatDepth(shoeTvd)} TVD` : ""}`,
+      `${record?.rawBottomDepthFt ? `Reported ${record.rawBottomDepthFt.toLocaleString("en-US")} ft · ` : ""}top ${record?.topDepthReported === false ? "not reported" : formatDepth(item.topM)}`,
+      hole ? `In ${formatInches(hole.odIn)} hole to ${formatDepth(hole.bottomM)}${hole.bottomM - item.bottomM > 1 ? ` · ${Math.round(hole.bottomM - item.bottomM).toLocaleString("en-US")} m below shoe` : ""}` : null,
+      cement ? `Cement TOC ${formatDepth(cement.topM)} · ${slurry?.replaceAll(" / ", " · ") ?? "slurry not reported"}` : null,
+    ].filter((line): line is string => !!line);
+    return { chosen, state, many, position, title, titleLines, bodyLines: bodyLines.flatMap((line) => wrapLabel(line, Math.max(14, Math.floor((W - Math.max(0, W - size.width) / 2 - textX - 20) / 6.8)))).slice(0, cap) };
+  }
+  // A callout's height: 13 px a line, the title's cap height above its baseline and a gap below.
+  const LINE = 13, LABEL_PAD = 14;
+  const labelHeight = (text: ReturnType<typeof labelText>) => (text.titleLines.length + text.bodyLines.length) * LINE + LABEL_PAD;
+  // Standalone, the drawing grows until every callout fits at full length (an upper bound: grouping only shortens).
+  // Callouts start below ground: above it the surface equipment carries its own names.
+  const FIRST = Math.max(42, Y0 + 30);
+  const H = trackFrame ? size.height : Math.max(size.height, FIRST - 31 + annotated.reduce((sum, item) => sum + labelHeight(labelText([{ item, anchor: 0 }])), 0) + 12);
+  const Y1 = H - (trackFrame ? trackFrame.bottom : 32);
+  const y = useMemo(() => scaleLinear().domain([top, bottom]).range([Y0, Y1]), [top, bottom, Y0, Y1]);
 
   useEffect(() => {
     const element = frame.current;
@@ -196,7 +244,7 @@ export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, i
       // Standalone, the drawing keeps a 900px floor and scrolls inside its frame so labels have
       // room. As a track it has to fit the column it was given — a 900px drawing in a 320px
       // track shows the middle third and nothing else.
-      if (width > 0 && height > 0) setSize({ width: trackFrame ? width : Math.max(900, width), height });
+      if (width > 0 && height > 0) setSize({ width: trackFrame ? width : Math.max(260, width), height });
     });
     observer.observe(element);
     return () => observer.disconnect();
@@ -337,6 +385,8 @@ export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, i
   const glow = `sw-asm-glow-${uid}`;
   const contour = `sw-asm-contour-${uid}`;
   const ticks = y.ticks(9);
+  // A formation's name sits left of the strings (and their shoes), cut short rather than run across them.
+  const formationChars = Math.floor((CX - r(maxOd) - 14 - (RULER_X + 6)) / 6.8);
 
   function cementSegments(item: AssemblyItem) {
     const host = items.find((value) => value.id === item.hostId);
@@ -517,28 +567,38 @@ export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, i
   const ordered = [...items].sort((a, b) => order(a) - order(b));
   function order(item: AssemblyItem) { return { cement: 0, casing: 1, liner: 2, sandface: 3, tubing: 4, "casing-tool": 5, "tubing-tool": 6, plug: 7, surface: 8 }[slot(item)]; }
 
-  const labelLayout = useMemo(() => {
+  const labelLayout = (() => {
     const visible = items.filter((item) => slot(item) !== "surface" && (zoomed || ["casing", "liner", "tubing", "sandface"].includes(slot(item)) || item.id === selectedId) && anchorDepth(item) >= top && anchorDepth(item) <= bottom)
       .map((item) => ({ item, anchor: y(anchorDepth(item)) })).sort((a, b) => a.anchor - b.anchor);
     // Accessories a few metres apart (shoe track, centralizers) share one label; strings, cement and perforations keep their own.
-    const groups: { members: { item: AssemblyItem; anchor: number }[]; anchor: number; at: number }[] = [];
+    const groups: { members: { item: AssemblyItem; anchor: number }[]; anchor: number; at: number; text: ReturnType<typeof labelText> }[] = [];
     let open: (typeof groups)[number] | null = null;
     for (const entry of visible) {
       const accessory = !MAJOR_SLOTS.has(slot(entry.item));
       if (accessory && open && entry.anchor - open.anchor <= 14 && open.members.length < 5) { open.members.push(entry); continue; }
-      const group = { members: [entry], anchor: entry.anchor, at: 0 };
+      const group = { members: [entry], anchor: entry.anchor, at: 0, text: null as unknown as ReturnType<typeof labelText> };
       groups.push(group);
       open = accessory ? group : null;
     }
-    // A label's detail runs below its anchor; the last one must end inside the drawing, not under the legend.
-    const first = 42, last = Y1 - 12 - (rich && !zoomed ? 70 : 0);
-    const gap = labelGap;
-    let cursor = first - gap;
-    for (const label of groups) { label.at = Math.max(label.anchor, cursor + gap); cursor = label.at; }
-    let limit = last;
-    for (let index = groups.length - 1; index >= 0; index--) { const label = groups[index]!; label.at = Math.min(label.at, limit); limit = label.at - gap; }
-    return { groups, compact: gap < 26 };
-  }, [items, top, bottom, y, Y1, zoomed, selectedId, labelGap, rich]);
+    // Each label stacks below the one above it by its own height. Where they cannot all fit at full
+    // length (a track keeps its box), the detail is cut a line at a time, never the titles.
+    const first = FIRST, room = H - 6 - (first - 31);
+    for (const cap of [Infinity, 4, 3, 2, 1, 0]) {
+      for (const group of groups) group.text = labelText(group.members, cap);
+      if (groups.reduce((sum, group) => sum + labelHeight(group.text), 0) <= room) break;
+    }
+    let cursor = first;
+    for (const label of groups) { label.at = Math.max(label.anchor, cursor); cursor = label.at + labelHeight(label.text); }
+    // The last label's detail ends inside the drawing; any above it shift up to make room.
+    let limit = Infinity;
+    for (let index = groups.length - 1; index >= 0; index--) {
+      const label = groups[index]!;
+      const lines = label.text.titleLines.length + label.text.bodyLines.length;
+      label.at = Math.max(first, Math.min(label.at, H - 6 + 20 - (lines - 1) * LINE - 4, limit - labelHeight(label.text)));
+      limit = label.at;
+    }
+    return { groups };
+  })();
 
   const stack = useMemo(() => {
     const surface = items.filter((item) => slot(item) === "surface");
@@ -609,7 +669,7 @@ export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, i
           const layerBottom = Math.min(Y1, y(mdAtTvd(trajectory, layer.bottomTvdM)));
           return layerBottom > layerTop && <g key={layer.id} data-formation-id={layer.id} pointerEvents="none">
             <rect x={RULER_X} y={layerTop} width={LABEL_X - RULER_X - 20} height={layerBottom - layerTop} fill={layer.color} opacity="0.3" />
-            <text x={RULER_X + 6} y={layerTop + 14} className="sw-asm-label-detail">{layer.name}</text>
+            {layerBottom - layerTop >= 18 && formationChars >= 6 && <text x={RULER_X + 6} y={layerTop + 14} className="sw-asm-label-detail">{layer.name.length > formationChars ? `${layer.name.slice(0, formationChars - 1).trimEnd()}…` : layer.name}<title>{layer.name}</title></text>}
           </g>;
         })}
         <g className="sw-asm-ruler" aria-hidden>
@@ -643,10 +703,16 @@ export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, i
             const main = members.find((item) => item.catalogId !== "tubing-hanger") ?? members[0]!;
             const hanger = members.find((item) => item.catalogId === "tubing-hanger" && item !== main);
             const width = level >= 4 ? 112 : 96 - level * 6;
+            // Names sit left of the equipment while they clear the drawing's left edge, else to its right, cut to fit.
+            const names = members.map((item) => item.label.replace(/ \(.*\)$/, ""));
+            const leftEnd = CX - width / 2 - 8;
+            const onLeft = leftEnd - Math.max(...names.map((name) => name.length)) * 6.2 >= (trackFrame ? 4 : RULER_X);
+            const nameX = onLeft ? leftEnd : CX + width / 2 + 8;
+            const fit = onLeft ? Infinity : Math.max(4, Math.floor((W - 4 - nameX) / 6.2));
             return <g key={level} data-stack-level={level}>
               <image className={main.id === selectedId ? "is-selected" : undefined} href={assetUrl(assetBaseUrl, getCatalogEntry(main.catalogId).asset.thumbnail)} x={CX - width / 2} y={sy} width={width} height={height} preserveAspectRatio="xMidYMax meet" />
               {hanger && <image className={hanger.id === selectedId ? "is-selected" : undefined} href={assetUrl(assetBaseUrl, getCatalogEntry(hanger.catalogId).asset.thumbnail)} x={CX - 15} y={sy + height * 0.45} width={30} height={height * 0.5} preserveAspectRatio="xMidYMid meet" />}
-              <text x={CX - width / 2 - 8} y={sy + height / 2 + 3.5 - (members.length - 1) * 6.5} textAnchor="end" className="sw-asm-stack-label">{members.map((item, index) => <tspan key={item.id} x={CX - width / 2 - 8} dy={index ? 13 : 0} className={item.id === selectedId ? "is-selected" : undefined}>{item.label.replace(/ \(.*\)$/, "")}</tspan>)}</text>
+              <text x={nameX} y={sy + height / 2 + 3.5 - (members.length - 1) * 6.5} textAnchor={onLeft ? "end" : "start"} className="sw-asm-stack-label">{members.map((item, index) => <tspan key={item.id} x={nameX} dy={index ? 13 : 0} className={item.id === selectedId ? "is-selected" : undefined}>{names[index]!.length > fit ? `${names[index]!.slice(0, fit - 1).trimEnd()}…` : names[index]}</tspan>)}<title>{names.join("\n")}</title></text>
               <rect {...interactive(main)} x={CX - width / 2} y={sy} width={width} height={height} className={`${interactive(main).className} sw-asm-hit`} />
               {hanger && <rect {...interactive(hanger)} x={CX - 16} y={sy + height * 0.45} width={32} height={height * 0.5} className={`${interactive(hanger).className} sw-asm-hit`} />}
             </g>;
@@ -697,54 +763,26 @@ export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, i
           <rect x={LABEL_X - 92} y={y(cursorDepthM) - 17} width={72} height={15} rx={3} /><text x={LABEL_X - 56} y={y(cursorDepthM) - 6} textAnchor="middle">{formatDepth(cursorDepthM)}</text>
         </g>}
         <g className="sw-asm-labels">
-          {labelLayout.groups.map(({ members, at }) => {
-            const chosen = members.find((member) => member.item.id === selectedId) ?? members[0]!;
+          {labelLayout.groups.map(({ members, at, text }) => {
+            const { chosen, state, many, position, title, titleLines, bodyLines: detailLines } = text;
             const item = chosen.item;
             const spec = getCatalogEntry(item.catalogId);
             const reach = (member: AssemblyItem) => slot(member) === "cement" ? CX + r(member.odIn * 1.28) : CX + r(member.odIn) + (getCatalogEntry(member.catalogId).slot === "tubing-tool" ? 10 : 6);
-            const stateOf = (member: AssemblyItem) => errors.has(member.id) ? "error" : warnings.has(member.id) ? "warning" : "ok";
-            const state = members.some((member) => stateOf(member.item) === "error") ? "error" : members.some((member) => stateOf(member.item) === "warning") ? "warning" : "ok";
             const selected = members.some((member) => member.item.id === selectedId);
-            const position = members.indexOf(chosen);
-            const many = members.length > 1;
-            const title = item.label + (many ? ` ${position + 1}/${members.length}` : "") + (state !== "ok" ? (state === "error" ? "  ⨯" : "  !") : "");
-            const detail = many ? `${formatInches(Math.max(...members.map((member) => member.item.odIn)))} · ${formatDepth(Math.min(...members.map((member) => anchorDepth(member.item))))}–${Math.round(Math.max(...members.map((member) => anchorDepth(member.item)))).toLocaleString("en-US")} m` : itemSummary(item);
             const next = () => onSelect?.(selected ? many && position < members.length - 1 ? members[position + 1]!.item.id : null : item.id);
-            const tall = !labelLayout.compact;
-            const textX = LABEL_X + 12;
-            const titleLines = wrapLabel(title, Math.max(18, Math.floor((W - textX - 16) / 6.4)));
-            const cement = items.find((value) => slot(value) === "cement" && value.hostId === item.id);
-            const record = recordOf.get(item.id);
-            const isString = ["casing", "liner", "tubing"].includes(slot(item));
-            const hole = isString && slot(item) !== "tubing" ? holeAt(item.bottomM - 0.5) : undefined;
-            const shoeTvd = tvdAt(item.bottomM);
-            const material = reported(record?.material);
-            const slurry = cement ? reported(recordOf.get(cement.id)?.material) : null;
-            const detailLines = !rich ? [
-              `OD ${formatInches(item.odIn)} · ID ${item.idIn == null ? "not reported" : formatInches(item.idIn)}`,
-              `${slot(item) === "casing" || slot(item) === "liner" ? "Shoe" : slot(item) === "tubing" ? "Tail" : "Base"} ${formatDepth(item.bottomM)} MD · Top ${formatDepth(item.topM)}`,
-              ...(cement ? [`Cement TOC ${formatDepth(cement.topM)} MD`] : []),
-            ] : [
-              `OD ${formatInches(item.odIn)} · ID ${item.idIn == null ? "not reported" : formatInches(item.idIn)}`,
-              material || record?.sourcePage ? [material?.replaceAll(" / ", " · "), record?.sourcePage ? `p. ${record.sourcePage}` : null].filter(Boolean).join(" · ") : null,
-              `${slot(item) === "casing" || slot(item) === "liner" ? "Shoe" : slot(item) === "tubing" ? "Tail" : "Base"} ${formatDepth(item.bottomM)} MD${shoeTvd !== null && Math.abs(shoeTvd - item.bottomM) > 0.5 ? ` · ${formatDepth(shoeTvd)} TVD` : ""}`,
-              `${record?.rawBottomDepthFt ? `Reported ${record.rawBottomDepthFt.toLocaleString("en-US")} ft · ` : ""}top ${record?.topDepthReported === false ? "not reported" : formatDepth(item.topM)}`,
-              hole ? `In ${formatInches(hole.odIn)} hole to ${formatDepth(hole.bottomM)}${hole.bottomM - item.bottomM > 1 ? ` · ${Math.round(hole.bottomM - item.bottomM).toLocaleString("en-US")} m below shoe` : ""}` : null,
-              cement ? `Cement TOC ${formatDepth(cement.topM)} · ${slurry?.replaceAll(" / ", " · ") ?? "slurry not reported"}` : null,
-            ].filter((line): line is string => !!line).flatMap((line) => wrapLabel(line, Math.max(24, Math.floor((W - Math.max(0, W - size.width) / 2 - textX - 20) / 6.8))));
             return <g key={members[0]!.item.id} role="button" tabIndex={0} aria-pressed={selected} aria-label={title} className={`sw-asm-label${selected ? " is-selected" : ""}${members.some((member) => preview?.focusId === member.item.id) ? " is-preview" : ""}`} data-state={state} data-group-size={members.length} onPointerDown={(event) => { event.stopPropagation(); next(); }} onKeyDown={(event) => {
               if (event.key === "Enter" || event.key === " ") { event.preventDefault(); next(); }
             }}>
               <title>{members.map((member) => `${member.item.label} — ${itemSummary(member.item)}`).join("\n") + (many ? "\nClick to step through, then clear selection." : "\nClick again to clear selection.")}</title>
-              <rect x={LABEL_X} y={at - 24} width={W - LABEL_X - 12} height={titleLines.length * 13 + (zoomed ? 30 : detailLines.length * 13 + 4)} className="sw-asm-hit" />
-              {selected && <rect x={LABEL_X - 3} y={at - (tall ? 17 : 12)} width={W - LABEL_X - 1} height={tall ? 33 : 20} rx={5} className="sw-asm-label-pill" />}
+              <rect x={LABEL_X} y={at - 24} width={W - LABEL_X - 12} height={(titleLines.length + detailLines.length) * LINE + 4} className="sw-asm-hit" />
+              {selected && <rect x={LABEL_X - 3} y={at - 17} width={W - LABEL_X - 1} height={33} rx={5} className="sw-asm-label-pill" />}
               {members.map((member) => <path key={member.item.id} d={`M${reach(member.item)} ${member.anchor} H${LABEL_X - 26} L${LABEL_X - 8} ${at - 4} H${LABEL_X - 2}`} className={`sw-asm-leader${member === chosen && selected ? " is-active" : ""}`} />)}
               {selected && <circle cx={reach(item)} cy={chosen.anchor} r={3.6} className="sw-asm-leader-dot" />}
-              <rect x={LABEL_X} y={at - (tall ? 14 : 10)} width={6} height={tall ? 24 : 15} rx={1.5} fill={spec.color} />
+              <rect x={LABEL_X} y={at - 14} width={6} height={24} rx={1.5} fill={spec.color} />
               <text x={textX} y={at - 20} className="sw-asm-label-title">{titleLines.map((line, index) => <tspan key={index} x={textX} dy={index ? 13 : 0}>{line}</tspan>)}</text>
-              {!zoomed ? <text x={textX} y={at - 20 + titleLines.length * 13} className="sw-asm-label-detail">
-                {detailLines.map((line, index) => <tspan key={index} x={textX} dy={index ? 13 : 0}>{line}</tspan>)}
-              </text> : tall && <text x={textX} y={at - 20 + titleLines.length * 13} className="sw-asm-label-detail">{wrapLabel(detail, Math.max(18, Math.floor((W - textX - 16) / 6.1))).map((line, index) => <tspan key={index} x={textX} dy={index ? 13 : 0}>{line}</tspan>)}</text>}
+              {detailLines.length > 0 && <text x={textX} y={at - 20 + titleLines.length * LINE} className="sw-asm-label-detail">
+                {detailLines.map((line, index) => <tspan key={index} x={textX} dy={index ? LINE : 0}>{line}</tspan>)}
+              </text>}
             </g>;
           })}
         </g>

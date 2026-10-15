@@ -6,7 +6,9 @@ import { useForgeLog, useForgeVolume } from "../data/sites.ts";
 import { formatDate, logTo, span, useMoment } from "../data/history.ts";
 import { analyse, useDesign, useDesignState } from "../data/design.ts";
 import { shoesOf, type Place } from "../data/place.ts";
-import { signals } from "../deck/store.ts";
+import { signals, useDeck } from "../deck/store.ts";
+import { WRAP_CURVES } from "../deck/Tile.tsx";
+import { useForgeOpenHole } from "../data/openhole.ts";
 import { Empty, Loading } from "./Empty.tsx";
 import { useWire, type Wire } from "./wire.ts";
 
@@ -29,7 +31,7 @@ function useConstruction(place: Place) {
   const state = useDesignState();
   return useMemo(() => {
     if (place.siteId === "forge" && moment) return { assembly: moment.assembly, components: moment.asOf.components, moment, issues: [] as AssemblyIssue[], alerts: NONE };
-    if (place.siteId === "kestrel") {
+    if (place.kind === "design") {
       const analysis = analyse(brief);
       const issues: AssemblyIssue[] = analysis.failing.map((itemId) => ({ severity: "error", itemId, code: "design", message: analysis.sections.find((section) => section.sectionId === itemId)?.issues.find((issue) => issue.severity === "error")?.message ?? "Fails the design checks." }));
       return { assembly: place.assembly, components: place.components, moment: null, issues, alerts: state.pending ? analysis.failing : NONE };
@@ -61,12 +63,24 @@ export function Well3D() {
   const place = wire.place!;
   const seismic = useForgeVolume(place.siteId === "forge");
   const { moment, alerts } = useConstruction(place);
+  // Fused with the logs: the chosen open-hole curve wraps the well as a coloured, swelling cylinder.
+  const wrapped = useDeck((deck) => deck.fusions["logs>well3d"] ?? null);
+  const { openHole } = useForgeOpenHole(place.siteId === "forge" && wrapped !== null);
+  const wrap = useMemo(() => {
+    const spec = WRAP_CURVES.find((curve) => curve.mnemonic === wrapped);
+    if (!openHole || !spec) return { curve: null, style: null };
+    // The scene ties a log to its own design's id; the open-hole set knows the well by the deck's.
+    const source = openHole.curve(spec.mnemonic);
+    const curve = { version: 1 as const, id: source.id, wellId: place.design?.id ?? "forge", unit: source.unit, depthsMdM: source.depthsMdM, values: source.values, nullValue: "nan" as const };
+    return { curve, style: { curveId: curve.id, mode: "color-radius" as const, domain: spec.domain, radiusRange: [0.9, 2.8] as const } };
+  }, [openHole, wrapped, place.design?.id]);
   if (!place.design) return null;
   return <Suspense fallback={<Loading>Starting the 3D well…</Loading>}>
     <WellScene key={place.wellId} design={place.design} selectedId={wire.componentId ?? ""} onSelect={wire.select} focusOnSelect colorBy="dls" dlsLimitDegPer30m={3}
       volume={place.siteId === "forge" ? seismic.volume : null} probeMdM={wire.pinned} onProbe={wire.pin} cursorMdM={wire.cursor} onCursorMdChange={wire.hover} mdWindow={wire.brush ?? wire.window}
       onCameraViewChange={(view) => signals.setViewState(view, wire.source)}
-      reachMdM={moment ? moment.asOf.drilledM : null} installedIds={moment ? moment.present : null} runToMdM={moment ? moment.runTo : null} alertIds={alerts} />
+      reachMdM={moment ? moment.asOf.drilledM : null} installedIds={moment ? moment.present : null} runToMdM={moment ? moment.runTo : null} alertIds={alerts}
+      logCurve={wrap.curve} logStyle={wrap.style} />
   </Suspense>;
 }
 

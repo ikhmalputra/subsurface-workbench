@@ -1,0 +1,2216 @@
+{
+ "licence": "CC-BY-4.0",
+ "note": "Depths in feet as each report gives them, measured from that well's rotary table / kelly bushing; diameters in inches. Each value carries the page it was read from (“cite”). Convert feet with 1200/3937 m per ft, as the 16A(78)-32 records are.",
+ "sources": {
+  "16b": {
+   "gdr": 1516,
+   "name": "End of Well Report-16B78-32-May_2024.pdf",
+   "url": "https://gdr.openei.org/files/1516/End%20of%20Well%20Report-16B78-32-May_2024.pdf",
+   "sha256": "b35f25eda60fcec90a82a688c46ab4b4f30548876cc3cb0113a7cdb966f18f5d"
+  },
+  "58-32": {
+   "gdr": 1006,
+   "name": "58-32_EOWR.zip",
+   "url": "https://gdr.openei.org/files/1006/58-32_EOWR.zip",
+   "sha256": "b702fa9e7dba34b8abdd0ed184aeb27d66cd4307027fc953caf1b2c1f2337654",
+   "members": {
+    "eowr": "58-32_EOWR/58-32_EOWR_DOE.pdf",
+    "casing": "58-32_EOWR/CasingReports_All.pdf"
+   }
+  },
+  "56-32": {
+   "gdr": 1295,
+   "name": "56-32 EOWR - Final 22 July 2021.pdf",
+   "url": "https://gdr.openei.org/files/1295/56-32%20EOWR%20-%20Final%2022%20July%202021.pdf",
+   "sha256": "95be3fe8e669bc39bc1b0e688b565584032d3c8ac0c227870870c384552704b3"
+  },
+  "78-32": {
+   "gdr": 1153,
+   "name": "Monitoring Wells  78-32 - EOWR.pdf",
+   "url": "https://gdr.openei.org/files/1153/Monitoring%20Wells%20%2078-32%20-%20EOWR.pdf",
+   "sha256": "7dc4d3e9ab9ba396039105c4b89475c9f34fb00525cd49fbe652317add3efa46"
+  },
+  "78b-32": {
+   "gdr": 1330,
+   "name": "78B-32 EOWR with appendices.zip",
+   "url": "https://gdr.openei.org/files/1330/78B-32%20EOWR%20with%20appendices.zip",
+   "sha256": "e4d84ced665534463a0d742589d715e8fbee04c9adf760f0674ca1da29afcb17",
+   "members": {
+    "eowr": "78B-32 EOWR with ref appendices.pdf"
+   }
+  }
+ },
+ "wells": [
+  {
+   "id": "16b",
+   "label": "16B(78)-32",
+   "purpose": "Production well, the doublet partner of 16A(78)-32",
+   "drilled": "2023",
+   "datum": {
+    "kind": "KB",
+    "aboveGroundFt": null,
+    "elevationFt": 5447.65,
+    "groundElevationFt": 5415.65,
+    "cite": [
+     {
+      "doc": "eowr",
+      "page": 5,
+      "quote": "KB Elevation 5447.65 ft (confirm)"
+     },
+     {
+      "doc": "eowr",
+      "page": 5,
+      "quote": "GL Elevation 5415.65 ft"
+     },
+     {
+      "doc": "eowr",
+      "page": 5,
+      "quote": "MD is relative to the rig's RT/KB"
+     }
+    ],
+    "note": "The report marks the KB elevation “(confirm)”."
+   },
+   "totalDepthFt": 10947,
+   "tdCite": [
+    {
+     "doc": "eowr",
+     "page": 14,
+     "quote": "rotate and slide from 10,503 to 10,947 ft MD"
+    }
+   ],
+   "strings": [
+    {
+     "role": "surface",
+     "name": "Surface casing / 16 in",
+     "odIn": 16,
+     "idIn": null,
+     "spec": "84 lb/ft · JFE110T",
+     "topFt": 0,
+     "shoeFt": 1136,
+     "cite": [
+      {
+       "doc": "eowr",
+       "page": 12,
+       "quote": "16-inch surface casing was run, with the shoe at 1,136 ft MD"
+      },
+      {
+       "doc": "eowr",
+       "page": 163,
+       "quote": "84 lb/ JFE110T @ 1,136"
+      }
+     ],
+     "hole": {
+      "sizeIn": 22,
+      "bottomFt": 1146,
+      "cite": [
+       {
+        "doc": "eowr",
+        "page": 12,
+        "quote": "drilling 22-inch surface hole"
+       },
+       {
+        "doc": "eowr",
+        "page": 12,
+        "quote": "TD for the surface hole was reached at 1,146 ft MD"
+       }
+      ]
+     },
+     "cement": {
+      "topFt": 0,
+      "text": "Cemented with 144 bbl to surface; the annulus top stayed at surface",
+      "cite": [
+       {
+        "doc": "eowr",
+        "page": 12,
+        "quote": "surface casing was successfully cemented with 144 bbl of cement to the surface"
+       },
+       {
+        "doc": "eowr",
+        "page": 29,
+        "quote": "Cement top in the annulus remained at the surface"
+       }
+      ]
+     }
+    },
+    {
+     "role": "intermediate",
+     "name": "Intermediate casing / 11 3/4 in",
+     "odIn": 11.75,
+     "idIn": null,
+     "spec": "65 lb/ft · JFE110T · BTC",
+     "topFt": 0,
+     "shoeFt": 4837,
+     "cite": [
+      {
+       "doc": "eowr",
+       "page": 12,
+       "quote": "ran 11-3/4-inch, 65 ppf, JFE110T BTC casing to a shoe depth of 4,837 ft MD"
+      }
+     ],
+     "hole": {
+      "sizeIn": 14.75,
+      "bottomFt": 4845,
+      "cite": [
+       {
+        "doc": "eowr",
+        "page": 12,
+        "quote": "start drilling the 14-3/4-inch intermediate section"
+       },
+       {
+        "doc": "eowr",
+        "page": 12,
+        "quote": "reach intermediate TD at 4,845 ft MD"
+       }
+      ]
+     },
+     "cement": {
+      "topFt": 0,
+      "text": "The annulus top fell to ~578 ft; two top-out jobs brought it to surface",
+      "cite": [
+       {
+        "doc": "eowr",
+        "page": 45,
+        "quote": "TOC in the annulus was at ~578 ft"
+       },
+       {
+        "doc": "eowr",
+        "page": 45,
+        "quote": "got good cement to surface"
+       }
+      ]
+     }
+    },
+    {
+     "role": "production",
+     "name": "Production casing / 7 in",
+     "odIn": 7,
+     "idIn": null,
+     "spec": "38 lb/ft · P110EC",
+     "topFt": 0,
+     "shoeFt": 10208,
+     "cite": [
+      {
+       "doc": "eowr",
+       "page": 163,
+       "quote": "38 lb/ P110EC @ 10,208"
+      },
+      {
+       "doc": "eowr",
+       "page": 14,
+       "quote": "cased to 10, 208 ft MD"
+      }
+     ],
+     "hole": {
+      "sizeIn": 9.5,
+      "bottomFt": 10947,
+      "cite": [
+       {
+        "doc": "eowr",
+        "page": 163,
+        "quote": "9-1/2\" OH @ 10,947"
+       }
+      ]
+     },
+     "cement": {
+      "topFt": 3000,
+      "approximate": true,
+      "text": "ThermaSTONE; the bond log shows no cement above ~3,000 ft inside the 11 3/4 in and extremely poor coverage through the build",
+      "cite": [
+       {
+        "doc": "eowr",
+        "page": 163,
+        "quote": "ThermaSTONE"
+       },
+       {
+        "doc": "eowr",
+        "page": 162,
+        "quote": "QSLT CBL shows no cement from ~3,000 ft to surface inside the 11-3/4\" intermediate casing string and extremely poor cement coverage throughout the build section"
+       }
+      ]
+     }
+    }
+   ],
+   "openHole": {
+    "fromFt": 10208,
+    "toFt": 10947,
+    "sizeIn": 9.5,
+    "cite": [
+     {
+      "doc": "eowr",
+      "page": 8,
+      "quote": "final 760 ft of well 16B(78)-32 were uncased"
+     }
+    ]
+   },
+   "surface": [
+    {
+     "kind": "Wellhead",
+     "name": "Wellhead (rating not given in the summary)",
+     "cite": [
+      {
+       "doc": "eowr",
+       "page": 14,
+       "quote": "install wellhead and BOPE"
+      }
+     ]
+    }
+   ],
+   "notes": [
+    {
+     "text": "Intermediate grade: JFE110T in the operations summary (p. 12), JFE125T in the cement-job figures (pp. 45, 163).",
+     "cite": [
+      {
+       "doc": "eowr",
+       "page": 163,
+       "quote": "65 lb/ JFE125T @ 4,837"
+      }
+     ]
+    },
+    {
+     "text": "The report says the final 760 ft were uncased; the shoe (10,208 ft) to TD (10,947 ft) is 739 ft.",
+     "cite": []
+    },
+    {
+     "text": "Section II gives 10,700.97 ft MD at the toe: the plan, not the well drilled.",
+     "cite": [
+      {
+       "doc": "eowr",
+       "page": 5,
+       "quote": "Total Measured Depth 10,700.97 ft"
+      }
+     ]
+    },
+    {
+     "text": "No conductor is described on the summary pages read.",
+     "cite": []
+    }
+   ],
+   "survey": {
+    "from": "forge-offset-wells",
+    "id": "16b"
+   }
+  },
+  {
+   "id": "58-32",
+   "label": "58-32 (MU-ESW1)",
+   "purpose": "Vertical exploration and injection-test well",
+   "drilled": "2017",
+   "datum": {
+    "kind": "RKB",
+    "aboveGroundFt": 21.5,
+    "elevationFt": 5557.5,
+    "groundElevationFt": 5536,
+    "cite": [
+     {
+      "doc": "eowr",
+      "page": 5,
+      "quote": "measured depths from the rotary Kelly bushing"
+     },
+     {
+      "doc": "eowr",
+      "page": 5,
+      "quote": "(RKB) level of 21.5 ft. above ground level"
+     },
+     {
+      "doc": "eowr",
+      "page": 11,
+      "quote": "5,536 ft ASL 5,557.5 ft ASL"
+     }
+    ],
+    "note": null
+   },
+   "totalDepthFt": 7536,
+   "tdCite": [
+    {
+     "doc": "eowr",
+     "page": 11,
+     "quote": "7,536 ft (2.30° inclination at TD)"
+    }
+   ],
+   "strings": [
+    {
+     "role": "conductor",
+     "name": "Conductor / 20 in",
+     "odIn": 20,
+     "idIn": null,
+     "spec": "A53B · 0.25 in wall · welded",
+     "topFt": 0,
+     "shoeFt": 83.5,
+     "cite": [
+      {
+       "doc": "eowr",
+       "page": 13,
+       "quote": "Conductor n/a 20 A53B, 0.25\" WT, Welded"
+      },
+      {
+       "doc": "eowr",
+       "page": 13,
+       "quote": "n/a 83.5 Preset"
+      }
+     ],
+     "hole": {
+      "sizeIn": 36,
+      "bottomFt": null,
+      "cite": [
+       {
+        "doc": "casing",
+        "page": 1,
+        "quote": "Bit Diameter (ins): 36.000"
+       }
+      ]
+     },
+     "cement": null
+    },
+    {
+     "role": "surface",
+     "name": "Surface casing / 13 3/8 in",
+     "odIn": 13.375,
+     "idIn": 12.615,
+     "spec": "54.5 ppf · N-80 · BTC (non-API)",
+     "topFt": 0,
+     "shoeFt": 337.5,
+     "cite": [
+      {
+       "doc": "eowr",
+       "page": 13,
+       "quote": "Surface 17-1/2 13-3/8 54.5 ppf, N-80, BTC (non-API) 12.615 / 12.459 / 14.375 337.5"
+      }
+     ],
+     "hole": {
+      "sizeIn": 17.5,
+      "bottomFt": 342,
+      "cite": [
+       {
+        "doc": "eowr",
+        "page": 13,
+        "quote": "The 17-1/2\" hole was drilled to 342 ft."
+       }
+      ]
+     },
+     "cement": {
+      "topFt": null,
+      "text": "Top of cement fell to four feet below the cellar and was filled with gravel",
+      "cite": [
+       {
+        "doc": "eowr",
+        "page": 25,
+        "quote": "Top of cement fell to four feet below the cellar and was filled with gravel"
+       }
+      ]
+     }
+    },
+    {
+     "role": "intermediate",
+     "name": "Intermediate casing / 9 5/8 in",
+     "odIn": 9.625,
+     "idIn": 8.835,
+     "spec": "40 ppf · L-80 · BTC",
+     "topFt": 0,
+     "shoeFt": 2172,
+     "cite": [
+      {
+       "doc": "eowr",
+       "page": 13,
+       "quote": "Intermediate 12-1/4 9-5/8 40 ppf, L-80, BTC 8.835 / 8.750 (AD) / 10.625 2,172"
+      }
+     ],
+     "hole": {
+      "sizeIn": 12.25,
+      "bottomFt": 2180,
+      "cite": [
+       {
+        "doc": "eowr",
+        "page": 13,
+        "quote": "when the casing point of 2180' was reached"
+       }
+      ]
+     },
+     "cement": {
+      "topFt": null,
+      "text": "No top jobs were needed (the cement report is an image)",
+      "cite": [
+       {
+        "doc": "eowr",
+        "page": 31,
+        "quote": "No top jobs were needed."
+       }
+      ]
+     }
+    },
+    {
+     "role": "production",
+     "name": "Injection casing / 7 in",
+     "odIn": 7,
+     "idIn": 6.276,
+     "spec": "29 ppf · L-80 · BTC",
+     "topFt": 0,
+     "shoeFt": 7374,
+     "cite": [
+      {
+       "doc": "eowr",
+       "page": 13,
+       "quote": "Injection 8-3/4 7 29 ppf, L-80, BTC 6.276 / 6.151 / 7.656 7,374"
+      }
+     ],
+     "hole": {
+      "sizeIn": 8.75,
+      "bottomFt": 7536,
+      "cite": [
+       {
+        "doc": "eowr",
+        "page": 13,
+        "quote": "total depth of 7,536 ft. was reached"
+       }
+      ]
+     },
+     "cement": {
+      "topFt": null,
+      "text": "Cemented; top not reported (the cementing report is an image)",
+      "cite": [
+       {
+        "doc": "eowr",
+        "page": 38,
+        "quote": "The 7\" 29 ppf L-80 casing was run and cemented"
+       }
+      ]
+     }
+    }
+   ],
+   "openHole": {
+    "fromFt": 7374,
+    "toFt": 7536,
+    "sizeIn": 8.75,
+    "cite": [
+     {
+      "doc": "eowr",
+      "page": 13,
+      "quote": "The bottom 161' of the hole was cleaned and left open"
+     }
+    ]
+   },
+   "surface": [
+    {
+     "kind": "Wellhead",
+     "name": "13-5/8 in 3M × 5M clamp-on wellhead",
+     "cite": [
+      {
+       "doc": "eowr",
+       "page": 25,
+       "quote": "13-5/8\" 3M x 5M clamp-on well head"
+      }
+     ]
+    },
+    {
+     "kind": "Valve",
+     "name": "7-1/16 in 10M master valve",
+     "cite": [
+      {
+       "doc": "eowr",
+       "page": 39,
+       "quote": "7-1/16\" 10 M master valve"
+      }
+     ]
+    },
+    {
+     "kind": "Valve",
+     "name": "3-1/16 in 10M crown valve",
+     "cite": [
+      {
+       "doc": "eowr",
+       "page": 39,
+       "quote": "3-1/16\" 10M crown valve above the master valve"
+      }
+     ]
+    }
+   ],
+   "notes": [
+    {
+     "text": "9 5/8 in grade: L-80 in Table 4, K-55 in the casing narrative (p. 31) and the RIMBase casing report.",
+     "cite": [
+      {
+       "doc": "eowr",
+       "page": 31,
+       "quote": "The 9-5/8\", 40 ppf, K-55 casing"
+      }
+     ]
+    },
+    {
+     "text": "7 in shoe: 7,374 ft in Table 4, 7,375 ft in the narrative (pp. 13, 38).",
+     "cite": [
+      {
+       "doc": "eowr",
+       "page": 38,
+       "quote": "with the shoe set at 7375'"
+      }
+     ]
+    },
+    {
+     "text": "Conductor bore: Table 4 gives 17.5 in; the RIMBase casing report gives 19.5 in. Neither is drawn.",
+     "cite": [
+      {
+       "doc": "casing",
+       "page": 1,
+       "quote": "String Nominal ID (ins): 19.500"
+      }
+     ]
+    }
+   ],
+   "survey": {
+    "from": "forge-offset-wells",
+    "id": "58-32"
+   }
+  },
+  {
+   "id": "56-32",
+   "label": "56-32",
+   "purpose": "Vertical seismic monitoring and testing well",
+   "drilled": "2021",
+   "datum": {
+    "kind": "RKB",
+    "aboveGroundFt": 30.4,
+    "elevationFt": 5482.11,
+    "groundElevationFt": 5451.71,
+    "cite": [
+     {
+      "doc": "eowr",
+      "page": 15,
+      "quote": "Rotary Table Height: 30.40 ft. from ground level"
+     },
+     {
+      "doc": "eowr",
+      "page": 15,
+      "quote": "Ground Level (GL): 5,451.71 ft. ASL"
+     },
+     {
+      "doc": "eowr",
+      "page": 15,
+      "quote": "Rotary Table Elevation 5,482.11 ft. ASL"
+     }
+    ],
+    "note": null
+   },
+   "totalDepthFt": 9145,
+   "tdCite": [
+    {
+     "doc": "eowr",
+     "page": 22,
+     "quote": "the final Total Measured Depth 9,145 ft."
+    }
+   ],
+   "strings": [
+    {
+     "role": "conductor",
+     "name": "Conductor / 20 in",
+     "odIn": 20,
+     "idIn": 19.124,
+     "spec": "94 ppf · J-55 · welded",
+     "topFt": 0,
+     "shoeFt": 120.5,
+     "cite": [
+      {
+       "doc": "eowr",
+       "page": 17,
+       "quote": "Conductor n/a 20 94 ppf, J-55, Welded 19.124 18.936 n/a 120.5 Preset"
+      }
+     ],
+     "hole": null,
+     "cement": null
+    },
+    {
+     "role": "surface",
+     "name": "Surface casing / 13 3/8 in",
+     "odIn": 13.375,
+     "idIn": 12.615,
+     "spec": "54.5 ppf · J-55 · BTC",
+     "topFt": 0,
+     "shoeFt": 381,
+     "cite": [
+      {
+       "doc": "eowr",
+       "page": 17,
+       "quote": "Surface 17-1/2 13-3/8 54.5 ppf, J-55, BTC 12.615 12.459 14.375 381"
+      }
+     ],
+     "hole": {
+      "sizeIn": 17.5,
+      "bottomFt": 380.5,
+      "cite": [
+       {
+        "doc": "eowr",
+        "page": 29,
+        "quote": "Drilling to the casing point at 380.5 ft."
+       }
+      ]
+     },
+     "cement": {
+      "topFt": 0,
+      "text": "Good cement returns held at surface",
+      "cite": [
+       {
+        "doc": "eowr",
+        "page": 34,
+        "quote": "Good cement returns held at surface"
+       }
+      ]
+     }
+    },
+    {
+     "role": "intermediate",
+     "name": "Intermediate casing / 9 5/8 in",
+     "odIn": 9.625,
+     "idIn": 8.835,
+     "spec": "36 ppf · J-55 · LTC",
+     "topFt": 0,
+     "shoeFt": 3494,
+     "cite": [
+      {
+       "doc": "eowr",
+       "page": 18,
+       "quote": "Intermediate 12-1/4 9-5/8 36 ppf, J-55, LTC 8.835 8.765 10.625 3,494"
+      }
+     ],
+     "hole": {
+      "sizeIn": 12.25,
+      "bottomFt": 3500,
+      "cite": [
+       {
+        "doc": "eowr",
+        "page": 3,
+        "quote": "12-1/4 in. Hole to 3,500 ft."
+       }
+      ]
+     },
+     "cement": {
+      "topFt": null,
+      "text": "No top jobs were needed (the cement report is an image)",
+      "cite": [
+       {
+        "doc": "eowr",
+        "page": 42,
+        "quote": "No top jobs were needed."
+       }
+      ]
+     }
+    },
+    {
+     "role": "production",
+     "name": "Production casing / 5 1/2 in",
+     "odIn": 5.5,
+     "idIn": 4.892,
+     "spec": "17 ppf · L-80 · BTC",
+     "topFt": 0,
+     "shoeFt": 9135,
+     "cite": [
+      {
+       "doc": "eowr",
+       "page": 18,
+       "quote": "Production 8-3/4 5-1/2 17 ppf, L-80, BTC 4.892 4.767 6.3 9,135"
+      }
+     ],
+     "hole": {
+      "sizeIn": 8.75,
+      "bottomFt": 9145,
+      "cite": [
+       {
+        "doc": "eowr",
+        "page": 20,
+        "quote": "Drilling continued with 8-3/4 in. PDC to 9,145 ft."
+       }
+      ]
+     },
+     "cement": {
+      "topFt": null,
+      "text": "Cemented without returns to surface, then a top squeeze; top not reported",
+      "cite": [
+       {
+        "doc": "eowr",
+        "page": 20,
+        "quote": "without cement returns"
+       },
+       {
+        "doc": "eowr",
+        "page": 20,
+        "quote": "top squeeze"
+       }
+      ]
+     }
+    }
+   ],
+   "openHole": null,
+   "surface": [
+    {
+     "kind": "Wellhead",
+     "name": "13-5/8 in 3M × 5M Sliplok wellhead",
+     "cite": [
+      {
+       "doc": "eowr",
+       "page": 34,
+       "quote": "13-5/8 in. 3M x 5M Sliplok wellhead"
+      }
+     ]
+    }
+   ],
+   "notes": [
+    {
+     "text": "5 1/2 in shoe: 9,135 ft in Table 4, 9,105 ft in the summary (p. 8).",
+     "cite": [
+      {
+       "doc": "eowr",
+       "page": 8,
+       "quote": "The well was cased with 5-1/2-inch casing to a depth of 9,105 ft."
+      }
+     ]
+    },
+    {
+     "text": "Depth: 9,145 ft in the survey and narrative, “Actual Depth: 9,105 ft” in the well data (p. 15).",
+     "cite": [
+      {
+       "doc": "eowr",
+       "page": 15,
+       "quote": "Actual Depth: 9,105 ft."
+      }
+     ]
+    },
+    {
+     "text": "Conductor: 120.5 ft in Table 4, 128.5 ft where drilling began (p. 29).",
+     "cite": [
+      {
+       "doc": "eowr",
+       "page": 29,
+       "quote": "conductor casing at 128.5 ft."
+      }
+     ]
+    },
+    {
+     "text": "13 3/8 in shoe: 381 ft in Table 4, 380.5 ft in the narrative (p. 34).",
+     "cite": [
+      {
+       "doc": "eowr",
+       "page": 34,
+       "quote": "casing was set at 380.5 ft."
+      }
+     ]
+    }
+   ],
+   "survey": {
+    "stations": [
+     [
+      0.0,
+      0.0,
+      0.0
+     ],
+     [
+      201.0,
+      0.22,
+      63.64
+     ],
+     [
+      292.0,
+      0.43,
+      44.92
+     ],
+     [
+      401.0,
+      0.7,
+      31.38
+     ],
+     [
+      493.0,
+      0.7,
+      352.1
+     ],
+     [
+      585.0,
+      1.14,
+      358.25
+     ],
+     [
+      676.0,
+      1.05,
+      258.25
+     ],
+     [
+      767.0,
+      1.36,
+      355.0
+     ],
+     [
+      858.0,
+      1.54,
+      7.21
+     ],
+     [
+      949.0,
+      1.41,
+      6.33
+     ],
+     [
+      1040.0,
+      1.54,
+      10.46
+     ],
+     [
+      1135.0,
+      1.71,
+      5.63
+     ],
+     [
+      1230.0,
+      1.85,
+      13.45
+     ],
+     [
+      1325.0,
+      1.85,
+      16.88
+     ],
+     [
+      1419.0,
+      2.02,
+      16.7
+     ],
+     [
+      1514.0,
+      1.36,
+      30.5
+     ],
+     [
+      1608.0,
+      1.54,
+      37.53
+     ],
+     [
+      1703.0,
+      1.71,
+      43.6
+     ],
+     [
+      1798.0,
+      1.98,
+      49.14
+     ],
+     [
+      1892.0,
+      1.36,
+      55.82
+     ],
+     [
+      1986.0,
+      1.27,
+      71.72
+     ],
+     [
+      2081.0,
+      1.45,
+      63.02
+     ],
+     [
+      2175.0,
+      1.23,
+      72.43
+     ],
+     [
+      2270.0,
+      1.49,
+      60.74
+     ],
+     [
+      2365.0,
+      1.36,
+      74.27
+     ],
+     [
+      2458.0,
+      1.32,
+      71.2
+     ],
+     [
+      2551.0,
+      1.67,
+      73.66
+     ],
+     [
+      2648.0,
+      2.02,
+      78.93
+     ],
+     [
+      2743.0,
+      2.02,
+      85.26
+     ],
+     [
+      2839.0,
+      1.54,
+      70.32
+     ],
+     [
+      2934.0,
+      1.27,
+      61.7
+     ],
+     [
+      3029.0,
+      1.8,
+      66.01
+     ],
+     [
+      3124.0,
+      0.97,
+      100.38
+     ],
+     [
+      3219.0,
+      0.7,
+      92.55
+     ],
+     [
+      3314.0,
+      1.41,
+      113.56
+     ],
+     [
+      3410.0,
+      1.49,
+      110.57
+     ],
+     [
+      3447.0,
+      1.45,
+      119.54
+     ],
+     [
+      3497.0,
+      1.45,
+      119.71
+     ],
+     [
+      3592.0,
+      0.09,
+      235.73
+     ],
+     [
+      3687.0,
+      1.19,
+      275.81
+     ],
+     [
+      3792.0,
+      1.14,
+      257.35
+     ],
+     [
+      3877.0,
+      1.71,
+      259.02
+     ],
+     [
+      3972.0,
+      2.37,
+      239.68
+     ],
+     [
+      4067.0,
+      0.88,
+      14.51
+     ],
+     [
+      4163.0,
+      0.7,
+      68.65
+     ],
+     [
+      4258.0,
+      1.14,
+      248.47
+     ],
+     [
+      4353.0,
+      1.89,
+      253.31
+     ],
+     [
+      4448.0,
+      1.19,
+      338.56
+     ],
+     [
+      4544.0,
+      3.34,
+      310.96
+     ],
+     [
+      4640.0,
+      2.02,
+      246.1
+     ],
+     [
+      4734.0,
+      1.27,
+      30.85
+     ],
+     [
+      4829.0,
+      0.7,
+      7.29
+     ],
+     [
+      4924.0,
+      0.84,
+      3.61
+     ],
+     [
+      5018.0,
+      0.75,
+      295.93
+     ],
+     [
+      5113.0,
+      1.85,
+      211.03
+     ],
+     [
+      5208.0,
+      2.42,
+      23.91
+     ],
+     [
+      5302.0,
+      2.68,
+      273.61
+     ],
+     [
+      5397.0,
+      1.96,
+      289.22
+     ],
+     [
+      5492.0,
+      3.92,
+      267.35
+     ],
+     [
+      5587.0,
+      6.34,
+      263.45
+     ],
+     [
+      5681.0,
+      5.97,
+      255.77
+     ],
+     [
+      5776.0,
+      4.04,
+      248.12
+     ],
+     [
+      5871.0,
+      4.02,
+      254.32
+     ],
+     [
+      5954.0,
+      4.02,
+      231.45
+     ],
+     [
+      6049.0,
+      3.45,
+      191.93
+     ],
+     [
+      6144.0,
+      2.73,
+      190.1
+     ],
+     [
+      6238.0,
+      0.77,
+      198.5
+     ],
+     [
+      6333.0,
+      1.45,
+      232.32
+     ],
+     [
+      6428.0,
+      2.8,
+      243.67
+     ],
+     [
+      6523.0,
+      2.49,
+      239.04
+     ],
+     [
+      6619.0,
+      2.03,
+      255.21
+     ],
+     [
+      6713.0,
+      0.71,
+      244.52
+     ],
+     [
+      6808.0,
+      1.51,
+      223.95
+     ],
+     [
+      6902.0,
+      2.28,
+      225.96
+     ],
+     [
+      6998.0,
+      2.12,
+      223.09
+     ],
+     [
+      7093.0,
+      1.58,
+      233.46
+     ],
+     [
+      7187.0,
+      1.11,
+      207.96
+     ],
+     [
+      7281.0,
+      1.49,
+      226.8
+     ],
+     [
+      7471.0,
+      1.8,
+      195.54
+     ],
+     [
+      7566.0,
+      2.35,
+      198.56
+     ],
+     [
+      7693.0,
+      3.78,
+      209.82
+     ],
+     [
+      7788.0,
+      2.83,
+      205.09
+     ],
+     [
+      7883.0,
+      2.4,
+      187.52
+     ],
+     [
+      7977.0,
+      3.49,
+      215.53
+     ],
+     [
+      8071.0,
+      1.86,
+      235.78
+     ],
+     [
+      8166.0,
+      0.75,
+      258.68
+     ],
+     [
+      8260.0,
+      1.39,
+      294.03
+     ],
+     [
+      8355.0,
+      2.45,
+      290.59
+     ],
+     [
+      8450.0,
+      1.75,
+      310.26
+     ],
+     [
+      8545.0,
+      5.06,
+      292.8
+     ],
+     [
+      8640.0,
+      5.84,
+      284.86
+     ],
+     [
+      8735.0,
+      4.18,
+      281.32
+     ],
+     [
+      8831.0,
+      2.49,
+      148.99
+     ],
+     [
+      8927.0,
+      2.44,
+      260.67
+     ],
+     [
+      9021.0,
+      1.84,
+      230.13
+     ],
+     [
+      9093.0,
+      2.99,
+      239.87
+     ],
+     [
+      9145.0,
+      2.99,
+      239.87
+     ]
+    ],
+    "pages": [
+     22,
+     23,
+     24,
+     25,
+     26
+    ],
+    "check": "TVD recomputed by minimum curvature within 0.05 ft of the printed TVD"
+   }
+  },
+  {
+   "id": "78-32",
+   "label": "78-32",
+   "purpose": "Intermediate-depth seismic monitoring well",
+   "drilled": "2019",
+   "datum": {
+    "kind": "RKB",
+    "aboveGroundFt": 5.7,
+    "elevationFt": null,
+    "groundElevationFt": null,
+    "cite": [
+     {
+      "doc": "eowr",
+      "page": 5,
+      "quote": "(RKB), which is 5.70 ft above ground level"
+     },
+     {
+      "doc": "eowr",
+      "page": 5,
+      "quote": "Elevation: 5509.5 ft ASL"
+     }
+    ],
+    "note": "The report gives “Elevation: 5509.5 ft ASL” without saying of what (ground or RKB), so no datum elevation is taken from it."
+   },
+   "totalDepthFt": 3280,
+   "tdCite": [
+    {
+     "doc": "eowr",
+     "page": 5,
+     "quote": "Total Depth (ft): 3,280 ft."
+    }
+   ],
+   "surveyNote": "Single-shot inclinations only, no azimuths: no TVD is computed.",
+   "strings": [
+    {
+     "role": "conductor",
+     "name": "Conductor / 14 in",
+     "odIn": 14,
+     "idIn": 13.25,
+     "spec": "welded",
+     "topFt": 0,
+     "shoeFt": 69,
+     "cite": [
+      {
+       "doc": "eowr",
+       "page": 6,
+       "quote": "Conductor 24 14 Welded 13.25 69"
+      }
+     ],
+     "hole": {
+      "sizeIn": 24,
+      "bottomFt": null,
+      "cite": [
+       {
+        "doc": "eowr",
+        "page": 6,
+        "quote": "Conductor 24 14 Welded"
+       }
+      ]
+     },
+     "cement": {
+      "topFt": null,
+      "text": "Pre-set with a dry-hole digger and cemented in place; top not stated",
+      "cite": [
+       {
+        "doc": "eowr",
+        "page": 6,
+        "quote": "Pre-set, with a dry hole digger and cemented in place"
+       }
+      ]
+     }
+    },
+    {
+     "role": "surface",
+     "name": "Surface casing / 9 5/8 in",
+     "odIn": 9.625,
+     "idIn": 8.921,
+     "spec": "36# · J-55 · LTC",
+     "topFt": 0,
+     "shoeFt": 704,
+     "cite": [
+      {
+       "doc": "eowr",
+       "page": 6,
+       "quote": "Surface 12.25 9.625 36#, J-55, LTC 8.921/ 8.765/ 10.625 704"
+      }
+     ],
+     "hole": {
+      "sizeIn": 12.25,
+      "bottomFt": null,
+      "cite": [
+       {
+        "doc": "eowr",
+        "page": 6,
+        "quote": "Surface 12.25 9.625"
+       }
+      ]
+     },
+     "cement": {
+      "topFt": 0,
+      "text": "Cemented in place to surface",
+      "cite": [
+       {
+        "doc": "eowr",
+        "page": 6,
+        "quote": "704 Cemented in place to surface"
+       }
+      ]
+     }
+    },
+    {
+     "role": "production",
+     "name": "Production casing / 5 1/2 in",
+     "odIn": 5.5,
+     "idIn": 5.0,
+     "spec": "17# · K-55 · BTC",
+     "topFt": 0,
+     "shoeFt": 3269,
+     "cite": [
+      {
+       "doc": "eowr",
+       "page": 6,
+       "quote": "Production 8.75 5.5 17#, K-55, BTC 5.00/ 4.767/ 6.050 3269"
+      }
+     ],
+     "hole": {
+      "sizeIn": 8.75,
+      "bottomFt": 3280,
+      "cite": [
+       {
+        "doc": "eowr",
+        "page": 6,
+        "quote": "Production 8.75 5.5"
+       }
+      ]
+     },
+     "cement": {
+      "topFt": 0,
+      "text": "Cemented in place to surface; a secondary job brought it to surface from 68 ft",
+      "cite": [
+       {
+        "doc": "eowr",
+        "page": 6,
+        "quote": "3269 Cemented in place to surface"
+       },
+       {
+        "doc": "eowr",
+        "page": 8,
+        "quote": "bring cement to surface from 68 ft"
+       }
+      ]
+     }
+    }
+   ],
+   "openHole": null,
+   "surface": [
+    {
+     "kind": "Wellhead",
+     "name": "6 in 2M wellhead with a 3 in threaded shooting flange",
+     "cite": [
+      {
+       "doc": "eowr",
+       "page": 8,
+       "quote": "A permanent wellhead was installed consisting of a 6\" 2M with a 3\" threaded shooting flange"
+      }
+     ]
+    },
+    {
+     "kind": "Valve",
+     "name": "3 in threaded crown valve",
+     "cite": [
+      {
+       "doc": "eowr",
+       "page": 8,
+       "quote": "a 3\" threaded crown valve"
+      }
+     ]
+    }
+   ],
+   "notes": [
+    {
+     "text": "5 1/2 in shoe: 3,269 ft in Table 1, float shoe at 3,268 ft in the narrative (p. 8).",
+     "cite": [
+      {
+       "doc": "eowr",
+       "page": 8,
+       "quote": "float shoe set at 3268ft"
+      }
+     ]
+    },
+    {
+     "text": "The daily reports say Hydro Resources measured from ground level; Table 1 and this transcription take the report's RKB statement.",
+     "cite": []
+    }
+   ],
+   "survey": null
+  },
+  {
+   "id": "78b-32",
+   "label": "78B-32",
+   "purpose": "Deep vertical seismic monitoring and testing well",
+   "drilled": "2021",
+   "datum": {
+    "kind": "RKB",
+    "aboveGroundFt": 30.4,
+    "elevationFt": 5566.4,
+    "groundElevationFt": 5536,
+    "cite": [
+     {
+      "doc": "eowr",
+      "page": 16,
+      "quote": "Rotary Table Height: 30.40 ft. from ground level"
+     },
+     {
+      "doc": "eowr",
+      "page": 16,
+      "quote": "Ground Level (GL): 5,536 ft. ASL"
+     },
+     {
+      "doc": "eowr",
+      "page": 16,
+      "quote": "Rotary Table Elevation 5,566.4 ft. ASL"
+     }
+    ],
+    "note": null
+   },
+   "totalDepthFt": 9500,
+   "tdCite": [
+    {
+     "doc": "eowr",
+     "page": 16,
+     "quote": "Actual Depth: 9,500 ft."
+    }
+   ],
+   "strings": [
+    {
+     "role": "conductor",
+     "name": "Conductor / 24 in",
+     "odIn": 24,
+     "idIn": 23.0,
+     "spec": "0.5 in wall · butt welded",
+     "topFt": 0,
+     "shoeFt": 128.5,
+     "cite": [
+      {
+       "doc": "eowr",
+       "page": 18,
+       "quote": "Conductor n/a 24 0.5 in. WT, Butt Welded 23.000 n/a n/a 128.5 Preset"
+      }
+     ],
+     "hole": null,
+     "cement": null
+    },
+    {
+     "role": "surface",
+     "name": "Surface casing / 16 in",
+     "odIn": 16,
+     "idIn": 15.25,
+     "spec": "65 ppf · K-55 · BTC",
+     "topFt": 0,
+     "shoeFt": 416,
+     "cite": [
+      {
+       "doc": "eowr",
+       "page": 18,
+       "quote": "Surface 22 16 65 ppf, K-55, BTC 15.250 15.062 17.000 416"
+      }
+     ],
+     "hole": {
+      "sizeIn": 22,
+      "bottomFt": 421,
+      "cite": [
+       {
+        "doc": "eowr",
+        "page": 28,
+        "quote": "Drilling to the casing point at 421 ft."
+       }
+      ]
+     },
+     "cement": {
+      "topFt": 0,
+      "text": "Good cement returns held at surface",
+      "cite": [
+       {
+        "doc": "eowr",
+        "page": 30,
+        "quote": "Good cement returns held at surface"
+       }
+      ]
+     }
+    },
+    {
+     "role": "intermediate",
+     "name": "Intermediate casing / 11 3/4 in",
+     "odIn": 11.75,
+     "idIn": 10.88,
+     "spec": "54 ppf · K-55 · BTC",
+     "topFt": 0,
+     "shoeFt": 2990,
+     "cite": [
+      {
+       "doc": "eowr",
+       "page": 18,
+       "quote": "Intermediate 14-3/4 11-3/4 54 ppf, K-55, BTC 10.880 10.720 12.750 2,990"
+      }
+     ],
+     "hole": {
+      "sizeIn": 14.75,
+      "bottomFt": 3009,
+      "cite": [
+       {
+        "doc": "eowr",
+        "page": 32,
+        "quote": "14-3/4 in. Hole to 3,009 ft."
+       }
+      ]
+     },
+     "cement": {
+      "topFt": null,
+      "text": "Cemented; top not reported in the text (the cement report is an image)",
+      "cite": [
+       {
+        "doc": "eowr",
+        "page": 18,
+        "quote": "Cemented intermediate string."
+       }
+      ]
+     }
+    },
+    {
+     "role": "production",
+     "name": "Production casing / 7 in",
+     "odIn": 7,
+     "idIn": 5.82,
+     "spec": "41 ppf · T-110 SS · Tenaris Blue",
+     "topFt": 0,
+     "shoeFt": 8509,
+     "cite": [
+      {
+       "doc": "eowr",
+       "page": 18,
+       "quote": "Production 10-5/8 7 41 ppf, T-110 SS, Tenaris Blue 5.820 5.695 7.656 8,509"
+      }
+     ],
+     "hole": {
+      "sizeIn": 10.625,
+      "bottomFt": null,
+      "cite": [
+       {
+        "doc": "eowr",
+        "page": 18,
+        "quote": "Production 10-5/8 7"
+       }
+      ]
+     },
+     "cement": {
+      "topFt": 95,
+      "text": "Cement top fell to 95 ft from the rig floor, then a top fill of neat cement (its level not given)",
+      "cite": [
+       {
+        "doc": "eowr",
+        "page": 20,
+        "quote": "cement top fell to 95 ft. from the rig floor. Waited on cement and top fill with neat cement"
+       }
+      ]
+     }
+    }
+   ],
+   "openHole": {
+    "fromFt": 8509,
+    "toFt": 9500,
+    "sizeIn": 5.75,
+    "cite": [
+     {
+      "doc": "eowr",
+      "page": 8,
+      "quote": "completed barefoot to 9,500 ft."
+     },
+     {
+      "doc": "eowr",
+      "page": 3,
+      "quote": "5-3/4 in. Hole to 9,500 ft."
+     }
+    ]
+   },
+   "surface": [
+    {
+     "kind": "Wellhead",
+     "name": "13-5/8 in 3,000 × 5,000 psi wellhead",
+     "cite": [
+      {
+       "doc": "eowr",
+       "page": 30,
+       "quote": "13-5/8 in. 3,000 psi x 5,000 psi wellhead"
+      }
+     ]
+    }
+   ],
+   "notes": [
+    {
+     "text": "7 in shoe: 8,509 ft in Table 4, 8,508 ft in the summary (p. 8).",
+     "cite": [
+      {
+       "doc": "eowr",
+       "page": 8,
+       "quote": "The well was cased with 7 in. casing to a depth of 8,508 ft."
+      }
+     ]
+    }
+   ],
+   "survey": {
+    "stations": [
+     [
+      0.0,
+      0.0,
+      359.98
+     ],
+     [
+      241.0,
+      0.69,
+      358.29
+     ],
+     [
+      337.0,
+      1.04,
+      359.49
+     ],
+     [
+      545.0,
+      0.17,
+      93.92
+     ],
+     [
+      731.0,
+      0.07,
+      271.76
+     ],
+     [
+      822.0,
+      0.12,
+      37.38
+     ],
+     [
+      914.0,
+      0.15,
+      342.6
+     ],
+     [
+      1005.0,
+      0.47,
+      187.27
+     ],
+     [
+      1101.0,
+      0.19,
+      350.91
+     ],
+     [
+      1195.0,
+      0.07,
+      294.81
+     ],
+     [
+      1291.0,
+      0.19,
+      82.64
+     ],
+     [
+      1386.0,
+      0.12,
+      297.71
+     ],
+     [
+      1480.0,
+      0.24,
+      141.52
+     ],
+     [
+      1576.0,
+      0.17,
+      48.65
+     ],
+     [
+      1670.0,
+      0.1,
+      216.87
+     ],
+     [
+      1765.0,
+      0.14,
+      231.05
+     ],
+     [
+      1861.0,
+      0.18,
+      123.07
+     ],
+     [
+      1955.0,
+      0.1,
+      292.13
+     ],
+     [
+      2050.0,
+      0.26,
+      216.12
+     ],
+     [
+      2145.0,
+      0.15,
+      323.76
+     ],
+     [
+      2240.0,
+      0.12,
+      115.81
+     ],
+     [
+      2335.0,
+      0.18,
+      98.85
+     ],
+     [
+      2431.0,
+      0.11,
+      21.4
+     ],
+     [
+      2526.0,
+      0.08,
+      179.69
+     ],
+     [
+      2620.0,
+      0.1,
+      52.94
+     ],
+     [
+      2715.0,
+      0.12,
+      192.1
+     ],
+     [
+      2810.0,
+      0.13,
+      85.79
+     ],
+     [
+      2905.0,
+      0.14,
+      127.62
+     ],
+     [
+      2981.0,
+      0.09,
+      327.33
+     ],
+     [
+      3101.0,
+      0.15,
+      39.36
+     ],
+     [
+      3196.0,
+      0.18,
+      42.83
+     ],
+     [
+      3289.0,
+      0.08,
+      311.16
+     ],
+     [
+      3384.0,
+      0.76,
+      228.36
+     ],
+     [
+      3480.0,
+      2.55,
+      231.96
+     ],
+     [
+      3575.0,
+      3.93,
+      223.19
+     ],
+     [
+      3642.0,
+      3.93,
+      218.32
+     ],
+     [
+      3737.0,
+      1.1,
+      218.9
+     ],
+     [
+      3832.0,
+      1.11,
+      93.69
+     ],
+     [
+      3927.0,
+      1.83,
+      89.39
+     ],
+     [
+      4022.0,
+      3.01,
+      85.27
+     ],
+     [
+      4117.0,
+      1.92,
+      159.41
+     ],
+     [
+      4181.0,
+      1.19,
+      199.7
+     ],
+     [
+      4213.0,
+      0.99,
+      220.09
+     ],
+     [
+      4308.0,
+      0.86,
+      209.26
+     ],
+     [
+      4403.0,
+      0.4,
+      258.72
+     ],
+     [
+      4498.0,
+      0.66,
+      264.54
+     ],
+     [
+      4593.0,
+      1.33,
+      319.25
+     ],
+     [
+      4688.0,
+      1.75,
+      318.56
+     ],
+     [
+      4783.0,
+      1.48,
+      0.52
+     ],
+     [
+      4879.0,
+      1.68,
+      339.26
+     ],
+     [
+      4974.0,
+      1.65,
+      322.94
+     ],
+     [
+      5069.0,
+      0.45,
+      52.1
+     ],
+     [
+      5164.0,
+      0.21,
+      25.93
+     ],
+     [
+      5259.0,
+      0.57,
+      255.65
+     ],
+     [
+      5354.0,
+      1.12,
+      247.76
+     ],
+     [
+      5499.0,
+      1.46,
+      260.8
+     ],
+     [
+      5545.0,
+      2.01,
+      268.39
+     ],
+     [
+      5640.0,
+      1.97,
+      247.92
+     ],
+     [
+      5736.0,
+      1.56,
+      198.04
+     ],
+     [
+      5832.0,
+      1.57,
+      189.05
+     ],
+     [
+      5927.0,
+      1.77,
+      197.93
+     ],
+     [
+      6022.0,
+      1.47,
+      189.12
+     ],
+     [
+      6117.0,
+      1.1,
+      155.48
+     ],
+     [
+      6307.0,
+      1.06,
+      132.51
+     ],
+     [
+      6402.0,
+      1.07,
+      123.66
+     ],
+     [
+      6497.0,
+      0.71,
+      100.21
+     ],
+     [
+      6592.0,
+      0.88,
+      33.24
+     ],
+     [
+      6635.0,
+      0.77,
+      56.73
+     ],
+     [
+      6675.0,
+      1.18,
+      44.22
+     ],
+     [
+      6770.0,
+      1.25,
+      25.97
+     ],
+     [
+      6865.0,
+      1.46,
+      26.18
+     ],
+     [
+      6960.0,
+      1.09,
+      38.77
+     ],
+     [
+      7056.0,
+      1.57,
+      205.96
+     ],
+     [
+      7151.0,
+      1.92,
+      193.85
+     ],
+     [
+      7246.0,
+      1.38,
+      197.6
+     ],
+     [
+      7341.0,
+      0.83,
+      203.94
+     ],
+     [
+      7436.0,
+      0.89,
+      200.92
+     ],
+     [
+      7531.0,
+      0.95,
+      208.89
+     ],
+     [
+      7639.0,
+      0.74,
+      209.63
+     ],
+     [
+      7830.0,
+      1.62,
+      212.6
+     ],
+     [
+      7925.0,
+      1.87,
+      235.65
+     ],
+     [
+      8020.0,
+      1.85,
+      235.65
+     ],
+     [
+      8116.0,
+      1.52,
+      279.59
+     ],
+     [
+      8211.0,
+      1.76,
+      291.62
+     ],
+     [
+      8306.0,
+      1.49,
+      275.63
+     ],
+     [
+      8402.0,
+      0.87,
+      250.94
+     ],
+     [
+      8428.0,
+      1.39,
+      249.84
+     ],
+     [
+      8558.0,
+      2.78,
+      264.46
+     ],
+     [
+      8653.0,
+      2.31,
+      307.21
+     ],
+     [
+      8743.0,
+      0.99,
+      21.37
+     ],
+     [
+      8843.0,
+      0.92,
+      283.71
+     ],
+     [
+      8938.0,
+      2.76,
+      282.65
+     ],
+     [
+      9033.0,
+      1.05,
+      250.44
+     ],
+     [
+      9127.0,
+      2.4,
+      258.85
+     ],
+     [
+      9222.0,
+      1.31,
+      284.52
+     ],
+     [
+      9317.0,
+      3.73,
+      270.04
+     ],
+     [
+      9412.0,
+      3.96,
+      250.99
+     ],
+     [
+      9444.0,
+      3.91,
+      235.47
+     ],
+     [
+      9497.5,
+      3.91,
+      235.47
+     ],
+     [
+      9500.0,
+      3.91,
+      235.47
+     ]
+    ],
+    "pages": [
+     21,
+     22,
+     23,
+     24
+    ],
+    "check": "TVD recomputed by minimum curvature within 0.09 ft of the printed TVD"
+   }
+  }
+ ]
+}

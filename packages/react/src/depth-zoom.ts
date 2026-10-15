@@ -8,6 +8,9 @@ import type { D3ZoomEvent, ZoomBehavior } from "d3-zoom";
 import { brush as selectBrush, brushY } from "d3-brush";
 import type { BrushBehavior, D3BrushEvent } from "d3-brush";
 
+/** Whether a key went to a field the user is typing in: its keys are the field's, not the plot's. */
+const typing = (event: KeyboardEvent) => !!(event.target as Element | null)?.closest?.("input, textarea, select, [contenteditable='true']");
+
 /**
  * One way to move along a depth axis, shared by every depth view — the well section, the
  * construction schematic, the log tracks — instead of three copies of the same wheel handler.
@@ -105,6 +108,9 @@ export class DepthZoom {
     const svg = document.createElementNS(SVG_NS, "svg");
     svg.setAttribute("class", "sw-depth-box");
     svg.setAttribute("aria-hidden", "true");
+    // No size until a Shift-drag places it: an unplaced SVG is 300 × 150 by default and would add
+    // that much phantom overflow below the surface.
+    Object.assign(svg.style, { left: "0px", top: "0px", width: "0px", height: "0px" });
     const group = document.createElementNS(SVG_NS, "g");
     svg.append(group);
     // An SVG surface cannot hold an HTML-positioned overlay, so the box goes beside it in its parent.
@@ -123,7 +129,8 @@ export class DepthZoom {
     });
     this.box = { svg, group, brush };
     select(group).call(brush);
-    const shift = (event: KeyboardEvent) => { svg.classList.toggle("is-live", event.shiftKey); if (event.shiftKey) this.placeBox(); };
+    // Shift arms the brush, but not while it is held to type capitals in a field.
+    const shift = (event: KeyboardEvent) => { const live = event.shiftKey && !typing(event); svg.classList.toggle("is-live", live); if (live) this.placeBox(); };
     const enter = (event: PointerEvent) => { svg.classList.toggle("is-live", event.shiftKey); if (event.shiftKey) this.placeBox(); };
     window.addEventListener("keydown", shift);
     window.addEventListener("keyup", shift);
@@ -285,7 +292,7 @@ export function usePlotZoom(surface: RefObject<SVGSVGElement | null>, options: {
     const place = () => { const [a, b] = latest.current.plot(); box.extent([[a[0], a[1]], [b[0], b[1]]]); group.call(box); };
     place();
     const live = (on: boolean) => { if (on && !group.classed("is-live")) place(); group.classed("is-live", on); };
-    const keys = (event: KeyboardEvent) => live(event.shiftKey);
+    const keys = (event: KeyboardEvent) => live(event.shiftKey && !typing(event));
     const move = (event: PointerEvent) => live(event.shiftKey);
     window.addEventListener("keydown", keys);
     window.addEventListener("keyup", keys);

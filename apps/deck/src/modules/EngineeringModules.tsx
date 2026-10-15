@@ -106,7 +106,7 @@ export function PressureWindow() {
   const drag = useRef<string | null>(null);
   const width = Math.max(240, size.width), height = Math.max(240, size.height);
   const tdTvd = tvdAtMd(brief, brief.totalDepthMdM);
-  const left = 54, right = width - 12, top = 30, bottom = height - 34;
+  const left = 54, right = width - 12, top = 44, bottom = height - 34;
   const x = scaleLinear().domain([0.9, 2.1]).range([left, right]);
   const y = scaleLinear().domain([0, Math.ceil(tdTvd / 250) * 250]).range([top, bottom]);
   const curve = useMemo(() => {
@@ -127,7 +127,7 @@ export function PressureWindow() {
   return <div className="plot-fill window" ref={box}>
     <svg ref={svg} viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Pressure window: pore pressure, fracture gradient and planned mud weights against true vertical depth"
       onPointerMove={move} onPointerLeave={() => { if (!drag.current) wire.hover(null); }} onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }}>
-      <text x={left} y={16} className="axis-title">Equivalent density, SG</text>
+      <text x={left} y={14} className="axis-title">Equivalent density, SG</text>
       {x.ticks(6).map((tick) => <g key={tick}><line x1={x(tick)} x2={x(tick)} y1={top} y2={bottom} className="grid-line" /><text x={x(tick)} y={top - 6} textAnchor="middle" className="axis">{tick.toFixed(1)}</text></g>)}
       {y.ticks(8).map((tick) => <g key={tick}><line x1={left} x2={right} y1={y(tick)} y2={y(tick)} className="grid-line" /><text x={left - 6} y={y(tick) + 3} textAnchor="end" className="axis">{fmt(tick)}</text></g>)}
       <text transform={`translate(12 ${(top + bottom) / 2}) rotate(-90)`} textAnchor="middle" className="axis-title">TVD below RKB, m</text>
@@ -145,7 +145,8 @@ export function PressureWindow() {
           <text x={x(section.mudWeightSg) + 5} y={y(to) - 5} className="mud-label">{formatOd(section.odIn)} · {section.mudWeightSg.toFixed(2)}</text>
         </g>;
       })}
-      {brief.geology.formations.filter((formation) => formation.topTvdM < tdTvd).map((formation) => <text key={formation.name} x={right - 4} y={y(formation.topTvdM) + 11} textAnchor="end" className={`formation${formation.reservoir ? " is-reservoir" : ""}`}>{formation.name}</text>)}
+      {/* In a narrow tile the names would sit on the mud-weight labels: the tops' lines stay, the names give way. */}
+      {width >= 400 && brief.geology.formations.filter((formation) => formation.topTvdM < tdTvd).map((formation) => <text key={formation.name} x={right - 4} y={y(formation.topTvdM) + 11} textAnchor="end" className={`formation${formation.reservoir ? " is-reservoir" : ""}`}>{formation.name}</text>)}
       {cursorTvd !== null && cursorTvd <= tdTvd && <g className="cursor"><line x1={left} x2={right} y1={y(cursorTvd)} y2={y(cursorTvd)} /><text x={left + 4} y={y(cursorTvd) - 4}>{fmt(cursorTvd)} m TVD · pore {pressureAt(brief, cursorTvd).porePressureSg.toFixed(2)} · frac {pressureAt(brief, cursorTvd).fractureGradientSg.toFixed(2)}</text></g>}
     </svg>
     <p className="window-legend"><i className="is-pore" />Pore pressure<i className="is-frac" />Fracture gradient<i className="is-mud" />Mud weight (drag){committed !== analysis && state.pending ? <><i className="is-was" />Committed</> : null}</p>

@@ -2,9 +2,11 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, ty
 import { motion } from "motion/react";
 import { Maximize2, X } from "lucide-react";
 import type { ModuleId } from "../modules/registry.ts";
-import { moduleById, signalColour, signalName } from "../modules/registry.ts";
+import { fusionRule, fusionRules, moduleById, signalColour, signalName } from "../modules/registry.ts";
 import type { Rect } from "./layout.ts";
-import { actions, useDeck } from "./store.ts";
+import { actions, deck as deckStore, useDeck } from "./store.ts";
+
+const useDeckState = () => deckStore.get();
 
 /** Where a drag would land, and whether the grid accepts it. */
 export interface Ghost { readonly rect: Rect; readonly ok: boolean }
@@ -28,6 +30,10 @@ export function Tile({ id, geometry, subtitle, onGhost, children }: { readonly i
   const start = useRef<{ x: number; y: number } | null>(null);
   const [flashing, setFlashing] = useState<string | null>(null);
   const [refused, setRefused] = useState(false);
+  const siteId = useDeck((deck) => deck.siteId);
+  const aimedHere = useDeck((deck) => deck.fuseAim?.to === id ? deck.fuseAim : null);
+  const fusions = useDeck((deck) => deck.fusions);
+  const fusedHere = Object.entries(fusions).filter(([key]) => key.endsWith(`>${id}`));
 
   useEffect(() => {
     if (!arriving) return;
@@ -49,10 +55,25 @@ export function Tile({ id, geometry, subtitle, onGhost, children }: { readonly i
     start.current = { x: event.clientX, y: event.clientY };
     setGesture({ kind, dx: 0, dy: 0 });
   };
+  /** A fusable tile whose middle is under the pointer: a drop there fuses rather than moves. */
+  const fuseTarget = (x: number, y: number): ModuleId | null => {
+    for (const element of document.elementsFromPoint(x, y)) {
+      const tile = element.closest<HTMLElement>("[data-module]");
+      const other = tile?.dataset.module as ModuleId | undefined;
+      if (!tile || !other || other === id || !fusionRule(id, other, siteId)) continue;
+      const box = tile.getBoundingClientRect();
+      const inner = Math.abs(x - (box.left + box.width / 2)) < box.width * 0.3 && Math.abs(y - (box.top + box.height / 2)) < box.height * 0.3;
+      return inner ? other : null;
+    }
+    return null;
+  };
   const move = (event: ReactPointerEvent<HTMLElement>) => {
     if (!gesture || !start.current) return;
     const dx = event.clientX - start.current.x, dy = event.clientY - start.current.y;
     setGesture({ ...gesture, dx, dy });
+    const into = gesture.kind === "move" ? fuseTarget(event.clientX, event.clientY) : null;
+    actions.aimFuse(into ? { from: id, to: into } : null);
+    if (into) { setRefused(false); onGhost(null); return; }
     const aim = target(gesture.kind, dx, dy);
     const drop = actions.preview(gesture.kind, id, aim);
     setRefused(Math.hypot(dx, dy) > 4 && !drop);
@@ -61,7 +82,10 @@ export function Tile({ id, geometry, subtitle, onGhost, children }: { readonly i
   const end = () => {
     if (!gesture) return;
     const moved = Math.hypot(gesture.dx, gesture.dy) > 4;
-    if (moved) (gesture.kind === "move" ? actions.place : actions.resize)(id, target(gesture.kind, gesture.dx, gesture.dy));
+    const aim = useDeckState().fuseAim;
+    if (aim && aim.from === id) actions.fuse(aim.from, aim.to, aim.from === "logs" ? "GR" : "tops");
+    else if (moved) (gesture.kind === "move" ? actions.place : actions.resize)(id, target(gesture.kind, gesture.dx, gesture.dy));
+    actions.aimFuse(null);
     setGesture(null); setRefused(false); start.current = null; onGhost(null);
   };
 
@@ -85,7 +109,29 @@ export function Tile({ id, geometry, subtitle, onGhost, children }: { readonly i
       {!isStage && <button type="button" className="tile-action" aria-label={`Bring ${spec.title} to the stage`} title="Bring to the stage" onClick={() => actions.promote(id)}><Maximize2 size={14} /></button>}
       <button type="button" className="tile-action" aria-label={`Close ${spec.title}`} title="Close" onClick={() => actions.close(id)}><X size={14} /></button>
     </header>
+    {fusedHere.length > 0 && <div className="fuse-chips">{fusedHere.map(([key, value]) => <FuseChip key={key} fusion={key} value={value} />)}</div>}
     <div className="tile-body">{children}</div>
+    {aimedHere && <div className="fuse-zone" aria-hidden="true"><span>{fusionRules.find((rule) => rule.from === aimedHere.from && rule.to === id)?.verb}</span></div>}
     <div className="tile-resize" aria-hidden="true" onPointerDown={begin("resize")} onPointerMove={move} onPointerUp={end} onPointerCancel={end} />
   </motion.section>;
+}
+
+/** The curves a log can wrap the well with: a few that read well as colour in granite. */
+export const WRAP_CURVES = [
+  { mnemonic: "GR", label: "Gamma ray", domain: [0, 300] as const },
+  { mnemonic: "P32", label: "Fracture intensity", domain: [0, 4] as const },
+  { mnemonic: "RT90", label: "Resistivity 90 in", domain: [0, 2000] as const },
+  { mnemonic: "DPHI", label: "Density porosity", domain: [0, 0.15] as const },
+];
+
+/** A fusion on the target's head: what is fused, a choice where there is one, and the way to pull it off. */
+function FuseChip({ fusion, value }: { readonly fusion: string; readonly value: string }) {
+  const [from] = fusion.split(">") as [ModuleId];
+  return <span className="fuse-chip">
+    <b>{moduleById[from].title}</b>
+    {from === "logs"
+      ? <select aria-label="Curve wrapped on the well" value={value} onChange={(event) => actions.fuse(from, fusion.split(">")[1] as ModuleId, event.target.value)}>{WRAP_CURVES.map((curve) => <option key={curve.mnemonic} value={curve.mnemonic}>{curve.label}</option>)}</select>
+      : <span>formation tops</span>}
+    <button type="button" aria-label={`Pull ${moduleById[from].title} off`} title="Pull it off" onClick={() => actions.unfuse(fusion)}><X size={12} /></button>
+  </span>;
 }

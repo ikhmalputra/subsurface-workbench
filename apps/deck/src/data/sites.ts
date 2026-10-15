@@ -1,21 +1,36 @@
 import { useMemo } from "react";
 import { computeMinimumCurvature, forgeDesign, forgeSeismicSection, getWellComponents, seismicDepthToTvd, wellComponentsToAssembly } from "@ikhmalputra/subsurface-core";
-import type { ComputedStation, SurveyPoint } from "@ikhmalputra/subsurface-core";
+import type { ComputedStation, SeismicCube, SurveyPoint } from "@ikhmalputra/subsurface-core";
 import { forgeOperations, parseLas } from "@ikhmalputra/subsurface-core/records";
 import type { LasFile } from "@ikhmalputra/subsurface-core/records";
 import { equatorSite, forgeSite, unlocatedWells } from "@ikhmalputra/subsurface-react";
 import type { WorldSite } from "@ikhmalputra/subsurface-react";
 import type { SceneSeismicVolume } from "@ikhmalputra/subsurface-react/3d";
-import { kestrel } from "./design.ts";
+import { designForSite, siteOfDesign, useDesigns } from "./design.ts";
+import { recordedForSite, siteOfRecord, useRecordedWells } from "./records.ts";
 import { useFetched } from "./fetch.ts";
 
-/** The sites the deck can place, built once from the records. */
-export const sites: readonly WorldSite[] = [forgeSite(), equatorSite(), kestrel];
-export const siteById = (id: string | null) => sites.find((site) => site.map.id === id) ?? null;
+/** The sites with records, built once. */
+const recordedSites: readonly WorldSite[] = [forgeSite(), equatorSite()];
+/** Every site the deck can place: the recorded ones, then each planned well as it now stands. */
+export function useSites(): readonly WorldSite[] {
+  const designs = useDesigns();
+  const entered = useRecordedWells();
+  return useMemo(() => [...recordedSites, ...designs.map((entry) => siteOfDesign(entry.record, entry.value.brief)),
+    ...entered.map((entry) => siteOfRecord(entry.entry, entry.value)).filter((site): site is WorldSite => site !== null)], [designs, entered]);
+}
+export const siteById = (id: string | null): WorldSite | null => {
+  const recorded = recordedSites.find((site) => site.map.id === id);
+  if (recorded) return recorded;
+  const design = designForSite(id);
+  if (design) return siteOfDesign(design, design.history.current().brief);
+  const entered = recordedForSite(id);
+  return entered ? siteOfRecord(entered, entered.history.current()) : null;
+};
 export const unlocated = unlocatedWells();
 
 /** Positions, dogleg and closure by minimum curvature from stations' MD, inclination and azimuth. */
-export const surveyFrom = (points: readonly SurveyPoint[]): readonly ComputedStation[] =>
+export const surveyFrom = (points: readonly SurveyPoint[]): readonly ComputedStation[] => points.length < 2 ? [] :
   computeMinimumCurvature(points.map((point) => ({ mdM: point.mdM, inclinationDeg: point.inclinationDeg, azimuthDeg: point.azimuthDeg })));
 
 export const FORGE_NAME = forgeDesign.wellName ?? "Utah FORGE 16A(78)-32";
@@ -59,4 +74,14 @@ export function useForgeVolume(enabled: boolean): { volume: SceneSeismicVolume |
     };
   }, [cut, counts, meta]);
   return { volume, loading: loaded.loading, error: loaded.error };
+}
+
+/** The same PSDM sub-volume as a cube on the section's axes, for cutting inlines and crosslines. */
+export function useForgeCube(enabled: boolean): { cube: SeismicCube | null; loading: boolean; error: string | null } {
+  const cut = forgeSeismicSection.subVolume;
+  const loaded = useFetched(enabled && cut ? `/data/${cut.file}` : null, asCounts);
+  const counts = loaded.value;
+  const cube = useMemo((): SeismicCube | null => !cut || !counts || counts.length !== cut.alongCount * cut.offsetCount * cut.samples ? null
+    : { counts, alongCount: cut.alongCount, offsetCount: cut.offsetCount, sampleCount: cut.samples, amplitudePerCount: cut.amplitudePerCount, alongFromM: cut.alongFromM, offsetFromM: cut.offsetFromM, spacingM: cut.spacingM }, [cut, counts]);
+  return { cube, loading: loaded.loading, error: loaded.error };
 }
