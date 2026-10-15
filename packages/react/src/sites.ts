@@ -1,4 +1,4 @@
-import { forgeDesign, forgeSeismicSection, getWellComponents } from "@ikhmalputra/subsurface-core";
+import { forge16aWellheads, forgeDesign, forgeNeighbours, forgeSeismicSection, getWellComponents } from "@ikhmalputra/subsurface-core";
 import { reprojectGisXY } from "@ikhmalputra/subsurface-core/gis";
 import type { GeographicXY } from "@ikhmalputra/subsurface-core/gis";
 import { createMockTrajectory } from "@ikhmalputra/subsurface-core/sandbox";
@@ -53,13 +53,25 @@ export function forgeSite(): WorldSite {
   const shoes = components.filter((component) => component.kind === "Casing").map((component) => ({ mdM: component.bottomDepthM, label: `${component.name.split(" / ").pop()?.trim()} shoe` }));
   const granite = forgeDesign.formations?.find((layer) => layer.id === "granite");
   const topMd = granite ? mdAtSurveyTvd(survey, granite.topTvdM) : null;
+  // The frame's origin is the point the seismic section was cut through (GDR 1216); 16A itself
+  // stands at its licensed as-built wellhead, 16.2 m from it.
+  const at16a = { e: forge16aWellheads.asBuilt.eastingM - head.eastingM, n: forge16aWellheads.asBuilt.northingM - head.northingM };
   const well: SiteSceneWell = {
     id: "forge", label: "16A(78)-32", provenance: "documented",
-    xyz: Float64Array.from(survey.flatMap((point) => [point.eastingM ?? 0, point.northingM ?? 0, point.tvdM])),
+    xyz: Float64Array.from(survey.flatMap((point) => [at16a.e + (point.eastingM ?? 0), at16a.n + (point.northingM ?? 0), point.tvdM])),
     mdM: Float64Array.from(survey.map((point) => point.mdM)),
     markers: [...shoes, ...(topMd !== null && granite ? [{ mdM: topMd, label: "Granite top (well)" }] : [])],
     intervals: topMd !== null && granite ? [{ topMdM: topMd, baseMdM: survey.at(-1)!.mdM, label: granite.name, color: RESERVOIR.top }] : [],
   };
+  // The neighbours in the site's frame: east and north from 16A's wellhead, depth below 16A's RKB.
+  const neighbours: SiteSceneWell[] = forgeNeighbours.map((placed) => {
+    const shift = { e: placed.eastingM - head.eastingM, n: placed.northingM - head.northingM, d: meta.rkbElevationM - placed.depthZeroElevationM };
+    return {
+      id: placed.id, label: placed.label, provenance: "documented",
+      xyz: Float64Array.from(placed.stations.flatMap((station) => [shift.e + station.eastingM, shift.n + station.northingM, shift.d + station.tvdM])),
+      mdM: Float64Array.from(placed.stations.map((station) => station.mdM)),
+    };
+  });
   const surfaces: SiteSceneSurface[] = [
     { id: "ground", label: "Ground level", provenance: "documented", role: "reference", color: "#7d8f55", note: `Flat at ${forgeDesign.groundTvdM?.toFixed(1)} m TVD below RKB. Terrain is not supplied.`, geometry: { kind: "plane", depthM: forgeDesign.groundTvdM ?? 0 } },
     ...(granite ? [{ id: "granite-top", label: "Granite reservoir top", provenance: "documented" as const, role: "horizon" as const, color: RESERVOIR.top, note: `Planar at the well's ${granite.topTvdM.toFixed(0)} m TVD contact. The record calls its regional extent conceptual; no dip or faulting is inferred.`, geometry: { kind: "plane" as const, depthM: granite.topTvdM } }] : []),
@@ -67,15 +79,18 @@ export function forgeSite(): WorldSite {
   return {
     map: {
       id: "forge", label: "Utah FORGE 16A(78)-32", provenance: "documented",
-      summary: "1 well · observed survey · 3D PSDM volume · 2 formations",
-      wells: [{ id: "forge", label: "16A(78)-32", head: toLonLat(0, 0), path: survey.map((point) => toLonLat(point.eastingM ?? 0, point.northingM ?? 0)) }],
+      summary: "16A(78)-32 with its records · 16B(78)-32 and 58-32 surveys · 3D PSDM volume · 2 formations",
+      wells: [
+        { id: "forge", label: "16A(78)-32", head: toLonLat(at16a.e, at16a.n), path: survey.map((point) => toLonLat(at16a.e + (point.eastingM ?? 0), at16a.n + (point.northingM ?? 0))) },
+        ...neighbours.map((well) => ({ id: well.id, label: well.label, head: toLonLat(well.xyz[0]!, well.xyz[1]!), path: Array.from({ length: well.mdM.length }, (_, i) => toLonLat(well.xyz[i * 3]!, well.xyz[i * 3 + 1]!)) })),
+      ],
       footprints: [{ id: "forge-psdm", label: "PSDM volume cut", ring }],
     },
     projectWellId: "forge",
     depthLabel: `m TVD below RKB (${meta.rkbElevationM.toFixed(0)} m ASL)`,
-    originLabel: "wellhead · NAD83 / UTM 12N grid",
-    wells: [well], surfaces, hasSeismic: true,
-    caveat: "Documented: observed survey, casing shoes and the 3D PSDM volume from the Utah FORGE records. Seismic depth is converted from the 1,800 m ASL datum to TVD below RKB; PSDM depths are not tied to check-shots. NAD83 is taken as WGS84 on the map (within about 2 m).",
+    originLabel: "seismic section origin (16A plan wellhead) · NAD83 / UTM 12N grid",
+    wells: [well, ...neighbours], surfaces, hasSeismic: true,
+    caveat: "Documented: observed survey, casing shoes and the 3D PSDM volume from the Utah FORGE records. 16A and 16B stand at their licensed as-built wellheads (GDR 1283, 1516), 58-32 at its GPS-surveyed one (GDR 1358), 36.9 m and about 900 m apart; 58-32's depths are from its KB, 21.5 ft above ground (its log header). The seismic section runs through 16A's planned wellhead, 16.2 m north of where it was built. Seismic depth is converted from the 1,800 m ASL datum to TVD below RKB; PSDM depths are not tied to check-shots. NAD83 is taken as WGS84 on the map (within about 2 m).",
   };
 }
 
@@ -197,44 +212,66 @@ export function equatorPetrophysics(project: EquatorField = equatorField()): rea
  * Malaysian platform with offset-derived pressures, a proposed casing scheme, cement and a gas-lift
  * completion. It is a design, not a drilled well, and every part of it says so.
  */
-export function kestrelSite(brief: WellDesignBrief = exampleWellBrief()): WorldSite & { readonly brief: WellDesignBrief; readonly design: WellDesign } {
+/** The WGS 84 / UTM zone a longitude and latitude fall in, as an EPSG code. */
+export function utmZoneOf(longitude: number, latitude: number): string {
+  const zone = Math.min(60, Math.max(1, Math.floor((longitude + 180) / 6) + 1));
+  return `EPSG:${latitude >= 0 ? 326 : 327}${String(zone).padStart(2, "0")}`;
+}
+
+/**
+ * A planned well from a design brief, placed as a site: its path on the globe from the planned
+ * trajectory (projected in the location's own UTM zone), the reference planes the brief gives
+ * (sea surface and a flat seabed offshore, the ground onshore), and the reservoir top it names.
+ */
+export function designSite(brief: WellDesignBrief, ids: { readonly siteId: string; readonly wellId: string }): WorldSite & { readonly brief: WellDesignBrief; readonly design: WellDesign } {
   const design = briefToWellDesign(brief, "synthetic");
   const survey = design.survey ?? [];
   const { latitude, longitude } = brief.location;
-  if (latitude === null || longitude === null) throw new RangeError("Kestrel A-7 needs a surface location.");
-  const head = reprojectGisXY([longitude, latitude], "EPSG:4326", "EPSG:32650");
-  const toLonLat = (east: number, north: number) => reprojectGisXY([head[0] + east, head[1] + north], "EPSG:32650", "EPSG:4326");
+  if (latitude === null || longitude === null) throw new RangeError(`${brief.identity.name || "The well"} needs a surface location.`);
+  const crs = utmZoneOf(longitude, latitude);
+  const head = reprojectGisXY([longitude, latitude], "EPSG:4326", crs);
+  const toLonLat = (east: number, north: number) => reprojectGisXY([head[0] + east, head[1] + north], crs, "EPSG:4326");
+  const name = brief.identity.name || "Unnamed well";
   const reservoir = brief.geology.formations.find((formation) => formation.reservoir);
   const reservoirMd = reservoir ? mdAtTvd(brief, reservoir.topTvdM) : null;
   const shoes = brief.sections.filter((section) => section.role !== "conductor").map((section) => ({ mdM: section.shoeMdM, label: `${section.label.split(" ")[0]} shoe` }));
   const well: SiteSceneWell = {
-    id: "kestrel-a7", label: brief.identity.name, provenance: "synthetic",
+    id: ids.wellId, label: name, provenance: "synthetic",
     xyz: Float64Array.from(survey.flatMap((point) => [point.eastingM, point.northingM, point.tvdM])),
     mdM: Float64Array.from(survey.map((point) => point.mdM)),
     markers: [...shoes, ...(reservoir && reservoirMd !== null ? [{ mdM: reservoirMd, label: `${reservoir.name} top` }] : [])],
     intervals: reservoir && reservoirMd !== null ? [{ topMdM: reservoirMd, baseMdM: brief.totalDepthMdM, label: reservoir.name, color: RESERVOIR.top }] : [],
   };
   const rkb = brief.datum.elevationAboveMslM ?? 0;
-  const mudline = rkb + (brief.location.waterDepthM ?? 0);
+  const offshore = brief.location.environment !== "onshore";
+  const ground = brief.location.groundElevationM;
   const surfaces: SiteSceneSurface[] = [
-    { id: "sea", label: "Sea surface", provenance: "synthetic", role: "reference", color: "#3f8fc0", note: `Mean sea level, ${rkb} m below the rig floor.`, geometry: { kind: "plane", depthM: rkb } },
-    { id: "seabed", label: "Seabed", provenance: "synthetic", role: "reference", color: "#6b7f6a", note: `Flat at the brief's ${brief.location.waterDepthM} m water depth. Not bathymetry.`, geometry: { kind: "plane", depthM: mudline } },
+    ...(offshore ? [
+      { id: "sea", label: "Sea surface", provenance: "synthetic" as const, role: "reference" as const, color: "#3f8fc0", note: `Mean sea level, ${rkb} m below the ${brief.datum.reference}.`, geometry: { kind: "plane" as const, depthM: rkb } },
+      ...(brief.location.waterDepthM !== null ? [{ id: "seabed", label: "Seabed", provenance: "synthetic" as const, role: "reference" as const, color: "#6b7f6a", note: `Flat at the brief's ${brief.location.waterDepthM} m water depth. Not bathymetry.`, geometry: { kind: "plane" as const, depthM: rkb + brief.location.waterDepthM } }] : []),
+    ] : ground !== null ? [{ id: "ground", label: "Ground", provenance: "synthetic" as const, role: "reference" as const, color: "#8a7a5c", note: `Flat at the brief's ${ground} m ground elevation, ${Math.round((rkb - ground) * 10) / 10} m below the ${brief.datum.reference}.`, geometry: { kind: "plane" as const, depthM: rkb - ground } }] : []),
     ...(reservoir ? [{ id: "reservoir-top", label: `${reservoir.name} top`, provenance: "synthetic" as const, role: "horizon" as const, color: RESERVOIR.top, note: `Flat at the brief's ${reservoir.topTvdM} m TVD top. The brief gives one depth per formation, not a mapped surface.`, geometry: { kind: "plane" as const, depthM: reservoir.topTvdM } }] : []),
   ];
   return {
     map: {
-      id: "kestrel", label: `${brief.identity.name} (design)`, provenance: "synthetic",
-      summary: `1 planned well · ${brief.sections.length} strings · pressures, cement, completion`,
-      wells: [{ id: "kestrel-a7", label: brief.identity.name, head: [longitude, latitude], path: survey.map((point) => toLonLat(point.eastingM, point.northingM)) }],
+      id: ids.siteId, label: `${name} (design)`, provenance: "synthetic",
+      summary: `1 planned well · ${brief.sections.length} string${brief.sections.length === 1 ? "" : "s"}${brief.geology.pressures.length ? " · pressures" : ""}${brief.completion ? " · completion" : ""}`,
+      wells: [{ id: ids.wellId, label: name, head: [longitude, latitude], path: survey.map((point) => toLonLat(point.eastingM, point.northingM)) }],
     },
     projectWellId: null,
-    depthLabel: `m TVD below RKB (${rkb} m above MSL)`,
-    originLabel: `wellhead · ${brief.location.crs}`,
+    depthLabel: `m TVD below ${brief.datum.reference} (${rkb} m above MSL)`,
+    originLabel: `wellhead · ${crs}`,
     wells: [well], surfaces, hasSeismic: false,
     seismicNote: "No seismic: this is a planned well from a design brief.",
-    caveat: `Synthetic design. ${brief.identity.name} is the SDK's example development well in the ${brief.identity.field} field: a planned trajectory, offset-derived pore and fracture pressures, a proposed casing scheme, cement and a gas-lift completion. Nothing here was drilled.`,
+    caveat: `Synthetic design. ${name} is a planned well: its trajectory, pressures, casing, cement and completion are the brief's, not records. Nothing here was drilled.`,
     brief, design,
   };
+}
+
+/** The SDK's example design, Kestrel A-7, as a site. */
+export function kestrelSite(brief: WellDesignBrief = exampleWellBrief()): WorldSite & { readonly brief: WellDesignBrief; readonly design: WellDesign } {
+  const site = designSite(brief, { siteId: "kestrel", wellId: "kestrel-a7" });
+  return { ...site, caveat: `Synthetic design. ${brief.identity.name} is the SDK's example development well in the ${brief.identity.field} field: a planned trajectory, offset-derived pore and fracture pressures, a proposed casing scheme, cement and a gas-lift completion. Nothing here was drilled.` };
 }
 
 /** The bundled wells that declare no surface location, so cannot be placed on the map. */

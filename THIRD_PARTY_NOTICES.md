@@ -20,11 +20,42 @@ licensed CC BY 4.0, https://creativecommons.org/licenses/by/4.0/:
 	`packages/fixtures/data/forge-16a-openhole-1ft.las`: selected curves binned to
 	1 ft means, neutron porosity converted from percent to fraction.
 
+- John McLennan et al. (2023), Utah FORGE: Well 16B(78)-32 Drilling Data,
+	DOI 10.15121/1998591, GDR 1516: https://gdr.openei.org/submissions/1516.
+- Greg Nash and Joe Moore (2018), Utah FORGE: Logs and Data from Deep Well 58-32
+	(MU-ESW1), DOI 10.15121/1452735, GDR 1006: https://gdr.openei.org/submissions/1006.
+- Ben Erickson, Utah Geological Survey (2021), Utah FORGE: Updated Well, Well Pad,
+	and Seismic Station GPS Coordinates, DOI 10.15121/1838418, GDR 1358:
+	https://gdr.openei.org/submissions/1358. Adapted with GDR 1516 and 1006 as
+	`packages/core/src/forge-offset-wells.json`: survey stations as reported (the
+	58-32 table transcribed from its PDF report), GPS wellheads.
+
+- The daily drilling reports of 16A(78)-32 (GDR 1283, above) are also adapted as
+	`packages/core/src/forge-string-weights.json`: string weights, torque, mud weight
+	and BHA per day, as reported.
+- John McLennan (2018), Utah FORGE: Stress Logging Data, DOI 10.15121/1452760,
+	GDR 1032: https://gdr.openei.org/submissions/1032. Adapted as
+	`packages/core/src/forge-58-32-stress.json`: the calibrated SHmax, Shmin and Sv
+	profile binned to 5 ft means.
+- Licensed as-built wellheads of 16A(78)-32 and 16B(78)-32 (Woolsey Land Surveying,
+	2023), published in GDR 1283 and 1516; the 58-32 KB and ground elevations from
+	the header of its DSI sonic LAS (GDR 1006). Position covariances in
+	`packages/core/src/forge-survey-uncertainty.json` are computed offline with welleng
+	0.29.1 (Apache-2.0) from the ISCWSA OWSG generic tool models it ships.
+
 Changes: XLSX station extraction, explicit unit conversion, report-page record
 transcription and approximate sediment/granite contact projection. No endorsement
 by the authors or University is implied. The fixture data is not relicensed MIT.
 Source hashes, provenance and attribution remain in the distributed JSON and
 core package README; see docs/FORGE_SOURCE_RECORD.md for evidence boundaries.
+
+The bundled `packages/fixtures/data/sodir-field-production.json` holds the monthly
+net production of every field on the Norwegian continental shelf from the Norwegian
+Offshore Directorate (Sodir) FactPages, table field_production_monthly, retrieved
+15 Oct 2026 (SHA-256 583818227ca0a3d073d77fcf65553c0b2098aa8f0fa80900b9f48972ca8280f9),
+used under the Norwegian Licence for Open Government Data (NLOD); the FactPages do
+not state the licence version. Source: Sodir, https://factpages.sodir.no. Changes:
+regrouped by field; no value altered.
 
 The offline world basemap `packages/react/assets/gis/world-50m.json` is built by
 `tools/build-world.mjs` from Natural Earth 1:50m land and country boundaries

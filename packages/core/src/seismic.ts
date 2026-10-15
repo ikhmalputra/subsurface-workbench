@@ -80,6 +80,19 @@ export interface SegyFile {
   readonly byteLength: number;
 }
 
+/**
+ * What a section is drawn from: traces in display order and their samples, trace-major. A SEG-Y
+ * file is one; a slice cut from a volume is another. `binary.sampleInterval` (µs or mm, as in
+ * SEG-Y) is only read when no depth step is given.
+ */
+export interface SeismicTraceSet<T extends { readonly index: number } = SegyTrace> {
+  readonly traceCount: number;
+  readonly sampleCount: number;
+  readonly traces: readonly T[];
+  readonly data: Float32Array;
+  readonly binary?: { readonly sampleInterval: number };
+}
+
 export interface ParseSegyOptions {
   readonly layout?: Partial<SegyTraceHeaderLayout>;
   /** Read at most this many traces. */
@@ -297,9 +310,118 @@ function paint(width: number, height: number, valueAt: (column: number, row: num
 }
 
 /** Variable-density image of every trace, amplitudes divided by `clip` (default p99) before colouring. Works without a DOM. */
-export function seismicImage(file: SegyFile, options: SeismicImageOptions = {}): SeismicImage {
+export function seismicImage(file: Pick<SeismicTraceSet<{ readonly index: number }>, "traceCount" | "sampleCount" | "data">, options: SeismicImageOptions = {}): SeismicImage {
   const height = file.sampleCount;
   return paint(file.traceCount, height, (trace, sample) => file.data[trace * height + sample]!, options.clip ?? amplitudeClip(file.data), options.colorMap ?? "grey");
+}
+
+/**
+ * A regular cube of quantised amplitudes on a section's own axes: along the line (fastest), offset
+ * to its right, then depth sample. Bin centres start at `alongFromM` and `offsetFromM`, `spacingM`
+ * apart; amplitude = count × `amplitudePerCount`.
+ */
+export interface SeismicCube {
+  readonly counts: Int8Array;
+  readonly alongCount: number;
+  readonly offsetCount: number;
+  readonly sampleCount: number;
+  readonly amplitudePerCount: number;
+  readonly alongFromM: number;
+  readonly offsetFromM: number;
+  readonly spacingM: number;
+}
+
+/** One trace of a cube slice: where it sits on both axes. */
+export interface CubeTrace { readonly index: number; readonly alongM: number; readonly offsetM: number }
+
+export interface CubeSection {
+  readonly kind: "inline" | "crossline";
+  /** The bin the slice was cut through, and its centre: a requested position snaps to the nearest bin. */
+  readonly bin: number;
+  readonly positionM: number;
+  readonly traces: SeismicTraceSet<CubeTrace>;
+}
+
+/**
+ * An inline (constant offset, traces along the line) or a crossline (constant along, traces across
+ * it) out of a cube, through the bin nearest the requested position. The samples are the cube's own,
+ * dequantised: nothing is interpolated between bins.
+ */
+export function cubeSection(cube: SeismicCube, kind: "inline" | "crossline", positionM: number): CubeSection {
+  const { alongCount: na, offsetCount: no, sampleCount: ns } = cube;
+  if (cube.counts.length !== na * no * ns) throw new RangeError(`The cube has ${cube.counts.length} counts, expected ${na} × ${no} × ${ns}.`);
+  if (!Number.isFinite(positionM)) throw new RangeError("A slice position must be a finite number of metres.");
+  const inline = kind === "inline";
+  const from = inline ? cube.offsetFromM : cube.alongFromM, count = inline ? no : na;
+  const bin = Math.min(count - 1, Math.max(0, Math.round((positionM - from) / cube.spacingM)));
+  const traceCount = inline ? na : no;
+  const data = new Float32Array(traceCount * ns);
+  const traces: CubeTrace[] = [];
+  for (let t = 0; t < traceCount; t++) {
+    const a = inline ? t : bin, o = inline ? bin : t;
+    traces.push({ index: t, alongM: cube.alongFromM + a * cube.spacingM, offsetM: cube.offsetFromM + o * cube.spacingM });
+    for (let s = 0; s < ns; s++) data[t * ns + s] = cube.counts[(s * no + o) * na + a]! * cube.amplitudePerCount;
+  }
+  return { kind, bin, positionM: from + bin * cube.spacingM, traces: { traceCount, sampleCount: ns, traces, data } };
+}
+
+/** One trace of a cut along an arbitrary line: its distance from the line's start and the bin it took. */
+export interface LineTrace { readonly index: number; readonly distanceM: number; readonly alongM: number; readonly offsetM: number }
+
+export interface CubeLine {
+  /** The line's whole length, and the stretch of it inside the cube (null when it misses the cube). */
+  readonly lengthM: number;
+  readonly inside: readonly [number, number] | null;
+  readonly traces: SeismicTraceSet<LineTrace>;
+}
+
+/**
+ * A vertical cut through a cube along any straight line, given by its ends on the cube's own axes
+ * (along, offset; metres). A trace every `stepM` along the line takes the samples of the bin nearest
+ * to it, dequantised; nothing is interpolated. The line is clipped to the cube: the result says how
+ * much of it was inside, and carries traces only there.
+ */
+export function cubeAlongLine(cube: SeismicCube, from: { readonly alongM: number; readonly offsetM: number }, to: { readonly alongM: number; readonly offsetM: number }, stepM = cube.spacingM): CubeLine {
+  const { alongCount: na, offsetCount: no, sampleCount: ns, spacingM } = cube;
+  if (cube.counts.length !== na * no * ns) throw new RangeError(`The cube has ${cube.counts.length} counts, expected ${na} × ${no} × ${ns}.`);
+  if (!(stepM > 0)) throw new RangeError("The trace spacing must be positive.");
+  const da = to.alongM - from.alongM, dof = to.offsetM - from.offsetM, lengthM = Math.hypot(da, dof);
+  const half = spacingM / 2;
+  const [a0, a1] = [cube.alongFromM - half, cube.alongFromM + (na - 0.5) * spacingM];
+  const [o0, o1] = [cube.offsetFromM - half, cube.offsetFromM + (no - 0.5) * spacingM];
+  // Clip the segment to the cube's rectangle (Liang–Barsky), as fractions of its length.
+  let t0 = 0, t1 = 1;
+  for (const [p, q] of [[-da, from.alongM - a0], [da, a1 - from.alongM], [-dof, from.offsetM - o0], [dof, o1 - from.offsetM]] as const) {
+    if (p === 0) { if (q < 0) { t0 = 1; t1 = 0; } continue; }
+    const r = q / p;
+    if (p < 0) t0 = Math.max(t0, r); else t1 = Math.min(t1, r);
+  }
+  if (lengthM === 0 || t0 > t1) return { lengthM, inside: null, traces: { traceCount: 0, sampleCount: ns, traces: [], data: new Float32Array(0) } };
+  const start = t0 * lengthM, end = t1 * lengthM;
+  const traces: LineTrace[] = [];
+  for (let d = Math.ceil(start / stepM) * stepM; d <= end + 1e-9; d += stepM) {
+    const along = from.alongM + da * d / lengthM, offset = from.offsetM + dof * d / lengthM;
+    traces.push({ index: traces.length, distanceM: d, alongM: along, offsetM: offset });
+  }
+  const data = new Float32Array(traces.length * ns);
+  traces.forEach((trace, t) => {
+    const a = Math.min(na - 1, Math.max(0, Math.round((trace.alongM - cube.alongFromM) / spacingM)));
+    const o = Math.min(no - 1, Math.max(0, Math.round((trace.offsetM - cube.offsetFromM) / spacingM)));
+    for (let s = 0; s < ns; s++) data[t * ns + s] = cube.counts[(s * no + o) * na + a]! * cube.amplitudePerCount;
+  });
+  return { lengthM, inside: [start, end], traces: { traceCount: traces.length, sampleCount: ns, traces, data } };
+}
+
+/**
+ * A well already projected onto the section line, re-projected onto a slice of the cube: on an
+ * inline its along position stays and its distance off the plane is measured from the slice; on a
+ * crossline its offset becomes the position across the slice and its along distance from the slice
+ * is how far off the plane it is.
+ */
+export function wellOnCubeSection(path: readonly ProjectedPoint[], section: Pick<CubeSection, "kind" | "positionM">): ProjectedPoint[] {
+  return path.map((point) => section.kind === "inline"
+    ? { ...point, offsetM: point.offsetM - section.positionM }
+    : { ...point, alongM: point.offsetM, offsetM: point.alongM - section.positionM });
 }
 
 export interface SectionLine {

@@ -1,18 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, MotionConfig } from "motion/react";
-import { Cable, Moon, Search, Sun, X } from "lucide-react";
+import { Cable, Moon, Pencil, Plus, Search, Sun, X } from "lucide-react";
 import { useSubsurfaceSelector } from "@ikhmalputra/subsurface-react/state";
 import { siteById } from "../data/sites.ts";
 import { amplitudeAtMd, useForgeSection } from "../data/forge.ts";
 import { fmt } from "../format.ts";
 import { placeAt, tvdOn, usePlace } from "../data/place.ts";
 import { useForgeOpenHole, valueAt } from "../data/openhole.ts";
-import { analyse, useDesignState } from "../data/design.ts";
+import { analyse, isDesignSite, useDesignState } from "../data/design.ts";
 import { WhatIfBar } from "./WhatIfBar.tsx";
 import { ModuleBody } from "../modules/bodies.tsx";
 import type { ModuleId } from "../modules/registry.ts";
 import { moduleIds, signalColour } from "../modules/registry.ts";
 import { CommandBar } from "./CommandBar.tsx";
+import { NewWell } from "./NewWell.tsx";
 import { Dock, gridProbe } from "./Dock.tsx";
 import { cellGeometry } from "./layout.ts";
 import { Links } from "./Links.tsx";
@@ -36,6 +37,7 @@ export function Deck() {
       <Lens />
       <Links />
       <CommandBar />
+      <NewWell />
     </div>
   </MotionConfig>;
 }
@@ -57,6 +59,8 @@ function Bar() {
     <span className="brand"><span className="brand-mark" aria-hidden="true">S</span>Subsurface <small>deck</small></span>
     <div className="chips" aria-label="Live signals" data-origin="bar">
       <span className="chip" style={{ ["--chip-colour" as string]: signalColour.place }}><i /><b>{site ? site.map.label : "World"}</b>{well && <span>· {well.label}</span>}
+        {place && <button type="button" className="chip-edit" aria-label={`Edit ${place.label}`} title={place.kind === "design" ? "Edit this planned well in the Well designer" : place.kind === "recorded" ? "Edit this well's records in the Well editor" : "Edit this well in the Well editor: your changes sit over the record, which stays as it is"}
+          onClick={() => place.kind === "design" ? actions.designWell(place.siteId) : actions.editWell(place.siteId, wellId)}><Pencil size={12} />{place.edits ? "Edited" : "Edit"}</button>}
         {site && <button type="button" aria-label="Back to the world" onClick={() => actions.selectSite(null)}><X size={12} /></button>}</span>
       {component && <span className="chip" style={{ ["--chip-colour" as string]: signalColour.object }}><i /><b>{component.name}</b>
         <button type="button" aria-label="Clear the selection" onClick={() => signals.selectComponent(null, "deck:bar")}><X size={12} /></button></span>}
@@ -70,6 +74,7 @@ function Bar() {
         <button type="button" aria-label="Show the whole well" onClick={() => signals.setDepthWindow(null, "deck:bar")}><X size={12} /></button></span>}
     </div>
     <div className="bar-end">
+      <button type="button" className="new-well" onClick={() => actions.openNewWell(true)} title="Plan a new well: place it, then design it stage by stage"><Plus size={15} />New well</button>
       <button type="button" className="find" onClick={() => actions.openCommand(true)}><Search size={14} />Fly, find, open or command<kbd>⌘K</kbd></button>
       <button type="button" className="icon-button" aria-pressed={patch} aria-label="Show every live link (hold ⌥)" title="Links between modules · hold ⌥" onClick={() => actions.setPatch(!patch)}><Cable size={15} /></button>
       <button type="button" className="icon-button" aria-label={theme === "night" ? "Switch to the day deck" : "Switch to the night deck"} onClick={() => actions.setTheme(theme === "night" ? "day" : "night")}>{theme === "night" ? <Sun size={15} /> : <Moon size={15} />}</button>
@@ -188,7 +193,7 @@ function Lens() {
   const moment = useMoment();
   const day = forge ? moment : null;
   const design = useDesignState();
-  const whatIf = siteId === "kestrel" && design.pending ? { label: design.pending.label, failing: analyse(design.pending.value.brief).failing.length, before: analyse(design.committed.brief).failing.length } : null;
+  const whatIf = isDesignSite(siteId) && design.pending ? { label: design.pending.label, failing: analyse(design.pending.value.brief).failing.length, before: analyse(design.committed.brief).failing.length } : null;
   const dot = (colour: string) => ({ ["--dot" as string]: colour });
   const [fresh, setFresh] = useState(false);
   useEffect(() => { if (!note) return; setFresh(true); const timer = window.setTimeout(() => setFresh(false), 4000); return () => window.clearTimeout(timer); }, [note]);
@@ -209,7 +214,7 @@ function Lens() {
       {day.asOf.report ? <> · {day.asOf.report.category} · {day.asOf.report.headline.toLowerCase()}{day.asOf.report.mudWeightPpg !== null ? ` · mud ${day.asOf.report.mudWeightPpg} ppg` : " · mud weight not reported"} · report p. {day.asOf.report.page}</> : " · no daily report for this date"}
       {[...day.asOf.events.map((event) => event.label), ...day.asOf.milestones.map((milestone) => milestone.label)].map((label) => <b key={label} className="lens-event"> · {label}</b>)}
     </span>}
-    {component && <span><i className="lens-dot" style={dot(signalColour.object)} /><b>{component.name}</b> · {component.material} · {fmt(component.topDepthM)}–{fmt(component.bottomDepthM)} m MD{component.sourcePage ? ` · source p. ${component.sourcePage}` : place?.siteId === "kestrel" ? " · planned in the design brief" : " · source not reported"}</span>}
+    {component && <span><i className="lens-dot" style={dot(signalColour.object)} /><b>{component.name}</b> · {component.material} · {fmt(component.topDepthM)}–{fmt(component.bottomDepthM)} m MD{component.sourcePage ? ` · source p. ${component.sourcePage}` : place?.kind === "design" ? " · planned in the design brief" : " · source not reported"}</span>}
     {!site && <span>⌘K flies anywhere · the dock opens any module · drag tiles by the head · hold ⌥ to see every link</span>}
   </footer>;
 }

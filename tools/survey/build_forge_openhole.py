@@ -73,6 +73,9 @@ CURVES = [
     ("IsoMechPro.las", "TZSG", "SV_G", "psi/ft", 1, "Vertical stress gradient (IsoMechPro)"),
     ("IsoMechPro.las", "TXSG_ISO", "SHMIN_G", "psi/ft", 1, "Minimum horizontal stress gradient (IsoMechPro)"),
     ("IsoMechPro.las", "PPGI", "PP_G", "psi/ft", 1, "Pore pressure gradient (IsoMechPro)"),
+    ("IsoMechPro.las", "FANG", "FANG", "deg", 1, "Friction angle (IsoMechPro)"),
+    ("IsoMechPro.las", "ISHE", "COHE", "psi", 1, "Cohesion (IsoMechPro)"),
+    ("IsoMechPro.las", "TSTR", "TSTR", "psi", 1, "Tensile strength (IsoMechPro)"),
 ]
 TOP, BASE = 5000, 10950
 NULL = -999.25

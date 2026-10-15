@@ -20,7 +20,7 @@ const NR = "not reported";
 export function Strings() {
   const wire = useWire("strings");
   const place = wire.place!;
-  return place.siteId === "kestrel" ? <Loads /> : <RecordedString />;
+  return place.kind === "design" ? <Loads /> : <RecordedString />;
 }
 
 function RecordedString() {

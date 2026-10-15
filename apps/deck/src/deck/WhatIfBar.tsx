@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Check, Redo2, Undo2, X } from "lucide-react";
-import { analyse, designHistory, useDesignState } from "../data/design.ts";
+import { analyse, designHistory, isDesignSite, useDesignState } from "../data/design.ts";
 import { pulse, useDeck } from "./store.ts";
 
 /**
@@ -13,7 +13,7 @@ export function WhatIfBar() {
   const siteId = useDeck((deck) => deck.siteId);
   const commandOpen = useDeck((deck) => deck.commandOpen);
   const state = useDesignState();
-  const active = siteId === "kestrel";
+  const active = isDesignSite(siteId);
   const pending = active ? state.pending : null;
   useEffect(() => {
     if (pending) document.documentElement.dataset.whatif = "";
@@ -22,7 +22,8 @@ export function WhatIfBar() {
   useEffect(() => {
     if (!active) return;
     const onKey = (event: KeyboardEvent) => {
-      if (commandOpen || (event.target as HTMLElement | null)?.closest("input[type='number'], input[type='text'], textarea")) return;
+      // A field keeps its own keys: ⌘Z undoes the typing, Esc puts the field back, not the design.
+      if (commandOpen || (event.target as HTMLElement | null)?.closest("input, textarea, select, [contenteditable='true']")) return;
       const meta = event.metaKey || event.ctrlKey;
       if (meta && event.key.toLowerCase() === "z") { event.preventDefault(); if (event.shiftKey ? designHistory.redo() : designHistory.undo()) pulse("whatif", "bar"); }
       else if (meta && event.key === "Enter") { event.preventDefault(); if (designHistory.apply()) pulse("whatif", "bar"); }

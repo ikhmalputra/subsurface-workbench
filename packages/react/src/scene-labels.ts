@@ -72,6 +72,14 @@ export class LabelLayer {
     }
   }
 
+  /** Take one label away for good: off the page and out of placement. */
+  remove(label: SceneLabel) {
+    const index = this.labels.indexOf(label);
+    if (index >= 0) this.labels.splice(index, 1);
+    label.removeFromParent();
+    label.element.remove();
+  }
+
   /** Every label of this kind and owner, e.g. to style the selected well's name. */
   each(visit: (label: SceneLabel) => void) { for (const label of this.labels) visit(label); }
 

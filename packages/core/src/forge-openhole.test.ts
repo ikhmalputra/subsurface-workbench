@@ -16,7 +16,7 @@ test("the FORGE open-hole set keeps its sources, licence and curves", () => {
     assert.match(las.parameters[`SHA_${source}`]?.value ?? "", /^[0-9a-f]{64}$/, source);
     assert.match(las.parameters[`SRC_${source}`]?.value ?? "", /gdr\.openei\.org\/files\/1292/, source);
   }
-  assert.deepEqual(las.curves.map((curve) => curve.mnemonic), ["DEPTH", "GR", "CGR", "K", "TH", "U", "NPHI", "NPHI_SAN", "DPHI", "SPHI", "DTC", "DTS", "RT10", "RT90", "C13", "C24", "BS", "DEVI", "P32", "UCS", "YME_STA", "PR", "SV_G", "SHMIN_G", "PP_G"]);
+  assert.deepEqual(las.curves.map((curve) => curve.mnemonic), ["DEPTH", "GR", "CGR", "K", "TH", "U", "NPHI", "NPHI_SAN", "DPHI", "SPHI", "DTC", "DTS", "RT10", "RT90", "C13", "C24", "BS", "DEVI", "P32", "UCS", "YME_STA", "PR", "SV_G", "SHMIN_G", "PP_G", "FANG", "COHE", "TSTR"]);
   assert.equal(las.curves[0]!.values.length, 5951);
 });
 

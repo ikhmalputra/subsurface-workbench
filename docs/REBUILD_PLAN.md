@@ -310,6 +310,46 @@ Each phase ends with something visibly new, screenshotted at 1440×1000 in both 
   Open hole set; the lens reads φD, RT90, P32, K and Th at the cursor.
 
 
+## Phase 4 as built (October 2026)
+
+- **Scenario 6, slice to section.** The 3D site's slices report and follow the store's
+  `seismicSlices`; each slice has a handle to drag in 3D (orbiting stays free elsewhere). The
+  Seismic tile shows the published SEG-Y along the well, or the inline or crossline last moved, cut
+  from the same PSDM sub-volume by core `cubeSection` (nearest bin, dequantised; the offset-0 inline
+  matches the published section to within half a count). Its ◀ ▶ step the slice in 3D too.
+- **Scenario 7, draw a section on the globe.** `WellsMap` has Draw section (ends snap to wellheads,
+  Esc cancels). The line opens a Section line tile: core `cubeAlongLine` cuts the volume along it,
+  clipped to the volume, and every FORGE well within two bins of the plane is drawn where it passes
+  (16A linked to the depth cursor, with its strings and tops). The 3D site shows the line as a
+  cutting plane.
+- **Scenario 8, fuse modules.** Dropping a tile on the middle of a fusable target fuses instead of
+  swapping: Logs onto Well in 3D wraps an open-hole curve around the well (gamma ray, fracture
+  intensity, resistivity or density porosity); Well section onto Seismic or Section line draws the
+  formation tops across it as horizons, planar at the well's contact. A chip on the target changes
+  the curve or pulls the fusion off.
+- **Anti-collision** (the first of the next tools), from the 16B and 58-32 surveys and GPS wellheads:
+  a module with a ladder and a travelling cylinder, the neighbours on the globe and in the 3D site.
+  See [the source record](FORGE_SOURCE_RECORD.md#neighbouring-wells-anti-collision).
+- **Fixed on the way.** The command bar now matches hyphenated names; a 3D scene closed before its
+  renderer started no longer reports an error over its successor; seismic marker text reads on the
+  dark deck.
+
+## The next tools, one by one (October 2026)
+
+- **Anti-collision, gaps closed.** Licensed as-built wellheads for 16A and 16B (16A moved 16.2 m from
+  the planned position it had been drawn on), 58-32's KB from its log header, and ISCWSA separation
+  factors from OWSG generic error models per reported tool (checked against welleng). 16A–16B
+  falls to SF 0.79 at about 1,780 m MD.
+- **Geomechanics** (1D mechanical earth model): see [the source record](FORGE_SOURCE_RECORD.md#stresses-1d-geomechanics).
+- **Torque & drag**: a Drilling module on FORGE, calibrated on 16A's daily reports; see [the source record](FORGE_SOURCE_RECORD.md#string-weights-torque-and-drag).
+- **Well barriers**: primary and secondary envelopes (core `barriers.ts`) drawn on the construction,
+  with each element's evidence and the records' gaps. On FORGE as built: one surface valve on record,
+  no cement record outside the 9 5/8 in string, no wellhead rating or test.
+- **Decline curves**: a Production module that works wherever the deck is (like the globe), on
+  Sodir's monthly production of every Norwegian field, built by `tools/survey/build_sodir_production.py`.
+  Fields are not on the globe: the production table has no locations, and placing them needs
+  Sodir's field outlines, a further download.
+
 ## Checks
 
 Unit tests for the store, the signal helpers, the registry and the what-if history. Static-render

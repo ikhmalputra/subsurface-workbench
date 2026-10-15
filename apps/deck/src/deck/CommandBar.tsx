@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { Command } from "cmdk";
-import { forgeWell, sites } from "../data/sites.ts";
+import { forgeWell, useSites } from "../data/sites.ts";
 import { fmt } from "../format.ts";
 import { usePlace } from "../data/place.ts";
-import { designHistory } from "../data/design.ts";
+import { designHistory, isDesignSite, useDesigns } from "../data/design.ts";
+import { useRecordedWells } from "../data/records.ts";
 import { dateToMs } from "@ikhmalputra/subsurface-core/records";
 import { allDates, formatDate, momentOn } from "../data/history.ts";
 import { modules, signalColour } from "../modules/registry.ts";
@@ -14,7 +15,8 @@ import { actions, signals, useDeck } from "./store.ts";
  * keywords). Fuzzy letter matching sent "open runs" to "Open Curved construction".
  */
 function scoreCommand(value: string, search: string, keywords: readonly string[] = []): number {
-  const words = search.toLowerCase().split(/\s+/).filter(Boolean);
+  // Typed words split the way names do, so "anti-collision" finds "Anti-collision".
+  const words = search.toLowerCase().split(/[^a-z0-9.]+/).filter(Boolean);
   if (!words.length) return 1;
   const own = value.toLowerCase().split(/[^a-z0-9.]+/).filter(Boolean);
   const extra = keywords.join(" ").toLowerCase().split(/[^a-z0-9.]+/).filter(Boolean);
@@ -45,6 +47,9 @@ export function CommandBar() {
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
   useEffect(() => { if (!open) setSearch(""); }, [open]);
+  const sites = useSites();
+  const designs = useDesigns();
+  const entered = useRecordedWells();
   if (!open) return null;
   const run = (action: () => void) => () => { actions.openCommand(false); action(); };
   const dot = (colour: string) => ({ ["--dot" as string]: colour });
@@ -68,6 +73,12 @@ export function CommandBar() {
         {moment && forge && <Command.Group heading="Time" forceMount>
           <Command.Item value={search} forceMount onSelect={run(() => signals.setTimeCursor(dateToMs(moment.date), "deck:bar"))}><i style={dot(signalColour.time)} />Go to day {moment.asOf.dayFromSpud} · {formatDate(moment.date)} · {fmt(moment.asOf.drilledFt)} ft</Command.Item>
         </Command.Group>}
+        <Command.Group heading="Wells">
+          <Command.Item value="new well plan create design record drilled enter" keywords={["add", "start", "planned", "existing"]} onSelect={run(() => actions.openNewWell(true))}><i style={dot(signalColour.whatif)} />New well…<kbd>plan or record one</kbd></Command.Item>
+          {place && place.kind !== "design" && <Command.Item value={`edit ${place.label} well editor records`} keywords={["edit", "change", "survey", "casing", "tops"]} onSelect={run(() => actions.editWell(place.siteId, place.wellId))}><i style={dot(signalColour.object)} />Edit {place.label} in the Well editor</Command.Item>}
+          {entered.map((entry) => <Command.Item key={entry.entry.id} value={`edit ${entry.value.identity.name} well editor entered`} keywords={["edit", "records", "drilled"]} onSelect={run(() => actions.editWell(entry.entry.siteId))}><i style={dot(signalColour.object)} />Edit {entry.value.identity.name || "Unnamed well"} in the Well editor</Command.Item>)}
+          {designs.map((entry) => <Command.Item key={entry.record.id} value={`design ${entry.value.brief.identity.name} edit well designer`} keywords={["edit", "design", "planned"]} onSelect={run(() => actions.designWell(entry.record.siteId))}><i style={dot(signalColour.whatif)} />Edit {entry.value.brief.identity.name || "Unnamed well"} in the Well designer</Command.Item>)}
+        </Command.Group>
         <Command.Group heading="Places">
           {sites.map((site) => <Command.Item key={site.map.id} value={`fly to ${site.map.label}`} onSelect={run(() => actions.selectSite(site.map.id, null, "bar"))}><i style={dot(signalColour.place)} />Fly to {site.map.label}</Command.Item>)}
           {sites.flatMap((site) => site.wells.length > 1 ? site.wells.map((well) => <Command.Item key={well.id} value={`select well ${well.label} ${site.map.label}`} onSelect={run(() => actions.selectSite(site.map.id, well.id, "bar"))}><i style={dot(signalColour.place)} />Select {well.label}</Command.Item>) : [])}
@@ -90,7 +101,7 @@ export function CommandBar() {
           <Command.Item value="show the well as finally recorded" keywords={["time", "now", "final", "as recorded"]} onSelect={run(() => signals.setTimeCursor(null, "deck:bar"))}><i style={dot(signalColour.time)} />Show the well as finally recorded</Command.Item>
           {forgeWell.operations.milestones.map((milestone) => <Command.Item key={milestone.id} value={`go to ${milestone.label}`} keywords={["time", milestone.date]} onSelect={run(() => signals.setTimeCursor(dateToMs(milestone.date), "deck:bar"))}><i style={dot(signalColour.time)} />{milestone.label}<kbd>{formatDate(milestone.date)}</kbd></Command.Item>)}
         </Command.Group>}
-        {siteId === "kestrel" && <Command.Group heading="Design">
+        {isDesignSite(siteId) && <Command.Group heading="Design">
           <Command.Item value="apply the what-if" keywords={["design", "commit"]} onSelect={run(() => designHistory.apply())}><i style={dot(signalColour.whatif)} />Apply the what-if<kbd>⌘↵</kbd></Command.Item>
           <Command.Item value="discard the what-if" keywords={["design", "cancel"]} onSelect={run(() => designHistory.discard())}><i style={dot(signalColour.whatif)} />Discard the what-if<kbd>Esc</kbd></Command.Item>
           <Command.Item value="undo" keywords={["design", "back"]} onSelect={run(() => designHistory.undo())}><i style={dot(signalColour.whatif)} />Undo{designHistory.getState().undo.at(-1) ? `: ${designHistory.getState().undo.at(-1)!.label}` : ""}<kbd>⌘Z</kbd></Command.Item>

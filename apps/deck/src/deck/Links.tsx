@@ -113,7 +113,12 @@ export function Links() {
   const [size, setSize] = useState({ width: window.innerWidth, height: window.innerHeight });
   useEffect(() => {
     const onResize = () => setSize({ width: window.innerWidth, height: window.innerHeight });
-    const onKey = (event: KeyboardEvent) => { if (event.key === "Alt") { event.preventDefault(); actions.setPatch(event.type === "keydown"); } };
+    // ⌥ shows the patch bay, except while typing: in a field ⌥ makes characters (•, ©, @ on some layouts).
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Alt") return;
+      if (event.type === "keydown" && (event.target as HTMLElement | null)?.closest("input, textarea, select, [contenteditable='true']")) return;
+      event.preventDefault(); actions.setPatch(event.type === "keydown");
+    };
     const off = () => actions.setPatch(false);
     window.addEventListener("resize", onResize);
     window.addEventListener("keydown", onKey);

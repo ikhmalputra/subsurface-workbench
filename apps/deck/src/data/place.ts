@@ -5,7 +5,9 @@ import type { LasFile, WellOperations } from "@ikhmalputra/subsurface-core/recor
 import type { SyntheticLogs } from "@ikhmalputra/subsurface-core/contracts";
 import { equatorField, equatorPetrophysics } from "@ikhmalputra/subsurface-react";
 import { useDeck } from "../deck/store.ts";
-import { analyse, kestrel, useDesign } from "./design.ts";
+import { analyse, designForSite, useDesign } from "./design.ts";
+import { assemblyOfRecord, baseRecord, designOfRecord, editedValue, layersOf, recordedForSite, same, surveyOf, useRecordsVersion } from "./records.ts";
+import type { WellRecordValue } from "./records.ts";
 import { forgeWell, surveyFrom } from "./sites.ts";
 import { shoes as forgeShoes } from "./forge.ts";
 
@@ -15,11 +17,15 @@ import { shoes as forgeShoes } from "./forge.ts";
  * the place for what it needs; what a place does not have is null, and the module says so.
  */
 export interface Place {
-  readonly siteId: "forge" | "kestrel" | "equator";
+  readonly siteId: string;
+  /** What kind of place: FORGE's records, an Equator well, a planned well (Kestrel A-7 or one of the user's), or a drilled well the user entered. */
+  readonly kind: "forge" | "equator" | "design" | "recorded";
+  /** Changes the user made over the well's records; 0 for a well as recorded. */
+  readonly edits: number;
   /** The id the signal bus knows the well by. */
   readonly wellId: string;
   readonly label: string;
-  readonly provenance: "documented" | "synthetic";
+  readonly provenance: "documented" | "synthetic" | "user-authored";
   readonly design: WellDesign | null;
   readonly components: readonly WellComponent[];
   readonly assembly: WellAssembly | null;
@@ -60,16 +66,18 @@ const equatorPlaces = new Map(project.records.map((record, index) => {
   const stations = stationsFromPoints(record.well.depthsMdM, record.well.xyz, water);
   const logs = equatorLogs[index]!.logs;
   const place: Place = {
-    siteId: "equator", wellId: record.well.id, label: record.well.label, provenance: "synthetic",
+    siteId: "equator", kind: "equator", edits: 0, wellId: record.well.id, label: record.well.label, provenance: "synthetic",
     design: null, components: [], assembly: null, stations, survey: surveyFrom(stations),
     formations: [], totalDepthM: stations.at(-1)!.mdM, operations: null, petro: logs, petroLas: inFeet(logs.las),
   };
   return [record.well.id, place] as const;
 }));
 const equatorWellIds = project.records.map((record) => record.well.id);
+/** The Equator wells by name, for lists that must say why they cannot draw one. */
+export const equatorWells = project.records.map((record) => ({ id: record.well.id, label: record.well.label }));
 
 const forgePlace: Place = {
-  siteId: "forge", wellId: "forge", label: "16A(78)-32", provenance: "documented",
+  siteId: "forge", kind: "forge", edits: 0, wellId: "forge", label: "16A(78)-32", provenance: "documented",
   design: forgeWell.design, components: forgeWell.components, assembly: forgeWell.assembly, stations: forgeWell.design.survey ?? [], survey: forgeWell.survey,
   formations: forgeWell.design.formations ?? [], totalDepthM: forgeWell.design.totalDepthM, operations: forgeWell.operations, petro: null, petroLas: null,
 };
@@ -77,30 +85,82 @@ const forgePlace: Place = {
 /** The store's id for a site's well: FORGE and Kestrel have one; on Equator, the chosen well or the first. */
 export function wellIdFor(siteId: string | null, wellId: string | null): string | null {
   if (siteId === "forge") return "forge";
-  if (siteId === "kestrel") return "kestrel-a7";
+  const design = designForSite(siteId);
+  if (design) return design.wellId;
+  const recorded = recordedForSite(siteId);
+  if (recorded) return recorded.wellId;
   if (siteId === "equator") return wellId && equatorPlaces.has(wellId) ? wellId : equatorWellIds[0]!;
   return null;
 }
 
-/** The place the deck is on; Kestrel's follows the live design, what-if included. */
+/** A well already in the deck, as its records give it, before any edit: what the editor edits. */
+export function basePlace(siteId: string | null, wellId: string | null): Place | null {
+  if (siteId === "forge") return forgePlace;
+  if (siteId === "equator") return equatorPlaces.get(wellIdFor(siteId, wellId)!) ?? null;
+  return null;
+}
+const bases = new WeakMap<Place, WellRecordValue>();
+/** That well as an editable record. */
+export function baseOf(place: Place): WellRecordValue {
+  let base = bases.get(place);
+  if (!base) {
+    base = baseRecord({ name: place.label, field: place.kind === "forge" ? "Utah FORGE" : "Equator", stations: place.stations, formations: place.formations, tops: place.petro?.well.tops, components: place.components, totalDepthM: place.totalDepthM, surveySource: place.design?.trajectorySource ?? "" });
+    bases.set(place, base);
+  }
+  return base;
+}
+
+/** A well with the user's edits over its records: only what changed is rebuilt, the rest is the record's own. */
+function edited(place: Place, value: WellRecordValue): Place {
+  const base = baseOf(place);
+  let edits = 0;
+  const changed = <K extends keyof WellRecordValue>(key: K) => { const differs = !same(value[key], base[key]); if (differs) edits++; return differs; };
+  const stationsChanged = changed("stations"), componentsChanged = changed("components"), topsChanged = changed("tops"), depthChanged = changed("totalDepthM"), nameChanged = changed("identity");
+  if (!edits) return place;
+  const stations = stationsChanged || depthChanged ? surveyOf(value.stations, value.totalDepthM) : place.stations;
+  const components = componentsChanged ? value.components : place.components;
+  const formations = topsChanged || stationsChanged ? layersOf(value.tops, stations, value.totalDepthM) : place.formations;
+  const totalDepthM = depthChanged ? value.totalDepthM : place.totalDepthM;
+  const label = nameChanged ? value.identity.name || place.label : place.label;
+  return {
+    ...place, edits, label, stations, survey: stationsChanged || depthChanged ? surveyFrom(stations) : place.survey, components, formations, totalDepthM,
+    assembly: componentsChanged || depthChanged ? assemblyOfRecord(place.wellId, { ...value, totalDepthM }) : place.assembly,
+    design: place.design ? { ...place.design, survey: stations, components, formations, totalDepthM } : null,
+  };
+}
+
+/** The place the deck is on; a planned well follows its live design, what-if included; an edited well shows the edits. */
 export function usePlace(): Place | null {
   const siteId = useDeck((deck) => deck.siteId), wellId = useDeck((deck) => deck.wellId);
   const { brief } = useDesign();
+  const records = useRecordsVersion();
   return useMemo(() => {
-    if (siteId === "forge") return forgePlace;
-    if (siteId === "equator") return equatorPlaces.get(wellIdFor(siteId, wellId)!) ?? null;
-    if (siteId === "kestrel") {
+    const base = basePlace(siteId, wellId);
+    if (base) { const value = editedValue(base.wellId); return value ? edited(base, value) : base; }
+    const entry = recordedForSite(siteId);
+    if (entry) {
+      const value = entry.history.current();
+      const design = designOfRecord(entry.wellId, value);
+      const stations = design.survey ?? [];
+      return {
+        siteId: entry.siteId, kind: "recorded", edits: 0, wellId: entry.wellId, label: value.identity.name || "Unnamed well", provenance: "user-authored",
+        design, components: value.components, assembly: assemblyOfRecord(entry.wellId, value), stations, survey: surveyFrom(stations),
+        formations: design.formations ?? [], totalDepthM: value.totalDepthM, operations: null, petro: null, petroLas: null,
+      } satisfies Place;
+    }
+    const record = designForSite(siteId);
+    if (record) {
       const analysis = analyse(brief);
       const stations = analysis.design.survey ?? [];
       return {
-        siteId: "kestrel", wellId: "kestrel-a7", label: kestrel.brief.identity.name, provenance: "synthetic",
+        siteId: record.siteId, kind: "design", edits: 0, wellId: record.wellId, label: brief.identity.name || "Unnamed well", provenance: "synthetic",
         design: analysis.design, components: analysis.design.components ?? [], assembly: analysis.assembly, stations,
         survey: surveyFrom(stations),
         formations: analysis.design.formations ?? [], totalDepthM: brief.totalDepthMdM, operations: null, petro: null, petroLas: null,
       } satisfies Place;
     }
     return null;
-  }, [siteId, wellId, brief]);
+  }, [siteId, wellId, brief, records]);
 }
 
 /** TVD at an MD on a place's path; null outside its stations. */

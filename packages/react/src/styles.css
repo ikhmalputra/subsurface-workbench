@@ -405,6 +405,8 @@
 .sw-rec-detail p { margin: 0 0 4px; }
 .sw-rec-cite { font: 11px "IBM Plex Mono", monospace; color: #52655a; }
 
+/* A column, not a grid: a grid sizes an auto-height SVG at 150 px and the rows below then overlap it. */
+.sw-rec.sw-dvd { display: flex; flex-direction: column; }
 .sw-dvd svg { display: block; width: 100%; height: auto; cursor: crosshair; touch-action: none; }
 .sw-dvd-grid { stroke: var(--sw-line); stroke-width: .7; }
 .sw-dvd-tick { font: 11px "IBM Plex Mono", monospace; fill: #52655a; }
@@ -503,7 +505,7 @@
 .sw-seis-zoom button { min-width: 30px; min-height: 30px; border: 1px solid var(--sw-line); border-radius: var(--sw-radius-control); background: var(--sw-surface); color: var(--sw-ink); font: 600 12px Inter, system-ui, sans-serif; cursor: pointer; }
 .sw-seis-zoom button:hover:not(:disabled) { border-color: var(--sw-accent); }
 .sw-seis-zoom button:disabled { color: #8a968f; cursor: default; }
-.sw-seis-marker-leader { stroke: #111; stroke-width: 1; }
+.sw-seis-marker-leader { stroke: var(--sw-ink, #111); stroke-width: 1; }
 .sw-seis-cursor-line { stroke: var(--sw-cursor, #1d4ed8); stroke-width: 1.2; stroke-dasharray: 6 4; pointer-events: none; }
 .sw-seis-frame svg { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; touch-action: none; }
 .sw-seis-border { fill: none; stroke: #52655a; stroke-width: 1; }
@@ -515,8 +517,11 @@
 .sw-seis-interval { fill: none; stroke: var(--sw-accent); stroke-width: 4; stroke-linecap: butt; }
 .sw-seis-selected-halo { fill: none; stroke: var(--sw-surface); stroke-width: 14; stroke-linecap: round; }
 .sw-seis-selected { fill: none; stroke: var(--sw-select); stroke-width: 8; stroke-linecap: round; }
-.sw-seis-marker path { fill: #111; stroke: var(--sw-surface); stroke-width: 1.5; }
-.sw-seis-marker text { font: 600 11px Inter, system-ui, sans-serif; fill: #111; paint-order: stroke; stroke: var(--sw-surface); stroke-width: 3.5px; }
+.sw-seis-horizon line { stroke: #f59e0b; stroke-width: 2; stroke-dasharray: 10 5; }
+.sw-seis-horizon text { font: 600 11px Inter, system-ui, sans-serif; fill: var(--sw-ink, #111); paint-order: stroke; stroke: var(--sw-surface); stroke-width: 3.5px; }
+.sw-seis-other text { font: 600 11px Inter, system-ui, sans-serif; fill: var(--sw-ink, #111); paint-order: stroke; stroke: var(--sw-surface); stroke-width: 3.5px; }
+.sw-seis-marker path { fill: var(--sw-ink, #111); stroke: var(--sw-surface); stroke-width: 1.5; }
+.sw-seis-marker text { font: 600 11px Inter, system-ui, sans-serif; fill: var(--sw-ink, #111); paint-order: stroke; stroke: var(--sw-surface); stroke-width: 3.5px; }
 .sw-seis-cursor { fill: var(--sw-surface); fill-opacity: .25; stroke: var(--sw-cursor, #1d4ed8); stroke-width: 3; }
 .sw-seis-crosshair line { stroke: var(--sw-select-strong); stroke-width: 1; stroke-dasharray: 4 3; pointer-events: none; }
 .sw-seis-legend { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sw-space-1) var(--sw-space-3); font: 11px "IBM Plex Mono", monospace; color: #3d4f45; }

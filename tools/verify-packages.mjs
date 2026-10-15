@@ -88,7 +88,7 @@ const forgeRecords = getWellComponents(forgeDesign);
 const forgeAssembly = wellComponentsToAssembly({ id: 'forge', name: 'FORGE', totalDepthM: forgeDesign.totalDepthM, components: forgeRecords });
 assert.match(renderToStaticMarkup(createElement(CurvedAssemblySchematic, { assembly: forgeAssembly, assetBaseUrl: '/parts', survey: forgeDesign.survey, records: forgeRecords })), /data-shoe-for="surface-casing"/);
 const forge = sdk.forgeSite();
-assert.ok(Math.abs(forge.map.wells[0].head[1] - 38.50416) < 1e-4);
+assert.ok(Math.abs(forge.map.wells[0].head[1] - 38.504013) < 2e-5);
 assert.equal(sdk.equatorSite().wells.length, 4);
 assert.match(renderToStaticMarkup(createElement(SiteScene, { title: 'FORGE', depthLabel: forge.depthLabel, originLabel: forge.originLabel, wells: forge.wells, surfaces: forge.surfaces })), /data-testid="site-scene"/);
 assert.match(renderToStaticMarkup(createElement(WellsMap, { sites: [forge.map], workerUrl: '/gis/worker.mjs', selectedSiteId: null, selectedWellId: null, onSelect: () => {} })), /data-testid="wells-map"/);

@@ -1,6 +1,11 @@
 import type { LucideIcon } from "lucide-react";
-import { Activity, AudioWaveform, Box, CalendarDays, Columns3, Compass, Cylinder, Droplets, Gauge, Layers2, ScatterChart, ShieldAlert, Waves, Globe2, Layers3, ListTree, Rotate3d } from "lucide-react";
+import { Activity, AudioWaveform, FilePen, GitCompareArrows, PencilRuler, Mountain, TrendingDown, Anchor, ShieldCheck, Radar, Slice, Box, CalendarDays, Columns3, Compass, Cylinder, Droplets, Gauge, Layers2, ScatterChart, ShieldAlert, Waves, Globe2, Layers3, ListTree, Rotate3d } from "lucide-react";
+import type { WellDesignBrief } from "@ikhmalputra/subsurface-core";
 import type { MinSize, Rect } from "../deck/layout.ts";
+import { designForSite, isDesignSite } from "../data/design.ts";
+import { activeEditWell, editedValue, isRecordedSite, recordedForSite } from "../data/records.ts";
+import type { WellRecordValue } from "../data/records.ts";
+import { importedLogs } from "../data/logs.ts";
 
 /** The six signals. Each has one colour, used for nothing else. */
 export type Signal = "place" | "object" | "depth" | "time" | "view" | "whatif";
@@ -12,13 +17,16 @@ export const signalName: Readonly<Record<Signal, string>> = { place: "Place", ob
 
 export type ModuleId =
   | "globe" | "site3d"
-  | "section" | "well3d" | "construction" | "cutaway" | "plan" | "profile"
-  | "logs" | "seismic"
-  | "drilling"
+  | "designer" | "editor" | "section" | "well3d" | "construction" | "compare" | "cutaway" | "plan" | "profile" | "anticollision"
+  | "logs" | "seismic" | "curtain"
+  | "drilling" | "torquedrag"
   | "petro"
-  | "strings" | "window" | "kick" | "cement" | "hydraulics";
+  | "strings" | "window" | "kick" | "cement" | "hydraulics" | "geomech" | "barriers"
+  | "decline";
 
-export type ModuleGroup = "Place" | "Well" | "Data" | "Drilling" | "Engineering";
+/** What kind of place a site is: FORGE's records, the Equator field, a planned well (Kestrel A-7 or the user's), or a drilled well entered on the deck. */
+type SiteKind = "forge" | "equator" | "design" | "recorded";
+export type ModuleGroup = "Place" | "Well" | "Data" | "Drilling" | "Engineering" | "Production";
 
 export interface ModuleSpec {
   readonly id: ModuleId;
@@ -37,59 +45,116 @@ export interface ModuleSpec {
   readonly depthIndexed: boolean;
 }
 
-const place = ["place"] as const;
 export const modules: readonly ModuleSpec[] = [
-  { id: "globe", title: "Globe", icon: Globe2, group: "Place", blurb: "Every located well on an offline globe", listens: ["place", "depth"], emits: place, min: { w: 3, h: 3 }, size: { w: 5, h: 8 }, depthIndexed: false },
-  { id: "site3d", title: "Site in 3D", icon: Box, group: "Place", blurb: "Wells, horizons and seismic in one frame", listens: ["place", "depth"], emits: ["place", "view"], min: { w: 3, h: 4 }, size: { w: 5, h: 8 }, depthIndexed: false },
+  { id: "globe", title: "Globe", icon: Globe2, group: "Place", blurb: "Every located well on an offline globe; draw a section line on it", listens: ["place", "depth", "view"], emits: ["place", "view"], min: { w: 3, h: 3 }, size: { w: 5, h: 8 }, depthIndexed: false },
+  { id: "site3d", title: "Site in 3D", icon: Box, group: "Place", blurb: "Wells, horizons and seismic in one frame", listens: ["place", "depth", "view"], emits: ["place", "view"], min: { w: 3, h: 4 }, size: { w: 5, h: 8 }, depthIndexed: false },
+  { id: "designer", title: "Well designer", icon: PencilRuler, group: "Well", blurb: "Plan a well stage by stage: place, datum, geology and pressures, trajectory, casing, cement and completion, checked live", listens: ["place", "whatif"], emits: ["whatif"], min: { w: 4, h: 6 }, size: { w: 5, h: 8 }, depthIndexed: false },
+  { id: "editor", title: "Well editor", icon: FilePen, group: "Well", blurb: "A drilled well's records: survey, formation tops, casing, hole and cement, and LAS logs; enter them, paste or import them, or edit an existing well's", listens: ["place", "object"], emits: ["object"], min: { w: 4, h: 6 }, size: { w: 5, h: 8 }, depthIndexed: false },
   { id: "section", title: "Well section", icon: Layers3, group: "Well", blurb: "Construction, mud log and survey on one depth axis", listens: ["place", "object", "depth", "time", "whatif"], emits: ["object", "depth"], min: { w: 3, h: 4 }, size: { w: 4, h: 8 }, depthIndexed: true },
   { id: "well3d", title: "Well in 3D", icon: Rotate3d, group: "Well", blurb: "The well, its strings and the PSDM volume", listens: ["place", "object", "depth", "time", "whatif"], emits: ["object", "depth", "view"], min: { w: 3, h: 4 }, size: { w: 5, h: 8 }, depthIndexed: true },
   { id: "construction", title: "Construction", icon: Columns3, group: "Well", blurb: "The construction drawing: straight on a depth axis, or along the surveyed path", listens: ["place", "object", "depth", "time", "whatif"], emits: ["object", "depth"], min: { w: 4, h: 4 }, size: { w: 4, h: 8 }, depthIndexed: true },
+  { id: "compare", title: "Compare wells", icon: GitCompareArrows, group: "Well", blurb: "Several wells' construction side by side, on one depth scale and one diameter scale, string by string", listens: ["place", "depth", "whatif"], emits: ["depth"], min: { w: 4, h: 5 }, size: { w: 7, h: 8 }, depthIndexed: false },
   { id: "cutaway", title: "Cutaway", icon: Cylinder, group: "Well", blurb: "The construction as a 3D cutaway", listens: ["place", "object", "time", "whatif"], emits: ["object"], min: { w: 3, h: 4 }, size: { w: 4, h: 6 }, depthIndexed: false },
   { id: "plan", title: "Plan view", icon: Compass, group: "Well", blurb: "The path from above: north, east, closure", listens: ["place", "depth"], emits: ["depth"], min: { w: 3, h: 3 }, size: { w: 4, h: 4 }, depthIndexed: true },
   { id: "profile", title: "Vertical section", icon: Activity, group: "Well", blurb: "Departure against TVD, with formations", listens: ["place", "depth"], emits: ["depth"], min: { w: 3, h: 3 }, size: { w: 4, h: 4 }, depthIndexed: true },
+  { id: "anticollision", title: "Anti-collision", icon: Radar, group: "Well", blurb: "Distance to the neighbouring wells down the hole: ladder and travelling cylinder", listens: ["place", "depth"], emits: ["depth"], min: { w: 4, h: 5 }, size: { w: 5, h: 7 }, depthIndexed: true },
   { id: "logs", title: "Logs", icon: ListTree, group: "Data", blurb: "The well's LAS curves; Shift-drag to brush an interval", listens: ["place", "object", "depth", "time"], emits: ["depth"], min: { w: 3, h: 4 }, size: { w: 4, h: 8 }, depthIndexed: true },
-  { id: "seismic", title: "Seismic section", icon: AudioWaveform, group: "Data", blurb: "PSDM along the well, with its strings", listens: ["place", "object", "depth"], emits: ["depth"], min: { w: 3, h: 4 }, size: { w: 5, h: 6 }, depthIndexed: true },
+  { id: "seismic", title: "Seismic section", icon: AudioWaveform, group: "Data", blurb: "PSDM along the well, or the inline or crossline moved in the 3D site", listens: ["place", "object", "depth", "view"], emits: ["depth", "view"], min: { w: 3, h: 4 }, size: { w: 5, h: 6 }, depthIndexed: true },
+  { id: "curtain", title: "Section line", icon: Slice, group: "Data", blurb: "The PSDM along a line drawn on the globe, with the wells that pass near it", listens: ["place", "depth", "view"], emits: ["depth"], min: { w: 4, h: 4 }, size: { w: 6, h: 5 }, depthIndexed: true },
   { id: "drilling", title: "Drilling record", icon: CalendarDays, group: "Drilling", blurb: "Days vs depth, hole sections, runs and the daily reports", listens: ["place", "object", "depth", "time"], emits: ["object", "depth", "time"], min: { w: 3, h: 4 }, size: { w: 4, h: 6 }, depthIndexed: true },
+  { id: "torquedrag", title: "Torque & drag", icon: Anchor, group: "Drilling", blurb: "Soft-string hookload and torque, calibrated on the daily reports' string weights", listens: ["place", "depth"], emits: ["depth"], min: { w: 4, h: 6 }, size: { w: 6, h: 8 }, depthIndexed: true },
   { id: "petro", title: "Petrophysics", icon: ScatterChart, group: "Data", blurb: "Porosity, saturation and pay over the brushed interval", listens: ["place", "object", "depth"], emits: ["object", "depth"], min: { w: 4, h: 4 }, size: { w: 5, h: 8 }, depthIndexed: false },
   { id: "strings", title: "Strings", icon: Gauge, group: "Engineering", blurb: "Each string's record and API ratings; on a design, burst, collapse and tension against them, live", listens: ["place", "object", "time", "whatif"], emits: ["object", "whatif"], min: { w: 4, h: 4 }, size: { w: 5, h: 6 }, depthIndexed: false },
   { id: "window", title: "Pressure window", icon: Layers2, group: "Engineering", blurb: "Pore, fracture and the mud weights between them", listens: ["place", "depth", "whatif"], emits: ["depth", "whatif"], min: { w: 3, h: 4 }, size: { w: 4, h: 8 }, depthIndexed: true },
   { id: "kick", title: "Kick tolerance", icon: ShieldAlert, group: "Engineering", blurb: "The influx each shoe can take while drilling on", listens: ["place", "object", "whatif"], emits: ["object", "whatif"], min: { w: 3, h: 3 }, size: { w: 4, h: 4 }, depthIndexed: false },
   { id: "cement", title: "Cement", icon: Droplets, group: "Engineering", blurb: "Slurry volumes and the column against fracture", listens: ["place", "object", "whatif"], emits: ["object", "whatif"], min: { w: 3, h: 4 }, size: { w: 4, h: 5 }, depthIndexed: false },
+  { id: "barriers", title: "Well barriers", icon: ShieldCheck, group: "Engineering", blurb: "Primary and secondary barrier envelopes on the construction, with what the records say of each element", listens: ["place", "depth", "time", "whatif"], emits: [], min: { w: 4, h: 6 }, size: { w: 6, h: 8 }, depthIndexed: false },
+  { id: "geomech", title: "Geomechanics", icon: Mountain, group: "Engineering", blurb: "A 1D mechanical earth model: stresses, collapse and breakdown against the mud used", listens: ["place", "depth"], emits: ["depth"], min: { w: 4, h: 6 }, size: { w: 5, h: 8 }, depthIndexed: true },
+  { id: "decline", title: "Decline curves", icon: TrendingDown, group: "Production", blurb: "Arps decline on any Norwegian field's monthly production (Sodir)", listens: [], emits: [], min: { w: 4, h: 5 }, size: { w: 6, h: 7 }, depthIndexed: false },
   { id: "hydraulics", title: "Hydraulics", icon: Waves, group: "Engineering", blurb: "Bit pressure drop, jet velocity and annular velocity", listens: ["place", "whatif"], emits: ["whatif"], min: { w: 3, h: 3 }, size: { w: 4, h: 4 }, depthIndexed: false },
 ];
+/**
+ * Fusing: a tile dropped on the middle of another hands it its data, and the target draws it in its
+ * own way; the target's head then carries a chip to change or pull the fusion off.
+ */
+export interface FusionRule { readonly from: ModuleId; readonly to: ModuleId; readonly verb: string; readonly sites: readonly SiteKind[] }
+export const fusionRules: readonly FusionRule[] = [
+  { from: "logs", to: "well3d", verb: "Wrap the open-hole log around the well", sites: ["forge"] },
+  { from: "section", to: "seismic", verb: "Draw the formation tops across the seismic", sites: ["forge"] },
+  { from: "section", to: "curtain", verb: "Draw the formation tops across the section line", sites: ["forge"] },
+];
+export const fusionKey = (from: ModuleId, to: ModuleId) => `${from}>${to}`;
+export const fusionRule = (from: ModuleId, to: ModuleId, siteId: string | null) => fusionRules.find((rule) => rule.from === from && rule.to === to && rule.sites.includes(siteId as SiteKind)) ?? null;
+
 export const moduleById = Object.fromEntries(modules.map((spec) => [spec.id, spec])) as Readonly<Record<ModuleId, ModuleSpec>>;
 export const moduleIds = modules.map((spec) => spec.id);
 export const minSizes = Object.fromEntries(modules.map((spec) => [spec.id, spec.min])) as Readonly<Record<ModuleId, MinSize>>;
-export const groups: readonly ModuleGroup[] = ["Place", "Well", "Data", "Drilling", "Engineering"];
+export const groups: readonly ModuleGroup[] = ["Place", "Well", "Data", "Drilling", "Engineering", "Production"];
 
-type SiteId = "forge" | "kestrel" | "equator";
 /** Which sites have the data each module draws; a site missing from a list gets that module's reason. */
-const availability: Readonly<Partial<Record<ModuleId, { readonly sites: readonly SiteId[]; readonly why: string }>>> = {
-  section: { sites: ["forge", "kestrel"], why: "No construction records: the Equator wells are synthetic trajectories with logs and picks." },
-  well3d: { sites: ["forge", "kestrel"], why: "No construction to draw: open the site in 3D for the Equator wells' paths and picks." },
-  construction: { sites: ["forge", "kestrel"], why: "No construction records for the Equator wells." },
-  cutaway: { sites: ["forge", "kestrel"], why: "No construction records for the Equator wells." },
-  plan: { sites: ["forge", "kestrel", "equator"], why: "" },
-  profile: { sites: ["forge", "kestrel", "equator"], why: "" },
-  logs: { sites: ["forge", "equator"], why: "Kestrel A-7 is a design: it has not been drilled, so it has no logs." },
+const availability: Readonly<Partial<Record<ModuleId, { readonly sites: readonly SiteKind[]; readonly why: string }>>> = {
+  section: { sites: ["forge", "design", "recorded"], why: "No construction records: the Equator wells are synthetic trajectories with logs and picks. Add casing records in the Well editor to draw one." },
+  well3d: { sites: ["forge", "design", "recorded"], why: "No construction to draw: open the site in 3D for the Equator wells' paths and picks." },
+  construction: { sites: ["forge", "design", "recorded"], why: "No construction records for the Equator wells. Add casing records in the Well editor to draw one." },
+  cutaway: { sites: ["forge", "design", "recorded"], why: "No construction records for the Equator wells. Add casing records in the Well editor to draw one." },
+  plan: { sites: ["forge", "design", "equator", "recorded"], why: "" },
+  anticollision: { sites: ["forge"], why: "Anti-collision needs real neighbouring surveys; only Utah FORGE has them (16B(78)-32 and 58-32 beside 16A(78)-32)." },
+  profile: { sites: ["forge", "design", "equator", "recorded"], why: "" },
+  logs: { sites: ["forge", "equator", "recorded"], why: "A planned well has not been drilled, so it has no logs." },
   seismic: { sites: ["forge"], why: "Only Utah FORGE has seismic: the PSDM volume around 16A(78)-32." },
+  curtain: { sites: ["forge"], why: "A section line cuts the PSDM volume; only Utah FORGE has one." },
+  torquedrag: { sites: ["forge"], why: "Torque and drag is calibrated on reported string weights; only Utah FORGE 16A(78)-32 has them, in its daily reports." },
   drilling: { sites: ["forge"], why: "Only Utah FORGE has been drilled: daily reports, hole sections and runs exist only for it." },
-  petro: { sites: ["forge", "equator"], why: "Kestrel A-7 is a design: it has not been drilled, so it has no logs." },
-  strings: { sites: ["forge", "kestrel"], why: "The Equator wells have no casing records." },
-  window: { sites: ["kestrel"], why: "A pressure window needs pore and fracture pressures; only Kestrel A-7's design brief has them." },
-  kick: { sites: ["kestrel"], why: "Kick tolerance needs fracture gradients at the shoes; only Kestrel A-7's design brief has them." },
-  cement: { sites: ["kestrel"], why: "Cement design needs planned slurries and fracture gradients; only Kestrel A-7's design brief has them." },
-  hydraulics: { sites: ["kestrel"], why: "Hydraulics need a hole section, mud and drill string; Kestrel A-7's design supplies them, with flow and nozzles you set." },
+  petro: { sites: ["forge", "equator"], why: "A planned well has not been drilled, so it has no logs." },
+  strings: { sites: ["forge", "design", "recorded"], why: "The Equator wells have no casing records. Add them in the Well editor." },
+  window: { sites: ["design"], why: "A pressure window needs pore and fracture pressures; only planned wells (Kestrel A-7 or one you create with + New well) carry them." },
+  kick: { sites: ["design"], why: "Kick tolerance needs fracture gradients at the shoes; only planned wells carry them." },
+  cement: { sites: ["design"], why: "Cement design needs planned slurries and fracture gradients; only planned wells carry them." },
+  barriers: { sites: ["forge", "design", "recorded"], why: "Barrier envelopes are drawn on a construction; the Equator wells have none. Add casing records in the Well editor." },
+  geomech: { sites: ["forge"], why: "A mechanical earth model needs logged rock strength and stresses; only Utah FORGE has them (16A's IsoMechPro and 58-32's calibrated stresses)." },
+  hydraulics: { sites: ["design"], why: "Hydraulics need a hole section, mud and drill string; a planned well supplies them, with flow and nozzles you set." },
 };
 
 /** What a module needs that the place does not have; null when it can show something. */
 export function missing(id: ModuleId, siteId: string | null): string | null {
-  if (id === "globe") return null;
+  // The globe chooses places; decline curves run on the Norwegian fields' own production, and a
+  // comparison holds its own wells, from any site, wherever the deck is.
+  if (id === "globe" || id === "decline" || id === "compare") return null;
+  if (id === "designer") return isDesignSite(siteId) ? null : "The designer plans wells. Press + New well to start one, or fly to Kestrel A-7, the example design.";
   if (!siteId) return "Choose a site on the globe or press ⌘K.";
+  const kind: SiteKind | null = siteId === "forge" || siteId === "equator" ? siteId : isDesignSite(siteId) ? "design" : isRecordedSite(siteId) ? "recorded" : null;
+  if (id === "editor") return kind === "design" ? "A planned well is edited in the Well designer." : null;
+  // An imported log is drawn wherever it was imported.
+  if (id === "logs" && importedLogs(activeEditWell()).length) return null;
+  // An Equator well the user gave casing records draws its construction.
+  const editedCasing = kind === "equator" && (editedValue(activeEditWell())?.components.some((component) => component.kind === "Casing") ?? false);
   const rule = availability[id];
-  if (!rule) return null;
-  return rule.sites.includes(siteId as SiteId) ? null : rule.why;
+  if (rule && !(kind && rule.sites.includes(kind)) && !(editedCasing && ["section", "construction", "cutaway", "strings", "barriers"].includes(id))) return rule.why;
+  const design = designForSite(siteId);
+  if (design) return designGap(id, design.history.current().brief);
+  const recorded = recordedForSite(siteId);
+  return recorded ? recordGap(id, recorded.history.current(), recorded.wellId) : null;
 }
+
+/** A drilled well being entered: which part of the editor supplies what a module needs. */
+function recordGap(id: ModuleId, value: WellRecordValue, wellId: string): string | null {
+  if (["well3d", "plan", "profile", "site3d"].includes(id) && value.stations.length < 2) return "No survey yet. In the Well editor, open Survey and paste, import or type the stations.";
+  if (["section", "construction", "cutaway", "strings", "barriers"].includes(id) && !value.components.some((component) => component.kind === "Casing")) return "No casing records yet. In the Well editor, open Casing & hole and add them.";
+  if (id === "logs" && !importedLogs(wellId).length) return "No logs yet. In the Well editor, open Logs and import a LAS file.";
+  return null;
+}
+
+/** A planned well still being designed: which stage of the designer supplies what a module needs. */
+function designGap(id: ModuleId, brief: WellDesignBrief): string | null {
+  const pressures = brief.geology.pressures.length >= 2;
+  if ((id === "window" || id === "kick" || id === "cement") && !pressures) return "No pore and fracture pressures yet. In the Well designer, open Geology & pressures to add them.";
+  if (["section", "construction", "cutaway", "strings", "barriers", "kick", "cement", "hydraulics"].includes(id) && !brief.sections.length) return "No casing yet. In the Well designer, open Casing and propose a scheme from the pressures, or add strings yourself.";
+  if (id === "hydraulics" && !brief.sections.some((section) => section.role !== "conductor")) return "Hydraulics need a hole section below the conductor. In the Well designer, open Casing and add one.";
+  return null;
+}
+/** Whether a reason points at the designer or the editor, so the empty tile can offer to open it. */
+export const pointsToDesigner = (reason: string) => /Well designer/.test(reason);
+export const pointsToEditor = (reason: string) => /Well editor/.test(reason);
 
 /** The deck opens on the globe, staged, where every site is chosen; choosing one stages it in 3D. */
 export type Tiles = Readonly<Partial<Record<ModuleId, Rect>>>;

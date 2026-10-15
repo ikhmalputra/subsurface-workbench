@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { scaleLinear } from "d3-scale";
-import { amplitudeClip, seismicColour, seismicImage, wellMdAtDepth, wellPointAtMd, type ProjectedPoint, type SeismicColorMap, type SegyFile, type SegyTrace } from "@ikhmalputra/subsurface-core";
+import { amplitudeClip, seismicColour, seismicImage, wellMdAtDepth, wellPointAtMd, type ProjectedPoint, type SeismicColorMap, type SeismicTraceSet, type SegyFile, type SegyTrace } from "@ikhmalputra/subsurface-core";
 import { AccessibleTable } from "./accessible-table.js";
 import { CommandButton } from "./ui.js";
 import { usePlotZoom } from "./depth-zoom.js";
@@ -34,10 +34,11 @@ export interface SeismicView {
   readonly z1: number;
 }
 
-export interface SeismicSectionProps {
-  readonly file: SegyFile;
+export interface SeismicSectionProps<T extends { readonly index: number } = SegyTrace> {
+  /** The traces to draw: a parsed SEG-Y file, or a slice cut from a volume (`cubeSection`). */
+  readonly file: SeismicTraceSet<T>;
   /** Horizontal position of each trace, e.g. distance along line. Defaults to the trace index. */
-  readonly traceX?: (trace: SegyTrace) => number;
+  readonly traceX?: (trace: T) => number;
   readonly xLabel?: string;
   /** Vertical value of sample 0 and the step between samples. Defaults to 0 and the binary interval / 1000 (ms for time data). */
   readonly depthStart?: number;
@@ -61,6 +62,10 @@ export interface SeismicSectionProps {
    */
   readonly mdWindow?: MdWindow | null;
   readonly onMdWindowChange?: (window: MdWindow | null) => void;
+  /** Horizontal levels to draw across the whole section, in the section's depth units, e.g. a formation top taken as planar. */
+  readonly horizons?: readonly { readonly id: string; readonly label: string; readonly depth: number; readonly color?: string }[];
+  /** More wells to draw, already projected to the section's axes: context only, not linked to the cursor. */
+  readonly otherWells?: readonly { readonly id: string; readonly label: string; readonly color: string; readonly path: readonly ProjectedPoint[] }[];
   readonly initialColorMap?: SeismicColorMap;
   readonly initialGain?: number;
   readonly title?: string;
@@ -71,9 +76,12 @@ const PICK_PX = 22;
 const MIN_SPAN_SAMPLES = 8;
 const fmt = (value: number, digits = 0) => value.toLocaleString("en-US", { maximumFractionDigits: digits, minimumFractionDigits: digits });
 
+/** A trace's SEG-Y header fields, when it has them: a slice cut from a volume has none. */
+const headerOf = (trace: { readonly index: number }): SegyTrace | null => "inline" in trace && "x" in trace ? trace as SegyTrace : null;
+
 const windowKey = (win: MdWindow | null | undefined) => (win ? `${Math.round(win[0])}:${Math.round(win[1])}` : "full");
 
-export function SeismicSection({ file, traceX = (trace) => trace.index, xLabel = "Trace", depthStart = 0, depthStep, depthLabel = "ms", wellPath = [], intervals = [], markers = [], selectedId = null, cursorMdM = null, onSelectMd, onCursorMdChange, mdWindow, onMdWindowChange, initialColorMap = "grey", initialGain = 1, title = "Seismic section" }: SeismicSectionProps) {
+export function SeismicSection<T extends { readonly index: number } = SegyTrace>({ file, traceX = (trace) => trace.index, xLabel = "Trace", depthStart = 0, depthStep, depthLabel = "ms", wellPath = [], intervals = [], markers = [], selectedId = null, cursorMdM = null, onSelectMd, onCursorMdChange, mdWindow, onMdWindowChange, horizons = [], otherWells = [], initialColorMap = "grey", initialGain = 1, title = "Seismic section" }: SeismicSectionProps<T>) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -87,7 +95,7 @@ export function SeismicSection({ file, traceX = (trace) => trace.index, xLabel =
   const [keyMd, setKeyMd] = useState<number | null>(null);
   const [own, setOwn] = useState<{ key: string | null; view: SeismicView | null }>({ key: null, view: null });
   const drag = useRef<{ x: number; y: number; view: SeismicView; moved: boolean; id: number } | null>(null);
-  const step = depthStep ?? file.binary.sampleInterval / 1000;
+  const step = depthStep ?? (file.binary?.sampleInterval ?? 1000) / 1000;
   const n = file.traceCount, m = file.sampleCount;
   const xs = useMemo(() => file.traces.map(traceX), [file, traceX]);
   const clip = useMemo(() => amplitudeClip(file.data, 99), [file]);
@@ -321,8 +329,10 @@ export function SeismicSection({ file, traceX = (trace) => trace.index, xLabel =
       {hover && readTrace ? <>
         <strong>{depthLabel === "ms" ? `${fmt(depthStart + hover.sample * step)} ms` : `${fmt(depthStart + hover.sample * step)} ${depthLabel}`}</strong>
         <span>{xLabel} {fmt(xs[hover.trace]!)}</span>
-        <span>Trace {readTrace.index + 1} · IL {readTrace.inline} · XL {readTrace.crossline}</span>
-        <span>X {fmt(readTrace.x, 1)} · Y {fmt(readTrace.y, 1)}</span>
+        {headerOf(readTrace) ? <>
+          <span>Trace {readTrace.index + 1} · IL {headerOf(readTrace)!.inline} · XL {headerOf(readTrace)!.crossline}</span>
+          <span>X {fmt(headerOf(readTrace)!.x, 1)} · Y {fmt(headerOf(readTrace)!.y, 1)}</span>
+        </> : <span>Trace {readTrace.index + 1}</span>}
         <span>Amplitude {amplitude === null || amplitude === undefined ? "—" : fmt(amplitude, 4)}</span>
         {hover.md !== null ? <span className="sw-seis-well">Well MD {fmt(hover.md)} m · click to select</span> : hover.corr !== null && <span>Well reaches this depth at MD {fmt(hover.corr)} m</span>}
       </> : cursorPoint && keyMd !== null ? <><strong>Well MD {fmt(cursorPoint.mdM)} m</strong><span>Depth {fmt(cursorPoint.depthM)} {depthLabel}</span><span>Enter selects · Esc clears</span></>
@@ -341,6 +351,15 @@ export function SeismicSection({ file, traceX = (trace) => trace.index, xLabel =
         <text transform={`translate(14 ${M.top + plotH / 2}) rotate(-90)`} textAnchor="middle" className="sw-seis-axis">{depthLabel === "ms" ? "Time (ms)" : `Depth (${depthLabel})`}</text>
         <g clipPath={`url(#${clipId})`}>
           {wellPath.length > 1 && <g>
+            {horizons.map((horizon) => <g key={horizon.id} className="sw-seis-horizon" data-horizon={horizon.id}>
+              <line x1={M.left} x2={W - M.right} y1={y(horizon.depth)} y2={y(horizon.depth)} style={horizon.color ? { stroke: horizon.color } : undefined} />
+              <text x={M.left + 6} y={y(horizon.depth) - 5}>{horizon.label}</text>
+            </g>)}
+            {otherWells.filter((well) => well.path.length > 1).map((well) => <g key={well.id} className="sw-seis-other" data-well={well.id}>
+              <path d={pathD(well.path)} className="sw-seis-well-halo" />
+              <path d={pathD(well.path)} className="sw-seis-well-path" style={{ stroke: well.color }} />
+              <text x={x(well.path[0]!.alongM) + 6} y={y(well.path[0]!.depthM) + 12}>{well.label}</text>
+            </g>)}
             <path d={pathD(wellPath)} className="sw-seis-well-halo" />
             <path d={pathD(wellPath)} className="sw-seis-well-path" />
             {intervals.map((item) => { const points = slice(item.topMdM, item.baseMdM); return points.length > 1 && item.id !== selectedId ? <path key={item.id} d={pathD(points)} className="sw-seis-interval" style={{ stroke: item.color }} /> : null; })}
@@ -373,14 +392,15 @@ export function SeismicSection({ file, traceX = (trace) => trace.index, xLabel =
         const traceIndex = Math.floor(index / m);
         const sampleIndex = index % m;
         const trace = file.traces[traceIndex]!;
+        const header = headerOf(trace);
         const amplitudeValue = file.data[index];
         return [
           depthStart + sampleIndex * step,
           trace.index + 1,
-          trace.inline,
-          trace.crossline,
-          trace.x,
-          trace.y,
+          header ? header.inline : null,
+          header ? header.crossline : null,
+          header ? header.x : null,
+          header ? header.y : null,
           amplitudeValue === null || amplitudeValue === undefined || !Number.isFinite(amplitudeValue) ? null : amplitudeValue,
         ];
       })}
