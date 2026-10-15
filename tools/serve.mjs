@@ -4,12 +4,24 @@ import { readFile } from "node:fs/promises";
 import { extname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "parse5";
+import { gzipSync } from "node:zlib";
 
 // Which exported app to serve. Lets the old demo and the new workbench run side by side during the
 // migration, so both Playwright projects can exercise their own app in one CI run.
 const app = process.env.SERVE_APP ?? "deck";
 const root = fileURLToPath(new URL(`../apps/${app}/out/`, import.meta.url));
-const types = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".png": "image/png", ".json": "application/json", ".woff2": "font/woff2", ".svg": "image/svg+xml", ".txt": "text/plain", ".ico": "image/x-icon" };
+const types = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".json": "application/json", ".woff2": "font/woff2", ".svg": "image/svg+xml", ".txt": "text/plain", ".ico": "image/x-icon" };
+
+// Text and raw data shrink several times under gzip; the meshopt models and images are already
+// compressed. Each file is compressed once per version and kept, so a slow link (a tunnel, a
+// remote viewer) moves a fraction of the bytes.
+const compressible = new Set([".html", ".js", ".mjs", ".css", ".json", ".svg", ".txt", ".las", ".sgy", ".i8"]);
+const gzipped = new Map();
+function gzipOf(path, data) {
+  const key = `${path}:${data.byteLength}`;
+  if (!gzipped.has(key)) gzipped.set(key, gzipSync(data, { level: 6 }));
+  return gzipped.get(key);
+}
 
 function scriptHashes(html) {
   const hashes = [];
@@ -31,23 +43,33 @@ createServer(async (request, response) => {
   }
   try {
     const pathname = decodeURIComponent(new URL(request.url, "http://localhost").pathname);
+    // A page's folder without its slash ("/deck") goes to the page ("/deck/").
+    if (!pathname.endsWith("/") && !extname(pathname)) {
+      response.writeHead(301, { Location: `${pathname}/` }).end();
+      return;
+    }
     const path = resolve(root, `.${pathname.endsWith("/") ? `${pathname}index.html` : pathname}`);
     if (!path.startsWith(root.endsWith(sep) ? root : root + sep)) {
       response.writeHead(403).end();
       return;
     }
-    const data = await readFile(path);
-    const hashes = extname(path) === ".html" ? scriptHashes(data.toString()) : [];
+    const raw = await readFile(path);
+    const hashes = extname(path) === ".html" ? scriptHashes(raw.toString()) : [];
+    const gzip = compressible.has(extname(path)) && /\bgzip\b/.test(request.headers["accept-encoding"] ?? "");
+    const data = gzip ? gzipOf(path, raw) : raw;
     response.writeHead(200, {
       "Content-Type": `${types[extname(path)] ?? "application/octet-stream"}; charset=utf-8`,
       "Content-Length": data.byteLength,
+      ...(gzip ? { "Content-Encoding": "gzip" } : {}),
+      Vary: "Accept-Encoding",
       "X-Content-Type-Options": "nosniff",
       "Referrer-Policy": "no-referrer",
       "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
       // wasm-unsafe-eval: the meshopt decoder for the component models is WebAssembly. It allows
       // compiling wasm only; JavaScript eval stays blocked.
       "Content-Security-Policy": `default-src 'self'; script-src 'self' 'wasm-unsafe-eval' ${hashes.join(" ")}; worker-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'`,
-      "Cache-Control": "no-store",
+      // Vite's hashed bundles never change under one name; everything else is re-read every time.
+      "Cache-Control": pathname.startsWith("/assets/") ? "public, max-age=31536000, immutable" : "no-store",
     });
     response.end(request.method === "HEAD" ? undefined : data);
   } catch {

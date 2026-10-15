@@ -11,7 +11,7 @@ import { analyse, isDesignSite, useDesignState } from "../data/design.ts";
 import { WhatIfBar } from "./WhatIfBar.tsx";
 import { ModuleBody } from "../modules/bodies.tsx";
 import type { ModuleId } from "../modules/registry.ts";
-import { moduleIds, signalColour } from "../modules/registry.ts";
+import { moduleById, moduleIds, signalColour } from "../modules/registry.ts";
 import { CommandBar } from "./CommandBar.tsx";
 import { NewWell } from "./NewWell.tsx";
 import { Dock, gridProbe } from "./Dock.tsx";
@@ -56,7 +56,7 @@ function Bar() {
   const brush = useSubsurfaceSelector(signals, (state) => state.dataInteraction.depthRange);
   const moment = useMoment();
   return <header className="bar">
-    <span className="brand"><span className="brand-mark" aria-hidden="true">S</span>Subsurface <small>deck</small></span>
+    <a className="brand" href="/" title="What the deck is and how to use it"><span className="brand-mark" aria-hidden="true">S</span>Subsurface <small>deck</small></a>
     <div className="chips" aria-label="Live signals" data-origin="bar">
       <span className="chip" style={{ ["--chip-colour" as string]: signalColour.place }}><i /><b>{site ? site.map.label : "World"}</b>{well && <span>· {well.label}</span>}
         {place && <button type="button" className="chip-edit" aria-label={`Edit ${place.label}`} title={place.kind === "design" ? "Edit this planned well in the Well designer" : place.kind === "recorded" ? "Edit this well's records in the Well editor" : "Edit this well in the Well editor: your changes sit over the record, which stays as it is"}
@@ -114,7 +114,8 @@ function Grid({ ghost, onGhost }: { readonly ghost: Ghost | null; readonly onGho
     return () => { gridProbe.cellAt = null; };
   }, [geometry]);
   const subtitle = (id: ModuleId): string | undefined => {
-    if (id === "globe" || !site) return undefined;
+    // A module that holds its own data (a Norwegian field, a set of wells) does not carry the place's name.
+    if (id === "globe" || id === "compare" || !moduleById[id].listens.includes("place") || !site) return undefined;
     return siteId === "forge" && id !== "site3d" ? "16A(78)-32" : site.map.label;
   };
   const ghostBox = ghost ? geometry.toPx(ghost.rect) : null;
