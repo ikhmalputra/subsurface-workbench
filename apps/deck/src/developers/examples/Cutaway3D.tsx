@@ -10,7 +10,7 @@ const assembly = designToAssembly(exampleWellBrief());
 export function Cutaway3D() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   return <div className="ex-scene">
-    <AssemblyScene assembly={assembly} assetBaseUrl="/well-components" title="Kestrel A-7, cut open"
+    <AssemblyScene assembly={assembly} assetBaseUrl={`${import.meta.env.BASE_URL}well-components`} title="Kestrel A-7, cut open"
       selectedId={selectedId} onSelect={setSelectedId} />
   </div>;
 }

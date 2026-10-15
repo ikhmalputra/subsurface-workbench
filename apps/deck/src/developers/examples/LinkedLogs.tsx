@@ -27,14 +27,14 @@ export function LinkedLogs() {
   const link = useDepthLink();
 
   useEffect(() => {
-    fetch("/data/forge-16a-mudlog-10ft.las")
+    fetch(`${import.meta.env.BASE_URL}data/forge-16a-mudlog-10ft.las`)
       .then((response) => response.ok ? response.text() : Promise.reject(new Error(`HTTP ${response.status}`)))
       .then((text) => setLas(parseLas(text)), (reason: Error) => setError(reason.message));
   }, []);
 
   return <div className="ex-pair">
     <div className="ex-schematic">
-      <AssemblySchematic assembly={assembly} records={components} assetBaseUrl="/well-components"
+      <AssemblySchematic assembly={assembly} records={components} assetBaseUrl={`${import.meta.env.BASE_URL}well-components`}
         title="16A(78)-32 as built"
         cursorDepthM={link.cursorMdM} onCursorDepthChange={link.setCursorMdM}
         depthWindow={link.window} onDepthWindowChange={link.setWindow} />

@@ -11,11 +11,12 @@ import { WRAP_CURVES } from "../deck/Tile.tsx";
 import { useForgeOpenHole } from "../data/openhole.ts";
 import { Empty, Loading } from "./Empty.tsx";
 import { useWire, type Wire } from "./wire.ts";
+import { BASE } from "../base.ts";
 
 const WellScene = lazy(() => import("@ikhmalputra/subsurface-react/3d").then((module) => ({ default: module.WellScene })));
 const AssemblyScene = lazy(() => import("@ikhmalputra/subsurface-react/3d").then((module) => ({ default: module.AssemblyScene })));
 
-const ASSETS = "/well-components";
+const ASSETS = `${BASE}well-components`;
 const NONE: readonly string[] = [];
 
 /** Shoes to mark on the trajectory plots: FORGE's from its records, a design's from its strings. */

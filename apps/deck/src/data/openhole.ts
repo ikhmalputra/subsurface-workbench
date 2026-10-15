@@ -4,6 +4,7 @@ import type { LasFile } from "@ikhmalputra/subsurface-core/records";
 import type { PetrophysicsLogCurve, PetrophysicsWell } from "@ikhmalputra/subsurface-core/contracts";
 import { useFetched } from "./fetch.ts";
 import { forgeWell } from "./sites.ts";
+import { BASE } from "../base.ts";
 
 /**
  * FORGE 16A(78)-32's open-hole logs (GDR 1292, CC BY 4.0): Schlumberger's thru-bit combination,
@@ -19,7 +20,7 @@ export interface OpenHole {
   readonly logBaseMdM: number;
 }
 
-const URL = "/data/forge-16a-openhole-1ft.las";
+const URL = `${BASE}data/forge-16a-openhole-1ft.las`;
 const shoe = forgeWell.components.find((component) => component.id === "intermediate-casing");
 const SHOE_MD = shoe?.rawBottomDepthFt ? feetToMetres(shoe.rawBottomDepthFt) : shoe?.bottomDepthM ?? 0;
 

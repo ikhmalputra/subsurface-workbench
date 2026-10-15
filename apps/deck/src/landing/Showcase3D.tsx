@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Hand, Loader2 } from "lucide-react";
 import { assemblyCatalog } from "@ikhmalputra/subsurface-core/assembly";
 import type { Viewer } from "./viewer.ts";
+import { BASE } from "../base.ts";
 
 /**
  * The 3D section: the subsurface first (the seismic volume, a well inside it, what was built in it),
@@ -10,14 +11,14 @@ import type { Viewer } from "./viewer.ts";
  * viewer scrolls into view.
  */
 
-const ASSETS = "/well-components/";
+const ASSETS = `${BASE}well-components/`;
 const fraction: Record<string, string> = { "0.125": "⅛", "0.25": "¼", "0.375": "⅜", "0.5": "½", "0.625": "⅝", "0.75": "¾", "0.875": "⅞" };
 const inches = (value: number) => { const whole = Math.floor(value); const part = fraction[String(Number((value - whole).toFixed(3)))]; return part ? `${whole}${part}″` : `${Number(value.toFixed(3))}″`; };
 
 const VIEWS: readonly { readonly image: string; readonly title: string; readonly body: string; readonly alt: string }[] = [
-  { image: "/landing/site3d.jpg", title: "The volume", body: "Utah FORGE's 3D seismic with the granite reservoir top and three wells, in one frame. Drag the inline, crossline and depth slices; the seismic section follows.", alt: "Utah FORGE in 3D: 16A, 16B and 58-32 with the granite reservoir top and slices through the PSDM volume" },
-  { image: "/landing/well3d.jpg", title: "The well in its rock", body: "16A inside the seismic it was drilled through, its open-hole gamma ray wrapped on the path as colour and thickness. Click the path to probe a depth.", alt: "FORGE 16A in 3D inside the PSDM volume, its open-hole section wrapped in the gamma-ray log, a probe ring at 2,571 m" },
-  { image: "/landing/cutaway-close.jpg", title: "What was built in it", body: "Every string, cement sheath and tool cut open on a shared depth scale, built from the component models below. Explode it, isolate a part, section it.", alt: "Kestrel A-7's construction cut open in 3D: conductor, surface, intermediate and production strings, cement, tubing and the safety valve" },
+  { image: `${BASE}landing/site3d.jpg`, title: "The volume", body: "Utah FORGE's 3D seismic with the granite reservoir top and three wells, in one frame. Drag the inline, crossline and depth slices; the seismic section follows.", alt: "Utah FORGE in 3D: 16A, 16B and 58-32 with the granite reservoir top and slices through the PSDM volume" },
+  { image: `${BASE}landing/well3d.jpg`, title: "The well in its rock", body: "16A inside the seismic it was drilled through, its open-hole gamma ray wrapped on the path as colour and thickness. Click the path to probe a depth.", alt: "FORGE 16A in 3D inside the PSDM volume, its open-hole section wrapped in the gamma-ray log, a probe ring at 2,571 m" },
+  { image: `${BASE}landing/cutaway-close.jpg`, title: "What was built in it", body: "Every string, cement sheath and tool cut open on a shared depth scale, built from the component models below. Explode it, isolate a part, section it.", alt: "Kestrel A-7's construction cut open in 3D: conductor, surface, intermediate and production strings, cement, tubing and the safety valve" },
 ];
 
 export function Showcase3D() {

@@ -1,5 +1,7 @@
 # Subsurface Workbench
 
+**Live:** https://ikhmalputra.github.io/subsurface-workbench/ · the deck at [/deck/](https://ikhmalputra.github.io/subsurface-workbench/deck/) · [for developers](https://ikhmalputra.github.io/subsurface-workbench/developers/)
+
 A subsurface visualisation and calculation toolkit by Ikhmal Putra Manan. The host owns data,
 backend and persistence; the packages store nothing and fetch nothing. Original code is MIT. The
 Utah FORGE data keeps its CC BY 4.0 attribution, and the world basemap is Natural Earth (public
@@ -49,6 +51,11 @@ tools and how to use them) is at `/`, the deck itself at `/deck/`, and the Devel
 (installing the packages, live examples, integration notes and the API reference) at
 `/developers/`. Its reference is generated from the built packages: after changing an export, run
 `pnpm --filter deck sdk:reference`.
+
+The live site is GitHub Pages, served from the `gh-pages` branch in a subfolder. Every path in the
+app goes through Vite's base (`apps/deck/src/base.ts`), so the same code serves at `/` locally.
+To publish: `pnpm --filter deck build:pages` (writes `output/pages/`), then push that folder's
+contents to `gh-pages`.
 
 ```sh
 pnpm build
