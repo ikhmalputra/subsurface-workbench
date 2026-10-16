@@ -3,7 +3,7 @@
 **Live:** https://ikhmalputra.github.io/subsurface-workbench/ · the deck at [/deck/](https://ikhmalputra.github.io/subsurface-workbench/deck/) · [for developers](https://ikhmalputra.github.io/subsurface-workbench/developers/)
 
 A subsurface visualisation and calculation toolkit by Ikhmal Putra Manan. The host owns data,
-backend and persistence; the packages store nothing and fetch nothing. Original code is MIT. The
+backend and persistence; the packages store nothing and fetch nothing. Original code is proprietary (see LICENSE). The
 Utah FORGE data keeps its CC BY 4.0 attribution, and the world basemap is Natural Earth (public
 domain); see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 

@@ -1,7 +1,7 @@
 {
   "id": "well-component-catalog-v1",
   "provenance": "synthetic",
-  "license": "MIT",
+  "license": "UNLICENSED",
   "author": "Ikhmal Putra Manan",
   "blenderVersion": "5.2.0 LTS",
   "renderer": "Cycles",

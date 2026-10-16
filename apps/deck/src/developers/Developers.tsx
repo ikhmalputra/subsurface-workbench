@@ -203,7 +203,7 @@ export function Developers() {
     <header className="lp-hero dv-hero">
       <p className="lp-eyebrow">For developers</p>
       <h1>The deck is an SDK.<br /><span>Build your own.</span></h1>
-      <p className="lp-lede">Everything in the deck comes from two MIT-licensed TypeScript packages: the calculations, the parsers and every 2D and 3D view. Call the same code from your app, your server or a script.</p>
+      <p className="lp-lede">Everything in the deck comes from two TypeScript packages: the calculations, the parsers and every 2D and 3D view. Call the same code from your app, your server or a script.</p>
       <div className="lp-actions">
         <a className="lp-cta" href="#examples">Run the examples<ArrowRight size={17} aria-hidden="true" /></a>
         <a className="lp-ghost" href="#reference">API reference</a>
@@ -212,7 +212,7 @@ export function Developers() {
         <div><dt>2</dt><dd>packages: core (data and calculations) and react (views)</dd></div>
         <div><dt>{reference.length}</dt><dd>entry points, import only what you use</dd></div>
         <div><dt>{unique(coreEntries) + unique(reactEntries)}</dt><dd>exports, every one listed below</dd></div>
-        <div><dt>MIT</dt><dd>licensed; FORGE data CC BY 4.0</dd></div>
+        <div><dt>26</dt><dd>deck modules built on them</dd></div>
       </dl>
     </header>
 
@@ -265,7 +265,7 @@ export function Developers() {
     <footer className="lp-section dv-foot">
       <div><h2>See every view at work</h2><p>The deck is the largest example there is: open it, then find the module you want in this reference.</p></div>
       <a className="lp-cta" href={DECK}>Open the deck<ArrowRight size={17} aria-hidden="true" /></a>
-      <p className="dv-fine">Code MIT. Utah FORGE data adapted from McLennan et al. (2021) and the Geothermal Data Repository, CC BY 4.0. Engineering screening only; it does not replace a qualified well design.</p>
+      <p className="dv-fine">© 2026 Ikhmal Putra Manan. All rights reserved: using, copying or distributing the code needs written permission. Utah FORGE data adapted from McLennan et al. (2021) and the Geothermal Data Repository, CC BY 4.0. Engineering screening only; it does not replace a qualified well design.</p>
     </footer>
   </div>;
 }

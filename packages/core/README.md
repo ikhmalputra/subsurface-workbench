@@ -1,6 +1,6 @@
 # Subsurface Core
 
-MIT-licensed, framework-independent well data and calculations. Not an
+Framework-independent well data and calculations. Not an
 engineering solver. Entry points: `.` (records, fixtures, assembly
 catalogue), `/trajectory`, `/well-design`, `/offset-wells`, `/units`, `/records`
 (operational history, runs, hole sections, LAS parser), `/seismic` (SEG-Y
@@ -730,5 +730,5 @@ Energy and Geoscience Institute, University of Utah, GDR 1296:
 https://gdr.openei.org/submissions/1296. Source data is licensed CC BY 4.0:
 https://creativecommons.org/licenses/by/4.0/. Adaptations are unit conversion,
 station extraction, page-cited record transcription and approximate contact
-projection. Original code remains MIT. This is not an engineering solver,
+projection. Original code is proprietary (see LICENSE). This is not an engineering solver,
 complete equipment tally, manufacturer model or regulatory approval.

@@ -833,7 +833,7 @@ order = [spec["id"] for spec in CATALOG]
 manifest = {
     "id": "well-component-catalog-v1",
     "provenance": "synthetic",
-    "license": "MIT",
+    "license": "UNLICENSED",
     "author": "Ikhmal Putra Manan",
     "blenderVersion": bpy.app.version_string,
     "renderer": "Cycles",

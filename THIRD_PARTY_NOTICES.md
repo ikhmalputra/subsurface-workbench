@@ -1,6 +1,6 @@
 # Third-party notices
 
-Original code and synthetic Blender asset: MIT, Ikhmal Putra Manan.
+Original code and synthetic Blender assets: proprietary, © 2026 Ikhmal Putra Manan, all rights reserved (see LICENSE). The notices below are for third-party software and data, which keep their own licences.
 No F3 data, PPDM schemas or documentation are bundled.
 
 The bundled FORGE fixtures are adapted from Utah FORGE public records,
@@ -45,7 +45,7 @@ licensed CC BY 4.0, https://creativecommons.org/licenses/by/4.0/:
 
 Changes: XLSX station extraction, explicit unit conversion, report-page record
 transcription and approximate sediment/granite contact projection. No endorsement
-by the authors or University is implied. The fixture data is not relicensed MIT.
+by the authors or University is implied. The fixture data keeps its own licence and is not relicensed.
 Source hashes, provenance and attribution remain in the distributed JSON and
 core package README; see docs/FORGE_SOURCE_RECORD.md for evidence boundaries.
 
