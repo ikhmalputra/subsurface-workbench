@@ -4,7 +4,7 @@
 
 A subsurface visualisation and calculation toolkit by Ikhmal Putra Manan. The host owns data,
 backend and persistence; the packages store nothing and fetch nothing. Original code is proprietary (see LICENSE). The
-Utah FORGE data keeps its CC BY 4.0 attribution, and the world basemap is Natural Earth (public
+Utah FORGE data keeps its CC BY 4.0 attribution, and the world basemap is Natural Earth, the globe imagery NASA Blue Marble and the FORGE ground USGS 3DEP and NAIP (all public
 domain); see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 **State, October 2026.** The previous application and its UI were purged for a total redo. What

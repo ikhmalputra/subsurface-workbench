@@ -10,7 +10,7 @@ const titles = (source: string, pattern: RegExp) => [...source.matchAll(pattern)
 test("the landing page lists exactly the deck's modules", () => {
   const registry = titles(read("../src/modules/registry.ts"), /\{ id: "[a-z0-9]+", title: "([^"]+)"/g);
   const landing = titles(read("../src/landing/Landing.tsx"), /\{ title: "([^"]+)", icon:/g);
-  assert.equal(registry.length, 28);
+  assert.equal(registry.length, 29);
   assert.deepEqual(landing, registry);
 });
 

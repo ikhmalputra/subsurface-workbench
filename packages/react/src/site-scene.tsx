@@ -64,6 +64,10 @@ export interface SiteSceneSurface {
   /** What the surface is, and what it is not: shown with it. */
   readonly note: string;
   readonly geometry: SiteSurfaceGeometry;
+  /** A colour for each TIN point (sRGB, 0–1), e.g. depth-coloured like a structure map; the surface's own colour when absent. */
+  readonly pointColors?: readonly (readonly [number, number, number])[];
+  /** Drawn faint, without its label or contours, until it is the scene's focused surface: one of many tops, e.g. */
+  readonly quiet?: boolean;
 }
 
 export interface SiteSceneProps {
@@ -110,6 +114,50 @@ export interface SiteSceneProps {
   readonly ribbon?: { readonly wellId: string; readonly mdM: ArrayLike<number>; readonly values: ArrayLike<number>; readonly halfWidthM: number; readonly label: string; readonly colorMap?: SeismicColorMap } | null;
   /** Where the camera opens: an interval of one well, seen square-on to the volume's inline slices, instead of the whole site. */
   readonly frame?: { readonly wellId: string; readonly topMdM: number; readonly baseMdM: number } | null;
+  /**
+   * A click (not a drag) on a seismic slice, in the volume's own units: along and offset in metres,
+   * depth in site metres. With it, the pointer is a crosshair over the slices: e.g. to seed a horizon.
+   */
+  readonly onSeismicPick?: (at: { readonly alongM: number; readonly offsetM: number; readonly depthM: number; readonly slice: SliceKey }) => void;
+  /**
+   * The ground as it is: a regular grid of depths (site metres, rows north to south) over an east and
+   * north extent, draped with an image when one is given (e.g. aerial imagery). Shown with the reference levels.
+   */
+  readonly terrain?: SiteTerrain | null;
+  /**
+   * A section through several wells, standing in the site: a wall along their plan positions between two
+   * depths, a column down each well coloured interval by interval (e.g. its lithology) laid in the wall,
+   * and lines across the wall joining a pick from well to well (e.g. a correlated top).
+   */
+  readonly fence?: SiteFence | null;
+  /** The vertical exaggeration the scene opens with, e.g. for a field far wider than it is deep. 1 when absent. */
+  readonly initialExaggeration?: number;
+  /** The legend of wells and surfaces under the scene; shown unless false, e.g. where the host lists them itself. */
+  readonly legend?: boolean;
+  /** The surface brought forward: drawn solid with its label and contours while every other is faint. */
+  readonly focusSurfaceId?: string | null;
+}
+
+export interface SiteFence {
+  readonly label: string;
+  /** The wall's corners in plan, in order: east and north, site metres. */
+  readonly stations: readonly (readonly [number, number])[];
+  readonly topM: number;
+  readonly baseM: number;
+  readonly columns?: readonly { readonly wellId: string; readonly intervals: readonly { readonly topMdM: number; readonly baseMdM: number; readonly color: string }[] }[];
+  /** Points are [east, north, depth]; an emphasised line is drawn thicker. */
+  readonly lines?: readonly { readonly label: string; readonly color: string; readonly points: readonly (readonly [number, number, number])[]; readonly emphasis?: boolean }[];
+}
+
+export interface SiteTerrain {
+  readonly east: readonly [number, number];
+  readonly north: readonly [number, number];
+  readonly cols: number;
+  readonly rows: number;
+  /** One depth per node, row by row from the north edge; NaN where there is no ground. */
+  readonly depthsM: ArrayLike<number>;
+  readonly imageUrl?: string;
+  readonly label: string;
 }
 
 interface Layers { readonly wells: boolean; readonly seismic: boolean; readonly horizons: boolean; readonly reference: boolean; readonly labels: boolean }
@@ -150,6 +198,32 @@ export function triangulatePlan(points: readonly (readonly [number, number])[]):
   return triangles.filter((t) => t.every((index) => index < n)).flat();
 }
 
+/**
+ * Contour segments across a TIN at a round depth interval (5, 10, 25, 50, 100 or 250 m) chosen to
+ * give about a dozen levels: each triangle a level crosses contributes the segment where it does.
+ */
+export function contourLines(points: readonly (readonly [number, number, number])[], triangles: readonly number[]): [number, number, number][] {
+  let lo = Infinity, hi = -Infinity;
+  for (const p of points) { lo = Math.min(lo, p[2]); hi = Math.max(hi, p[2]); }
+  const step = [5, 10, 25, 50, 100, 250].find((candidate) => (hi - lo) / candidate <= 14) ?? 500;
+  const out: [number, number, number][] = [];
+  for (let t = 0; t + 2 < triangles.length; t += 3) {
+    const tri = [points[triangles[t]!]!, points[triangles[t + 1]!]!, points[triangles[t + 2]!]!];
+    const min = Math.min(tri[0]![2], tri[1]![2], tri[2]![2]), max = Math.max(tri[0]![2], tri[1]![2], tri[2]![2]);
+    for (let level = Math.ceil(min / step) * step; level < max; level += step) {
+      const crossing: [number, number, number][] = [];
+      for (const [a, b] of [[0, 1], [1, 2], [2, 0]] as const) {
+        const p = tri[a]!, q = tri[b]!;
+        if ((p[2] < level) === (q[2] < level)) continue;
+        const f = (level - p[2]) / (q[2] - p[2]);
+        crossing.push([p[0] + (q[0] - p[0]) * f, p[1] + (q[1] - p[1]) * f, level]);
+      }
+      if (crossing.length === 2) out.push(crossing[0]!, crossing[1]!);
+    }
+  }
+  return out;
+}
+
 function pointAtMd(well: SiteSceneWell, md: number): [number, number, number] | null {
   const count = well.mdM.length;
   if (count === 0 || md < well.mdM[0]! || md > well.mdM[count - 1]!) return null;
@@ -165,14 +239,14 @@ function pointAtMd(well: SiteSceneWell, md: number): [number, number, number] | 
 
 const fmt = (value: number) => Math.round(value).toLocaleString("en-US");
 
-export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = [], seismic = null, seismicClip, seismicNote, selectedWellId = null, onSelectWell, cursor = null, reach = null, hiddenMarkers = null, highlight = null, slices: given = null, onSlicesChange, curtain = null, ribbon = null, frame: opening = null }: SiteSceneProps) {
+export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = [], seismic = null, seismicClip, seismicNote, selectedWellId = null, onSelectWell, cursor = null, reach = null, hiddenMarkers = null, highlight = null, slices: given = null, onSlicesChange, curtain = null, ribbon = null, frame: opening = null, onSeismicPick, terrain = null, fence = null, initialExaggeration = 1, legend = true, focusSurfaceId = null }: SiteSceneProps) {
   const host = useRef<HTMLDivElement>(null);
   const ids = useId();
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [readout, setReadout] = useState<string | null>(null);
   const [layers, setLayers] = useState<Layers>({ wells: true, seismic: true, horizons: true, reference: true, labels: true });
-  const [exaggeration, setExaggeration] = useState(1);
+  const [exaggeration, setExaggeration] = useState(initialExaggeration);
   const [colorMap, setColorMap] = useState<SeismicColorMap>("grey");
   const [gain, setGain] = useState(1);
   const volumeFrame = useMemo(() => seismic ? { along: [seismic.alongStartM, seismic.alongEndM] as const, offset: [seismic.offsetStartM, seismic.offsetEndM] as const, depth: [seismic.topTvdM, seismic.baseTvdM] as const } : null, [seismic]);
@@ -221,12 +295,19 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
     highlight(band: SiteSceneProps["highlight"]): void;
     curtain(plane: SiteSceneProps["curtain"]): void;
     ribbon(band: SiteSceneProps["ribbon"]): void;
+    fence(wall: SiteSceneProps["fence"]): void;
+    focusSurface(id: string | null): void;
   } | null>(null);
   const openingRef = useRef(opening);
   openingRef.current = opening;
+  const fenceRef = useRef(fence);
+  fenceRef.current = fence;
   const reachRef = useRef({ reach, hiddenMarkers });
   reachRef.current = { reach, hiddenMarkers };
   const pick = useEffectEvent((id: string) => onSelectWell?.(id));
+  const pickSeismic = useEffectEvent((at: Parameters<NonNullable<SiteSceneProps["onSeismicPick"]>>[0]) => onSeismicPick?.(at));
+  const picking = useRef(false);
+  picking.current = onSeismicPick !== undefined;
 
   useEffect(() => {
     const element = host.current;
@@ -243,8 +324,10 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
     const token = (name: string, fallback: string) => css.getPropertyValue(name).trim() || fallback;
     const axisColour = token("--sw-scene-axis", "#7d8794"), gridColour = token("--sw-scene-grid", "#d5dbe2");
     const scene = new THREE.Scene();
-    scene.add(new THREE.HemisphereLight("#ffffff", "#9aa3ad", 2.1));
-    const sun = new THREE.DirectionalLight("#ffffff", 1.5);
+    // Low sky light and an oblique sun from the north-west: relief on a surface shades the way a hillshade map does.
+    scene.add(new THREE.HemisphereLight("#ffffff", "#7d8794", 1.25));
+    const sun = new THREE.DirectionalLight("#fff7ea", 2.6);
+    sun.position.set(-0.9, 1.1, -0.7);
     scene.add(sun);
     const view = new THREE.PerspectiveCamera(38, 1, 1, 1e6);
     const controls = new OrbitControls(view, renderer.domElement);
@@ -259,6 +342,7 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
     const note = (e: number, n: number, d: number) => { xs.push(e); ys.push(n); ds.push(d); };
     for (const well of wells) for (let i = 0; i < well.mdM.length; i++) note(well.xyz[i * 3]!, well.xyz[i * 3 + 1]!, well.xyz[i * 3 + 2]!);
     for (const surface of surfaces) if (surface.geometry.kind === "tin") for (const p of surface.geometry.points) note(p[0], p[1], p[2]); else ds.push(surface.geometry.depthM);
+    if (terrain) for (const e of terrain.east) for (const n of terrain.north) { xs.push(e); ys.push(n); }
     const azimuth = seismic ? THREE.MathUtils.degToRad(seismic.azimuthDeg) : 0, sinA = Math.sin(azimuth), cosA = Math.cos(azimuth);
     const plan = (along: number, offset: number) => seismic ? [(seismic.originEastingM ?? 0) + along * sinA + offset * cosA, (seismic.originNorthingM ?? 0) + along * cosA - offset * sinA] as const : [0, 0] as const;
     if (seismic) for (const a of [seismic.alongStartM, seismic.alongEndM]) for (const o of [seismic.offsetStartM, seismic.offsetEndM]) { const [e, n] = plan(a, o); note(e, n, seismic.topTvdM); note(e, n, seismic.baseTvdM); }
@@ -290,6 +374,7 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
     const groups = { wells: new THREE.Group(), seismic: new THREE.Group(), horizons: new THREE.Group(), reference: new THREE.Group() };
     for (const group of Object.values(groups)) scene.add(group);
     const pickables: THREE.Object3D[] = [];
+    const surfaceParts = new Map<string, { readonly material: THREE.MeshStandardMaterial; readonly opacity: number; readonly quiet: boolean; readonly extras: THREE.Object3D[]; readonly text: ReturnType<typeof label> }>();
     for (const surface of surfaces) {
       const group = surface.role === "horizon" ? groups.horizons : groups.reference;
       const geometry = new THREE.BufferGeometry();
@@ -308,6 +393,10 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
         if (triangles.length === 0) continue;
         geometry.setFromPoints(points.map((p) => at(p[0], p[1], p[2])));
         geometry.setIndex([...triangles]);
+        if (surface.pointColors?.length === points.length) {
+          const linear = new THREE.Color();
+          geometry.setAttribute("color", new THREE.Float32BufferAttribute(surface.pointColors.flatMap(([r, g, b]) => { linear.setRGB(r, g, b, THREE.SRGBColorSpace); return [linear.r, linear.g, linear.b]; }), 3));
+        }
         // The boundary: edges used by one triangle only.
         const count = new Map<string, [number, number]>();
         for (let t = 0; t < triangles.length; t += 3) for (const [a, b] of [[triangles[t]!, triangles[t + 1]!], [triangles[t + 1]!, triangles[t + 2]!], [triangles[t + 2]!, triangles[t]!]]) {
@@ -321,7 +410,8 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
       geometry.computeVertexNormals();
       keep(geometry);
       const reference = surface.role === "reference";
-      const material = keep(new THREE.MeshStandardMaterial({ color: surface.color, transparent: true, opacity: reference ? 0.16 : 0.62, side: THREE.DoubleSide, depthWrite: !reference, roughness: 0.85, metalness: 0, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }));
+      const coloured = surface.geometry.kind === "tin" && surface.pointColors?.length === surface.geometry.points.length;
+      const material = keep(new THREE.MeshStandardMaterial({ color: coloured ? "#ffffff" : surface.color, vertexColors: coloured, transparent: true, opacity: reference ? 0.16 : surface.quiet ? 0.07 : coloured ? 0.92 : 0.62, side: THREE.DoubleSide, depthWrite: !reference && !surface.quiet, roughness: 0.85, metalness: 0, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }));
       const mesh = new THREE.Mesh(geometry, material);
       mesh.userData.surface = surface;
       mesh.renderOrder = reference ? 3 : 2;
@@ -329,7 +419,46 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
       if (!reference) pickables.push(mesh);
       const edge = new THREE.LineSegments(keep(new THREE.BufferGeometry().setFromPoints(outline)), keep(new THREE.LineBasicMaterial({ color: surface.color })));
       group.add(edge);
-      label(surface.label, anchor, "name", reference ? 1 : 2, { className: reference ? "is-reference" : "is-horizon", colour: surface.color, layer: reference ? "reference" : "horizons" });
+      const extras: THREE.Object3D[] = [edge];
+      // Contours draped on an interpreted surface, at a round interval giving about a dozen lines: its relief at a glance.
+      if (!reference && surface.geometry.kind === "tin" && surface.geometry.points.length >= 12) {
+        const lines = contourLines(surface.geometry.points, [...(surface.geometry.triangles ?? triangulatePlan(surface.geometry.points.map((p) => [p[0], p[1]] as const)))]);
+        if (lines.length) {
+          const contours = new THREE.LineSegments(keep(new THREE.BufferGeometry().setFromPoints(lines.map((p) => at(p[0], p[1], p[2])))), keep(new THREE.LineBasicMaterial({ color: "#0b0f1a", transparent: true, opacity: 0.45, depthWrite: false })));
+          contours.renderOrder = 4;
+          group.add(contours);
+          extras.push(contours);
+        }
+      }
+      const text = label(surface.label, anchor, "name", reference ? 1 : 2, { className: reference ? "is-reference" : "is-horizon", colour: surface.color, layer: reference ? "reference" : "horizons" });
+      if (surface.quiet) { text.visible = false; for (const item of extras) item.visible = false; }
+      surfaceParts.set(surface.id, { material, opacity: material.opacity, quiet: !!surface.quiet, extras, text });
+    }
+
+    // ── The ground: a height mesh, draped with its image ─────────────────────────────────────
+    if (terrain && terrain.cols >= 2 && terrain.rows >= 2 && terrain.depthsM.length === terrain.cols * terrain.rows) {
+      const { cols, rows } = terrain, positions = new Float32Array(cols * rows * 3), uvs = new Float32Array(cols * rows * 2);
+      let fallback = 0;
+      for (let i = 0; i < terrain.depthsM.length; i++) if (Number.isFinite(terrain.depthsM[i]!)) { fallback = terrain.depthsM[i]!; break; }
+      for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+        const k = r * cols + c, d = terrain.depthsM[k]!;
+        const p = at(terrain.east[0] + (terrain.east[1] - terrain.east[0]) * c / (cols - 1), terrain.north[1] - (terrain.north[1] - terrain.north[0]) * r / (rows - 1), Number.isFinite(d) ? d : fallback);
+        positions.set([p.x, p.y, p.z], k * 3);
+        uvs.set([c / (cols - 1), 1 - r / (rows - 1)], k * 2);
+      }
+      const index: number[] = [];
+      for (let r = 0; r + 1 < rows; r++) for (let c = 0; c + 1 < cols; c++) { const k = r * cols + c; index.push(k, k + cols, k + 1, k + 1, k + cols, k + cols + 1); }
+      const geometry = keep(new THREE.BufferGeometry());
+      geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+      geometry.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
+      geometry.setIndex(index);
+      geometry.computeVertexNormals();
+      const material = keep(new THREE.MeshStandardMaterial({ color: terrain.imageUrl ? "#ffffff" : "#9a8f78", roughness: 1, metalness: 0, side: THREE.DoubleSide }));
+      if (terrain.imageUrl) new THREE.TextureLoader().load(terrain.imageUrl, (texture) => { if (dead) { texture.dispose(); return; } texture.colorSpace = THREE.SRGBColorSpace; texture.anisotropy = 8; material.map = keep(texture); material.needsUpdate = true; invalidate(); });
+      const ground = new THREE.Mesh(geometry, material);
+      ground.renderOrder = 1;
+      groups.reference.add(ground);
+      label(terrain.label, at(terrain.east[0], terrain.north[1], Number.isFinite(terrain.depthsM[0]!) ? terrain.depthsM[0]! : fallback), "name", 1, { className: "is-reference", layer: "reference" });
     }
 
     // ── Wells ────────────────────────────────────────────────────────────────────────────────
@@ -427,6 +556,86 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
       invalidate();
     };
     let curtainGroup: THREE.Group | null = null, curtainLabel: ReturnType<typeof label> | null = null;
+    let fenceGroup: THREE.Group | null = null, fenceLabels: ReturnType<typeof label>[] = [];
+    const clearFence = () => {
+      if (fenceGroup) { scene.remove(fenceGroup); fenceGroup.traverse((item) => { if (item instanceof THREE.Mesh || item instanceof THREE.LineSegments) { item.geometry.dispose(); (item.material as THREE.Material).dispose(); } }); fenceGroup = null; }
+      for (const entry of fenceLabels) labels.remove(entry);
+      fenceLabels = [];
+    };
+    /** The fence: its wall, a column down each well in the wall's own plane, and the lines across it. */
+    const drawFence = (wall: SiteSceneProps["fence"]) => {
+      clearFence();
+      if (!wall || wall.stations.length < 1) { invalidate(); return; }
+      const group = new THREE.Group();
+      const stations = wall.stations;
+      if (stations.length >= 2) {
+        const positions: number[] = [], index: number[] = [];
+        stations.forEach(([e, n], i) => {
+          const a = at(e, n, wall.topM), b = at(e, n, wall.baseM);
+          positions.push(a.x, a.y, a.z, b.x, b.y, b.z);
+          if (i > 0) index.push((i - 1) * 2, i * 2, i * 2 + 1, (i - 1) * 2, i * 2 + 1, (i - 1) * 2 + 1);
+        });
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+        geometry.setIndex(index);
+        const fill = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: token("--sw-fence", "#c7d2fe"), transparent: true, opacity: 0.13, side: THREE.DoubleSide, depthWrite: false }));
+        fill.renderOrder = 7;
+        const outline: THREE.Vector3[] = [];
+        stations.forEach(([e, n], i) => {
+          outline.push(at(e, n, wall.topM), at(e, n, wall.baseM));
+          if (i > 0) { const [pe, pn] = stations[i - 1]!; outline.push(at(pe, pn, wall.topM), at(e, n, wall.topM), at(pe, pn, wall.baseM), at(e, n, wall.baseM)); }
+        });
+        group.add(fill, new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(outline), new THREE.LineBasicMaterial({ color: token("--sw-fence", "#c7d2fe"), transparent: true, opacity: 0.55 })));
+      }
+      // Each column lies in the wall: across the well along the wall's direction where the well stands.
+      const half = span * 0.018;
+      for (const column of wall.columns ?? []) {
+        const well = wells.find((entry) => entry.id === column.wellId);
+        if (!well || !column.intervals.length) continue;
+        const head = [well.xyz[0]!, well.xyz[1]!] as const;
+        let nearest = 0;
+        stations.forEach(([e, n], i) => { if (Math.hypot(e - head[0], n - head[1]) < Math.hypot(stations[nearest]![0] - head[0], stations[nearest]![1] - head[1])) nearest = i; });
+        const from = stations[Math.max(0, nearest - 1)]!, to = stations[Math.min(stations.length - 1, nearest + 1)]!;
+        const length = Math.hypot(to[0] - from[0], to[1] - from[1]);
+        const [ux, uy] = length > 0 ? [(to[0] - from[0]) / length, (to[1] - from[1]) / length] : [1, 0];
+        const positions: number[] = [], colours: number[] = [], index: number[] = [];
+        const colour = new THREE.Color();
+        for (const interval of column.intervals) {
+          const p = pointAtMd(well, interval.topMdM), q = pointAtMd(well, interval.baseMdM);
+          if (!p || !q) continue;
+          colour.set(interval.color);
+          const row = positions.length / 3;
+          for (const [e, n, d] of [p, q]) { const a = at(e - ux * half, n - uy * half, d), b = at(e + ux * half, n + uy * half, d); positions.push(a.x, a.y, a.z, b.x, b.y, b.z); }
+          for (let k = 0; k < 4; k++) colours.push(colour.r, colour.g, colour.b);
+          index.push(row, row + 2, row + 3, row, row + 3, row + 1);
+        }
+        if (!index.length) continue;
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+        geometry.setAttribute("color", new THREE.Float32BufferAttribute(colours, 3));
+        geometry.setIndex(index);
+        const fill = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+        fill.renderOrder = 8;
+        group.add(fill);
+      }
+      // Lines across the wall, as thin tubes so they read at any distance.
+      for (const line of wall.lines ?? []) {
+        if (line.points.length < 2) continue;
+        const path = new THREE.CurvePath<THREE.Vector3>();
+        const points = line.points.map(([e, n, d]) => at(e, n, d));
+        for (let i = 1; i < points.length; i++) path.add(new THREE.LineCurve3(points[i - 1]!, points[i]!));
+        const tube = new THREE.Mesh(new THREE.TubeGeometry(path, (points.length - 1) * 4, radius * (line.emphasis ? 1.9 : 1.05), 8, false), new THREE.MeshBasicMaterial({ color: line.color, depthTest: !line.emphasis, transparent: true, opacity: line.emphasis ? 1 : 0.92 }));
+        tube.renderOrder = line.emphasis ? 10 : 9;
+        group.add(tube);
+        // Labelled halfway along its last span, clear of the well names at either end.
+        fenceLabels.push(label(line.label, points.at(-2)!.clone().lerp(points.at(-1)!, 0.5), "pick", line.emphasis ? 3 : 1, { colour: line.color }));
+      }
+      const [e, n] = stations[0]!;
+      fenceLabels.push(label(wall.label, at(e, n, wall.topM), "name", 3, { className: "is-seismic" }));
+      fenceGroup = group;
+      scene.add(group);
+      invalidate();
+    };
     // ── The linked depth cursor: one ring, moved along whichever well it is on ─────────────
     const cursorColour = token("--sw-cursor", "#1d4ed8");
     const cursorRing = new THREE.Mesh(keep(new THREE.TorusGeometry(radius * 3.4, radius * 0.7, 10, 32)), keep(new THREE.MeshBasicMaterial({ color: cursorColour, depthTest: false, transparent: true })));
@@ -549,6 +758,19 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
         openingView = () => fitTo(sphere, new THREE.Vector3(seismic ? cosA : 0, 0.32, seismic ? sinA : 1).normalize());
       }
     }
+    // With a fence and no interval to open on, the fence fills the view, seen square-on from the home side.
+    const wall = fenceRef.current;
+    if (!(opened && openWell) && wall && wall.stations.length >= 2) {
+      const corners = wall.stations.flatMap(([e, n]) => [at(e, n, wall.topM), at(e, n, wall.baseM)]);
+      const sphere = new THREE.Box3().setFromPoints(corners).getBoundingSphere(new THREE.Sphere());
+      const first = corners[0]!, last = corners[corners.length - 2]!;
+      const along = last.clone().sub(first).setY(0).normalize();
+      const normal = new THREE.Vector3(-along.z, 0, along.x);
+      if (normal.dot(home) < 0) normal.negate();
+      sphere.radius *= 0.92;
+      const facing = normal.add(new THREE.Vector3(0, 0.42, 0)).normalize();
+      openingView = () => fitTo(sphere, facing.clone());
+    }
     // Until the camera is first moved by hand, the opening view is fitted again as the stage settles (a tile opening, say).
     let settling = true;
     controls.addEventListener("start", () => { settling = false; });
@@ -573,6 +795,16 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
       return ray.intersectObjects(pickables.filter((object) => { for (let o: THREE.Object3D | null = object; o; o = o.parent) if (!o.visible) return false; return true; }), false)[0] ?? null;
     };
     const trueAt = (point: THREE.Vector3) => ({ e: point.x + cx, n: -point.z + cy, d: -point.y / ve });
+    /** The first seismic slice under the pointer, whatever lies in front of it, in the volume's own units. */
+    const sliceAt = (clientX: number, clientY: number) => {
+      if (!seismic || !frameInverse || !groups.seismic.visible) return null;
+      const box = renderer.domElement.getBoundingClientRect();
+      ray.setFromCamera(new THREE.Vector2((clientX - box.left) / box.width * 2 - 1, -(clientY - box.top) / box.height * 2 + 1), view);
+      const hit = ray.intersectObjects([...sliceMeshes.values()].map((entry) => entry.mesh).filter((mesh) => mesh.visible), false)[0];
+      if (!hit) return null;
+      const uvw = hit.point.clone().applyMatrix4(frameInverse);
+      return { alongM: seismic.alongStartM + uvw.x * (seismic.alongEndM - seismic.alongStartM), offsetM: seismic.offsetStartM + uvw.y * (seismic.offsetEndM - seismic.offsetStartM), depthM: seismic.topTvdM + uvw.z * (seismic.baseTvdM - seismic.topTvdM), slice: hit.object.userData.slice as SliceKey };
+    };
     const describe = (hit: THREE.Intersection) => {
       const { e, n, d } = trueAt(hit.point);
       const where = `E ${fmt(e)} · N ${fmt(n)} · ${fmt(d)} m depth`;
@@ -615,7 +847,7 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
       cancelAnimationFrame(hoverFrame);
       hoverFrame = requestAnimationFrame(() => {
         const handle = handleAt(event.clientX, event.clientY);
-        renderer.domElement.style.cursor = handle ? "grab" : "";
+        renderer.domElement.style.cursor = handle ? "grab" : picking.current && sliceAt(event.clientX, event.clientY) ? "crosshair" : "";
         if (handle) { const key = handle.object.userData.handle as SliceKey; setReadout(`${key === "inline" ? "Inline" : key === "crossline" ? "Crossline" : "Depth slice"} handle · drag to move the slice`); return; }
         const hit = hitAt(event.clientX, event.clientY); setReadout(hit ? describe(hit) : null);
       });
@@ -648,7 +880,8 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
       if (!down || Math.hypot(event.clientX - down[0], event.clientY - down[1]) > 5) { down = null; return; }
       down = null;
       const well = hitAt(event.clientX, event.clientY)?.object.userData.well as SiteSceneWell | undefined;
-      if (well) pick(well.id);
+      if (well) { pick(well.id); return; }
+      if (picking.current) { const at = sliceAt(event.clientX, event.clientY); if (at) pickSeismic(at); }
     };
     renderer.domElement.addEventListener("pointermove", move);
     renderer.domElement.addEventListener("pointerleave", leave);
@@ -743,6 +976,17 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
         invalidate();
       },
       ribbon(band) { ribbonBand = band; drawRibbon(); },
+      fence(wall) { drawFence(wall); },
+      focusSurface(id) {
+        const known = id !== null && surfaceParts.has(id);
+        for (const [key, part] of surfaceParts) {
+          const on = key === id;
+          part.material.opacity = on ? Math.max(part.quiet ? 0.55 : 0.72, part.opacity) : known && !part.quiet && part.opacity > 0.2 ? 0.12 : part.opacity;
+          if (part.quiet) part.material.depthWrite = on;
+          if (part.quiet) { part.text.visible = on; for (const item of part.extras) item.visible = on; }
+        }
+        invalidate();
+      },
       highlight(band) {
         if (highlightMesh) { scene.remove(highlightMesh); highlightMesh.geometry.dispose(); (highlightMesh.material as THREE.Material).dispose(); highlightMesh = null; }
         const well = band ? wells.find((entry) => entry.id === band.wellId) : undefined;
@@ -788,13 +1032,14 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
       renderer.domElement.removeEventListener("pointerup", release);
       if (highlightMesh) { highlightMesh.geometry.dispose(); (highlightMesh.material as THREE.Material).dispose(); }
       clearRibbon();
+      clearFence();
       labels.dispose();
       for (const item of disposables) item.dispose();
       started.dispose(); renderer.domElement.remove();
       engine.current = null;
       setReady(false);
     };
-  }, [title, depthLabel, wells, surfaces, seismic, seismicClip, exaggeration]);
+  }, [title, depthLabel, wells, surfaces, seismic, seismicClip, exaggeration, terrain]);
 
   useEffect(() => { if (ready) engine.current?.layers(layers); }, [ready, layers]);
   useEffect(() => { if (ready) engine.current?.slices(slices); }, [ready, slices]);
@@ -804,6 +1049,8 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
   useEffect(() => { if (ready) engine.current?.curtain(curtain); }, [ready, curtain?.from[0], curtain?.from[1], curtain?.to[0], curtain?.to[1], curtain?.baseM, curtain?.label]);
   useEffect(() => { if (ready) engine.current?.highlight(highlight); }, [ready, highlight?.wellId, highlight?.topMdM, highlight?.baseMdM, highlight?.color]);
   useEffect(() => { if (ready) engine.current?.ribbon(ribbon); }, [ready, ribbon]);
+  useEffect(() => { if (ready) engine.current?.fence(fence); }, [ready, fence]);
+  useEffect(() => { if (ready) engine.current?.focusSurface(focusSurfaceId); }, [ready, focusSurfaceId]);
   const reachKey = `${reach ? Object.entries(reach).map(([id, md]) => `${id}:${md}`).join("|") : ""}/${hiddenMarkers ? Object.entries(hiddenMarkers).map(([id, labels]) => `${id}:${labels.join(",")}`).join("|") : ""}`;
   useEffect(() => { if (ready) engine.current?.reach(reachRef.current.reach, reachRef.current.hiddenMarkers); }, [ready, reachKey]);
 
@@ -825,7 +1072,7 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
           {references.length > 0 && <CommandButton kind="selection" aria-pressed={layers.reference} onClick={() => toggle("reference")}>Datum levels</CommandButton>}
           <CommandButton kind="selection" aria-pressed={layers.labels} onClick={() => toggle("labels")}>Labels</CommandButton>
         </span>
-        <label className="sw-site-select">Vertical ×<select value={exaggeration} onChange={(event) => setExaggeration(Number(event.target.value))}>{[1, 2, 3, 5].map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+        <label className="sw-site-select">Vertical ×<select value={exaggeration} onChange={(event) => setExaggeration(Number(event.target.value))}>{[...new Set([1, 2, 3, 5, 10, initialExaggeration])].sort((a, b) => a - b).map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
       </div>
       <SceneViewKeys labels={COMPASS_FACES} onView={(named) => engine.current?.look(named)} />
       {error && <p role="alert" className="sw-site-error">{error}</p>}
@@ -847,7 +1094,7 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
           <label className="sw-site-select">Gain {gain.toFixed(1)}×<input type="range" min={0.5} max={6} step={0.25} value={gain} onChange={(event) => setGain(Number(event.target.value))} /></label>
         </div>
       </div>}
-      <div className="sw-site-legend" aria-label="Legend">
+      {legend && <div className="sw-site-legend" aria-label="Legend">
         <ul>
           {wells.map((well, index) => <li key={well.id}>
             <CommandButton kind="selection" className="sw-site-swatch-button" aria-pressed={selectedWellId === well.id} onClick={() => onSelectWell?.(well.id)}>
@@ -863,7 +1110,7 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
           {seismic ? <li><span><i className={`sw-site-swatch is-ramp is-${colorMap}`} aria-hidden="true" />{seismic.label ?? "Seismic volume"}</span><small>Colour saturates at ±{((seismicClip ?? 127 * seismic.amplitudePerCount) / gain).toFixed(3)}, the 2D section's clip ÷ gain</small></li>
             : seismicNote ? <li><span><i className="sw-site-swatch is-none" aria-hidden="true" />Seismic</span><small>{seismicNote}</small></li> : null}
         </ul>
-      </div>
+      </div>}
     </div>
   </section>;
 }

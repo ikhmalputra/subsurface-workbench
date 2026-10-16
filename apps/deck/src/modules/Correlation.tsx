@@ -10,7 +10,9 @@ import { flattenAt, matchPick, topsOf } from "../data/force-model.ts";
 import type { Top } from "../data/force-model.ts";
 import { removePick, setPick, usePicks } from "../data/picks.ts";
 import { useSize } from "./useSize.ts";
+import { LithologyLegend, LithologyPatterns, lithologyFill } from "./lithology-patterns.tsx";
 import { useWire } from "./wire.ts";
+import { Section3D } from "./Section3D.tsx";
 
 /**
  * Correlation: a section through a field's wells, built on its map. The wells stand side by side
@@ -24,7 +26,7 @@ const KEY = "deck-correlation-v2";
 type Track = "res" | "dn" | "sonic";
 type Spacing = "equal" | "distance";
 const TRACK_NAME: Readonly<Record<Track, string>> = { res: "Resistivity", dn: "Density–neutron", sonic: "Sonic" };
-interface Setup { readonly ids: readonly string[]; readonly flatten: string | null; readonly track: Track; readonly spacing: Spacing; readonly shown: readonly string[] }
+interface Setup { readonly ids: readonly string[]; readonly flatten: string | null; readonly track: Track; readonly spacing: Spacing; readonly shown: readonly string[]; readonly view?: "panel" | "3d" }
 const reduceMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 function readSetups(): Record<string, Setup> { try { const value = JSON.parse(localStorage.getItem(KEY) ?? "{}") as Record<string, Setup>; return value && typeof value === "object" ? value : {}; } catch { return {}; } }
@@ -143,21 +145,32 @@ export function Correlation() {
   }, [armed, suggestion]);
   const addWell = (id: string) => setSetup((current) => current.ids.includes(id) || current.ids.length >= MAX_WELLS ? current : { ...current, ids: [...current.ids, id] });
   const removeWell = (id: string) => setSetup((current) => current.ids.length <= 1 ? current : { ...current, ids: current.ids.filter((entry) => entry !== id) });
+  const in3d = setup.view === "3d";
+  // Picking and suggestions happen on the panel: asking for either brings it back.
+  const toPanel = () => setSetup((current) => current.view === "3d" ? { ...current, view: "panel" } : current);
+  const toggleWell = (id: string) => setup.ids.includes(id) ? removeWell(id) : addWell(id);
+  const visibleNames = useMemo(() => entries.filter((entry) => visible.has(entry.name)).map((entry) => entry.name), [entries, visible]);
+  const colours = useMemo(() => new Map(entries.map((entry) => [entry.name, entry.colour])), [entries]);
   const unflattened = setup.flatten ? shown.filter((well) => flattenAt(tops.get(well.id) ?? [], setup.flatten) === null) : [];
 
   return <div className="cor" data-armed={armed ? "" : undefined}>
     <aside className="cor-side">
-      <WellMap wells={all} section={shown} placeWell={placeWell} onToggle={(well) => setup.ids.includes(well.id) ? removeWell(well.id) : addWell(well.id)} full={shown.length >= MAX_WELLS} />
+      <WellMap wells={all} section={shown} placeWell={placeWell} onToggle={(well) => toggleWell(well.id)} full={shown.length >= MAX_WELLS} />
       <TopsList entries={entries} visible={visible} flattened={setup.flatten} focus={focus} armed={armed} wellCount={shown.length}
-        onFocus={setFocus} onToggle={toggle} onFlatten={flatten} onArm={(name) => { setArmed((current) => current === name ? null : name); setNext(null); }}
-        suggesting={suggestion?.name ?? null} onSuggest={(name) => suggestion?.name === name ? setSuggestion(null) : suggest(name)} />
-      <form className="cor-newtop" onSubmit={(event) => { event.preventDefault(); const name = newName.trim(); if (name) { setArmed(name); setNewName(""); setNext(null); } }}>
+        onFocus={setFocus} onToggle={toggle} onFlatten={flatten} onArm={(name) => { setArmed((current) => current === name ? null : name); setNext(null); toPanel(); }}
+        suggesting={suggestion?.name ?? null} onSuggest={(name) => { toPanel(); if (suggestion?.name === name) setSuggestion(null); else suggest(name); }} />
+      <form className="cor-newtop" onSubmit={(event) => { event.preventDefault(); const name = newName.trim(); if (name) { setArmed(name); setNewName(""); setNext(null); toPanel(); } }}>
         <input id="correlation-new-top" value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="New top, e.g. Top Heimdal sand" aria-label="Name a new top to pick" />
         <button type="submit" disabled={!newName.trim()} title="Arm it, then click each well where it is"><Crosshair size={13} aria-hidden="true" /></button>
       </form>
     </aside>
     <section className="cor-main">
       <header className="cor-bar">
+        <span className="log-sets cor-view" role="group" aria-label="View">
+          <button type="button" aria-pressed={!in3d} title="The wells side by side on their logs: read, flatten and pick" onClick={toPanel}>Panel</button>
+          <button type="button" aria-pressed={in3d} title="The section standing in its field, with the tops as surfaces" onClick={() => setSetup((current) => ({ ...current, view: "3d" }))}>3D</button>
+        </span>
+        {in3d ? <span className="cor-gesture">Add wells on the map · click one here to take it off · drag to orbit · hover a top to bring its surface up</span> : <>
         <span className={`cor-datum${setup.flatten ? " is-flat" : ""}`}>
           {setup.flatten ? <>Flattened on <b>{setup.flatten}</b><button type="button" aria-label="Back to sea level" title="Back to sea level" onClick={() => flatten(null)}><X size={12} /></button></> : <>Hung on <b>sea level</b><small>click any top to flatten on it</small></>}
         </span>
@@ -169,6 +182,7 @@ export function Correlation() {
           <button type="button" aria-pressed={setup.spacing === "distance"} title="Space the wells by their distance apart along the section" onClick={() => setSetup((current) => ({ ...current, spacing: "distance" }))}>By distance</button>
         </span>
         <span className="cor-gesture">Drag the ruler to zoom · ⇧ drag a GR for a ghost · drag a header to reorder · double-click fits</span>
+        </>}
         {armed && <span className="cor-armed"><Crosshair size={13} aria-hidden="true" />Picking <b>{armed}</b>: click {next ? shown.find((well) => well.id === next)?.name ?? "a well" : "a well"} at its depth<button type="button" onClick={() => { setArmed(null); setNext(null); }}>Done <kbd>Esc</kbd></button></span>}
       </header>
       {suggestion && <div className="cor-suggest">
@@ -178,13 +192,15 @@ export function Correlation() {
         <button type="button" className="is-quiet" onClick={() => setSuggestion(null)}>Dismiss <kbd>Esc</kbd></button>
       </div>}
       {suggestNote && <p className="cor-note">{suggestNote}</p>}
-      {unflattened.length > 0 && <p className="cor-note">{unflattened.map((well) => well.name).join(", ")}: no {setup.flatten} top, so {unflattened.length === 1 ? "it is" : "they are"} not drawn while the section is flattened on it.</p>}
-      <Panel wells={shown} logs={logs} errors={errors} tops={tops} setup={setup} visible={visible} placeWell={placeWell} area={area} wire={wire}
+      {!in3d && unflattened.length > 0 && <p className="cor-note">{unflattened.map((well) => well.name).join(", ")}: no {setup.flatten} top, so {unflattened.length === 1 ? "it is" : "they are"} not drawn while the section is flattened on it.</p>}
+      {in3d ? <Section3D area={area} wells={shown} logs={logs} names={visibleNames} colours={colours} focus={focus} picks={picks}
+        selectedId={placeWell} onToggle={(id) => { const well = forceWellByBusId(id); if (well && well.area === area) toggleWell(well.id); }} /> : <Panel wells={shown} logs={logs} errors={errors} tops={tops} setup={setup} visible={visible} placeWell={placeWell} area={area} wire={wire}
         focus={focus} onFocus={setFocus} armed={armed} next={next} onFlatten={flatten}
         onPicked={(well) => { const i = shown.indexOf(well); const after = shown.slice(i + 1).concat(shown.slice(0, i)).find((other) => !(tops.get(other.id) ?? []).some((top) => top.kind === "yours" && top.name === armed)); setNext(after?.id ?? null); }}
         onRemove={removeWell} suggestion={suggestion} onAccept={accept} onReject={reject}
         onReorder={(from, to) => setSetup((current) => { const ids = [...current.ids]; const [moved] = ids.splice(from, 1); ids.splice(to, 0, moved!); return { ...current, ids }; })}
-        onMove={(id, by) => setSetup((current) => { const ids = [...current.ids]; const i = ids.indexOf(id), j = i + by; if (i < 0 || j < 0 || j >= ids.length) return current; [ids[i], ids[j]] = [ids[j]!, ids[i]!]; return { ...current, ids }; })} />
+        onMove={(id, by) => setSetup((current) => { const ids = [...current.ids]; const i = ids.indexOf(id), j = i + by; if (i < 0 || j < 0 || j >= ids.length) return current; [ids[i], ids[j]] = [ids[j]!, ids[i]!]; return { ...current, ids }; })} />}
+      <LithologyLegend codes={[...new Set(shown.flatMap((well) => { const l = logs.get(well.id)?.litho; return l ? [...new Set(l)].filter((code) => code >= 0) : []; }))].sort((a, b) => a - b)} />
       <YourPicks wells={shown} tops={tops} />
       <p className="petro-note">{FORCE_SOURCE}. GR is filled with the competition&apos;s interpreted lithology. Depths are TVD below sea level from the logs&apos; positions{setup.flatten ? `, less each well's ${setup.flatten} depth` : ""}. Bands between wells join the Directorate&apos;s picks for reading; they are not mapped.</p>
     </section>
@@ -457,6 +473,7 @@ function Panel({ wells, logs, errors, tops, setup, visible, placeWell, area, wir
         pan.current = null;
       }}
       onDoubleClick={fit}>
+      <LithologyPatterns />
       <Ruler y={y} height={height} flatten={setup.flatten} brush={brush} />
       <defs><clipPath id="cor-body"><rect x={RULER} y={HEAD + TRACKS} width={width} height={Math.max(0, height - HEAD - TRACKS - BOTTOM)} /></clipPath></defs>
       <g clipPath="url(#cor-body)"><Gaps drawn={drawn} tops={tops} visible={visible} focused={focused} y={y} lefts={lefts} colW={colW} /></g>
@@ -614,7 +631,7 @@ function Column({ well, logs, error, tops, visible, focused, shift, y, colW, hei
       <rect className="cor-frame" x={0} y={top} width={colW} height={Math.max(0, base - top)} data-place={place || undefined} />
       <line className="cor-track" x1={t2x} x2={t2x} y1={top} y2={base} />
       {track === "res" && [0.2, 2, 20, 200].map((value) => <line key={value} className="cor-grid" x1={log(value)} x2={log(value)} y1={top} y2={base} />)}
-      {litho.map((run, i) => <path key={i} d={run.d} fill={run.code >= 0 ? LITHOLOGY[run.code]!.colour : "var(--ink-3)"} className="cor-litho" />)}
+      {litho.map((run, i) => <path key={i} d={run.d} fill={lithologyFill(run.code)} className="cor-litho" />)}
       {grLine && <path d={grLine} className="cor-curve is-gr" />}
       {crossover && <path d={crossover} className="cor-crossover" />}
       {track === "res" && <>
@@ -720,7 +737,7 @@ function Cursor({ level, y, drawn, logs, tops, lefts, colW, width, flatten, arme
       const flip = py > y.range()[1]! - 40;
       return <g key={well.id} transform={`translate(${lefts[i]! + 4},${py + (flip ? -32 : 5)})`}>
         <rect className="cor-chip" width={colW - 8} height={27} rx={6} />
-        {code >= 0 && <rect x={5} y={6} width={6} height={15} rx={2} fill={LITHOLOGY[code]!.colour} />}
+        {code >= 0 && <rect x={5} y={6} width={6} height={15} rx={2} fill={lithologyFill(code)} />}
         <text x={code >= 0 ? 15 : 6} y={12}>{fmt(md)} m MD{gr !== undefined && !Number.isNaN(gr) ? ` · GR ${fmt(gr)}` : ""}</text>
         <text x={code >= 0 ? 15 : 6} y={23} className="cor-chip-sub">{code >= 0 ? LITHOLOGY[code]!.name : "no lithology"}{group ? ` · ${group.name.replace(/ Gp\.$/, "")}` : ""}</text>
       </g>;

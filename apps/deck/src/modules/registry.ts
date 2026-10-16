@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { Activity, AlignHorizontalSpaceAround, AudioLines, AudioWaveform, FilePen, GitCompareArrows, PencilRuler, Mountain, TrendingDown, Anchor, ShieldCheck, Radar, Slice, Box, CalendarDays, Columns3, Compass, Cylinder, Droplets, Gauge, Layers2, ScatterChart, ShieldAlert, Waves, Globe2, Layers3, ListTree, Rotate3d } from "lucide-react";
+import { Activity, AlignHorizontalSpaceAround, AudioLines, AudioWaveform, Layers, FilePen, GitCompareArrows, PencilRuler, Mountain, TrendingDown, Anchor, ShieldCheck, Radar, Slice, Box, CalendarDays, Columns3, Compass, Cylinder, Droplets, Gauge, Layers2, ScatterChart, ShieldAlert, Waves, Globe2, Layers3, ListTree, Rotate3d } from "lucide-react";
 import type { WellDesignBrief } from "@ikhmalputra/subsurface-core";
 import type { MinSize, Rect } from "../deck/layout.ts";
 import { designForSite, isDesignSite } from "../data/design.ts";
@@ -18,7 +18,7 @@ export const signalName: Readonly<Record<Signal, string>> = { place: "Place", ob
 export type ModuleId =
   | "globe" | "site3d"
   | "designer" | "editor" | "section" | "well3d" | "construction" | "compare" | "cutaway" | "plan" | "profile" | "anticollision"
-  | "logs" | "seismic" | "curtain" | "correlate" | "tie"
+  | "logs" | "seismic" | "curtain" | "correlate" | "tie" | "horizons"
   | "drilling" | "torquedrag"
   | "petro"
   | "strings" | "window" | "kick" | "cement" | "hydraulics" | "geomech" | "barriers"
@@ -55,6 +55,7 @@ export const modules: readonly ModuleSpec[] = [
   { id: "curtain", title: "Section line", icon: Slice, group: "Geophysics & geology", blurb: "The PSDM along a line drawn on the globe, with the wells that pass near it", listens: ["place", "depth", "view"], emits: ["depth"], min: { w: 4, h: 4 }, size: { w: 6, h: 5 }, depthIndexed: true },
   { id: "correlate", title: "Correlation", icon: AlignHorizontalSpaceAround, group: "Geophysics & geology", blurb: "A field's wells side by side on their logs and tops: flatten on a top, pick your own", listens: ["place", "depth"], emits: ["place", "depth"], min: { w: 5, h: 5 }, size: { w: 8, h: 8 }, depthIndexed: false, opensFocused: true },
   { id: "tie", title: "Well tie", icon: AudioLines, group: "Geophysics & geology", blurb: "The seismic the logs predict, tied to the PSDM: shift, stretch and fit, scored by correlation", listens: ["place", "depth"], emits: ["depth"], min: { w: 5, h: 5 }, size: { w: 8, h: 8 }, depthIndexed: false, opensFocused: true },
+  { id: "horizons", title: "Horizons", icon: Layers, group: "Geophysics & geology", blurb: "Click a reflector in 3D and it is tracked through the PSDM: a depth-coloured surface, a structure map and the section", listens: ["place"], emits: [], min: { w: 5, h: 5 }, size: { w: 8, h: 8 }, depthIndexed: false, opensFocused: true },
   { id: "logs", title: "Logs", icon: ListTree, group: "Petrophysics", blurb: "The well's LAS curves; Shift-drag to brush an interval", listens: ["place", "object", "depth", "time"], emits: ["depth"], min: { w: 3, h: 4 }, size: { w: 4, h: 8 }, depthIndexed: true },
   { id: "petro", title: "Petrophysics", icon: ScatterChart, group: "Petrophysics", blurb: "Porosity, saturation and pay over the brushed interval", listens: ["place", "object", "depth"], emits: ["object", "depth"], min: { w: 4, h: 4 }, size: { w: 5, h: 8 }, depthIndexed: false },
   { id: "geomech", title: "Geomechanics", icon: Mountain, group: "Geomechanics & pressure", blurb: "A 1D mechanical earth model: stresses, collapse and breakdown against the mud used", listens: ["place", "depth"], emits: ["depth"], min: { w: 4, h: 6 }, size: { w: 5, h: 8 }, depthIndexed: true },
@@ -107,6 +108,7 @@ const availability: Readonly<Partial<Record<ModuleId, { readonly sites: readonly
   profile: { sites: ["forge", "design", "equator", "force", "recorded"], why: "" },
   logs: { sites: ["forge", "equator", "force", "recorded"], why: "A planned well has not been drilled, so it has no logs." },
   tie: { sites: ["forge"], why: "A well tie needs sonic, density and seismic at one well; at Utah FORGE, 58-32 has all three. Fly to Utah FORGE." },
+  horizons: { sites: ["forge"], why: "Horizons are picked on seismic; at Utah FORGE there is a PSDM volume to pick on. Fly to Utah FORGE." },
   correlate: { sites: ["force"], why: "Correlation reads logs and tops across a field's wells. The FORCE 2020 wells in the Norwegian North Sea have both: fly to one of their areas from the globe or ⌘K." },
   seismic: { sites: ["forge"], why: "Only Utah FORGE has seismic: the PSDM volume around 16A(78)-32." },
   curtain: { sites: ["forge"], why: "A section line cuts the PSDM volume; only Utah FORGE has one." },
@@ -128,7 +130,7 @@ const forceWhy: Readonly<Partial<Record<ModuleId, string>>> = {
   petro: "Petrophysics runs on FORGE and the Equator field. The FORCE wells' curves are in Logs and Correlation.",
   section: "The FORCE wells carry casing shoe depths, not a construction record. Their shoes are marked in Logs and Correlation.",
   construction: "The FORCE wells carry casing shoe depths, not a construction record.",
-  seismic: "FORCE 2020 carries no seismic.", curtain: "FORCE 2020 carries no seismic.", tie: "FORCE 2020 carries no seismic to tie to.",
+  seismic: "FORCE 2020 carries no seismic.", curtain: "FORCE 2020 carries no seismic.", tie: "FORCE 2020 carries no seismic to tie to.", horizons: "FORCE 2020 carries no seismic to pick horizons on.",
 };
 
 /** What a module needs that the place does not have; null when it can show something. */

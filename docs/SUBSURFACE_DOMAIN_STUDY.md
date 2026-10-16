@@ -111,6 +111,12 @@ Each is a real tool on real data, with no overlap with what is built.
    synthetic; the person drags it onto an event and Fit refines shift and stretch locally, because a
    wide search locks onto other cycles. Near the 1,225 m PSDM event: +57 m, 3% stretch, r 0.52.
 
+9. ~~**Horizon picking**~~ — *built* 17 Oct 2026 on the FORGE PSDM sub-volume: click a reflector on
+   any slice in 3D (or on the inline section) and it is tracked trace to trace, best-correlated
+   step first, peak or trough, within a step and a correlation the user sets (a strong event tracks
+   over ~90% of the volume in ~10 ms, so it re-tracks live). The surface is drawn depth-coloured in
+   3D, as a contoured structure map and on the section, and joins Site in 3D. Kept in the browser.
+
 Shaly-sand saturation, permeability and Monte Carlo extend the clastic petrophysics, which still
 runs on synthetic logs; FORCE 2020 would give it real ones. Hydraulics with rheology waits for a source with Fann readings.
 

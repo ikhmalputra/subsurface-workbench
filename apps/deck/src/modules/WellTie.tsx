@@ -6,6 +6,7 @@ import { amplitudeClip, forgeNeighbours, forgeSeismicSection, mdAtSurveyTvd } fr
 import type { SeismicCube } from "@ikhmalputra/subsurface-core";
 import { BASE } from "../base.ts";
 import { useFetched } from "../data/fetch.ts";
+import { useForgeTerrain, withoutFlatGround } from "../data/terrain.ts";
 import { siteById, useForgeCube, useForgeVolume } from "../data/sites.ts";
 import { bestFit, correlation, impedance, onSeismic, placed, reflectivity, synthetic, twoWayTime } from "../data/tie-model.ts";
 import type { Fit } from "../data/tie-model.ts";
@@ -155,7 +156,8 @@ function TieScene({ site, volume, logs, syn, pScale, fit, windowM, hoverMd }: {
   }, [syn, logs, fit, pScale, windowM]);
   const slices = useMemo(() => ({ inline: frame.offsetM, crossline: frame.alongM, depth: null }), []);
   // The seismic shows the contact itself; FORGE's planar granite top is conceptual, and would hide the band below it.
-  const references = useMemo(() => site.surfaces.filter((surface) => surface.role === "reference"), [site]);
+  const terrain = useForgeTerrain(true);
+  const references = useMemo(() => withoutFlatGround(site.surfaces.filter((surface) => surface.role === "reference"), terrain), [site, terrain]);
   const toMd = (depth: number) => depth - (DATUM - well.depthZeroElevationM);
   const cursor = useMemo(() => hoverMd === null ? null : { wellId: "58-32", mdM: hoverMd }, [hoverMd]);
   // The camera opens on the tie: the logged part of 58-32 around the window, not the whole site.
@@ -163,7 +165,7 @@ function TieScene({ site, volume, logs, syn, pScale, fit, windowM, hoverMd }: {
   return <Suspense fallback={<Loading>Starting the 3D site…</Loading>}>
     <SiteScene title="The tie at 58-32" depthLabel={site.depthLabel} originLabel={site.originLabel} wells={site.wells} surfaces={references}
       seismic={volume} seismicClip={forgeSeismicSection.section.p99AbsAmplitude} selectedWellId="58-32" slices={slices}
-      ribbon={ribbon} cursor={cursor} frame={opening} />
+      ribbon={ribbon} cursor={cursor} frame={opening} terrain={terrain} />
   </Suspense>;
 }
 

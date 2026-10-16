@@ -94,6 +94,18 @@ The offline world basemap `packages/react/assets/gis/world-50m.json` is built by
 2.0.2 (ISC). Coordinates are rounded to 0.001°. Country boundaries are Natural
 Earth's de facto lines and carry no position on disputed borders.
 
+The globe's imagery `packages/react/assets/gis/world-imagery.jpg` is NASA's Blue
+Marble Next Generation, December 2004 with topography and bathymetry (Reto Stöckli,
+NASA Earth Observatory, public domain, https://visibleearth.nasa.gov/images/73909),
+reprojected to Web Mercator at 4096 × 4096 by `tools/build-world-imagery.py`.
+
+The FORGE ground `packages/fixtures/data/forge-terrain.*` is built by
+`tools/build-forge-terrain.mjs` from the USGS 3D Elevation Program (3DEP) and the
+USDA Farm Service Agency's National Agriculture Imagery Program (NAIP), both public
+domain and fetched from The National Map image services in NAD83 / UTM 12N.
+Elevation is resampled to a 10 m grid and kept in decimetres; the imagery is a
+JPEG export of the same extent. No endorsement by NASA, USGS or USDA is implied.
+
 Runtime packages include Next.js/React (MIT), D3 Scale (ISC), Lucide (ISC),
 and IBM Plex font files (SIL Open Font License 1.1). Their full license notices
 remain in the installed dependency packages; retain them when redistributing
