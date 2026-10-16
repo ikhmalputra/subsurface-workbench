@@ -21,6 +21,7 @@ import { TorqueDrag } from "./TorqueDrag.tsx";
 import { Barriers } from "./Barriers.tsx";
 import { Compare } from "./Compare.tsx";
 import { Correlation } from "./Correlation.tsx";
+import { WellTie } from "./WellTie.tsx";
 import { Designer } from "./Designer.tsx";
 import { WellEditor } from "./WellEditor.tsx";
 import { useRecordsVersion } from "../data/records.ts";
@@ -31,7 +32,7 @@ import { actions } from "../deck/store.ts";
 const views: Readonly<Record<ModuleId, () => ReactNode>> = {
   globe: Globe, site3d: Site3D,
   section: Section, well3d: Well3D, designer: Designer, editor: WellEditor, construction: Construction, compare: Compare, cutaway: Cutaway, plan: Plan, profile: Profile, anticollision: AntiCollision,
-  logs: Logs, seismic: Seismic, curtain: Curtain, correlate: Correlation,
+  logs: Logs, seismic: Seismic, curtain: Curtain, correlate: Correlation, tie: WellTie,
   drilling: DrillingRecord, torquedrag: TorqueDrag,
   petro: Petrophysics,
   strings: Strings, window: PressureWindow, kick: KickTolerance, cement: Cement, hydraulics: Hydraulics, geomech: Geomechanics, barriers: Barriers, decline: Decline,

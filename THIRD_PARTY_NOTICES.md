@@ -33,6 +33,13 @@ licensed CC BY 4.0, https://creativecommons.org/licenses/by/4.0/:
 - The daily drilling reports of 16A(78)-32 (GDR 1283, above) are also adapted as
 	`packages/core/src/forge-string-weights.json`: string weights, torque, mud weight
 	and BHA per day, as reported.
+- The 58-32 logs of GDR 1006 (above) are also adapted as
+	`packages/fixtures/data/forge-58-32-tie.json` by `tools/build-forge-tie.mjs`: compressional slowness
+	from `D5RL-00187_University of  Utah_ME-ESW1_Run1_DSI Sonic.las` (SHA-256
+	30cbc94a3596b6ccb061398fbb832793012795b360d5a452210696adf719e3ad) and bulk density, gamma ray and
+	caliper from `58-32_logs.zip :: D5RL-00187_University of Utah_ME-ESW1_Run2_TCOM_Main.las` (SHA-256
+	b3edbb093648df2dd8d66cc8bdf46017e50d7dfc8ec8c01bbe7b307af4feb97b), retrieved 17 Oct 2026, averaged
+	into 0.5 m MD bins with readings outside physical ranges (cycle skips, casing) left out.
 - John McLennan (2018), Utah FORGE: Stress Logging Data, DOI 10.15121/1452760,
 	GDR 1032: https://gdr.openei.org/submissions/1032. Adapted as
 	`packages/core/src/forge-58-32-stress.json`: the calibrated SHmax, Shmin and Sv

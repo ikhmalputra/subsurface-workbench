@@ -104,6 +104,13 @@ Each is a real tool on real data, with no overlap with what is built.
    difference. The wells also open in Logs, Site in 3D (each group top triangulated between
    them), Plan view and Vertical section.
 
+8. ~~**Well tie**~~ — *built* 17 Oct 2026, at FORGE 58-32 rather than 16A: 16A's open-hole logs
+   start at 5,000 ft MD, below its granite top at 4,700 ft, while 58-32 has sonic (2,150–7,569 ft)
+   and density across its contact and sits inside the PSDM sub-volume (894 m along the 16A section,
+   197 m off it). Impedance, reflectivity, a sonic time–depth relation and a Ricker wavelet make the
+   synthetic; the person drags it onto an event and Fit refines shift and stretch locally, because a
+   wide search locks onto other cycles. Near the 1,225 m PSDM event: +57 m, 3% stretch, r 0.52.
+
 Shaly-sand saturation, permeability and Monte Carlo extend the clastic petrophysics, which still
 runs on synthetic logs; FORCE 2020 would give it real ones. Hydraulics with rheology waits for a source with Fann readings.
 

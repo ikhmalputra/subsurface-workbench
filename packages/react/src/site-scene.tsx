@@ -102,6 +102,14 @@ export interface SiteSceneProps {
   readonly onSlicesChange?: (slices: SiteSlices, moved: SliceKey) => void;
   /** A vertical cutting plane between two plan points (site east/north, metres), e.g. a section line drawn on a map, down to `baseM`. */
   readonly curtain?: { readonly from: readonly [number, number]; readonly to: readonly [number, number]; readonly baseM: number; readonly label: string } | null;
+  /**
+   * A band down one well, coloured sample by sample with the seismic colour map: a trace in −1…1 at
+   * each MD, laid across the well in the volume's along direction (the inline slice through the well),
+   * e.g. a synthetic seismogram spliced into the seismic where it ties.
+   */
+  readonly ribbon?: { readonly wellId: string; readonly mdM: ArrayLike<number>; readonly values: ArrayLike<number>; readonly halfWidthM: number; readonly label: string; readonly colorMap?: SeismicColorMap } | null;
+  /** Where the camera opens: an interval of one well, seen square-on to the volume's inline slices, instead of the whole site. */
+  readonly frame?: { readonly wellId: string; readonly topMdM: number; readonly baseMdM: number } | null;
 }
 
 interface Layers { readonly wells: boolean; readonly seismic: boolean; readonly horizons: boolean; readonly reference: boolean; readonly labels: boolean }
@@ -157,7 +165,7 @@ function pointAtMd(well: SiteSceneWell, md: number): [number, number, number] | 
 
 const fmt = (value: number) => Math.round(value).toLocaleString("en-US");
 
-export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = [], seismic = null, seismicClip, seismicNote, selectedWellId = null, onSelectWell, cursor = null, reach = null, hiddenMarkers = null, highlight = null, slices: given = null, onSlicesChange, curtain = null }: SiteSceneProps) {
+export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = [], seismic = null, seismicClip, seismicNote, selectedWellId = null, onSelectWell, cursor = null, reach = null, hiddenMarkers = null, highlight = null, slices: given = null, onSlicesChange, curtain = null, ribbon = null, frame: opening = null }: SiteSceneProps) {
   const host = useRef<HTMLDivElement>(null);
   const ids = useId();
   const [ready, setReady] = useState(false);
@@ -212,7 +220,10 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
     reach(depths: Readonly<Record<string, number>> | null, hidden: Readonly<Record<string, readonly string[]>> | null): void;
     highlight(band: SiteSceneProps["highlight"]): void;
     curtain(plane: SiteSceneProps["curtain"]): void;
+    ribbon(band: SiteSceneProps["ribbon"]): void;
   } | null>(null);
+  const openingRef = useRef(opening);
+  openingRef.current = opening;
   const reachRef = useRef({ reach, hiddenMarkers });
   reachRef.current = { reach, hiddenMarkers };
   const pick = useEffectEvent((id: string) => onSelectWell?.(id));
@@ -372,6 +383,49 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
     });
 
     let highlightMesh: THREE.Mesh | null = null;
+    let ribbonGroup: THREE.Group | null = null, ribbonLabel: ReturnType<typeof label> | null = null;
+    let ribbonBand: SiteSceneProps["ribbon"] = null, ribbonMap: SeismicColorMap = "grey";
+    const clearRibbon = () => {
+      if (ribbonGroup) { scene.remove(ribbonGroup); ribbonGroup.traverse((item) => { if (item instanceof THREE.Mesh || item instanceof THREE.LineSegments) { item.geometry.dispose(); (item.material as THREE.Material).dispose(); } }); ribbonGroup = null; }
+      if (ribbonLabel) { labels.remove(ribbonLabel); ribbonLabel = null; }
+    };
+    /** The ribbon as two rows of vertices either side of the well, each pair coloured by its sample. */
+    const drawRibbon = () => {
+      clearRibbon();
+      const band = ribbonBand, well = band ? wells.find((entry) => entry.id === band.wellId) : undefined;
+      if (!band || !well || band.mdM.length < 2) { invalidate(); return; }
+      const [ux, uy] = seismic ? [sinA, cosA] : [1, 0];
+      const positions: number[] = [], colours: number[] = [], index: number[] = [], left: THREE.Vector3[] = [], right: THREE.Vector3[] = [];
+      const colour = new THREE.Color();
+      for (let k = 0; k < band.mdM.length; k++) {
+        const p = pointAtMd(well, band.mdM[k]!);
+        if (!p) continue;
+        const a = at(p[0] - ux * band.halfWidthM, p[1] - uy * band.halfWidthM, p[2]), b = at(p[0] + ux * band.halfWidthM, p[1] + uy * band.halfWidthM, p[2]);
+        const [r, g, bl] = seismicColour(band.colorMap ?? ribbonMap, band.values[k] ?? 0);
+        colour.setRGB(r / 255, g / 255, bl / 255, THREE.SRGBColorSpace);
+        const row = positions.length / 6;
+        positions.push(a.x, a.y, a.z, b.x, b.y, b.z);
+        colours.push(colour.r, colour.g, colour.b, colour.r, colour.g, colour.b);
+        if (row > 0) index.push((row - 1) * 2, row * 2, row * 2 + 1, (row - 1) * 2, row * 2 + 1, (row - 1) * 2 + 1);
+        left.push(a); right.push(b);
+      }
+      if (left.length < 2) { invalidate(); return; }
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+      geometry.setAttribute("color", new THREE.Float32BufferAttribute(colours, 3));
+      geometry.setIndex(index);
+      // Drawn just in front of a slice it lies in, so the two never fight for the same pixels.
+      const fill = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
+      const edgeColour = token("--sw-cursor", "#1d4ed8");
+      const outline = [...left.slice(1).flatMap((p, i) => [left[i]!, p]), ...right.slice(1).flatMap((p, i) => [right[i]!, p]), left[0]!, right[0]!, left.at(-1)!, right.at(-1)!];
+      const edge = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(outline), new THREE.LineBasicMaterial({ color: edgeColour }));
+      fill.renderOrder = edge.renderOrder = 9;
+      ribbonGroup = new THREE.Group();
+      ribbonGroup.add(fill, edge);
+      scene.add(ribbonGroup);
+      ribbonLabel = label(band.label, right[0]!.clone(), "name", 3, { className: "is-cursor", colour: edgeColour });
+      invalidate();
+    };
     let curtainGroup: THREE.Group | null = null, curtainLabel: ReturnType<typeof label> | null = null;
     // ── The linked depth cursor: one ring, moved along whichever well it is on ─────────────
     const cursorColour = token("--sw-cursor", "#1d4ed8");
@@ -483,14 +537,29 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
     controls.maxDistance = whole.radius * 8;
     controls.minDistance = radius * 6;
 
+    // The opening view: the whole site, or a well interval framed with room around it, looking along the volume's offset axis.
+    const opened = openingRef.current, openWell = opened ? wells.find((entry) => entry.id === opened.wellId) : undefined;
+    let openingView = () => fitTo(whole, home.clone().normalize());
+    if (opened && openWell) {
+      const points: THREE.Vector3[] = [];
+      for (let md = opened.topMdM; md <= opened.baseMdM; md += Math.max(1, (opened.baseMdM - opened.topMdM) / 40)) { const p = pointAtMd(openWell, md); if (p) points.push(at(...p)); }
+      if (points.length) {
+        const sphere = new THREE.Box3().setFromPoints(points).getBoundingSphere(new THREE.Sphere());
+        sphere.radius = Math.max(sphere.radius * 1.15, radius * 30);
+        openingView = () => fitTo(sphere, new THREE.Vector3(seismic ? cosA : 0, 0.32, seismic ? sinA : 1).normalize());
+      }
+    }
+    // Until the camera is first moved by hand, the opening view is fitted again as the stage settles (a tile opening, say).
+    let settling = true;
+    controls.addEventListener("start", () => { settling = false; });
     function resize() {
       const width = Math.max(1, stage.clientWidth), height = Math.max(1, stage.clientHeight);
       view.aspect = width / height; view.updateProjectionMatrix();
       renderer.setSize(width, height);
+      if (settling) openingView();
       invalidate();
     }
     resize();
-    fitTo(whole, home.clone().normalize());
     const observer = new ResizeObserver(resize);
     observer.observe(element);
     controls.addEventListener("change", invalidate);
@@ -624,6 +693,8 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
       },
       style(map, nextGain) {
         if (!seismic || !lutBytes || !lutTexture) return;
+        ribbonMap = map;
+        if (ribbonBand) drawRibbon();
         for (let i = 0; i < 256; i++) { const [r, g, b] = seismicColour(map, i / 127.5 - 1); lutBytes.set([r, g, b, 255], i * 4); }
         lutTexture.needsUpdate = true;
         // At gain 1 colour saturates at the clip amplitude, the 2D section's default.
@@ -671,6 +742,7 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
         }
         invalidate();
       },
+      ribbon(band) { ribbonBand = band; drawRibbon(); },
       highlight(band) {
         if (highlightMesh) { scene.remove(highlightMesh); highlightMesh.geometry.dispose(); (highlightMesh.material as THREE.Material).dispose(); highlightMesh = null; }
         const well = band ? wells.find((entry) => entry.id === band.wellId) : undefined;
@@ -715,6 +787,7 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
       renderer.domElement.removeEventListener("pointerdown", press, { capture: true });
       renderer.domElement.removeEventListener("pointerup", release);
       if (highlightMesh) { highlightMesh.geometry.dispose(); (highlightMesh.material as THREE.Material).dispose(); }
+      clearRibbon();
       labels.dispose();
       for (const item of disposables) item.dispose();
       started.dispose(); renderer.domElement.remove();
@@ -730,6 +803,7 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
   useEffect(() => { if (ready) engine.current?.cursor(cursor); }, [ready, cursor?.wellId, cursor?.mdM]);
   useEffect(() => { if (ready) engine.current?.curtain(curtain); }, [ready, curtain?.from[0], curtain?.from[1], curtain?.to[0], curtain?.to[1], curtain?.baseM, curtain?.label]);
   useEffect(() => { if (ready) engine.current?.highlight(highlight); }, [ready, highlight?.wellId, highlight?.topMdM, highlight?.baseMdM, highlight?.color]);
+  useEffect(() => { if (ready) engine.current?.ribbon(ribbon); }, [ready, ribbon]);
   const reachKey = `${reach ? Object.entries(reach).map(([id, md]) => `${id}:${md}`).join("|") : ""}/${hiddenMarkers ? Object.entries(hiddenMarkers).map(([id, labels]) => `${id}:${labels.join(",")}`).join("|") : ""}`;
   useEffect(() => { if (ready) engine.current?.reach(reachRef.current.reach, reachRef.current.hiddenMarkers); }, [ready, reachKey]);
 
