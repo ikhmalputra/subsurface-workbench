@@ -1,0 +1,1 @@
+var e={"0.125":`⅛`,"0.25":`¼`,"0.375":`⅜`,"0.5":`½`,"0.625":`⅝`,"0.75":`¾`,"0.875":`⅞`};function t(t){if(t==null||!t)return`—`;let n=Math.floor(t),r=e[String(Number((t-n).toFixed(3)))];return r?`${n||``}${r}″`:`${Number(t.toFixed(3))}″`}function n(e){return`${Math.round(e).toLocaleString(`en-US`)} m`}export{t as n,n as t};
