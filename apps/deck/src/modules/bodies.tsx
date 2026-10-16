@@ -1,10 +1,10 @@
-import { Component, type ErrorInfo, type ReactNode } from "react";
+import { Component, lazy, Suspense, type ErrorInfo, type ReactNode } from "react";
 import { TriangleAlert } from "lucide-react";
 import { motion } from "motion/react";
 import { useDeck } from "../deck/store.ts";
 import { DrillingRecord } from "./DrillingModules.tsx";
 import { Logs, Seismic } from "./DataModules.tsx";
-import { Empty } from "./Empty.tsx";
+import { Empty, Loading } from "./Empty.tsx";
 import { Globe } from "./Globe.tsx";
 import type { ModuleId } from "./registry.ts";
 import { missing, moduleById, pointsToDesigner, pointsToEditor } from "./registry.ts";
@@ -20,15 +20,21 @@ import { Decline } from "./Decline.tsx";
 import { TorqueDrag } from "./TorqueDrag.tsx";
 import { Barriers } from "./Barriers.tsx";
 import { Compare } from "./Compare.tsx";
-import { Correlation } from "./Correlation.tsx";
-import { WellTie } from "./WellTie.tsx";
-import { Horizons } from "./Horizons.tsx";
 import { Designer } from "./Designer.tsx";
 import { WellEditor } from "./WellEditor.tsx";
 import { useRecordsVersion } from "../data/records.ts";
 import { useImportedLogs } from "../data/logs.ts";
 import { useDesignState } from "../data/design.ts";
 import { actions } from "../deck/store.ts";
+
+/** A heavy module fetched the first time its tile opens, so the deck starts without it. */
+function later(load: () => Promise<{ default: () => ReactNode }>, what: string) {
+  const View = lazy(load);
+  return () => <Suspense fallback={<Loading>{`Loading ${what}…`}</Loading>}><View /></Suspense>;
+}
+const Correlation = later(() => import("./Correlation.tsx").then((module) => ({ default: module.Correlation })), "the correlation");
+const WellTie = later(() => import("./WellTie.tsx").then((module) => ({ default: module.WellTie })), "the well tie");
+const Horizons = later(() => import("./Horizons.tsx").then((module) => ({ default: module.Horizons })), "horizon picking");
 
 const views: Readonly<Record<ModuleId, () => ReactNode>> = {
   globe: Globe, site3d: Site3D,
