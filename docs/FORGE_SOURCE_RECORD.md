@@ -20,7 +20,7 @@
    https://gdr.openei.org/submissions/1216.
 
 All records identify CC BY 4.0, https://creativecommons.org/licenses/by/4.0/.
-The adapted fixture retains attribution and licence. Original SDK code is MIT.
+The adapted fixture retains attribution and licence. Original SDK code is proprietary (see LICENSE).
 
 ## Directly Reported Records
 

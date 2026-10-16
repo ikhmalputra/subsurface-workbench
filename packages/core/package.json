@@ -2,7 +2,7 @@
   "name": "@ikhmalputra/subsurface-core",
   "version": "0.0.1",
   "type": "module",
-  "license": "MIT",
+  "license": "UNLICENSED",
   "author": "Ikhmal Putra Manan",
   "sideEffects": false,
   "dependencies": {
