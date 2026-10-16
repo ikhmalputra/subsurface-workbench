@@ -119,6 +119,11 @@ Each is a real tool on real data, with no overlap with what is built.
    Faults followed the same day: sticks picked on inlines, joined into a surface; a horizon stops
    at a fault and is seeded again across it, which gives the throw (median step across its cut-offs)
    and the gap it opens on the structure map.
+10. ~~**Maps & probabilistic volumetrics**~~ — *built* 17 Oct 2026 on the FORCE 2020 wells: a
+   zone's top and thickness mapped between the wells by thin-plate spline; a contact you set makes
+   a closure from the crest you click, up to its spill; N/G, porosity and pay Sw from each well's
+   logs set the ranges; 4,000 Monte Carlo runs give P90/P50/P10 with a tornado. FORCE has no fluid
+   contacts, so the contact is a what-if.
 
 Shaly-sand saturation, permeability and Monte Carlo extend the clastic petrophysics, which still
 runs on synthetic logs; FORCE 2020 would give it real ones. Hydraulics with rheology waits for a source with Fann readings.

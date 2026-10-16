@@ -35,11 +35,12 @@ function later(load: () => Promise<{ default: () => ReactNode }>, what: string) 
 const Correlation = later(() => import("./Correlation.tsx").then((module) => ({ default: module.Correlation })), "the correlation");
 const WellTie = later(() => import("./WellTie.tsx").then((module) => ({ default: module.WellTie })), "the well tie");
 const Horizons = later(() => import("./Horizons.tsx").then((module) => ({ default: module.Horizons })), "horizon picking");
+const Volumetrics = later(() => import("./Volumetrics.tsx").then((module) => ({ default: module.Volumetrics })), "the maps and volumes");
 
 const views: Readonly<Record<ModuleId, () => ReactNode>> = {
   globe: Globe, site3d: Site3D,
   section: Section, well3d: Well3D, designer: Designer, editor: WellEditor, construction: Construction, compare: Compare, cutaway: Cutaway, plan: Plan, profile: Profile, anticollision: AntiCollision,
-  logs: Logs, seismic: Seismic, curtain: Curtain, correlate: Correlation, tie: WellTie, horizons: Horizons,
+  logs: Logs, seismic: Seismic, curtain: Curtain, correlate: Correlation, tie: WellTie, horizons: Horizons, volumetrics: Volumetrics,
   drilling: DrillingRecord, torquedrag: TorqueDrag,
   petro: Petrophysics,
   strings: Strings, window: PressureWindow, kick: KickTolerance, cement: Cement, hydraulics: Hydraulics, geomech: Geomechanics, barriers: Barriers, decline: Decline,

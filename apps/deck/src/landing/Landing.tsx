@@ -1,6 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
-  Activity, AlignHorizontalSpaceAround, Anchor, AudioLines, ArrowRight, AudioWaveform, Box, CalendarDays, Columns3, Command, Compass, Cylinder, Droplets, FilePen, Gauge, GitCompareArrows, Globe2, Layers, Layers2, Layers3,
+  Activity, AlignHorizontalSpaceAround, Anchor, AudioLines, ArrowRight, AudioWaveform, Box, CalendarDays, Columns3, Command, Compass, Cylinder, Droplets, FilePen, Gauge, GitCompareArrows, Globe2, Layers, Map as MapIcon, Layers2, Layers3,
   ListTree, Mountain, MousePointerClick, PencilRuler, Plus, Radar, Rotate3d, ScatterChart, ShieldAlert, ShieldCheck, Slice, TrendingDown, Waves,
 } from "lucide-react";
 import { Showcase3D } from "./Showcase3D.tsx";
@@ -23,6 +23,7 @@ const DISCIPLINES: readonly Discipline[] = [
     { title: "Correlation", icon: AlignHorizontalSpaceAround, blurb: "A field's wells side by side on their logs, the Directorate's tops joined from well to well. Flatten on any top, and pick your own beside theirs.", on: ["NorthSea"] },
     { title: "Well tie", icon: AudioLines, blurb: "The seismic a well's sonic and density predict, against the PSDM at FORGE 58-32: drag the synthetic onto its event, fit the shift and stretch, read the correlation.", on: ["FORGE"] },
     { title: "Horizons & faults", icon: Layers, blurb: "Click a reflector on a slice in 3D: it is tracked through FORGE's PSDM into a depth-coloured surface. Pick faults as sticks; the horizon stops at them and shows the throw.", on: ["FORGE"] },
+    { title: "Maps & volumetrics", icon: MapIcon, blurb: "Map a reservoir zone between the North Sea wells, set a contact, and get P90, P50 and P10 in-place volumes from the wells' own porosity, net to gross and saturation.", on: ["NorthSea"] },
     { title: "Seismic section", icon: AudioWaveform, blurb: "The PSDM along the well, or the inline and crossline you move in 3D, with the wells and formation tops drawn on it.", on: ["FORGE"] },
     { title: "Section line", icon: Slice, blurb: "Draw a line on the globe: the seismic along it, with every well that passes near.", on: ["FORGE"] },
     { title: "Globe", icon: Globe2, blurb: "Every located well and field on an offline globe; fly to a site or draw a section across it.", on: ["Anywhere"] },
