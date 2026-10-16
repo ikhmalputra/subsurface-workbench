@@ -42,6 +42,7 @@ pnpm test                 # core
 pnpm test:render-adapters # React views rendered to static markup
 pnpm test:asset
 pnpm test:packages        # packs both packages and renders them in a clean consumer
+pnpm test:budget          # after pnpm build: initial JS per page, largest chunk, worker, data files (gzip)
 pnpm test:deck            # the deck's grid rules, survey pasting, the landing page's module list,
                           # and the Developers page's API reference and examples against the packages
 ```
@@ -107,3 +108,12 @@ textbook calculations without professional approval.
 Source values, units, report pages and hashes are recorded in
 [the FORGE source record](docs/FORGE_SOURCE_RECORD.md); planned tools are listed in
 [the domain study](docs/SUBSURFACE_DOMAIN_STUDY.md).
+
+## Performance
+
+Each deck module is its own chunk, fetched when its tile first opens (the rest are fetched in the
+background once the deck is idle), and parsing and the heavier models (LAS, SEG-Y, the
+geomechanics earth model, torque and drag) run in a compute worker (`apps/deck/src/compute/`).
+Budgets live in `tools/budgets.mjs`: `pnpm test:budget` checks sizes from the build, and
+`pnpm bench:deck` checks startup and main-thread blocking per module in a browser (needs
+Playwright; see the script).

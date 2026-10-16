@@ -2,11 +2,12 @@ import { useEffect, useState } from "react";
 
 /**
  * Files the deck reads from its own origin, fetched and parsed once per URL however many modules
- * ask. A failed load is not kept, so asking again can succeed.
+ * ask. A failed load is not kept, so asking again can succeed. `parse` may hand the work to the
+ * compute worker (return its promise), so a large file is decoded off the main thread.
  */
 const requests = new Map<string, Promise<unknown>>();
 
-export function useFetched<T>(url: string | null, parse: (buffer: ArrayBuffer) => T): { readonly value: T | null; readonly error: string | null; readonly loading: boolean } {
+export function useFetched<T>(url: string | null, parse: (buffer: ArrayBuffer) => T | Promise<T>): { readonly value: T | null; readonly error: string | null; readonly loading: boolean } {
   const [state, setState] = useState<{ url: string; value: T | null; error: string | null } | null>(null);
   useEffect(() => {
     if (!url) return;

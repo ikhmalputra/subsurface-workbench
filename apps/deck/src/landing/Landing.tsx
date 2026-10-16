@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import {
+import { Drill,
   Activity, AlignHorizontalSpaceAround, Anchor, AudioLines, ArrowRight, AudioWaveform, Box, CalendarDays, Columns3, Command, Compass, Cylinder, Droplets, FilePen, Gauge, GitCompareArrows, Globe2, Layers, Map as MapIcon, Layers2, Layers3,
   ListTree, Mountain, MousePointerClick, PencilRuler, Plus, Radar, Rotate3d, ScatterChart, ShieldAlert, ShieldCheck, Slice, TrendingDown, Waves,
 } from "lucide-react";
@@ -38,6 +38,7 @@ const DISCIPLINES: readonly Discipline[] = [
   ] },
   { name: "Drilling", line: "Getting the hole to the target, safely, and what happened on the way.", tools: [
     { title: "Drilling record", icon: CalendarDays, blurb: "Days against depth, hole sections, runs and the daily reports.", on: ["FORGE"] },
+    { title: "Live drilling", icon: Drill, blurb: "Drill a planned well in simulation, second by second: work the rig, catch the kick, shut in and kill it, or lose the well.", on: ["Designs"] },
     { title: "Torque & drag", icon: Anchor, blurb: "Soft-string hookload and torque, calibrated on the daily reports' string weights.", on: ["FORGE"] },
     { title: "Hydraulics", icon: Waves, blurb: "Bit pressure drop, jet velocity and annular velocity, with flow and nozzles you set.", on: ["Designs"] },
     { title: "Kick tolerance", icon: ShieldAlert, blurb: "The influx each shoe can take while drilling on.", on: ["Designs"] },
