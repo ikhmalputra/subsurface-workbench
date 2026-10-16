@@ -9,8 +9,11 @@ export interface Pick { readonly name: string; readonly md: number }
 const KEY = "deck-picks-v1";
 let picks: Readonly<Record<string, readonly Pick[]>> = (() => {
   try {
-    const value = JSON.parse(localStorage.getItem(KEY) ?? "{}") as Record<string, Pick[]>;
-    return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    const value = JSON.parse(localStorage.getItem(KEY) ?? "{}") as Record<string, unknown>;
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+    // Only well entries that are lists of named depths: anything else is dropped rather than crash every load.
+    const ok = (pick: unknown): pick is Pick => !!pick && typeof (pick as Pick).name === "string" && typeof (pick as Pick).md === "number" && Number.isFinite((pick as Pick).md);
+    return Object.fromEntries(Object.entries(value).filter(([, list]) => Array.isArray(list)).map(([id, list]) => [id, (list as unknown[]).filter(ok)]));
   } catch { return {}; }
 })();
 const listeners = new Set<() => void>();

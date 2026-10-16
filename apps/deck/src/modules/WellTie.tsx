@@ -147,21 +147,22 @@ function TieScene({ site, volume, logs, syn, pScale, fit, windowM, hoverMd }: {
 }) {
   const ribbon = useMemo(() => {
     const md: number[] = [], values: number[] = [];
+    let first = Infinity, last = -Infinity;
     for (let k = 0; k < syn.length; k += 2) {
       const moved = placed(logs.depth[k]!, logs.depth[0]!, fit) - logs.depth[k]!;
       const shown = placed(logs.depth[k]!, logs.depth[0]!, fit), inside = shown >= windowM[0] && shown <= windowM[1];
       md.push(logs.md[k]! + moved); values.push(Math.max(-1, Math.min(1, syn[k]! / pScale)) * (inside ? 1 : 0.3));
+      if (inside) { first = Math.min(first, logs.md[k]! + moved); last = Math.max(last, logs.md[k]! + moved); }
     }
-    return { wellId: "58-32", mdM: md, values, halfWidthM: 100, colorMap: "seismic" as const, label: `Synthetic · ${fit.shiftM > 0 ? "+" : ""}${fmt(fit.shiftM)} m` };
+    return { wellId: "58-32", mdM: md, values, halfWidthM: 100, colorMap: "seismic" as const, label: `Synthetic · ${fit.shiftM > 0 ? "+" : ""}${fmt(fit.shiftM)} m`, window: Number.isFinite(first) ? [first, last] as const : null };
   }, [syn, logs, fit, pScale, windowM]);
   const slices = useMemo(() => ({ inline: frame.offsetM, crossline: frame.alongM, depth: null }), []);
   // The seismic shows the contact itself; FORGE's planar granite top is conceptual, and would hide the band below it.
   const terrain = useForgeTerrain(true);
   const references = useMemo(() => withoutFlatGround(site.surfaces.filter((surface) => surface.role === "reference"), terrain), [site, terrain]);
-  const toMd = (depth: number) => depth - (DATUM - well.depthZeroElevationM);
   const cursor = useMemo(() => hoverMd === null ? null : { wellId: "58-32", mdM: hoverMd }, [hoverMd]);
-  // The camera opens on the tie: the logged part of 58-32 around the window, not the whole site.
-  const opening = useMemo(() => ({ wellId: "58-32", topMdM: toMd(windowM[0]) - 150, baseMdM: toMd(windowM[1]) + 150 }), []);
+  // The camera opens on the tie: the band's own window down 58-32, with room around it (read off the band, so the two cannot disagree).
+  const opening = useMemo(() => ribbon.window ? { wellId: "58-32", topMdM: ribbon.window[0] - 120, baseMdM: ribbon.window[1] + 120 } : null, []);
   return <Suspense fallback={<Loading>Starting the 3D site…</Loading>}>
     <SiteScene title="The tie at 58-32" depthLabel={site.depthLabel} originLabel={site.originLabel} wells={site.wells} surfaces={references}
       seismic={volume} seismicClip={forgeSeismicSection.section.p99AbsAmplitude} selectedWellId="58-32" slices={slices}

@@ -83,7 +83,9 @@ export function Horizons() {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape" && (arming || across || newFault) && (horizons.length || mode === "fault")) { event.preventDefault(); setArming(false); setAcross(false); setNewFault(false); }
-      if (mode === "fault" && fault && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") { event.preventDefault(); undoStickPoint(fault.id); }
+      // ⌘Z undoes a stick point, except while typing, where it is the field's own undo.
+      const typing = event.target instanceof HTMLElement && (event.target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(event.target.tagName));
+      if (!typing && mode === "fault" && fault && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") { event.preventDefault(); undoStickPoint(fault.id); }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
@@ -129,7 +131,7 @@ export function Horizons() {
       <aside className="tie-side hz-side">
         <HorizonList horizons={horizons} grids={grids} active={active} onActive={(id) => { setActive(id); if (mode === "fault") switchMode("horizon"); }} />
         {faults.length > 0 && <FaultList faults={faults} active={mode === "fault" ? activeFault : null} horizon={current} grid={grid} onActive={(id) => { setActiveFault(id); setNewFault(false); if (mode !== "fault") switchMode("fault"); }} />}
-        {cube && grid && current && <StructureMap horizon={current} grid={grid} slices={slices} faults={faults} />}
+        {cube && grid && current && range && Number.isFinite(range.lo) && <StructureMap horizon={current} grid={grid} slices={slices} faults={faults} />}
         {cube && <Section cube={cube} offsetM={slices.inline ?? 0} horizons={horizons} grids={grids} active={active} faults={faults} activeFault={mode === "fault" ? activeFault : null} onPick={pick} />}
       </aside>
     </div>
@@ -193,7 +195,7 @@ function StructureMap({ horizon, grid, slices, faults }: { readonly horizon: Hor
       smooth[o * cut.alongCount + a] = sum / n;
     }
     for (let o = 0; o < cut.offsetCount; o++) for (let a = 0; a < cut.alongCount; a++) {
-      const s = grid[o * cut.alongCount + a]!, at = ((cut.offsetCount - 1 - o) * cut.alongCount + a) * 4;
+      const s = grid[o * cut.alongCount + a]!, at = (o * cut.alongCount + a) * 4;
       if (Number.isNaN(s)) { image.data[at + 3] = 0; continue; }
       const depth = s * cut.sampleIntervalM, [r, g, b] = depthColour((depth - lo) / Math.max(1, hi - lo));
       // Contours every 25 m: a darker line where the depth crosses one.
@@ -205,9 +207,9 @@ function StructureMap({ horizon, grid, slices, faults }: { readonly horizon: Hor
     }
     context.putImageData(image, 0, 0);
   }, [grid, lo, hi]);
-  // Map frame: along to the right, offset up, as the volume's grid lies; the arrow shows where north is.
+  // Map frame: along to the right and offset down, so the map is a true plan (offset runs 90° clockwise of along); the arrow shows north.
   const x = (along: number) => (along - cut.alongFromM + cut.spacingM / 2) / (cut.alongCount * cut.spacingM) * W;
-  const y = (offset: number) => H - (offset - cut.offsetFromM + cut.spacingM / 2) / (cut.offsetCount * cut.spacingM) * H;
+  const y = (offset: number) => (offset - cut.offsetFromM + cut.spacingM / 2) / (cut.offsetCount * cut.spacingM) * H;
   const az = cut.azimuthDeg * Math.PI / 180;
   const wellAt = (e: number, n: number) => ({ along: e * Math.sin(az) + n * Math.cos(az), offset: e * Math.cos(az) - n * Math.sin(az) });
   const heads = [{ id: "16A", e: 0, n: 0 }, ...forgeNeighbours.map((well) => ({ id: well.label.split(" ")[0]!, e: well.eastingM - forgeSeismicSection.wellhead.eastingM, n: well.northingM - forgeSeismicSection.wellhead.northingM }))];
@@ -232,7 +234,7 @@ function StructureMap({ horizon, grid, slices, faults }: { readonly horizon: Hor
           </g>;
         })}
         {heads.map((head) => { const p = wellAt(head.e, head.n); return <g key={head.id} transform={`translate(${x(p.along)},${y(p.offset)})`}><circle r={4} /><text x={6} y={-5}>{head.id}</text></g>; })}
-        <g transform={`translate(${W - 16},18) rotate(${cut.azimuthDeg + 90})`} className="hz-map-north"><path d="M0,-9 L4,4 L0,1 L-4,4 Z" /></g>
+        <g transform={`translate(${W - 16},18) rotate(${90 - cut.azimuthDeg})`} className="hz-map-north"><path d="M0,-9 L4,4 L0,1 L-4,4 Z" /></g>
       </svg>
     </div>
     <div className="hz-ramp"><span>{fmt(lo)} m</span><i style={{ background: `linear-gradient(90deg, ${[0, 0.2, 0.4, 0.6, 0.8, 1].map((t) => `rgb(${depthColour(t).map((v) => Math.round(v * 255)).join(",")})`).join(", ")})` }} /><span>{fmt(hi)} m below datum</span></div>

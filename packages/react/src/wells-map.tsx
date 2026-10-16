@@ -129,7 +129,7 @@ export function WellsMap({ sites, workerUrl, basemapUrl, basemapAttribution, ima
       };
       if (imageryUrl) {
         if (!imageryAttribution?.trim()) throw new TypeError("World imagery requires attribution.");
-        style.sources.imagery = { type: "image", url: localUrl(imageryUrl), coordinates: [[-180, 85.0511], [180, 85.0511], [180, -85.0511], [-180, -85.0511]] };
+        style.sources.imagery = { type: "image", url: localUrl(imageryUrl), coordinates: [[-180, 85.0511], [180, 85.0511], [180, -85.0511], [-180, -85.0511]], ...(basemapUrl ? {} : { attribution: imageryAttribution }) } as typeof style.sources[string];
         style.layers.push({ id: "imagery", type: "raster", source: "imagery", paint: { "raster-opacity": ["interpolate", ["linear"], ["zoom"], 4, 1, 9, 0.35], "raster-fade-duration": 0 } });
       }
       if (basemapUrl) {
@@ -353,6 +353,6 @@ export function WellsMap({ sites, workerUrl, basemapUrl, basemapAttribution, ima
     </div>
     {error && <p role="alert" className="sw-wells-map-error">{error}</p>}
     {!ready && !error && <p role="status" className="sw-wells-map-status">Starting the map…</p>}
-    <p className="sw-wells-map-cursor" aria-live="off">{cursor ? `${cursor} · WGS84` : basemapUrl ? `Basemap: ${basemapAttribution}${imageryUrl ? ` · imagery ${imageryAttribution}` : ""}` : "No basemap supplied: graticule only"}</p>
+    <p className="sw-wells-map-cursor" aria-live="off">{cursor ? `${cursor} · WGS84` : basemapUrl ? `Basemap: ${basemapAttribution}${imageryUrl ? ` · imagery ${imageryAttribution}` : ""}` : imageryUrl ? `Imagery: ${imageryAttribution}` : "No basemap supplied: graticule only"}</p>
   </section>;
 }

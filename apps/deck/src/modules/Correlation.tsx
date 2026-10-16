@@ -29,7 +29,16 @@ const TRACK_NAME: Readonly<Record<Track, string>> = { res: "Resistivity", dn: "D
 interface Setup { readonly ids: readonly string[]; readonly flatten: string | null; readonly track: Track; readonly spacing: Spacing; readonly shown: readonly string[]; readonly view?: "panel" | "3d" }
 const reduceMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-function readSetups(): Record<string, Setup> { try { const value = JSON.parse(localStorage.getItem(KEY) ?? "{}") as Record<string, Setup>; return value && typeof value === "object" ? value : {}; } catch { return {}; } }
+/** Stored sections, each kept only if it still has the shape this code reads: a bad one is dropped rather than crash the module on every load. */
+function readSetups(): Record<string, Setup> {
+  try {
+    const value = JSON.parse(localStorage.getItem(KEY) ?? "{}") as Record<string, Partial<Setup>>;
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+    const strings = (list: unknown) => Array.isArray(list) && list.every((entry) => typeof entry === "string");
+    return Object.fromEntries(Object.entries(value).filter(([, setup]) => setup && strings(setup.ids) && strings(setup.shown) && (setup.flatten === null || typeof setup.flatten === "string")
+      && (["res", "dn", "sonic"] as unknown[]).includes(setup.track) && (["equal", "distance"] as unknown[]).includes(setup.spacing))) as Record<string, Setup>;
+  } catch { return {}; }
+}
 function writeSetup(area: string, setup: Setup) { try { localStorage.setItem(KEY, JSON.stringify({ ...readSetups(), [area]: setup })); } catch { /* not kept */ } }
 
 const distanceKm = (a: ForceWell, b: ForceWell) => a.utm && b.utm ? Math.hypot(a.utm[0] - b.utm[0], a.utm[1] - b.utm[1]) / 1000 : null;
@@ -51,7 +60,7 @@ const strength = (r: number) => { const shown = Math.round(r * 100) / 100; retur
 const topIn = (list: readonly Top[] | undefined, name: string) => list?.find((top) => top.name === name && top.kind === "yours") ?? list?.find((top) => top.name === name);
 
 /** A top on the section: its name, kind and colour, and in how many of the wells it is. */
-interface Entry { readonly name: string; readonly kind: Top["kind"]; readonly colour: string; readonly wells: number; readonly order: number; readonly group: string | null }
+interface Entry { readonly name: string; readonly kind: Top["kind"]; readonly colour: string; readonly wells: number; readonly order: number; readonly group: string | null; readonly yours: boolean }
 
 export function Correlation() {
   const wire = useWire("correlate");
@@ -79,18 +88,19 @@ export function Correlation() {
 
   // Every top on the section, in depth order, each formation under its group.
   const entries = useMemo((): readonly Entry[] => {
-    const byName = new Map<string, { kind: Top["kind"]; colour: string; wells: Set<string>; depths: number[]; group: string | null }>();
+    const byName = new Map<string, { kind: Top["kind"]; colour: string; wells: Set<string>; depths: number[]; group: string | null; yours: boolean }>();
     for (const [id, list] of tops) for (const top of list) {
-      const entry = byName.get(top.name) ?? { kind: top.kind, colour: top.colour, wells: new Set<string>(), depths: [], group: null };
+      const entry = byName.get(top.name) ?? { kind: top.kind, colour: top.colour, wells: new Set<string>(), depths: [], group: null, yours: false };
+      if (top.kind === "yours") entry.yours = true;
       if (top.kind === "group") { entry.kind = "group"; entry.colour = top.colour; }
       if (top.kind === "formation" && !entry.group) entry.group = [...list].filter((other) => other.kind === "group" && other.tvdss <= top.tvdss + 0.01).at(-1)?.name ?? null;
       entry.wells.add(id); entry.depths.push(top.tvdss); byName.set(top.name, entry);
     }
     const median = (values: number[]) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)]!;
-    return [...byName].map(([name, entry]) => ({ name, kind: entry.kind, colour: entry.colour, wells: entry.wells.size, order: median(entry.depths), group: entry.group })).sort((a, b) => a.order - b.order);
+    return [...byName].map(([name, entry]) => ({ name, kind: entry.kind, colour: entry.colour, wells: entry.wells.size, order: median(entry.depths), group: entry.group, yours: entry.yours })).sort((a, b) => a.order - b.order);
   }, [tops]);
-  // Which tops are drawn: every group and your own, and the formations you turn on.
-  const visible = useMemo(() => new Set(entries.filter((entry) => entry.kind !== "formation" || setup.shown.includes(entry.name)).map((entry) => entry.name)), [entries, setup.shown]);
+  // Which tops are drawn: every group, every top you have picked (a formation's too), and the formations you turn on.
+  const visible = useMemo(() => new Set(entries.filter((entry) => entry.kind !== "formation" || entry.yours || setup.shown.includes(entry.name)).map((entry) => entry.name)), [entries, setup.shown]);
   const toggle = (name: string) => setSetup((current) => ({ ...current, shown: current.shown.includes(name) ? current.shown.filter((entry) => entry !== name) : [...current.shown, name] }));
   const flatten = (name: string | null) => setSetup((current) => ({ ...current, flatten: current.flatten === name ? null : name }));
 
@@ -106,13 +116,15 @@ export function Correlation() {
     const reference = here && shown.includes(here) && has(here) ? here : shown.find(has);
     if (!reference) { setSuggestion(null); setSuggestNote(`No well on the section has both ${name} and a GR log to match from.`); return; }
     const refTop = topIn(tops.get(reference.id), name)!;
-    const level = refTop.tvdss - (flattenAt(tops.get(reference.id) ?? [], setup.flatten) ?? 0);
+    // Where the top is expected: relative to the flattening top where both wells have it, else in absolute depth.
+    const refFlat = flattenAt(tops.get(reference.id) ?? [], setup.flatten);
     const found = new Map<string, { md: number; r: number }>();
     for (const well of shown) {
       const gr = logs.get(well.id)?.curves.GR;
       if (well === reference || !gr) continue;
       const own = topIn(tops.get(well.id), name);
-      const expected = own ? own.md : mdAtTvdss(well, level + (flattenAt(tops.get(well.id) ?? [], setup.flatten) ?? 0));
+      const flat = flattenAt(tops.get(well.id) ?? [], setup.flatten);
+      const expected = own ? own.md : mdAtTvdss(well, refFlat !== null && flat !== null ? refTop.tvdss - refFlat + flat : refTop.tvdss);
       const match = matchPick(logs.get(reference.id)!.curves.GR!, sampleAt(reference, refTop.md), gr, sampleAt(well, expected), 30, 80);
       if (match) found.set(well.id, { md: mdOf(well, match.index), r: match.r });
     }
@@ -200,6 +212,8 @@ export function Correlation() {
         onRemove={removeWell} suggestion={suggestion} onAccept={accept} onReject={reject}
         onReorder={(from, to) => setSetup((current) => { const ids = [...current.ids]; const [moved] = ids.splice(from, 1); ids.splice(to, 0, moved!); return { ...current, ids }; })}
         onMove={(id, by) => setSetup((current) => { const ids = [...current.ids]; const i = ids.indexOf(id), j = i + by; if (i < 0 || j < 0 || j >= ids.length) return current; [ids[i], ids[j]] = [ids[j]!, ids[i]!]; return { ...current, ids }; })} />}
+      {/* The legend's swatches use the panel's pattern defs; in 3D the panel is gone, so they come along here. */}
+      {in3d && <svg width={0} height={0} aria-hidden="true" style={{ position: "absolute" }}><LithologyPatterns /></svg>}
       <LithologyLegend codes={[...new Set(shown.flatMap((well) => { const l = logs.get(well.id)?.litho; return l ? [...new Set(l)].filter((code) => code >= 0) : []; }))].sort((a, b) => a - b)} />
       <YourPicks wells={shown} tops={tops} />
       <p className="petro-note">{FORCE_SOURCE}. GR is filled with the competition&apos;s interpreted lithology. Depths are TVD below sea level from the logs&apos; positions{setup.flatten ? `, less each well's ${setup.flatten} depth` : ""}. Bands between wells join the Directorate&apos;s picks for reading; they are not mapped.</p>
@@ -277,15 +291,20 @@ function TopsList({ entries, visible, flattened, focus, armed, wellCount, onFocu
 const RULER = 54, HEAD = 78, TRACKS = 40, GAP = 36, MIN_GAP = 26, BOTTOM = 10, LITHO = 7;
 type Y = ReturnType<typeof scaleLinear<number, number>>;
 
-/** Moves toward a target over 450 ms when asked to, else jumps: the section slides when its datum changes. */
-function useTween(target: readonly number[], animate: boolean): readonly number[] {
+/**
+ * Moves toward a target over 450 ms when asked to, else jumps: the section slides when its datum
+ * changes. `order` names what each value belongs to: when it changes (wells reordered), values jump,
+ * so no column slides from the shift of the well that used to stand there.
+ */
+function useTween(target: readonly number[], animate: boolean, order = ""): readonly number[] {
   const [shown, setShown] = useState(target);
-  const current = useRef(target);
+  const current = useRef(target), lastOrder = useRef(order);
   current.current = shown;
   const key = target.map((value) => Number.isFinite(value) ? value.toFixed(3) : "x").join();
   useEffect(() => {
-    const from = current.current;
-    if (!animate || reduceMotion() || from.length !== target.length) { setShown(target); return; }
+    const from = current.current, reordered = lastOrder.current !== order;
+    lastOrder.current = order;
+    if (!animate || reordered || reduceMotion() || from.length !== target.length) { setShown(target); return; }
     let frame = 0;
     const start = performance.now();
     const step = (now: number) => {
@@ -330,7 +349,7 @@ function Panel({ wells, logs, errors, tops, setup, visible, placeWell, area, wir
   const lastFlatten = useRef(setup.flatten);
   if (lastFlatten.current !== setup.flatten) { lastFlatten.current = setup.flatten; if (view) setView(null); if (!animate) setAnimate(true); }
   const target = view ?? extent;
-  const tweened = useTween([...targetShift, target[0], target[1]], animate);
+  const tweened = useTween([...targetShift, target[0], target[1]], animate, wells.map((well) => well.id).join());
   const shifts = tweened.slice(0, n), domain: readonly [number, number] = [tweened[n]!, tweened[n + 1]!];
   const y = scaleLinear().domain(domain).range([HEAD + TRACKS, height - BOTTOM]);
   const drawn = wells.map((well, i) => ({ well, i, shift: shifts[i]! })).filter((entry) => Number.isFinite(entry.shift));
@@ -425,7 +444,10 @@ function Panel({ wells, logs, errors, tops, setup, visible, placeWell, area, wir
         if (over !== overTop) { setOverTop(over); onFocus(over); }
         if (deckWell && x > RULER) wire.hover(Math.max(0, mdIn(deckIndex, level)));
       }}
-      onPointerLeave={() => { setHover(null); if (overTop) { setOverTop(null); onFocus(null); } wire.hover(null); }}
+      onPointerLeave={() => {
+        // A grab that never became a drag (it is captured once it does) ends when the pointer leaves: released outside, it would otherwise stay stuck.
+        if (reordering.current && !reordering.current.active) setReorder(null);
+        setHover(null); if (overTop) { setOverTop(null); onFocus(null); } wire.hover(null); }}
       onPointerDown={(event) => {
         // A press on a well's header may become a drag along the section; its buttons keep their clicks.
         if ((event.target as Element).closest(".cor-colhead")) {
@@ -750,7 +772,8 @@ function Ghost({ source, gr, top, base, level, x, colW, y, dropped, onClear }: {
   readonly source: ForceWell; readonly gr: Float32Array; readonly top: number; readonly base: number; readonly level: number; readonly x: number; readonly colW: number; readonly y: Y; readonly dropped: boolean; readonly onClear: () => void;
 }) {
   const levels = sampleTvdss(source);
-  const from = sampleAt(source, top), to = sampleAt(source, base);
+  // Only the logged part of the interval: a selection above or below the logs is clipped to them.
+  const from = Math.max(0, Math.min(source.n - 1, sampleAt(source, Math.min(top, base)))), to = Math.max(0, Math.min(source.n - 1, sampleAt(source, Math.max(top, base))));
   const start = levels[from]!;
   const scale = scaleLinear().domain([0, 150]).range([LITHO, Math.floor(colW / 2)]).clamp(true);
   let d = "";

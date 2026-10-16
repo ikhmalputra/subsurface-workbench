@@ -23,7 +23,15 @@ export interface Fault {
 
 const KEY = "deck-faults-v1";
 const COLOURS = ["#ef4444", "#f97316", "#e11d48", "#dc2626"];
-let faults: readonly Fault[] = (() => { try { const value = JSON.parse(localStorage.getItem(KEY) ?? "[]") as Fault[]; return Array.isArray(value) ? value : []; } catch { return []; } })();
+const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+/** A stored fault, if it still has the shape this code reads; anything else is dropped rather than crash every load. */
+function readFault(value: unknown): Fault | null {
+  const f = value as Partial<Fault> | null;
+  if (!f || typeof f.id !== "string" || !Array.isArray(f.sticks)) return null;
+  const sticks = f.sticks.filter((stick) => stick && finite(stick.o) && Array.isArray(stick.points)).map((stick) => ({ o: stick.o, points: (stick.points as readonly StickPoint[]).filter((p) => p && finite(p.a) && finite(p.s)) })).filter((stick) => stick.points.length);
+  return { id: f.id, name: typeof f.name === "string" ? f.name : "Fault", colour: typeof f.colour === "string" ? f.colour : COLOURS[0]!, sticks, history: Array.isArray(f.history) ? f.history.filter((h) => h && finite(h.o) && finite(h.a) && finite(h.s)) : [], visible: f.visible !== false, createdAt: finite(f.createdAt) ? f.createdAt : 0 };
+}
+let faults: readonly Fault[] = (() => { try { const value = JSON.parse(localStorage.getItem(KEY) ?? "[]") as unknown; return Array.isArray(value) ? value.map(readFault).filter((f): f is Fault => f !== null) : []; } catch { return []; } })();
 const listeners = new Set<() => void>();
 function changed(next: readonly Fault[]) {
   faults = next;
@@ -66,10 +74,10 @@ export function undoStickPoint(id: string) {
   }));
 }
 
-/** Every fault's sticks, for tracking against. */
-export const allSticks = (list: readonly Fault[]) => list.filter((fault) => fault.sticks.length).map((fault) => fault.sticks);
+/** The shown faults' sticks, for tracking against: a hidden fault does not cut horizons, so nothing stops at a line you cannot see. */
+export const allSticks = (list: readonly Fault[]) => list.filter((fault) => fault.visible && fault.sticks.length).map((fault) => fault.sticks);
 /** A short key for a set of faults: grids tracked against them are cached by it. */
-export const faultsKey = (list: readonly Fault[]) => list.map((fault) => fault.sticks.map((stick) => `${stick.o}:${stick.points.map((p) => `${p.a.toFixed(1)}/${p.s.toFixed(1)}`).join(",")}`).join(";")).join("|");
+export const faultsKey = (list: readonly Fault[]) => list.filter((fault) => fault.visible).map((fault) => fault.sticks.map((stick) => `${stick.o}:${stick.points.map((p) => `${p.a.toFixed(1)}/${p.s.toFixed(1)}`).join(",")}`).join(";")).join("|");
 
 const cut = forgeSeismicSection.subVolume!;
 /** A point in bin space as the site draws it: east, north and TVD below RKB. */

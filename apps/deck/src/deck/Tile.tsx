@@ -35,7 +35,8 @@ export function Tile({ id, geometry, subtitle, onGhost, children }: { readonly i
   const siteId = useDeck((deck) => deck.siteId);
   const aimedHere = useDeck((deck) => deck.fuseAim?.to === id ? deck.fuseAim : null);
   const fusions = useDeck((deck) => deck.fusions);
-  const fusedHere = Object.entries(fusions).filter(([key]) => key.endsWith(`>${id}`));
+  // A fusion from a module this deck no longer has (an old layout, a link) is skipped, not drawn.
+  const fusedHere = Object.entries(fusions).filter(([key]) => key.endsWith(`>${id}`) && key.split(">")[0]! in moduleById);
 
   useEffect(() => {
     if (!arriving) return;

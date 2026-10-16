@@ -154,7 +154,7 @@ export interface SiteTerrain {
   readonly north: readonly [number, number];
   readonly cols: number;
   readonly rows: number;
-  /** One depth per node, row by row from the north edge; NaN where there is no ground. */
+  /** One depth per cell (taken at its middle; east and north are the cells' outer edges), row by row from the north edge; NaN where there is no ground. */
   readonly depthsM: ArrayLike<number>;
   readonly imageUrl?: string;
   readonly label: string;
@@ -239,6 +239,14 @@ function pointAtMd(well: SiteSceneWell, md: number): [number, number, number] | 
 
 const fmt = (value: number) => Math.round(value).toLocaleString("en-US");
 
+/** Ground images by URL, decoded once: a scene rebuilt (a new surface, another exaggeration) does not fetch and decode them again. */
+const groundImages = new Map<string, Promise<HTMLImageElement>>();
+function groundImage(url: string): Promise<HTMLImageElement> {
+  let image = groundImages.get(url);
+  if (!image) { image = new THREE.ImageLoader().loadAsync(url); groundImages.set(url, image); image.catch(() => groundImages.delete(url)); }
+  return image;
+}
+
 export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = [], seismic = null, seismicClip, seismicNote, selectedWellId = null, onSelectWell, cursor = null, reach = null, hiddenMarkers = null, highlight = null, slices: given = null, onSlicesChange, curtain = null, ribbon = null, frame: opening = null, onSeismicPick, terrain = null, fence = null, initialExaggeration = 1, legend = true, focusSurfaceId = null }: SiteSceneProps) {
   const host = useRef<HTMLDivElement>(null);
   const ids = useId();
@@ -299,6 +307,8 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
     focusSurface(id: string | null): void;
   } | null>(null);
   const openingRef = useRef(opening);
+  /** Where the user left the camera: a rebuild (a new surface, a renamed horizon) keeps it rather than flying back to the opening view. */
+  const keptView = useRef<{ readonly position: THREE.Vector3; readonly target: THREE.Vector3 } | null>(null);
   openingRef.current = opening;
   const fenceRef = useRef(fence);
   fenceRef.current = fence;
@@ -342,7 +352,13 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
     const note = (e: number, n: number, d: number) => { xs.push(e); ys.push(n); ds.push(d); };
     for (const well of wells) for (let i = 0; i < well.mdM.length; i++) note(well.xyz[i * 3]!, well.xyz[i * 3 + 1]!, well.xyz[i * 3 + 2]!);
     for (const surface of surfaces) if (surface.geometry.kind === "tin") for (const p of surface.geometry.points) note(p[0], p[1], p[2]); else ds.push(surface.geometry.depthM);
-    if (terrain) for (const e of terrain.east) for (const n of terrain.north) { xs.push(e); ys.push(n); }
+    if (terrain) {
+      for (const e of terrain.east) for (const n of terrain.north) { xs.push(e); ys.push(n); }
+      // The ground can stand above the datum (negative depth): the frame must reach up to it.
+      let top = Infinity, bottom = -Infinity;
+      for (let i = 0; i < terrain.depthsM.length; i++) { const d = terrain.depthsM[i]!; if (Number.isFinite(d)) { top = Math.min(top, d); bottom = Math.max(bottom, d); } }
+      if (Number.isFinite(top)) ds.push(top, bottom);
+    }
     const azimuth = seismic ? THREE.MathUtils.degToRad(seismic.azimuthDeg) : 0, sinA = Math.sin(azimuth), cosA = Math.cos(azimuth);
     const plan = (along: number, offset: number) => seismic ? [(seismic.originEastingM ?? 0) + along * sinA + offset * cosA, (seismic.originNorthingM ?? 0) + along * cosA - offset * sinA] as const : [0, 0] as const;
     if (seismic) for (const a of [seismic.alongStartM, seismic.alongEndM]) for (const o of [seismic.offsetStartM, seismic.offsetEndM]) { const [e, n] = plan(a, o); note(e, n, seismic.topTvdM); note(e, n, seismic.baseTvdM); }
@@ -442,9 +458,11 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
       for (let i = 0; i < terrain.depthsM.length; i++) if (Number.isFinite(terrain.depthsM[i]!)) { fallback = terrain.depthsM[i]!; break; }
       for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
         const k = r * cols + c, d = terrain.depthsM[k]!;
-        const p = at(terrain.east[0] + (terrain.east[1] - terrain.east[0]) * c / (cols - 1), terrain.north[1] - (terrain.north[1] - terrain.north[0]) * r / (rows - 1), Number.isFinite(d) ? d : fallback);
+        // Each sample is the middle of its cell (the extent is the cells' outer edges), and the image covers the whole extent.
+        const u = (c + 0.5) / cols, v = (r + 0.5) / rows;
+        const p = at(terrain.east[0] + (terrain.east[1] - terrain.east[0]) * u, terrain.north[1] - (terrain.north[1] - terrain.north[0]) * v, Number.isFinite(d) ? d : fallback);
         positions.set([p.x, p.y, p.z], k * 3);
-        uvs.set([c / (cols - 1), 1 - r / (rows - 1)], k * 2);
+        uvs.set([u, 1 - v], k * 2);
       }
       const index: number[] = [];
       for (let r = 0; r + 1 < rows; r++) for (let c = 0; c + 1 < cols; c++) { const k = r * cols + c; index.push(k, k + cols, k + 1, k + 1, k + cols, k + cols + 1); }
@@ -453,8 +471,14 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
       geometry.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
       geometry.setIndex(index);
       geometry.computeVertexNormals();
-      const material = keep(new THREE.MeshStandardMaterial({ color: terrain.imageUrl ? "#ffffff" : "#9a8f78", roughness: 1, metalness: 0, side: THREE.DoubleSide }));
-      if (terrain.imageUrl) new THREE.TextureLoader().load(terrain.imageUrl, (texture) => { if (dead) { texture.dispose(); return; } texture.colorSpace = THREE.SRGBColorSpace; texture.anisotropy = 8; material.map = keep(texture); material.needsUpdate = true; invalidate(); });
+      // Earth-coloured until the image arrives (white would flash); the image is decoded once per page and reused by every rebuild.
+      const material = keep(new THREE.MeshStandardMaterial({ color: "#9a8f78", roughness: 1, metalness: 0, side: THREE.DoubleSide }));
+      if (terrain.imageUrl) groundImage(terrain.imageUrl).then((image) => {
+        if (dead) return;
+        const texture = keep(new THREE.Texture(image));
+        texture.colorSpace = THREE.SRGBColorSpace; texture.anisotropy = 8; texture.needsUpdate = true;
+        material.map = texture; material.color.set("#ffffff"); material.needsUpdate = true; invalidate();
+      }, () => { /* no image: the ground stays plain */ });
       const ground = new THREE.Mesh(geometry, material);
       ground.renderOrder = 1;
       groups.reference.add(ground);
@@ -771,8 +795,15 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
       openingView = () => fitTo(sphere, facing.clone());
     }
     // Until the camera is first moved by hand, the opening view is fitted again as the stage settles (a tile opening, say).
-    let settling = true;
+    // Once it has been, a rebuilt scene opens where the user left it.
+    let settling = !keptView.current;
+    if (keptView.current) {
+      view.position.copy(keptView.current.position); controls.target.copy(keptView.current.target);
+      const distance = view.position.distanceTo(controls.target);
+      view.near = distance / 200; view.far = distance * 20; view.updateProjectionMatrix(); controls.update();
+    }
     controls.addEventListener("start", () => { settling = false; });
+    controls.addEventListener("change", () => { if (!settling) keptView.current = { position: view.position.clone(), target: controls.target.clone() }; });
     function resize() {
       const width = Math.max(1, stage.clientWidth), height = Math.max(1, stage.clientHeight);
       view.aspect = width / height; view.updateProjectionMatrix();

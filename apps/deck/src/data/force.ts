@@ -106,12 +106,14 @@ export function forceSite(areaId: string): WorldSite | null {
     well.survey.forEach(([, e, n, tvdss], i) => { xyz[i * 3] = well.utm![0] + e - ox; xyz[i * 3 + 1] = well.utm![1] + n - oy; xyz[i * 3 + 2] = tvdss; });
     return { id: busId(well), label: well.name, provenance: "documented", xyz, mdM: well.survey.map((station) => station[0]), markers: well.groups.map((top) => ({ mdM: top.md, label: top.name })) };
   });
+  // East and north interpolated between the stations either side, as the depth is: on a deviated well both come from one place on the path.
   const at = (well: ForceWell, md: number): [number, number, number] => {
     const s = well.survey;
     let i = s.findIndex((station) => station[0] >= md);
     if (i < 0) i = s.length - 1;
-    const station = s[Math.max(0, i)]!;
-    return [well.utm![0] + station[1] - ox, well.utm![1] + station[2] - oy, tvdssAt(well, md)];
+    const b = s[Math.max(0, i)]!, a = s[Math.max(0, i - 1)]!;
+    const t = b[0] > a[0] ? Math.min(1, Math.max(0, (md - a[0]) / (b[0] - a[0]))) : 0;
+    return [well.utm![0] + a[1] + (b[1] - a[1]) * t - ox, well.utm![1] + a[2] + (b[2] - a[2]) * t - oy, tvdssAt(well, md)];
   };
   const names = [...new Set(wells.flatMap((well) => well.groups.map((top) => top.name)))];
   const surfaces: SiteSceneSurface[] = [

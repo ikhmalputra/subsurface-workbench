@@ -75,6 +75,11 @@ export function describeDeck(shared: SharedDeck, componentName: (id: string) => 
   if (shared.whatIf) rows.push({ label: "What-if", value: `${shared.whatIf.label}, not applied` });
   if (shared.carried) rows.push({ label: "Your well", value: shared.carried.kind === "design" ? `${wellName(shared.carried)}, the whole design` : shared.carried.kind === "recorded" ? `${wellName(shared.carried)}, its survey, tops and construction` : `your edits to ${wellName(shared.carried)}` });
   const left: string[] = ["The 3D camera angle: each view opens on its own default"];
+  // Interpretation kept in this browser: the link opens the tiles, not what was picked in them.
+  const tiles = Object.keys(shared.tiles);
+  if (tiles.includes("horizons")) left.push("Your horizons and faults: they stay in this browser");
+  if (tiles.includes("correlate")) left.push("Your correlation section and picked tops: they stay in this browser");
+  if (tiles.includes("volumetrics")) left.push("Your zone, contact and ranges in Maps & volumetrics: they stay in this browser");
   const wellId = shared.site ? wellIdFor(shared.site.id, shared.site.well) : null;
   if (wellId && importedLogs(wellId).length) left.unshift("Imported LAS logs: send the files with the link");
   return { rows, left };
@@ -93,16 +98,26 @@ function receiveWell(shared: SharedDeck, notes: string[]): { siteId: string | nu
     if (match) return { siteId: match.record.siteId, wellId: null };
     // The example as it ships needs nothing carried; an edited example opens beside this deck's own.
     if (carried.builtIn && same(carried.value.brief, kestrel.brief)) return { siteId: "kestrel", wellId: null };
-    const record = addDesign(shown as DesignValue);
-    notes.push(`${wellName({ ...carried, value: shown as DesignValue })} was added to your planned wells.`);
-    return { siteId: record.siteId, wellId: null };
+    try {
+      const record = addDesign(shown as DesignValue);
+      notes.push(`${wellName({ ...carried, value: shown as DesignValue })} was added to your planned wells.`);
+      return { siteId: record.siteId, wellId: null };
+    } catch (error) {
+      notes.push(`Its planned well could not be added (${error instanceof Error ? error.message : "it is incomplete"}), so it was left out.`);
+      return { siteId: null, wellId: null };
+    }
   }
   if (carried.kind === "recorded") {
     const match = recordedEntries().find((entry) => same(entry.entry.history.getState().committed, carried.value));
     if (match) return { siteId: match.entry.siteId, wellId: null };
-    const entry = addRecordedWell(carried.value);
-    notes.push(`${wellName(carried)} was added to your wells.`);
-    return { siteId: entry.siteId, wellId: null };
+    try {
+      const entry = addRecordedWell(carried.value);
+      notes.push(`${wellName(carried)} was added to your wells.`);
+      return { siteId: entry.siteId, wellId: null };
+    } catch (error) {
+      notes.push(`Its well could not be added (${error instanceof Error ? error.message : "it is incomplete"}), so it was left out.`);
+      return { siteId: null, wellId: null };
+    }
   }
   // Edits over a well already in the deck: they become this deck's edits, unless it has its own.
   const base = basePlace(carried.siteId, carried.wellId);
@@ -140,7 +155,9 @@ export function applySharedDeck(shared: SharedDeck): string {
   const dropped = Object.keys(shared.tiles).length - Object.keys(known).length;
   const stage = (known[shared.stage as ModuleId] ? shared.stage : Object.keys(known)[0]) as ModuleId | undefined;
   if (stage && isLayout(known, moduleIds, minSizes)) {
-    actions.restore({ tiles: known, stage, sectionLine: shared.sectionLine, fusions: shared.fusions });
+    // Fusions name two modules ("from>to"): one naming a module this deck does not have would break its tile's frame.
+    const fusions = Object.fromEntries(Object.entries(shared.fusions).filter(([key]) => key.split(">").every((id) => (moduleIds as readonly string[]).includes(id))));
+    actions.restore({ tiles: known, stage, sectionLine: shared.sectionLine, fusions });
     if (dropped) notes.push(`${dropped} of its tiles ${dropped === 1 ? "is a module" : "are modules"} this deck does not have.`);
   } else notes.push("Its layout does not fit this deck, so your own was kept.");
   const well = wellIdFor(siteId, wellId), source = "deck:bar";
@@ -156,7 +173,7 @@ export function applySharedDeck(shared: SharedDeck): string {
 }
 
 let opened = "";
-/** Opens the deck in the page's link, once per link; the link is then taken off the address bar. */
+/** Opens the deck in the page's link; the link is then taken off the address bar. The same link pasted again later opens again. */
 export async function openSharedLink(): Promise<void> {
   const payload = sharedPayload(window.location.hash);
   if (!payload || payload === opened) return;
@@ -170,5 +187,8 @@ export async function openSharedLink(): Promise<void> {
     actions.notify(said, said.length > 60 ? 9000 : 5000);
   } catch (error) {
     actions.notify(`This link could not be opened. ${error instanceof Error ? error.message : ""} The deck opened as usual.`, 9000);
+  } finally {
+    // Only a link already being opened is skipped (a second call while it loads); once done, the same link may open again.
+    opened = "";
   }
 }

@@ -30,7 +30,16 @@ export interface Horizon {
 
 const KEY = "deck-horizons-v1";
 const COLOURS = ["#f59e0b", "#22d3ee", "#f472b6", "#a3e635", "#a78bfa", "#fb7185"];
-let horizons: readonly Horizon[] = (() => { try { const value = JSON.parse(localStorage.getItem(KEY) ?? "[]") as Horizon[]; return Array.isArray(value) ? value : []; } catch { return []; } })();
+const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+const seedOk = (s: unknown): s is Horizon["seed"] => !!s && finite((s as Horizon["seed"]).a) && finite((s as Horizon["seed"]).o) && finite((s as Horizon["seed"]).s);
+/** A stored horizon, if it still has the shape this code reads; anything else is dropped rather than crash every load. */
+function readHorizon(value: unknown): Horizon | null {
+  const h = value as Partial<Horizon> | null;
+  if (!h || typeof h.id !== "string" || !seedOk(h.seed)) return null;
+  return { id: h.id, name: typeof h.name === "string" ? h.name : "Horizon", colour: typeof h.colour === "string" ? h.colour : COLOURS[0]!, polarity: h.polarity === "trough" ? "trough" : "peak", seed: h.seed,
+    ...(Array.isArray(h.more) ? { more: h.more.filter(seedOk) } : {}), minCorrelation: finite(h.minCorrelation) ? h.minCorrelation : 0.7, search: finite(h.search) ? h.search : 3, visible: h.visible !== false, createdAt: finite(h.createdAt) ? h.createdAt : 0 };
+}
+let horizons: readonly Horizon[] = (() => { try { const value = JSON.parse(localStorage.getItem(KEY) ?? "[]") as unknown; return Array.isArray(value) ? value.map(readHorizon).filter((h): h is Horizon => h !== null) : []; } catch { return []; } })();
 const listeners = new Set<() => void>();
 function changed(next: readonly Horizon[]) {
   horizons = next;

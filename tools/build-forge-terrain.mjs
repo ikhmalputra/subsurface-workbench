@@ -28,7 +28,7 @@ const tiff = await fromArrayBuffer(demBytes.buffer.slice(demBytes.byteOffset, de
 const image = await tiff.getImage();
 const [raster] = await image.readRasters();
 if (image.getWidth() !== cols || image.getHeight() !== rows) throw new Error(`DEM came back ${image.getWidth()} × ${image.getHeight()}`);
-const decimetres = Int16Array.from(raster, (metres) => Number.isFinite(metres) && metres > -1000 ? Math.round(metres * 10) : -32768);
+const decimetres = Int16Array.from(raster, (metres) => Number.isFinite(metres) && metres > -1000 && metres < 3276 ? Math.round(metres * 10) : -32768);
 const imagery = await get(naip);
 if (imagery.length < 20_000) throw new Error(`The imagery came back too small (${imagery.length} bytes): the service may have returned an empty tile.`);
 

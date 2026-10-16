@@ -1268,7 +1268,9 @@ g[data-well] .tie-wiggle { stroke: var(--ink); stroke-width: 1.2; }
 .lith-legend svg { border-radius: 3px; box-shadow: 0 0 0 1px var(--glass-edge); }
 
 /* ---- Material: grain, sheen and depth on the deck and its glass ---- */
-body::after { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 200; background-image: var(--grain); opacity: var(--grain-opacity); mix-blend-mode: overlay; }
+/* Grain sits behind the content, never over it: canvases (seismic, maps, logs) keep their true colours and nothing re-blends while they animate. */
+body::before { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: -1; background-image: var(--grain); opacity: var(--grain-opacity); mix-blend-mode: overlay; }
+.tile::before { content: ""; position: absolute; inset: 0; pointer-events: none; background-image: var(--grain); opacity: var(--grain-opacity); mix-blend-mode: overlay; border-radius: inherit; }
 .tile { background-image: linear-gradient(160deg, var(--sheen) 0%, transparent 32%), linear-gradient(to bottom, transparent 60%, rgba(0, 0, 0, .10)); box-shadow: var(--depth-shadow); }
 .tile.is-stage { box-shadow: var(--depth-shadow), 0 0 0 1px var(--glass-edge-strong); }
 .tile-head { background: linear-gradient(to bottom, var(--glass-light), transparent); }
@@ -1296,3 +1298,10 @@ body::after { content: ""; position: fixed; inset: 0; pointer-events: none; z-in
 .hz-section-fault path.is-read { stroke-width: 1.6; stroke-dasharray: 5 4; opacity: .75; }
 .hz-section-fault circle { fill: currentColor; stroke: var(--deck-bg); stroke-width: 1.5; }
 .hz-section-fault[data-active] path:not(.is-read) { filter: drop-shadow(0 0 3px currentColor); }
+
+/* The 3D modules in a smaller tile: the side column goes under the 3D view instead of squeezing it. */
+@container tile (max-width: 1100px) {
+  .tie-stage, .hz-stage { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(340px, 1fr) auto; }
+  .hz, .vol { overflow: auto; scrollbar-width: thin; }
+  .tie-side.hz-side { overflow: visible; }
+}
