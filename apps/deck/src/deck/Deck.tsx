@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, MotionConfig } from "motion/react";
-import { Cable, Moon, Pencil, Plus, Search, Sun, X } from "lucide-react";
+import { Cable, Link2, Moon, Pencil, Plus, Search, Sun, X } from "lucide-react";
 import { useSubsurfaceSelector } from "@ikhmalputra/subsurface-react/state";
 import { siteById } from "../data/sites.ts";
 import { amplitudeAtMd, useForgeSection } from "../data/forge.ts";
@@ -14,6 +14,8 @@ import type { ModuleId } from "../modules/registry.ts";
 import { moduleById, moduleIds, signalColour } from "../modules/registry.ts";
 import { CommandBar } from "./CommandBar.tsx";
 import { NewWell } from "./NewWell.tsx";
+import { Share } from "./Share.tsx";
+import { openSharedLink } from "./share.ts";
 import { Dock, gridProbe } from "./Dock.tsx";
 import { cellGeometry } from "./layout.ts";
 import { Links } from "./Links.tsx";
@@ -28,6 +30,13 @@ const GAP = 10;
 export function Deck() {
   const theme = useDeck((deck) => deck.theme);
   const patch = useDeck((deck) => deck.patch);
+  // A shared deck in the link opens over this one; a link pasted into this tab later opens too.
+  useEffect(() => {
+    void openSharedLink();
+    const onHash = () => void openSharedLink();
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
   useEffect(() => { document.documentElement.dataset.deck = theme; document.documentElement.dataset.swTheme = theme === "night" ? "dark" : "light"; }, [theme]);
   return <MotionConfig reducedMotion="user">
     <div className="deck" data-sw-theme={theme === "night" ? "dark" : "light"} data-patch={patch || undefined}>
@@ -39,6 +48,7 @@ export function Deck() {
       <Links />
       <CommandBar />
       <NewWell />
+      <Share />
     </div>
   </MotionConfig>;
 }
@@ -76,6 +86,7 @@ function Bar() {
     </div>
     <div className="bar-end">
       <button type="button" className="new-well" onClick={() => actions.openNewWell(true)} title="Plan a new well: place it, then design it stage by stage"><Plus size={15} />New well</button>
+      <button type="button" className="share-open" onClick={() => actions.openShare(true)} title="A link that opens this deck as it is now, for anyone you send it to"><Link2 size={14} />Share</button>
       <button type="button" className="find" onClick={() => actions.openCommand(true)}><Search size={14} />Fly, find, open or command<kbd>⌘K</kbd></button>
       <button type="button" className="icon-button" aria-pressed={patch} aria-label="Show every live link (hold ⌥)" title="Links between modules · hold ⌥" onClick={() => actions.setPatch(!patch)}><Cable size={15} /></button>
       <button type="button" className="icon-button" aria-label={theme === "night" ? "Switch to the day deck" : "Switch to the night deck"} onClick={() => actions.setTheme(theme === "night" ? "day" : "night")}>{theme === "night" ? <Sun size={15} /> : <Moon size={15} />}</button>
@@ -198,7 +209,7 @@ function Lens() {
   const whatIf = isDesignSite(siteId) && design.pending ? { label: design.pending.label, failing: analyse(design.pending.value.brief).failing.length, before: analyse(design.committed.brief).failing.length } : null;
   const dot = (colour: string) => ({ ["--dot" as string]: colour });
   const [fresh, setFresh] = useState(false);
-  useEffect(() => { if (!note) return; setFresh(true); const timer = window.setTimeout(() => setFresh(false), 4000); return () => window.clearTimeout(timer); }, [note]);
+  useEffect(() => { if (!note) return; setFresh(true); const timer = window.setTimeout(() => setFresh(false), note.ms ?? 4000); return () => window.clearTimeout(timer); }, [note]);
   const stringName = (name: string) => name.split(" / ")[1] ?? name;
   return <footer className="lens" aria-live="polite">
     {fresh && note && <span className="toast" role="status">{note.text}</span>}

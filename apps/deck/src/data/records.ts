@@ -132,6 +132,7 @@ const listingSnapshot = () => {
   return listing;
 };
 export const useRecordedWells = (): readonly RecordListing[] => useSyncExternalStore(subscribe, listingSnapshot, listingSnapshot);
+export const recordedEntries = () => listingSnapshot();
 const versionSnapshot = () => version;
 /** Re-renders on any change to any record or edit. */
 export const useRecordsVersion = () => useSyncExternalStore(subscribe, versionSnapshot, versionSnapshot);
