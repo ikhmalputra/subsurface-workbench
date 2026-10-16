@@ -5,6 +5,7 @@ import type { WellRecordValue } from "../data/records.ts";
 import { importedLogs } from "../data/logs.ts";
 import { baseOf, basePlace, wellIdFor } from "../data/place.ts";
 import { siteById } from "../data/sites.ts";
+import { isForceSite, loadForce } from "../data/force.ts";
 import { formatDate } from "../data/history.ts";
 import { fmt } from "../format.ts";
 import type { ModuleId, Tiles } from "../modules/registry.ts";
@@ -163,6 +164,8 @@ export async function openSharedLink(): Promise<void> {
   window.history.replaceState(window.history.state, "", `${window.location.pathname}${window.location.search}`);
   try {
     const shared = await decodeSharedDeck(payload);
+    // A FORCE 2020 area is a site once its index has loaded.
+    if (isForceSite(shared.site?.id ?? null)) await loadForce();
     const said = applySharedDeck(shared);
     actions.notify(said, said.length > 60 ? 9000 : 5000);
   } catch (error) {

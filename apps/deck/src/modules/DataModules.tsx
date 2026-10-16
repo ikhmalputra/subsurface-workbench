@@ -85,7 +85,7 @@ export function Logs() {
     {(forge || imported.length > 0) && <div className="log-sets" role="group" aria-label="Log set">
       {forge && <button type="button" aria-pressed={!importedLog && set === "openhole"} onClick={() => setSet("openhole")}>Open hole <small>Schlumberger · GDR 1292</small></button>}
       {forge && <button type="button" aria-pressed={!importedLog && set === "mudlog"} onClick={() => setSet("mudlog")}>Mud log <small>drilling · GDR 1283</small></button>}
-      {!forge && place.petroLas && <button type="button" aria-pressed={!importedLog} onClick={() => setSet("own")}>{place.label} <small>synthetic</small></button>}
+      {!forge && place.petroLas && <button type="button" aria-pressed={!importedLog} onClick={() => setSet("own")}>{place.label} <small>{place.kind === "force" ? "FORCE 2020" : "synthetic"}</small></button>}
       {imported.map((entry) => <button key={entry.id} type="button" aria-pressed={importedLog?.id === entry.id} onClick={() => setSet(entry.id)}>{entry.fileName} <small>imported</small></button>)}
     </div>}
     {notYetLogged ? <Empty icon={ListTree} title="Not logged yet">{`The open-hole logs were run at TD; the resistivity print is dated 29 Dec 2020. On ${formatDate(moment!.date)} only the mud log exists.`}</Empty>

@@ -8,6 +8,7 @@ import type { WorldSite } from "@ikhmalputra/subsurface-react";
 import type { SceneSeismicVolume } from "@ikhmalputra/subsurface-react/3d";
 import { designForSite, siteOfDesign, useDesigns } from "./design.ts";
 import { recordedForSite, siteOfRecord, useRecordedWells } from "./records.ts";
+import { forceSite, forceSites, isForceSite, useForceVersion } from "./force.ts";
 import { useFetched } from "./fetch.ts";
 import { BASE } from "../base.ts";
 
@@ -17,12 +18,14 @@ const recordedSites: readonly WorldSite[] = [forgeSite(), equatorSite()];
 export function useSites(): readonly WorldSite[] {
   const designs = useDesigns();
   const entered = useRecordedWells();
-  return useMemo(() => [...recordedSites, ...designs.map((entry) => siteOfDesign(entry.record, entry.value.brief)),
-    ...entered.map((entry) => siteOfRecord(entry.entry, entry.value)).filter((site): site is WorldSite => site !== null)], [designs, entered]);
+  const force = useForceVersion();
+  return useMemo(() => [...recordedSites, ...forceSites(), ...designs.map((entry) => siteOfDesign(entry.record, entry.value.brief)),
+    ...entered.map((entry) => siteOfRecord(entry.entry, entry.value)).filter((site): site is WorldSite => site !== null)], [designs, entered, force]);
 }
 export const siteById = (id: string | null): WorldSite | null => {
   const recorded = recordedSites.find((site) => site.map.id === id);
   if (recorded) return recorded;
+  if (isForceSite(id)) return forceSite(id!);
   const design = designForSite(id);
   if (design) return siteOfDesign(design, design.history.current().brief);
   const entered = recordedForSite(id);

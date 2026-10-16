@@ -57,6 +57,30 @@ used under the Norwegian Licence for Open Government Data (NLOD); the FactPages 
 not state the licence version. Source: Sodir, https://factpages.sodir.no. Changes:
 regrouped by field; no value altered.
 
+The bundled `packages/fixtures/data/force2020/` (one `wells.json` and one `.i16`
+log file per well) is adapted from Peter Bormann, Peder Aursand, Fahad Dilib,
+Surrender Manral and Peter Dischington (2020), FORCE 2020 Well well log and
+lithofacies dataset for machine learning competition, Zenodo,
+DOI 10.5281/zenodo.4351156, licensed CC BY 4.0,
+https://creativecommons.org/licenses/by/4.0/. Its logs, lithostratigraphic tops and
+casing depths are the Norwegian Offshore Directorate's, under the Norwegian Licence
+for Open Government Data (NLOD 2.0); its lithology is the competition's
+interpretation. Files used, retrieved 16 Oct 2026 (SHA-256): train.zip
+e996c8466f2d0dc7116daa71485cc90c31fcfac6345a5bb33165026478b642e9,
+leaderboard_test_features.csv 4688d93728feab7e86855b9315ddfc8b498387927954235f7dbbfa2216550781,
+leaderboard_test_target.csv 4fe5e59809d98eb9b8b0a3836776bd52e5c7e63ffefa31476fa17011a27ef382 and
+hidden_test.csv c75e817bfefcabd2bacdefd9e1c74dbd829d24543646bf0b85ef8fbf5c06f069 (the same
+wells as the record's LAS files, from the competition repository
+github.com/bolgebrygg/Force-2020-Machine-Learning-competition), and the record's
+NPD_Lithostratigraphy_groups_all_wells.xlsx f0be5f3061aa0e63b8692f71264635ccb7d52cb148b00beaf7a59cd495c49025,
+NPD_Lithostratigraphy_member_formations_all_wells.xlsx 2dd953073c459db341e6cf3243a9dbfa5a46b4bb567dddcaec2a1db4e5879518 and
+NPD_Casing_depth_most_wells.xlsx d36564dd821f892c58f35d1ef86fe4ca68422e133d1b9cc14cc1deb32461aeb6.
+Changes (tools/build-force2020.mjs): logs averaged into 0.5 m MD bins and quantised to
+16 bits per curve (resistivity in log10), lithology as the most common class per bin,
+paths kept every 50 m MD, ED50 / UTM 31N positions converted to WGS84 with the EPSG
+three-parameter shift, rig floor elevation derived from MD and TVDSS. No endorsement
+by the authors, FORCE or the Directorate is implied.
+
 The offline world basemap `packages/react/assets/gis/world-50m.json` is built by
 `tools/build-world.mjs` from Natural Earth 1:50m land and country boundaries
 (public domain, https://www.naturalearthdata.com/), as packaged in world-atlas

@@ -16,10 +16,12 @@ import { CommandBar } from "./CommandBar.tsx";
 import { NewWell } from "./NewWell.tsx";
 import { Share } from "./Share.tsx";
 import { openSharedLink } from "./share.ts";
+import { loadForce } from "../data/force.ts";
 import { Dock, gridProbe } from "./Dock.tsx";
 import { cellGeometry } from "./layout.ts";
 import { Links } from "./Links.tsx";
-import { actions, signals, useDeck } from "./store.ts";
+import { actions, deck as deckStore, signals, useDeck } from "./store.ts";
+const deckState = () => deckStore.get();
 import { Tile, type Ghost } from "./Tile.tsx";
 import { TimeRail } from "./TimeRail.tsx";
 import { formatDate, useMoment } from "../data/history.ts";
@@ -30,6 +32,14 @@ const GAP = 10;
 export function Deck() {
   const theme = useDeck((deck) => deck.theme);
   const patch = useDeck((deck) => deck.patch);
+  // Esc puts a tile spread over the deck back, unless something inside it used the key first.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape" && !event.defaultPrevented && deckState().focus && !deckState().commandOpen && !deckState().newWellOpen && !deckState().shareOpen) actions.setFocus(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  // The FORCE 2020 wells' index, so their areas join the globe.
+  useEffect(() => { void loadForce(); }, []);
   // A shared deck in the link opens over this one; a link pasted into this tab later opens too.
   useEffect(() => {
     void openSharedLink();
@@ -107,6 +117,7 @@ function Grid({ ghost, onGhost }: { readonly ghost: Ghost | null; readonly onGho
   const element = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 1200, height: 760 });
   const tiles = useDeck((deck) => deck.tiles);
+  const focus = useDeck((deck) => deck.focus);
   const siteId = useDeck((deck) => deck.siteId);
   const site = siteById(siteId);
   useEffect(() => {
@@ -131,7 +142,7 @@ function Grid({ ghost, onGhost }: { readonly ghost: Ghost | null; readonly onGho
     return siteId === "forge" && id !== "site3d" ? "16A(78)-32" : site.map.label;
   };
   const ghostBox = ghost ? geometry.toPx(ghost.rect) : null;
-  return <main className="grid" ref={element}>
+  return <main className="grid" ref={element} data-focus={focus ?? undefined}>
     {ghost && ghostBox && <div className="snap-ghost" data-refused={!ghost.ok || undefined} style={{ left: ghostBox.x, top: ghostBox.y, width: ghostBox.width, height: ghostBox.height }} />}
     <AnimatePresence>
       {moduleIds.filter((id) => tiles[id]).map((id) => <Tile key={id} id={id} geometry={geometry} subtitle={subtitle(id)} onGhost={onGhost}><ModuleBody id={id} /></Tile>)}

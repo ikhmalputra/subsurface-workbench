@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { Activity, AudioWaveform, FilePen, GitCompareArrows, PencilRuler, Mountain, TrendingDown, Anchor, ShieldCheck, Radar, Slice, Box, CalendarDays, Columns3, Compass, Cylinder, Droplets, Gauge, Layers2, ScatterChart, ShieldAlert, Waves, Globe2, Layers3, ListTree, Rotate3d } from "lucide-react";
+import { Activity, AlignHorizontalSpaceAround, AudioWaveform, FilePen, GitCompareArrows, PencilRuler, Mountain, TrendingDown, Anchor, ShieldCheck, Radar, Slice, Box, CalendarDays, Columns3, Compass, Cylinder, Droplets, Gauge, Layers2, ScatterChart, ShieldAlert, Waves, Globe2, Layers3, ListTree, Rotate3d } from "lucide-react";
 import type { WellDesignBrief } from "@ikhmalputra/subsurface-core";
 import type { MinSize, Rect } from "../deck/layout.ts";
 import { designForSite, isDesignSite } from "../data/design.ts";
@@ -18,14 +18,14 @@ export const signalName: Readonly<Record<Signal, string>> = { place: "Place", ob
 export type ModuleId =
   | "globe" | "site3d"
   | "designer" | "editor" | "section" | "well3d" | "construction" | "compare" | "cutaway" | "plan" | "profile" | "anticollision"
-  | "logs" | "seismic" | "curtain"
+  | "logs" | "seismic" | "curtain" | "correlate"
   | "drilling" | "torquedrag"
   | "petro"
   | "strings" | "window" | "kick" | "cement" | "hydraulics" | "geomech" | "barriers"
   | "decline";
 
-/** What kind of place a site is: FORGE's records, the Equator field, a planned well (Kestrel A-7 or the user's), or a drilled well entered on the deck. */
-type SiteKind = "forge" | "equator" | "design" | "recorded";
+/** What kind of place a site is: FORGE's records, the Equator field, a FORCE 2020 area, a planned well (Kestrel A-7 or the user's), or a drilled well entered on the deck. */
+type SiteKind = "forge" | "equator" | "force" | "design" | "recorded";
 /** The subsurface disciplines the dock is grouped by, the same as the landing page's. */
 export type ModuleGroup = "Geophysics & geology" | "Petrophysics" | "Geomechanics & pressure" | "Drilling" | "Well engineering & completions" | "Production" | "Your data";
 
@@ -44,6 +44,8 @@ export interface ModuleSpec {
   readonly size: MinSize;
   /** Indexed by measured depth: it draws the depth cursor and can set it. */
   readonly depthIndexed: boolean;
+  /** Opens spread over the whole deck (Esc puts it back in its tile): for modules that read across many wells. */
+  readonly opensFocused?: boolean;
 }
 
 export const modules: readonly ModuleSpec[] = [
@@ -51,6 +53,7 @@ export const modules: readonly ModuleSpec[] = [
   { id: "site3d", title: "Site in 3D", icon: Box, group: "Geophysics & geology", blurb: "Wells, horizons and seismic in one frame", listens: ["place", "depth", "view"], emits: ["place", "view"], min: { w: 3, h: 4 }, size: { w: 5, h: 8 }, depthIndexed: false },
   { id: "seismic", title: "Seismic section", icon: AudioWaveform, group: "Geophysics & geology", blurb: "PSDM along the well, or the inline or crossline moved in the 3D site", listens: ["place", "object", "depth", "view"], emits: ["depth", "view"], min: { w: 3, h: 4 }, size: { w: 5, h: 6 }, depthIndexed: true },
   { id: "curtain", title: "Section line", icon: Slice, group: "Geophysics & geology", blurb: "The PSDM along a line drawn on the globe, with the wells that pass near it", listens: ["place", "depth", "view"], emits: ["depth"], min: { w: 4, h: 4 }, size: { w: 6, h: 5 }, depthIndexed: true },
+  { id: "correlate", title: "Correlation", icon: AlignHorizontalSpaceAround, group: "Geophysics & geology", blurb: "A field's wells side by side on their logs and tops: flatten on a top, pick your own", listens: ["place", "depth"], emits: ["place", "depth"], min: { w: 5, h: 5 }, size: { w: 8, h: 8 }, depthIndexed: false, opensFocused: true },
   { id: "logs", title: "Logs", icon: ListTree, group: "Petrophysics", blurb: "The well's LAS curves; Shift-drag to brush an interval", listens: ["place", "object", "depth", "time"], emits: ["depth"], min: { w: 3, h: 4 }, size: { w: 4, h: 8 }, depthIndexed: true },
   { id: "petro", title: "Petrophysics", icon: ScatterChart, group: "Petrophysics", blurb: "Porosity, saturation and pay over the brushed interval", listens: ["place", "object", "depth"], emits: ["object", "depth"], min: { w: 4, h: 4 }, size: { w: 5, h: 8 }, depthIndexed: false },
   { id: "geomech", title: "Geomechanics", icon: Mountain, group: "Geomechanics & pressure", blurb: "A 1D mechanical earth model: stresses, collapse and breakdown against the mud used", listens: ["place", "depth"], emits: ["depth"], min: { w: 4, h: 6 }, size: { w: 5, h: 8 }, depthIndexed: true },
@@ -98,10 +101,11 @@ const availability: Readonly<Partial<Record<ModuleId, { readonly sites: readonly
   well3d: { sites: ["forge", "design", "recorded"], why: "No construction to draw: open the site in 3D for the Equator wells' paths and picks." },
   construction: { sites: ["forge", "design", "recorded"], why: "No construction records for the Equator wells. Add casing records in the Well editor to draw one." },
   cutaway: { sites: ["forge", "design", "recorded"], why: "No construction records for the Equator wells. Add casing records in the Well editor to draw one." },
-  plan: { sites: ["forge", "design", "equator", "recorded"], why: "" },
+  plan: { sites: ["forge", "design", "equator", "force", "recorded"], why: "" },
   anticollision: { sites: ["forge"], why: "Anti-collision needs real neighbouring surveys; only Utah FORGE has them (16B(78)-32 and 58-32 beside 16A(78)-32)." },
-  profile: { sites: ["forge", "design", "equator", "recorded"], why: "" },
-  logs: { sites: ["forge", "equator", "recorded"], why: "A planned well has not been drilled, so it has no logs." },
+  profile: { sites: ["forge", "design", "equator", "force", "recorded"], why: "" },
+  logs: { sites: ["forge", "equator", "force", "recorded"], why: "A planned well has not been drilled, so it has no logs." },
+  correlate: { sites: ["force"], why: "Correlation reads logs and tops across a field's wells. The FORCE 2020 wells in the Norwegian North Sea have both: fly to one of their areas from the globe or ⌘K." },
   seismic: { sites: ["forge"], why: "Only Utah FORGE has seismic: the PSDM volume around 16A(78)-32." },
   curtain: { sites: ["forge"], why: "A section line cuts the PSDM volume; only Utah FORGE has one." },
   torquedrag: { sites: ["forge"], why: "Torque and drag is calibrated on reported string weights; only Utah FORGE 16A(78)-32 has them, in its daily reports." },
@@ -116,6 +120,15 @@ const availability: Readonly<Partial<Record<ModuleId, { readonly sites: readonly
   hydraulics: { sites: ["design"], why: "Hydraulics need a hole section, mud and drill string; a planned well supplies them, with flow and nozzles you set." },
 };
 
+/** What the FORCE 2020 wells carry, for the modules that need more. */
+const FORCE_HAS = "The FORCE 2020 wells carry logs, the Directorate's tops, interpreted lithology and casing shoe depths, not the records this module reads.";
+const forceWhy: Readonly<Partial<Record<ModuleId, string>>> = {
+  petro: "Petrophysics runs on FORGE and the Equator field. The FORCE wells' curves are in Logs and Correlation.",
+  section: "The FORCE wells carry casing shoe depths, not a construction record. Their shoes are marked in Logs and Correlation.",
+  construction: "The FORCE wells carry casing shoe depths, not a construction record.",
+  seismic: "FORCE 2020 carries no seismic.", curtain: "FORCE 2020 carries no seismic.",
+};
+
 /** What a module needs that the place does not have; null when it can show something. */
 export function missing(id: ModuleId, siteId: string | null): string | null {
   // The globe chooses places; decline curves run on the Norwegian fields' own production, and a
@@ -123,13 +136,14 @@ export function missing(id: ModuleId, siteId: string | null): string | null {
   if (id === "globe" || id === "decline" || id === "compare") return null;
   if (id === "designer") return isDesignSite(siteId) ? null : "The designer plans wells. Press + New well to start one, or fly to Kestrel A-7, the example design.";
   if (!siteId) return "Choose a site on the globe or press ⌘K.";
-  const kind: SiteKind | null = siteId === "forge" || siteId === "equator" ? siteId : isDesignSite(siteId) ? "design" : isRecordedSite(siteId) ? "recorded" : null;
+  const kind: SiteKind | null = siteId === "forge" || siteId === "equator" ? siteId : siteId.startsWith("force-q") ? "force" : isDesignSite(siteId) ? "design" : isRecordedSite(siteId) ? "recorded" : null;
   if (id === "editor") return kind === "design" ? "A planned well is edited in the Well designer." : null;
   // An imported log is drawn wherever it was imported.
   if (id === "logs" && importedLogs(activeEditWell()).length) return null;
   // An Equator well the user gave casing records draws its construction.
   const editedCasing = kind === "equator" && (editedValue(activeEditWell())?.components.some((component) => component.kind === "Casing") ?? false);
   const rule = availability[id];
+  if (kind === "force" && rule && !rule.sites.includes("force")) return forceWhy[id] ?? FORCE_HAS;
   if (rule && !(kind && rule.sites.includes(kind)) && !(editedCasing && ["section", "construction", "cutaway", "strings", "barriers"].includes(id))) return rule.why;
   const design = designForSite(siteId);
   if (design) return designGap(id, design.history.current().brief);

@@ -10,16 +10,19 @@ import { assemblyOfRecord, baseRecord, designOfRecord, editedValue, layersOf, re
 import type { WellRecordValue } from "./records.ts";
 import { forgeWell, surveyFrom } from "./sites.ts";
 import { shoes as forgeShoes } from "./forge.ts";
+import { areaWells, busId, forceArea, forceFormations, forceLas, forceLogsOf, forceStations, forceWellByBusId, isForceSite, requestForceLogs, useForceVersion } from "./force.ts";
+import type { ForceLogs, ForceWell } from "./force.ts";
 
 /**
  * The well the deck is on, in one shape whatever the site: FORGE (documented records), Kestrel A-7
- * (a live design) or one Equator well (a synthetic trajectory with synthetic logs). A module asks
+ * (a live design), one Equator well (a synthetic trajectory with synthetic logs) or one FORCE 2020
+ * well (the Norwegian Offshore Directorate's logs and tops). A module asks
  * the place for what it needs; what a place does not have is null, and the module says so.
  */
 export interface Place {
   readonly siteId: string;
   /** What kind of place: FORGE's records, an Equator well, a planned well (Kestrel A-7 or one of the user's), or a drilled well the user entered. */
-  readonly kind: "forge" | "equator" | "design" | "recorded";
+  readonly kind: "forge" | "equator" | "design" | "recorded" | "force";
   /** Changes the user made over the well's records; 0 for a well as recorded. */
   readonly edits: number;
   /** The id the signal bus knows the well by. */
@@ -90,13 +93,36 @@ export function wellIdFor(siteId: string | null, wellId: string | null): string 
   const recorded = recordedForSite(siteId);
   if (recorded) return recorded.wellId;
   if (siteId === "equator") return wellId && equatorPlaces.has(wellId) ? wellId : equatorWellIds[0]!;
+  if (isForceSite(siteId)) {
+    const wells = areaWells(siteId!);
+    const chosen = wells.find((well) => busId(well) === wellId) ?? wells[0];
+    return chosen ? busId(chosen) : null;
+  }
   return null;
+}
+
+/** A FORCE well as a place: built once, and again when its logs arrive. */
+const forcePlaces = new Map<string, { readonly logs: ForceLogs | null; readonly place: Place }>();
+function forcePlace(well: ForceWell): Place {
+  const logs = forceLogsOf(well);
+  const kept = forcePlaces.get(well.id);
+  if (kept && kept.logs === logs) return kept.place;
+  if (!logs) requestForceLogs(well);
+  const stations = forceStations(well);
+  const place: Place = {
+    siteId: well.area, kind: "force", edits: 0, wellId: busId(well), label: well.name, provenance: "documented",
+    design: null, components: [], assembly: null, stations, survey: surveyFrom(stations), formations: forceFormations(well),
+    totalDepthM: well.mdBase, operations: null, petro: null, petroLas: logs ? forceLas(logs) : null,
+  };
+  forcePlaces.set(well.id, { logs, place });
+  return place;
 }
 
 /** A well already in the deck, as its records give it, before any edit: what the editor edits. */
 export function basePlace(siteId: string | null, wellId: string | null): Place | null {
   if (siteId === "forge") return forgePlace;
   if (siteId === "equator") return equatorPlaces.get(wellIdFor(siteId, wellId)!) ?? null;
+  if (isForceSite(siteId) && forceArea(siteId)) { const well = forceWellByBusId(wellIdFor(siteId, wellId)); return well ? forcePlace(well) : null; }
   return null;
 }
 const bases = new WeakMap<Place, WellRecordValue>();
@@ -104,7 +130,7 @@ const bases = new WeakMap<Place, WellRecordValue>();
 export function baseOf(place: Place): WellRecordValue {
   let base = bases.get(place);
   if (!base) {
-    base = baseRecord({ name: place.label, field: place.kind === "forge" ? "Utah FORGE" : "Equator", stations: place.stations, formations: place.formations, tops: place.petro?.well.tops, components: place.components, totalDepthM: place.totalDepthM, surveySource: place.design?.trajectorySource ?? "" });
+    base = baseRecord({ name: place.label, field: place.kind === "forge" ? "Utah FORGE" : place.kind === "force" ? forceArea(place.siteId)?.label ?? "" : "Equator", stations: place.stations, formations: place.formations, tops: place.petro?.well.tops, components: place.components, totalDepthM: place.totalDepthM, surveySource: place.design?.trajectorySource ?? "" });
     bases.set(place, base);
   }
   return base;
@@ -134,6 +160,7 @@ export function usePlace(): Place | null {
   const siteId = useDeck((deck) => deck.siteId), wellId = useDeck((deck) => deck.wellId);
   const { brief } = useDesign();
   const records = useRecordsVersion();
+  const force = useForceVersion();
   return useMemo(() => {
     const base = basePlace(siteId, wellId);
     if (base) { const value = editedValue(base.wellId); return value ? edited(base, value) : base; }
@@ -160,7 +187,7 @@ export function usePlace(): Place | null {
       } satisfies Place;
     }
     return null;
-  }, [siteId, wellId, brief, records]);
+  }, [siteId, wellId, brief, records, force]);
 }
 
 /** TVD at an MD on a place's path; null outside its stations. */
@@ -173,6 +200,7 @@ export const stringsOf = (place: Place) => place.components.filter(isString);
 /** Shoes to mark: FORGE's at the reported depths, a design's at its strings' planned shoes. */
 export function shoesOf(place: Place): readonly { readonly id: string; readonly mdM: number; readonly label: string }[] {
   if (place.siteId === "forge") return forgeShoes;
+  if (place.kind === "force") return (forceWellByBusId(place.wellId)?.shoes ?? []).map((shoe, i) => ({ id: `${place.wellId}-shoe-${i}`, mdM: shoe.md, label: `${shoe.odIn === null ? shoe.label : `${shoe.odIn} in`} shoe` }));
   return place.components.filter((component) => component.kind === "Casing").map((component) => ({ id: component.id, mdM: component.bottomDepthM, label: `${component.name.split(" / ")[0]} shoe` }));
 }
 
