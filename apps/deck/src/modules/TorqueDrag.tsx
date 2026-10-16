@@ -1,7 +1,10 @@
 import { useMemo } from "react";
 import { scaleLinear } from "d3-scale";
-import { calibrate, calibrationDays, dayString, feetToMetres, forgeStringWeights, metresToFeet, torqueDrag } from "@ikhmalputra/subsurface-core";
-import type { CalibrationDay, Movement } from "@ikhmalputra/subsurface-core";
+import { feetToMetres, forgeStringWeights, metresToFeet } from "@ikhmalputra/subsurface-core";
+import type { Movement } from "@ikhmalputra/subsurface-core";
+import { useComputed } from "../compute/run.ts";
+import type { Curve } from "../compute/torque.ts";
+import { Loading } from "./Empty.tsx";
 import { shoesOf } from "../data/place.ts";
 import { fmt } from "../format.ts";
 import { useSize } from "./useSize.ts";
@@ -23,25 +26,15 @@ export function TorqueDrag() {
   const survey = useMemo(() => place.survey.map((station) => ({ mdFt: metresToFeet(station.mdM), inclinationDeg: station.inclinationDeg, azimuthDeg: station.azimuthDeg })), [place.survey]);
   // The 9 5/8 in shoe: the last casing while the 8 3/4 in hole was drilled.
   const shoeFt = useMemo(() => metresToFeet(shoesOf(place).find((shoe) => /9 5\/8/.test(shoe.label))?.mdM ?? feetToMetres(5110)), [place]);
-  const days = useMemo(() => calibrationDays(), []);
-  const fit = useMemo(() => calibrate(survey, shoeFt, days), [survey, shoeFt, days]);
   const reported = forgeStringWeights.days.filter((day) => day.mdFt !== null && (day.puLb !== null || day.soLb !== null || day.rotLb !== null));
-  const used = new Set(days.map((day) => day.date));
-  const last = days.at(-1)!;
   const tdFt = metresToFeet(place.survey.at(-1)!.mdM);
-  const curves = useMemo(() => {
-    const at = (bitFt: number, movement: Movement, open: number) => fit.blockLb + torqueDrag({ survey, string: dayString({ ...last, mdFt: bitFt } as CalibrationDay, fit.pipeLbFt), bitMdFt: bitFt, mudWeightPpg: last.mudWeightPpg, frictionCased: fit.frictionCased, frictionOpen: open, shoeMdFt: shoeFt, stepFt: 60 }, movement).hookloadLb;
-    const depths: number[] = [];
-    for (let md = Math.ceil((last.bhaLengthFt + 100) / 100) * 100; md <= tdFt; md += 150) depths.push(md);
-    depths.push(tdFt);
-    const line = (movement: Movement, open: number) => depths.map((md) => ({ md, value: at(md, movement, open) }));
-    return {
-      fitted: { pickup: line("pickup", fit.frictionOpen), slackoff: line("slackoff", fit.frictionOpen), rotating: line("rotating", fit.frictionOpen) },
-      ghosts: [0.2, 0.4].flatMap((open) => (["pickup", "slackoff"] as const).map((movement) => ({ open, movement, points: line(movement, open) }))),
-    };
-  }, [survey, fit, last, shoeFt, tdFt]);
+  // The fit and every curve are worked out in the compute worker, off the main thread.
+  const { value: model, error } = useComputed(`${place.wellId}|${survey.length}|${shoeFt}|${tdFt}`, "torqueAndDrag", () => [survey, shoeFt, tdFt]);
   const [box, size] = useSize<HTMLDivElement>();
   const wide = size.width > 700;
+  if (!model) return <Loading>{error ? `Torque and drag could not be worked out (${error}).` : "Fitting torque and drag to the daily reports…"}</Loading>;
+  const { fit, curves } = model;
+  const used = new Set(model.usedDates);
   const excluded = reported.filter((day) => !used.has(day.date));
   return <div className="acx td" ref={box}>
     <header className="acx-head"><span><b>16A(78)-32</b> · soft-string torque and drag · calibrated on {fit.days} daily reports</span></header>
@@ -55,7 +48,7 @@ export function TorqueDrag() {
     </dl>
     <div className={`acx-plots${wide ? " is-wide" : ""}`}>
       <Broomstick curves={curves} reported={reported} used={used} tdFt={tdFt} cursorFt={wire.cursor === null ? null : metresToFeet(wire.cursor)} onHover={(ft) => wire.hover(ft === null ? null : feetToMetres(ft))} />
-      <TorquePlot survey={survey} fit={fit} last={last} shoeFt={shoeFt} tdFt={tdFt} reported={reported} />
+      <TorquePlot points={model.torque} tdFt={tdFt} reported={reported} />
     </div>
     <p className="petro-note">
       <b>Source:</b> 16A&apos;s daily drilling reports (GDR 1283): rotating, pick-up and slack-off weights and torque as read at each day&apos;s reported depth, mud weight, and the BHA&apos;s length and weight in air. <b>Model:</b> soft string on the observed survey, buoyed by the day&apos;s mud (steel 65.5 ppg); the BHA as one segment of its reported weight, 5 in drill pipe above. <b>Calibration:</b> rotating removes axial friction, so the rotating weights give the block weight and pipe weight by least squares; then the cased and open-hole friction by grid search on the pick-up and slack-off weights. The fitted pipe weight sits near the nominal 19.5 lb/ft; the cased friction is weakly constrained, since most of the drag builds in the open 65° tangent.
@@ -65,7 +58,7 @@ export function TorqueDrag() {
   </div>;
 }
 
-type Curves = { fitted: Record<Movement, { md: number; value: number }[]>; ghosts: { open: number; movement: Movement; points: { md: number; value: number }[] }[] };
+type Curves = { fitted: Record<Movement, Curve>; ghosts: { open: number; movement: Movement; points: Curve }[] };
 
 function Broomstick({ curves, reported, used, tdFt, cursorFt, onHover }: { readonly curves: Curves; readonly reported: typeof forgeStringWeights.days; readonly used: ReadonlySet<string>; readonly tdFt: number; readonly cursorFt: number | null; readonly onHover: (ft: number | null) => void }) {
   const [box, size] = useSize<HTMLDivElement>();
@@ -95,15 +88,10 @@ function Broomstick({ curves, reported, used, tdFt, cursorFt, onHover }: { reado
   </div>;
 }
 
-function TorquePlot({ survey, fit, last, shoeFt, tdFt, reported }: { readonly survey: readonly { mdFt: number; inclinationDeg: number; azimuthDeg: number }[]; readonly fit: ReturnType<typeof calibrate>; readonly last: CalibrationDay; readonly shoeFt: number; readonly tdFt: number; readonly reported: typeof forgeStringWeights.days }) {
+function TorquePlot({ points, tdFt, reported }: { readonly points: Curve; readonly tdFt: number; readonly reported: typeof forgeStringWeights.days }) {
   const [box, size] = useSize<HTMLDivElement>();
   const width = Math.max(200, size.width), height = Math.max(160, size.height);
   const m = { left: 54, right: 14, top: 22, bottom: 32 };
-  const points = useMemo(() => {
-    const out: { md: number; value: number }[] = [];
-    for (let md = Math.ceil((last.bhaLengthFt + 100) / 100) * 100; md <= tdFt; md += 200) out.push({ md, value: torqueDrag({ survey, string: dayString({ ...last, mdFt: md } as CalibrationDay, fit.pipeLbFt), bitMdFt: md, mudWeightPpg: last.mudWeightPpg, frictionCased: fit.frictionCased, frictionOpen: fit.frictionOpen, shoeMdFt: shoeFt, stepFt: 60 }, "rotating").torqueFtLbf });
-    return out;
-  }, [survey, fit, last, shoeFt, tdFt]);
   const measured = reported.filter((day) => day.torqueFtLbf !== null && day.mdFt !== null);
   const x = scaleLinear().domain([0, Math.max(16000, ...measured.map((day) => day.torqueFtLbf!), ...points.map((point) => point.value))]).range([m.left, width - m.right]).nice();
   const y = scaleLinear().domain([0, tdFt]).range([m.top, height - m.bottom]);

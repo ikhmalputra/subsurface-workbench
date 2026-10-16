@@ -1,8 +1,9 @@
-import { feetToMetres, findPipe, forge16aWellheads, forgeSeismicSection, mdAtSurveyTvd, millimetresToInches, parseSegy, pipeRatings, projectOntoSection, steelGrades, tvdToSeismicDepth, wellPointAtMd } from "@ikhmalputra/subsurface-core";
+import { feetToMetres, findPipe, forge16aWellheads, forgeSeismicSection, mdAtSurveyTvd, millimetresToInches, pipeRatings, projectOntoSection, steelGrades, tvdToSeismicDepth, wellPointAtMd } from "@ikhmalputra/subsurface-core";
 import type { PipeRatings, ProjectedPoint, SegyFile, WellComponent } from "@ikhmalputra/subsurface-core";
 import { useFetched } from "./fetch.ts";
 import { forgeWell } from "./sites.ts";
 import { BASE } from "../base.ts";
+import { compute } from "../compute/run.ts";
 
 /**
  * What the deck derives from the FORGE records, each in one place: the shoes as reported, the
@@ -21,7 +22,7 @@ export const shoes = casing.filter((component) => component.rawBottomDepthFt).ma
 const meta = forgeSeismicSection;
 /** The FORGE PSDM section along the well, fetched and parsed once. */
 export function useForgeSection(enabled: boolean): { file: SegyFile | null; error: string | null } {
-  const loaded = useFetched(enabled ? `${BASE}data/${meta.section.file}` : null, (buffer) => parseSegy(buffer));
+  const loaded = useFetched(enabled ? `${BASE}data/${meta.section.file}` : null, (buffer) => compute("segyFromBuffer", buffer));
   return { file: loaded.value, error: loaded.error };
 }
 

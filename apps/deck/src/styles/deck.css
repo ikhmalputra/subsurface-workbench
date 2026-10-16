@@ -951,6 +951,102 @@ button { font: inherit; color: inherit; }
 .wed-warn { margin: 0; font-size: var(--t-12); }
 .dsg-row > .wed-badge { margin-bottom: 6px; }
 
+/* ---- Live drilling ---- */
+.rig { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; overflow: auto; scrollbar-width: thin; container-type: inline-size; }
+.rig-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.rig-head .dca-field select { max-width: 300px; }
+.rig-speed { padding: 0; }
+.rig-clock { font: 600 var(--t-13) var(--font-mono); color: var(--ink); }
+.rig-check { display: inline-flex; align-items: center; gap: 5px; font-size: var(--t-12); color: var(--ink-3); }
+.rig-status { margin-left: auto; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--glass-edge-strong); font-size: var(--t-12); font-weight: 600; color: var(--ink); }
+.rig-status.is-shut-in, .rig-status.is-killing, .rig-status.is-flow-check { border-color: #fbbf24; color: #fbbf24; }
+.rig-status.is-blowout { border-color: #ef4444; background: color-mix(in srgb, #ef4444 22%, transparent); color: #fecaca; }
+.rig-status.is-killed, .rig-status.is-section-td { border-color: #34d399; color: #6ee7b7; }
+.rig-alarm { margin: 0; padding: 7px 12px; border-radius: 10px; font-size: var(--t-13); font-weight: 600; }
+.rig-alarm.is-alarm { background: color-mix(in srgb, #ef4444 18%, transparent); border: 1px solid color-mix(in srgb, #ef4444 55%, transparent); color: #fecaca; }
+.rig-alarm.is-warning { background: color-mix(in srgb, #fbbf24 14%, transparent); border: 1px solid color-mix(in srgb, #fbbf24 45%, transparent); color: #fde68a; }
+.rig-alarm.is-disaster { background: #7f1d1d; border: 1px solid #ef4444; color: #fff; animation: rig-flash 1s ease-in-out infinite alternate; }
+@keyframes rig-flash { to { background: #b91c1c; } }
+@media (prefers-reduced-motion: reduce) { .rig-alarm.is-disaster { animation: none; } }
+.rig-body { flex: 1 0 auto; display: grid; grid-template-columns: 220px minmax(0, 1fr) 300px; grid-template-rows: minmax(0, 1fr) auto; grid-template-areas: "controls stage charts" "controls stage log"; gap: 10px; min-height: 600px; }
+.rig-controls { grid-area: controls; } .rig-charts { grid-area: charts; } .rig-side { grid-area: log; }
+.rig-stage { grid-area: stage; position: relative; min-height: 560px; border-radius: 12px; border: 1px solid var(--glass-edge); background: #070a14; overflow: hidden; }
+.rig-view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.rig:fullscreen { background: var(--deck-bg, #060912); padding: 16px 20px; }
+.rig:fullscreen .rig-body { min-height: 0; }
+.rig-controls { display: flex; flex-direction: column; gap: 9px; min-width: 0; }
+.rig-depth { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin: 0; border-radius: 10px; overflow: hidden; background: var(--glass-edge); }
+.rig-depth div { padding: 6px 8px; background: var(--glass-strong); }
+.rig-depth dt { font-size: var(--t-11); color: var(--ink-3); }
+.rig-depth dd { margin: 2px 0 0; font: 600 var(--t-13) var(--font-mono); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rig-knob { display: grid; grid-template-columns: 44px 1fr 74px; align-items: center; gap: 6px; font-size: var(--t-12); color: var(--ink-2); }
+.rig-knob input { width: 100%; accent-color: #94a3b8; }
+.rig-knob output { font: var(--t-12) var(--font-mono); color: var(--ink); text-align: right; }
+.rig-mud { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: var(--t-12); color: var(--ink-2); }
+.rig-mud input { width: 64px; height: 26px; padding: 0 6px; border-radius: 7px; border: 1px solid var(--glass-edge); background: transparent; color: var(--ink); font: var(--t-12) var(--font-mono); }
+.rig-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.rig-buttons button { height: 30px; border-radius: 8px; border: 1px solid var(--glass-edge-strong); background: var(--glass-light); color: var(--ink); font-size: var(--t-12); font-weight: 500; cursor: pointer; }
+.rig-buttons button:hover:not(:disabled) { background: var(--hover); }
+.rig-buttons button:disabled { opacity: .35; cursor: default; }
+.rig-buttons .is-danger { border-color: #ef4444; color: #fecaca; background: color-mix(in srgb, #ef4444 16%, transparent); }
+.rig-sheet { padding: 8px 10px; border-radius: 10px; border: 1px solid color-mix(in srgb, #fbbf24 45%, transparent); background: color-mix(in srgb, #fbbf24 8%, transparent); font-size: var(--t-12); color: var(--ink-2); }
+.rig-sheet b { color: #fde68a; }
+.rig-sheet p { margin: 4px 0 0; }
+.rig-sheet dl { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; margin: 6px 0 0; }
+.rig-sheet dt { font-size: var(--t-11); color: var(--ink-3); }
+.rig-sheet dd { margin: 0; font: var(--t-12) var(--font-mono); color: var(--ink); }
+.rig-progress { position: relative; margin-top: 8px; height: 20px; border-radius: 6px; background: var(--glass-light); overflow: hidden; }
+.rig-progress i { position: absolute; inset: 0 auto 0 0; background: color-mix(in srgb, #34d399 35%, transparent); }
+.rig-progress span { position: relative; display: block; padding: 2px 8px; font: var(--t-11) var(--font-mono); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rig-disasters { font-size: var(--t-12); color: var(--ink-2); }
+.rig-disasters summary { cursor: pointer; font-weight: 600; color: var(--ink); }
+.rig-disasters p { margin: 6px 0; color: var(--ink-3); }
+.rig-disasters .dsg-tool { width: 100%; margin-top: 4px; justify-content: flex-start; }
+.rig-charts { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.rig-window { padding: 0; align-self: flex-end; }
+.rig-track { flex: 1 1 0; min-height: 54px; display: grid; grid-template-rows: auto 1fr; border-radius: 8px; border: 1px solid var(--glass-edge); background: rgba(5, 8, 18, .45); overflow: hidden; }
+.rig-track-head { display: flex; flex-wrap: wrap; gap: 2px 12px; padding: 3px 8px 0; font-size: var(--t-11); color: var(--ink-3); }
+.rig-track-head span { display: inline-flex; align-items: center; gap: 5px; }
+.rig-track-head i { width: 12px; height: 2px; background: var(--c); }
+.rig-track-head i.is-dashed { background: repeating-linear-gradient(90deg, var(--c) 0 3px, transparent 3px 5px); }
+.rig-track-head b { font: 600 var(--t-12) var(--font-mono); color: var(--ink); }
+.rig-track svg { width: 100%; height: 100%; min-height: 30px; }
+.rig-track path { fill: none; stroke-width: 1.6; }
+.rig-zero { stroke: var(--glass-edge-strong); stroke-dasharray: 2 3; }
+.rig-side { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.rig-log { flex: 1 1 200px; margin: 0; padding: 6px 8px; list-style: none; border-radius: 10px; border: 1px solid var(--glass-edge); background: var(--glass-strong); overflow: auto; font-size: var(--t-11); color: var(--ink-2); scrollbar-width: thin; }
+.rig-log li { padding: 3px 0; border-bottom: 1px solid var(--glass-edge); }
+.rig-log time { display: block; font-family: var(--font-mono); color: var(--ink-3); }
+.rig-log .is-alarm { color: #fecaca; } .rig-log .is-warning { color: #fde68a; } .rig-log .is-disaster { color: #fff; font-weight: 600; }
+.rig-debrief { padding: 10px 12px; border-radius: 12px; border: 1px solid var(--glass-edge-strong); background: var(--glass-strong); font-size: var(--t-12); color: var(--ink-2); }
+.rig-debrief b { color: var(--ink); }
+.rig-debrief ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 3px; }
+
+
+/* Medium tiles: the charts and the log go under the rig; narrow tiles: one column, the rig first. */
+@container (max-width: 1150px) { .rig-body { grid-template-columns: 220px minmax(0, 1fr); grid-template-rows: auto auto auto; grid-template-areas: "controls stage" "charts charts" "log log"; } .rig-charts { min-height: 380px; } .rig-log { max-height: 220px; } }
+@container (max-width: 700px) {
+  .rig-body { grid-template-columns: minmax(0, 1fr); grid-template-areas: "stage" "controls" "charts" "log"; }
+  .rig-stage { min-height: 620px; }
+  .rig-controls { display: grid; grid-template-columns: 1fr 1fr; align-items: start; gap: 8px 12px; }
+  .rig-controls > .rig-depth, .rig-controls > .rig-sheet, .rig-controls > .rig-disasters { grid-column: 1 / -1; }
+  .rig-status { margin-left: 0; }
+}
+
+/* ---- Live drilling: the 3D path ---- */
+.rig3d { position: absolute; inset: 0; overflow: hidden; }
+.rig3d-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.rig3d-hud { position: absolute; top: 8px; left: 10px; right: 10px; display: flex; align-items: center; justify-content: space-between; gap: 8px; pointer-events: none; font: 600 var(--t-12) var(--font-mono); color: var(--ink); }
+.rig3d-hud .log-sets { pointer-events: auto; padding: 0; }
+.rig3d-key { position: absolute; left: 10px; bottom: 8px; margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: var(--t-11); color: var(--ink-3); pointer-events: none; }
+.rig3d-key i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: -6px; }
+.rig3d-key .is-mud { background: #d6c4a0; } .rig3d-key .is-cutting { background: #b08d4f; border-radius: 1px; } .rig3d-key .is-gas { background: #f2f6ff; } .rig3d-key .is-kill { background: #f2b45c; } .rig3d-key .is-loss { background: #f87171; }
+.rig3d-label { position: absolute; left: 0; top: 0; padding: 1px 6px; border-radius: 5px; background: rgba(8, 11, 22, .72); color: var(--ink-2); font-size: var(--t-11); white-space: nowrap; pointer-events: none; margin: -9px 0 0 6px; transition: opacity .2s; }
+.rig3d-label.is-reservoir { color: #fbbf24; } .rig3d-label.is-shoe { color: var(--ink-3); }
+.rig3d-label.is-bit { color: var(--ink); font-family: var(--font-mono); font-weight: 600; }
+.rig3d-label.is-event { color: #fecaca; font-weight: 600; background: rgba(127, 29, 29, .75); }
+
+
 /* ---- Correlation ---- */
 .cor { --yours: #60a5fa; position: absolute; inset: 0; display: grid; grid-template-columns: 248px minmax(0, 1fr); }
 [data-deck="day"] .cor { --yours: #1d4ed8; }
@@ -1299,13 +1395,6 @@ body::before { content: ""; position: fixed; inset: 0; pointer-events: none; z-i
 .hz-section-fault circle { fill: currentColor; stroke: var(--deck-bg); stroke-width: 1.5; }
 .hz-section-fault[data-active] path:not(.is-read) { filter: drop-shadow(0 0 3px currentColor); }
 
-/* The 3D modules in a smaller tile: the side column goes under the 3D view instead of squeezing it. */
-@container tile (max-width: 1100px) {
-  .tie-stage, .hz-stage { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(340px, 1fr) auto; }
-  .hz, .vol { overflow: auto; scrollbar-width: thin; }
-  .tie-side.hz-side { overflow: visible; }
-}
-
 /* ---- Maps & volumetrics ---- */
 .vol { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; overflow: hidden; }
 .vol-bar { flex-wrap: nowrap; }
@@ -1360,6 +1449,13 @@ body::before { content: ""; position: fixed; inset: 0; pointer-events: none; z-i
 .vol-high path { fill: none; stroke: #fff; stroke-width: 1.4; }
 .vol-high text { font: 600 9px var(--font-mono); fill: #fff; paint-order: stroke; stroke: rgba(8, 11, 22, .9); stroke-width: 3px; }
 .vol-p.is-none b { font-size: var(--t-13); color: #fbbf24; }
+
+/* The 3D modules in a smaller tile: the side column goes under the 3D view instead of squeezing it. */
+@container tile (max-width: 1100px) {
+  .tie-stage, .hz-stage { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(340px, 1fr) auto; }
+  .hz, .vol { overflow: auto; scrollbar-width: thin; }
+  .tie-side.hz-side { overflow: visible; }
+}
 @container tile (max-width: 1240px) {
   .vol-stage { grid-template-columns: minmax(0, 1fr) 360px; grid-auto-rows: auto; }
   .vol-stage > .vol-3d { min-height: 420px; }

@@ -1,7 +1,8 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { metresToFeet } from "@ikhmalputra/subsurface-core";
-import { parseLas } from "@ikhmalputra/subsurface-core/records";
+
 import type { LasFile } from "@ikhmalputra/subsurface-core/records";
+import { compute } from "../compute/run.ts";
 
 /**
  * LAS files a user imports for a well, any well. What they are (curves, depth range, the index
@@ -62,7 +63,7 @@ const METRES = /^(m|meter|meters|metre|metres)$/i;
 export async function importLas(wellId: string, file: File): Promise<ImportedLog> {
   const text = await file.text();
   let las: LasFile;
-  try { las = parseLas(text); } catch (reason) { throw new Error(`Not a readable LAS file: ${(reason as Error).message}`, { cause: reason }); }
+  try { las = await compute("lasFromText", text); } catch (reason) { throw new Error(`Not a readable LAS file: ${(reason as Error).message}`, { cause: reason }); }
   const [index, ...curves] = las.curves;
   if (!index || !curves.length) throw new Error("The file has no curves besides its depth index.");
   const unit = index.unit.trim();
@@ -99,11 +100,13 @@ export function useLasFile(log: ImportedLog | null): { readonly las: LasFile | n
     store("readonly", (objects) => objects.get(log.id)).then((text) => {
       if (!live) return;
       if (typeof text !== "string") { setState({ las: null, error: "The file is no longer in this browser's storage; import it again." }); return; }
-      const las = parseLas(text);
+      return compute("lasFromText", text).then((las) => {
+      if (!live) return;
       const [index, ...rest] = las.curves;
       const inFeet: LasFile = log.index.readAs === "ft" ? las : { ...las, curves: [{ ...index!, unit: "ft", values: index!.values.map((value) => value === null ? null : metresToFeet(value)) }, ...rest] };
       parsed.set(log.id, inFeet);
       setState({ las: inFeet, error: null });
+      });
     }).catch((reason: unknown) => { if (live) setState({ las: null, error: (reason as Error).message }); });
     return () => { live = false; };
   }, [log]);

@@ -17,7 +17,9 @@
     "test:asset": "node --test tools/asset.test.mjs",
     "test:packages": "node tools/verify-packages.mjs",
     "test:render-adapters": "node --test packages/react/test/*.test.mjs",
-    "typecheck": "pnpm --filter @ikhmalputra/subsurface-core build && pnpm --filter @ikhmalputra/subsurface-react build && pnpm --filter deck typecheck"
+    "typecheck": "pnpm --filter @ikhmalputra/subsurface-core build && pnpm --filter @ikhmalputra/subsurface-react build && pnpm --filter deck typecheck",
+    "test:budget": "node tools/perf-budget.mjs",
+    "bench:deck": "node tools/bench-deck.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

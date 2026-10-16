@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { computeMinimumCurvature, forgeDesign, forgeSeismicSection, getWellComponents, seismicDepthToTvd, wellComponentsToAssembly } from "@ikhmalputra/subsurface-core";
 import type { ComputedStation, SeismicCube, SurveyPoint } from "@ikhmalputra/subsurface-core";
-import { forgeOperations, parseLas } from "@ikhmalputra/subsurface-core/records";
+import { forgeOperations } from "@ikhmalputra/subsurface-core/records";
 import type { LasFile } from "@ikhmalputra/subsurface-core/records";
 import { equatorSite, forgeSite, unlocatedWells } from "@ikhmalputra/subsurface-react";
 import type { WorldSite } from "@ikhmalputra/subsurface-react";
@@ -11,6 +11,7 @@ import { recordedForSite, siteOfRecord, useRecordedWells } from "./records.ts";
 import { forceSite, forceSites, isForceSite, useForceVersion } from "./force.ts";
 import { useFetched } from "./fetch.ts";
 import { BASE } from "../base.ts";
+import { compute } from "../compute/run.ts";
 
 /** The sites with records, built once. */
 const recordedSites: readonly WorldSite[] = [forgeSite(), equatorSite()];
@@ -51,7 +52,7 @@ export const forgeWell = (() => {
   };
 })();
 
-const decodeLas = (buffer: ArrayBuffer) => parseLas(new TextDecoder().decode(buffer));
+const decodeLas = (buffer: ArrayBuffer) => compute("lasFromBuffer", buffer);
 const asCounts = (buffer: ArrayBuffer) => new Int8Array(buffer);
 
 /** The FORGE mud log, fetched once. */

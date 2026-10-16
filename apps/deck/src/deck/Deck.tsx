@@ -9,7 +9,7 @@ import { placeAt, tvdOn, usePlace } from "../data/place.ts";
 import { useForgeOpenHole, valueAt } from "../data/openhole.ts";
 import { analyse, isDesignSite, useDesignState } from "../data/design.ts";
 import { WhatIfBar } from "./WhatIfBar.tsx";
-import { ModuleBody } from "../modules/bodies.tsx";
+import { ModuleBody, prefetchModules } from "../modules/bodies.tsx";
 import type { ModuleId } from "../modules/registry.ts";
 import { moduleById, moduleIds, signalColour } from "../modules/registry.ts";
 import { CommandBar } from "./CommandBar.tsx";
@@ -32,6 +32,12 @@ const GAP = 10;
 export function Deck() {
   const theme = useDeck((deck) => deck.theme);
   const patch = useDeck((deck) => deck.patch);
+  // Once the first tiles have drawn and the deck is idle, fetch the other modules' chunks in the background.
+  useEffect(() => {
+    const idle = (window as { requestIdleCallback?: (run: () => void, options?: { timeout: number }) => number }).requestIdleCallback;
+    const handle = idle ? idle(prefetchModules, { timeout: 5000 }) : window.setTimeout(prefetchModules, 3000);
+    return () => { if (!idle) window.clearTimeout(handle); };
+  }, []);
   // Esc puts a tile spread over the deck back, unless something inside it used the key first.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => { if (event.key === "Escape" && !event.defaultPrevented && deckState().focus && !deckState().commandOpen && !deckState().newWellOpen && !deckState().shareOpen) actions.setFocus(null); };
