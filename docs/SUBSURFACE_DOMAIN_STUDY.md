@@ -116,6 +116,9 @@ Each is a real tool on real data, with no overlap with what is built.
    step first, peak or trough, within a step and a correlation the user sets (a strong event tracks
    over ~90% of the volume in ~10 ms, so it re-tracks live). The surface is drawn depth-coloured in
    3D, as a contoured structure map and on the section, and joins Site in 3D. Kept in the browser.
+   Faults followed the same day: sticks picked on inlines, joined into a surface; a horizon stops
+   at a fault and is seeded again across it, which gives the throw (median step across its cut-offs)
+   and the gap it opens on the structure map.
 
 Shaly-sand saturation, permeability and Monte Carlo extend the clastic petrophysics, which still
 runs on synthetic logs; FORCE 2020 would give it real ones. Hydraulics with rheology waits for a source with Fann readings.

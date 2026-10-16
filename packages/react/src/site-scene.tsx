@@ -140,7 +140,7 @@ export interface SiteSceneProps {
 
 export interface SiteFence {
   readonly label: string;
-  /** The wall's corners in plan, in order: east and north, site metres. */
+  /** The wall's corners in plan, in order: east and north, site metres. With none, only the lines are drawn (e.g. fault sticks). */
   readonly stations: readonly (readonly [number, number])[];
   readonly topM: number;
   readonly baseM: number;
@@ -565,7 +565,7 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
     /** The fence: its wall, a column down each well in the wall's own plane, and the lines across it. */
     const drawFence = (wall: SiteSceneProps["fence"]) => {
       clearFence();
-      if (!wall || wall.stations.length < 1) { invalidate(); return; }
+      if (!wall) { invalidate(); return; }
       const group = new THREE.Group();
       const stations = wall.stations;
       if (stations.length >= 2) {
@@ -589,7 +589,7 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
       }
       // Each column lies in the wall: across the well along the wall's direction where the well stands.
       const half = span * 0.018;
-      for (const column of wall.columns ?? []) {
+      for (const column of stations.length ? wall.columns ?? [] : []) {
         const well = wells.find((entry) => entry.id === column.wellId);
         if (!well || !column.intervals.length) continue;
         const head = [well.xyz[0]!, well.xyz[1]!] as const;
@@ -628,10 +628,9 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
         tube.renderOrder = line.emphasis ? 10 : 9;
         group.add(tube);
         // Labelled halfway along its last span, clear of the well names at either end.
-        fenceLabels.push(label(line.label, points.at(-2)!.clone().lerp(points.at(-1)!, 0.5), "pick", line.emphasis ? 3 : 1, { colour: line.color }));
+        if (line.label) fenceLabels.push(label(line.label, points.at(-2)!.clone().lerp(points.at(-1)!, 0.5), "pick", line.emphasis ? 3 : 1, { colour: line.color }));
       }
-      const [e, n] = stations[0]!;
-      fenceLabels.push(label(wall.label, at(e, n, wall.topM), "name", 3, { className: "is-seismic" }));
+      if (stations.length) { const [e, n] = stations[0]!; fenceLabels.push(label(wall.label, at(e, n, wall.topM), "name", 3, { className: "is-seismic" })); }
       fenceGroup = group;
       scene.add(group);
       invalidate();

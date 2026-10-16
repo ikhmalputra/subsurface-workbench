@@ -1282,3 +1282,17 @@ body::after { content: ""; position: fixed; inset: 0; pointer-events: none; z-in
   background: radial-gradient(120% 90% at 30% 0%, color-mix(in srgb, var(--signal-depth) 10%, transparent), transparent 55%), radial-gradient(90% 80% at 100% 100%, color-mix(in srgb, var(--yours) 10%, transparent), transparent 60%); }
 .cor-3d > .sw-site { position: absolute; inset: 0; }
 .cor-view { margin-right: 4px; }
+
+/* ---- Faults, picked in Horizons ---- */
+.hz-mode { margin-right: 2px; }
+.tie-3d[data-mode="fault"] { box-shadow: inset 0 0 0 2px color-mix(in srgb, #ef4444 60%, transparent); }
+.hz-hint.is-fault { border-color: color-mix(in srgb, #ef4444 55%, transparent); color: #fca5a5; }
+.hz-hint.is-note { border-color: color-mix(in srgb, #fbbf24 55%, transparent); color: #fde68a; }
+.hz-list.is-faults { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--glass-edge); }
+.hz-list.is-faults li i { width: 6px; height: 22px; border-radius: 1px; transform: skewX(-14deg); }
+.hz-map-fault { fill: currentColor; fill-opacity: .55; stroke: currentColor; stroke-width: 1.2; stroke-linejoin: round; }
+.hz-map-fault-line { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 2px rgba(0, 0, 0, .8)); }
+.hz-section-fault path { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.hz-section-fault path.is-read { stroke-width: 1.6; stroke-dasharray: 5 4; opacity: .75; }
+.hz-section-fault circle { fill: currentColor; stroke: var(--deck-bg); stroke-width: 1.5; }
+.hz-section-fault[data-active] path:not(.is-read) { filter: drop-shadow(0 0 3px currentColor); }

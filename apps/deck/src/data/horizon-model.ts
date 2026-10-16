@@ -67,17 +67,23 @@ class Heap {
   }
 }
 
-/** Tracks from a seed (along bin, offset bin, sample): a depth in fractional samples for every trace reached, NaN elsewhere. */
-export function track(cube: SeismicCube, seed: { readonly a: number; readonly o: number; readonly s: number }, options: TrackOptions = defaultTrack): Float32Array {
+export interface Seed { readonly a: number; readonly o: number; readonly s: number }
+/** Whether a step from one trace to its neighbour, at a depth sample, is barred (e.g. it crosses a fault). */
+export type Barrier = (a: number, o: number, na: number, no: number, s: number) => boolean;
+
+/**
+ * Tracks from one or more seeds (along bin, offset bin, sample): a depth in fractional samples for
+ * every trace reached, NaN elsewhere. A barrier stops steps across it, so a fault ends the horizon
+ * on its side and a seed on the far side carries it on there.
+ */
+export function track(cube: SeismicCube, seeds: Seed | readonly Seed[], options: TrackOptions = defaultTrack, barrier?: Barrier): Float32Array {
   const grid = new Float32Array(cube.alongCount * cube.offsetCount).fill(NaN);
-  const start = snap(cube, seed.a, seed.o, Math.round(seed.s), options.polarity);
-  if (start === null) return grid;
-  grid[seed.o * cube.alongCount + seed.a] = start;
   const heap = new Heap();
   const offer = (a: number, o: number, s: number) => {
     for (const [da, dof] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
       const na = a + da, no = o + dof;
       if (na < 0 || no < 0 || na >= cube.alongCount || no >= cube.offsetCount || !Number.isNaN(grid[no * cube.alongCount + na]!)) continue;
+      if (barrier?.(a, o, na, no, s)) continue;
       const found = snap(cube, na, no, Math.round(s), options.polarity, options.search);
       if (found === null || Math.abs(found - s) > options.search) continue;
       // Compared at the same rounded place in both traces, moved by the rounded step: rounding each depth
@@ -86,7 +92,12 @@ export function track(cube: SeismicCube, seed: { readonly a: number; readonly o:
       if (score >= options.minCorrelation) heap.push({ score, a: na, o: no, s: found });
     }
   };
-  offer(seed.a, seed.o, start);
+  for (const seed of Array.isArray(seeds) ? seeds as readonly Seed[] : [seeds as Seed]) {
+    const start = snap(cube, seed.a, seed.o, Math.round(seed.s), options.polarity);
+    if (start === null || !Number.isNaN(grid[seed.o * cube.alongCount + seed.a]!)) continue;
+    grid[seed.o * cube.alongCount + seed.a] = start;
+    offer(seed.a, seed.o, start);
+  }
   while (heap.size) {
     const step = heap.pop();
     const k = step.o * cube.alongCount + step.a;

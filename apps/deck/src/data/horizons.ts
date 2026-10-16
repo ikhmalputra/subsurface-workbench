@@ -3,6 +3,8 @@ import { forgeSeismicSection, seismicDepthToTvd } from "@ikhmalputra/subsurface-
 import type { SeismicCube } from "@ikhmalputra/subsurface-core";
 import type { SiteSceneSurface } from "@ikhmalputra/subsurface-react/3d";
 import { depthColour, track } from "./horizon-model.ts";
+import { crosses } from "./fault-model.ts";
+import type { Stick } from "./fault-model.ts";
 import type { Polarity } from "./horizon-model.ts";
 
 /**
@@ -18,6 +20,8 @@ export interface Horizon {
   readonly polarity: Polarity;
   /** Along bin, offset bin and depth sample of the seed in the sub-volume. */
   readonly seed: { readonly a: number; readonly o: number; readonly s: number };
+  /** Further seeds, e.g. across a fault: the horizon is tracked from all of them. */
+  readonly more?: readonly { readonly a: number; readonly o: number; readonly s: number }[];
   readonly minCorrelation: number;
   readonly search: number;
   readonly visible: boolean;
@@ -49,12 +53,19 @@ const cut = forgeSeismicSection.subVolume!;
 /** The FORGE sub-volume as a cube, from its counts. */
 export const forgeCube = (counts: Int8Array): SeismicCube => ({ counts, alongCount: cut.alongCount, offsetCount: cut.offsetCount, sampleCount: cut.samples, amplitudePerCount: cut.amplitudePerCount, alongFromM: cut.alongFromM, offsetFromM: cut.offsetFromM, spacingM: cut.spacingM });
 
-/** Tracked grids, by the settings that make them. */
+/** Tracked grids, by the settings and the faults that make them. */
 const grids = new Map<string, Float32Array>();
-export function gridOf(horizon: Horizon, cube: SeismicCube): Float32Array {
-  const key = `${horizon.seed.a},${horizon.seed.o},${horizon.seed.s},${horizon.polarity},${horizon.minCorrelation},${horizon.search}`;
+/** A horizon tracked through the cube, stopping at any of the faults given (their sticks; `faultKey` names them for the cache). */
+export function gridOf(horizon: Horizon, cube: SeismicCube, faults: readonly (readonly Stick[])[] = [], faultKey = ""): Float32Array {
+  const seeds = [horizon.seed, ...(horizon.more ?? [])];
+  const key = `${seeds.map((seed) => `${seed.a},${seed.o},${seed.s}`).join(";")}/${horizon.polarity},${horizon.minCorrelation},${horizon.search}/${faultKey}`;
   let grid = grids.get(key);
-  if (!grid) { grid = track(cube, horizon.seed, { polarity: horizon.polarity, search: horizon.search, window: 5, minCorrelation: horizon.minCorrelation }); grids.set(key, grid); }
+  if (!grid) {
+    const barrier = faults.length ? (a: number, o: number, na: number, no: number, s: number) => faults.some((sticks) => crosses(sticks, a, o, na, no, s)) : undefined;
+    grid = track(cube, seeds, { polarity: horizon.polarity, search: horizon.search, window: 5, minCorrelation: horizon.minCorrelation }, barrier);
+    if (grids.size > 64) grids.clear();
+    grids.set(key, grid);
+  }
   return grid;
 }
 
