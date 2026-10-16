@@ -4,7 +4,7 @@
 
 A subsurface visualisation and calculation toolkit by Ikhmal Putra Manan. The host owns data,
 backend and persistence; the packages store nothing and fetch nothing. Original code is proprietary (see LICENSE). The
-Utah FORGE data keeps its CC BY 4.0 attribution, and the world basemap is Natural Earth (public
+Utah FORGE data keeps its CC BY 4.0 attribution, and the world basemap is Natural Earth, the globe imagery NASA Blue Marble and the FORGE ground USGS 3DEP and NAIP (all public
 domain); see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 **State, October 2026.** The previous application and its UI were purged for a total redo. What
@@ -25,7 +25,7 @@ absent values (`/known`); LAS 2.0 and SEG-Y parsing; a well's state on any day f
 reports (`wellAsOf`); a design brief as a drawable well (`briefToWellDesign`); what-if edit
 history (`createEditHistory`); synthetic rock-model logs (`syntheticReservoirLogs`); CRS and GIS (WGS84, Web Mercator, WGS84 and NAD83 UTM); validated contracts; state and URL deep links; the FORGE, S-profile and research wells |
 | `@ikhmalputra/subsurface-react` | Views: the well section, construction schematic and curved construction, log tracks, trajectory plots, seismic section (`/2d`); well, assembly, offshore and site scenes (`/3d`); the wells map and field GIS map (`/gis`); the site adapters that place FORGE and the Equator field (root) |
-| `packages/fixtures` | Data only: the FORGE source files the tests and the deck read (mud log LAS, PSDM section SEG-Y, PSDM sub-volume), CC BY 4.0 |
+| `packages/fixtures` | Data only: the FORGE source files the tests and the deck read (mud log LAS, PSDM section SEG-Y, PSDM sub-volume), CC BY 4.0; the 118 FORCE 2020 North Sea wells (logs, the Directorate's tops and shoes, interpreted lithology), CC BY 4.0, rebuilt from the downloads by `node tools/build-force2020.mjs <folder>`; the 58-32 sonic and density the well tie reads (CC BY 4.0), by `node tools/build-forge-tie.mjs <folder>` |
 
 Neither package has been published.
 

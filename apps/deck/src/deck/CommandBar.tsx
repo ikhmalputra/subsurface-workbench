@@ -108,6 +108,7 @@ export function CommandBar() {
           <Command.Item value="redo" keywords={["design"]} onSelect={run(() => designHistory.redo())}><i style={dot(signalColour.whatif)} />Redo{designHistory.getState().redo.at(-1) ? `: ${designHistory.getState().redo.at(-1)!.label}` : ""}<kbd>⇧⌘Z</kbd></Command.Item>
         </Command.Group>}
         <Command.Group heading="Deck">
+          <Command.Item value="share this deck copy link" keywords={["send", "url", "link", "collaborate", "review"]} onSelect={run(() => actions.openShare(true))}><i />Share this deck as a link…</Command.Item>
           <Command.Item value="clear depth cursor" onSelect={run(() => signals.pinDepth(signals.getState().activeAsset.wellId, null, "deck:bar"))}><i style={dot(signalColour.depth)} />Clear the depth cursor</Command.Item>
           <Command.Item value="whole well clear depth window" onSelect={run(() => signals.setDepthWindow(null, "deck:bar"))}><i style={dot(signalColour.depth)} />Show the whole well</Command.Item>
           <Command.Item value="links patch bay connections" onSelect={run(() => actions.setPatch(true))}><i />Show every link between modules<kbd>hold ⌥</kbd></Command.Item>

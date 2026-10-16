@@ -39,9 +39,13 @@ export interface DeckState {
   readonly pulses: readonly Pulse[];
   /** The patch bay: every live connection drawn at once, while ⌥ is held. */
   readonly patch: boolean;
-  /** One line on what the deck just did to make room, shown in the lens. */
-  readonly note: { readonly text: string; readonly at: number } | null;
+  /** One line on what the deck just did (made room, opened a link), shown in the lens; `ms` for longer reads. */
+  readonly note: { readonly text: string; readonly at: number; readonly ms?: number } | null;
   readonly commandOpen: boolean;
+  /** The Share dialog: a link to the deck as it is now. */
+  readonly shareOpen: boolean;
+  /** A tile spread over the whole grid for a while; the layout under it is kept. */
+  readonly focus: ModuleId | null;
   /** The New well dialog. */
   readonly newWellOpen: boolean;
   /** A section line drawn on the map, longitude/latitude ends: the curtain tile cuts along it. */
@@ -77,7 +81,7 @@ const opening = (() => {
   return tiles.globe ? { tiles: swap(tiles, stage, "globe"), stage: "globe" as const } : storedLayout;
 })();
 
-let state: DeckState = { siteId: null, wellId: null, tiles: opening.tiles, stage: opening.stage, theme: storedTheme, lastUsed: {}, pulses: [], patch: false, note: null, commandOpen: false, newWellOpen: false, sectionLine: null, fusions: {}, fuseAim: null };
+let state: DeckState = { siteId: null, wellId: null, tiles: opening.tiles, stage: opening.stage, theme: storedTheme, lastUsed: {}, pulses: [], patch: false, note: null, commandOpen: false, shareOpen: false, focus: null, newWellOpen: false, sectionLine: null, fusions: {}, fuseAim: null };
 const listeners = new Set<() => void>();
 const set = (next: Partial<DeckState>) => {
   state = { ...state, ...next };
@@ -152,6 +156,14 @@ function settle(opening: Opening | null, id: ModuleId, from: Origin) {
   for (const signal of moduleById[id].listens) if (signal !== "whatif") set({ pulses: [...state.pulses, { id: ++pulseId, signal, from, to: [id], at: performance.now() }] });
 }
 
+/** A module that needs the stage, on a full deck: it takes the stage's tile, which closes. */
+function takeStage(id: ModuleId): Opening | null {
+  const room = state.tiles[state.stage];
+  const min = minSizes[id];
+  if (!room || room.w < min.w || room.h < min.h) return null;
+  return { tiles: { ...without(state.tiles, state.stage), [id]: room } as Layout, landed: room, split: null, replaced: state.stage };
+}
+
 export const actions = {
   /** Fuse one tile into another (or change what it fuses); the source tile stays where it was. */
   fuse(from: ModuleId, to: ModuleId, value: string) {
@@ -186,12 +198,14 @@ export const actions = {
     }
     // A moment belongs to one well's history; a new place starts from the finished record.
     if (siteChanged) signals.setTimeCursor(null, `deck:${from}`);
-    if (siteId && state.stage !== "site3d") actions.promote("site3d");
+    // A new site is staged in 3D; another well on the same site leaves the stage where it is.
+    if (siteId && siteChanged && state.stage !== "site3d") actions.promote("site3d");
     if (!siteId && state.stage !== "globe" && state.tiles.globe) actions.promote("globe");
     if (changed) pulse("place", from);
   },
   /** Swap a tile with the stage: the stage is wherever the focus is. Opens the module if it is closed. */
   promote(id: ModuleId) {
+    if (moduleById[id].opensFocused && state.tiles[id]) { actions.setFocus(id); return; }
     const opened = !state.tiles[id];
     if (opened) actions.open(id);
     const tile = state.tiles[id], stage = state.tiles[state.stage];
@@ -201,8 +215,10 @@ export const actions = {
     set({ tiles: swap(state.tiles, state.stage, id), stage: id, lastUsed: { ...state.lastUsed, [id]: Date.now() } });
   },
   open(id: ModuleId, from: Origin = "bar") {
-    if (state.tiles[id]) { pulse("place", from); return; }
-    settle(planOpen(state.tiles as Layout, id, minSizes, moduleById[id].size, state.stage, state.lastUsed as Record<string, number>), id, from);
+    if (state.tiles[id]) { pulse("place", from); if (moduleById[id].opensFocused) actions.setFocus(id); return; }
+    const opening = planOpen(state.tiles as Layout, id, minSizes, moduleById[id].size, state.stage, state.lastUsed as Record<string, number>);
+    settle(opening ?? (moduleById[id].opensFocused ? takeStage(id) : null), id, from);
+    if (moduleById[id].opensFocused && state.tiles[id]) actions.setFocus(id);
   },
   /** A module dragged in from the dock and dropped on a cell. */
   dropIn(id: ModuleId, at: { col: number; row: number }) {
@@ -212,6 +228,7 @@ export const actions = {
     return planDropIn(state.tiles as Layout, id, at, minSizes, moduleById[id].size)?.landed ?? null;
   },
   close(id: ModuleId) {
+    if (state.focus === id) set({ focus: null });
     if (!state.tiles[id] || openIds().length === 1) return;
     const rest = without(state.tiles, id);
     set({ tiles: rest, stage: state.stage === id ? largest(rest) : state.stage });
@@ -225,6 +242,15 @@ export const actions = {
   setTheme(theme: "night" | "day") { write("deck-theme", theme); set({ theme }); },
   openCommand(open: boolean) { set({ commandOpen: open }); },
   openNewWell(open: boolean) { set({ newWellOpen: open, commandOpen: false }); },
+  /** Spread a tile over the whole grid, or put it back. */
+  setFocus(id: ModuleId | null) { if (id !== state.focus) set({ focus: id && state.tiles[id] ? id : null }); },
+  openShare(open: boolean) { set({ shareOpen: open, commandOpen: false }); },
+  /** A line in the lens; long ones stay up longer. */
+  notify(text: string, ms?: number) { set({ note: { text, at: Date.now(), ...(ms ? { ms } : {}) } }); },
+  /** A shared deck's own tiles and drawings, set at once (the place is chosen first, by `selectSite`). */
+  restore(next: { readonly tiles: Tiles; readonly stage: ModuleId; readonly sectionLine: DeckState["sectionLine"]; readonly fusions: DeckState["fusions"] }) {
+    set({ tiles: next.tiles, stage: next.stage, sectionLine: next.sectionLine, fusions: next.fusions, lastUsed: {} });
+  },
   /** Go to a well with its editor on the stage. */
   editWell(siteId: string, wellId: string | null = null, from: Origin = "bar") {
     actions.selectSite(siteId, wellId, from);

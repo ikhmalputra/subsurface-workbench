@@ -186,3 +186,4 @@ a:focus-visible { outline: 2px solid var(--signal-depth); outline-offset: 3px; }
 .lp-discipline em { font: normal 500 11.5px var(--sans); padding: 3px 8px; border-radius: 999px; background: rgba(255, 255, 255, .05); color: var(--ink-2); }
 .lp-group > header h3 { display: flex; align-items: center; gap: 10px; }
 .lp-group > header h3::before { content: ""; width: 4px; height: 18px; border-radius: 2px; background: var(--grad); }
+.lp-on em.is-northsea { color: #6ee7b7; background: color-mix(in srgb, #34d399 14%, transparent); }

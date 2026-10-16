@@ -43,6 +43,13 @@ export interface WellsMapProps {
   /** Same-origin GeoJSON of land polygons (`properties.kind: "land"`) and borders (`"border"`). */
   readonly basemapUrl?: string;
   readonly basemapAttribution?: string;
+  /**
+   * Same-origin world imagery already in Web Mercator, square, spanning ±85.0511° (e.g. NASA Blue
+   * Marble reprojected): laid under the coastlines and borders in place of the flat land fill, fading
+   * as the map zooms in to a site.
+   */
+  readonly imageryUrl?: string;
+  readonly imageryAttribution?: string;
   readonly selectedSiteId: string | null;
   readonly selectedWellId: string | null;
   /** A site (and well) chosen on the map; null when the reader returns to the world view. */
@@ -82,7 +89,7 @@ function siteBounds(site: WellsMapSite): [[number, number], [number, number]] {
 
 const WORLD = { center: [-176, 16] as [number, number], zoom: 1.35 };
 
-export function WellsMap({ sites, workerUrl, basemapUrl, basemapAttribution, selectedSiteId, selectedWellId, onSelect, cursor: depthCursor = null, sectionLine = null, onSectionLineChange }: WellsMapProps) {
+export function WellsMap({ sites, workerUrl, basemapUrl, basemapAttribution, imageryUrl, imageryAttribution, selectedSiteId, selectedWellId, onSelect, cursor: depthCursor = null, sectionLine = null, onSectionLineChange }: WellsMapProps) {
   const element = useRef<HTMLDivElement>(null);
   const map = useRef<GeographicMap | null>(null);
   const markers = useRef<Marker[]>([]);
@@ -120,11 +127,16 @@ export function WellsMap({ sites, workerUrl, basemapUrl, basemapAttribution, sel
         },
         layers: [{ id: "water", type: "background", paint: { "background-color": "#dce7ef" } }],
       };
+      if (imageryUrl) {
+        if (!imageryAttribution?.trim()) throw new TypeError("World imagery requires attribution.");
+        style.sources.imagery = { type: "image", url: localUrl(imageryUrl), coordinates: [[-180, 85.0511], [180, 85.0511], [180, -85.0511], [-180, -85.0511]], ...(basemapUrl ? {} : { attribution: imageryAttribution }) } as typeof style.sources[string];
+        style.layers.push({ id: "imagery", type: "raster", source: "imagery", paint: { "raster-opacity": ["interpolate", ["linear"], ["zoom"], 4, 1, 9, 0.35], "raster-fade-duration": 0 } });
+      }
       if (basemapUrl) {
         if (!basemapAttribution?.trim()) throw new TypeError("A host basemap requires attribution.");
-        style.sources.world = { type: "geojson", data: localUrl(basemapUrl), attribution: basemapAttribution };
+        style.sources.world = { type: "geojson", data: localUrl(basemapUrl), attribution: imageryUrl ? `${basemapAttribution} · ${imageryAttribution}` : basemapAttribution };
         style.layers.push(
-          { id: "land", type: "fill", source: "world", filter: ["==", ["get", "kind"], "land"], paint: { "fill-color": "#f4f1ea" } },
+          { id: "land", type: "fill", source: "world", filter: ["==", ["get", "kind"], "land"], paint: { "fill-color": "#f4f1ea", "fill-opacity": imageryUrl ? ["interpolate", ["linear"], ["zoom"], 4, 0, 9, 0.6] : 1 } },
           { id: "coast", type: "line", source: "world", filter: ["==", ["get", "kind"], "land"], paint: { "line-color": "#a7b3bd", "line-width": 0.8 } },
           { id: "borders", type: "line", source: "world", filter: ["==", ["get", "kind"], "border"], paint: { "line-color": "#c3b9a8", "line-width": 0.7, "line-dasharray": [3, 2] } },
         );
@@ -160,13 +172,18 @@ export function WellsMap({ sites, workerUrl, basemapUrl, basemapAttribution, sel
       });
       instance.on("mouseenter", "heads", () => { instance!.getCanvas().style.cursor = "pointer"; });
       instance.on("mouseleave", "heads", () => { instance!.getCanvas().style.cursor = ""; });
-      instance.on("load", () => { if (!cancelled) setReady(true); });
+      instance.on("load", () => {
+        if (cancelled) return;
+        setReady(true);
+        // The corner label already names the sources; the full credit stays one click away behind ⓘ.
+        element.current?.querySelector(".maplibregl-ctrl-attrib")?.classList.remove("maplibregl-compact-show");
+      });
       instance.getCanvas().setAttribute("aria-label", "World map of wells. Drag to pan, scroll to zoom. Choose a site from its label or from the list beside the map.");
       resize = new ResizeObserver(() => instance?.resize());
       resize.observe(element.current);
     })().catch((cause: unknown) => { if (!cancelled) setError(`The map could not start: ${cause instanceof Error ? cause.message : String(cause)}`); });
     return () => { cancelled = true; resize?.disconnect(); for (const marker of markers.current) marker.remove(); markers.current = []; instance?.remove(); map.current = null; };
-  }, [workerUrl, basemapUrl, basemapAttribution]);
+  }, [workerUrl, basemapUrl, basemapAttribution, imageryUrl, imageryAttribution]);
 
   // Sites, wells and selection into the map's sources, and one labelled marker per site.
   useEffect(() => {
@@ -336,6 +353,6 @@ export function WellsMap({ sites, workerUrl, basemapUrl, basemapAttribution, sel
     </div>
     {error && <p role="alert" className="sw-wells-map-error">{error}</p>}
     {!ready && !error && <p role="status" className="sw-wells-map-status">Starting the map…</p>}
-    <p className="sw-wells-map-cursor" aria-live="off">{cursor ? `${cursor} · WGS84` : basemapUrl ? `Basemap: ${basemapAttribution}` : "No basemap supplied: graticule only"}</p>
+    <p className="sw-wells-map-cursor" aria-live="off">{cursor ? `${cursor} · WGS84` : basemapUrl ? `Basemap: ${basemapAttribution}${imageryUrl ? ` · imagery ${imageryAttribution}` : ""}` : imageryUrl ? `Imagery: ${imageryAttribution}` : "No basemap supplied: graticule only"}</p>
   </section>;
 }

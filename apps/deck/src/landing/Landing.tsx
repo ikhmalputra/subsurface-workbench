@@ -1,6 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
-  Activity, Anchor, ArrowRight, AudioWaveform, Box, CalendarDays, Columns3, Command, Compass, Cylinder, Droplets, FilePen, Gauge, GitCompareArrows, Globe2, Layers2, Layers3,
+  Activity, AlignHorizontalSpaceAround, Anchor, AudioLines, ArrowRight, AudioWaveform, Box, CalendarDays, Columns3, Command, Compass, Cylinder, Droplets, FilePen, Gauge, GitCompareArrows, Globe2, Layers, Map as MapIcon, Layers2, Layers3,
   ListTree, Mountain, MousePointerClick, PencilRuler, Plus, Radar, Rotate3d, ScatterChart, ShieldAlert, ShieldCheck, Slice, TrendingDown, Waves,
 } from "lucide-react";
 import { Showcase3D } from "./Showcase3D.tsx";
@@ -14,18 +14,22 @@ import { BASE } from "../base.ts";
 
 const DECK = `${BASE}deck/`;
 
-type Kind = "FORGE" | "Designs" | "Recorded" | "Equator" | "Anywhere";
+type Kind = "FORGE" | "NorthSea" | "Designs" | "Recorded" | "Equator" | "Anywhere";
 interface Tool { readonly title: string; readonly icon: LucideIcon; readonly blurb: string; readonly on: readonly Kind[] }
 interface Discipline { readonly name: string; readonly line: string; readonly tools: readonly Tool[] }
 const DISCIPLINES: readonly Discipline[] = [
   { name: "Geophysics & geology", line: "The volume the wells sit in: seismic, horizons, formations, and where everything is.", tools: [
-    { title: "Site in 3D", icon: Box, blurb: "Wells, horizons and reference levels in one frame; on FORGE, the seismic volume with inline, crossline and depth slices you drag.", on: ["FORGE", "Designs", "Recorded", "Equator"] },
+    { title: "Site in 3D", icon: Box, blurb: "Wells, horizons and reference levels in one frame; on FORGE, the seismic volume with inline, crossline and depth slices you drag; in the North Sea, each group top triangulated between the wells.", on: ["FORGE", "NorthSea", "Designs", "Recorded", "Equator"] },
+    { title: "Correlation", icon: AlignHorizontalSpaceAround, blurb: "A field's wells side by side on their logs, the Directorate's tops joined from well to well. Flatten on any top, and pick your own beside theirs.", on: ["NorthSea"] },
+    { title: "Well tie", icon: AudioLines, blurb: "The seismic a well's sonic and density predict, against the PSDM at FORGE 58-32: drag the synthetic onto its event, fit the shift and stretch, read the correlation.", on: ["FORGE"] },
+    { title: "Horizons & faults", icon: Layers, blurb: "Click a reflector on a slice in 3D: it is tracked through FORGE's PSDM into a depth-coloured surface. Pick faults as sticks; the horizon stops at them and shows the throw.", on: ["FORGE"] },
+    { title: "Maps & volumetrics", icon: MapIcon, blurb: "Map a reservoir zone between the North Sea wells, set a contact, and get P90, P50 and P10 in-place volumes from the wells' own porosity, net to gross and saturation.", on: ["NorthSea"] },
     { title: "Seismic section", icon: AudioWaveform, blurb: "The PSDM along the well, or the inline and crossline you move in 3D, with the wells and formation tops drawn on it.", on: ["FORGE"] },
     { title: "Section line", icon: Slice, blurb: "Draw a line on the globe: the seismic along it, with every well that passes near.", on: ["FORGE"] },
     { title: "Globe", icon: Globe2, blurb: "Every located well and field on an offline globe; fly to a site or draw a section across it.", on: ["Anywhere"] },
   ] },
   { name: "Petrophysics", line: "What the logs say about the rock and what is in it.", tools: [
-    { title: "Logs", icon: ListTree, blurb: "LAS curves on depth tracks: open-hole and mud logs, or files you import. Shift-drag to brush an interval.", on: ["FORGE", "Recorded", "Equator"] },
+    { title: "Logs", icon: ListTree, blurb: "LAS curves on depth tracks: open-hole and mud logs, or files you import. Shift-drag to brush an interval.", on: ["FORGE", "NorthSea", "Recorded", "Equator"] },
     { title: "Petrophysics", icon: ScatterChart, blurb: "Shale volume, porosity, saturation and pay over the brushed interval; FORGE's granite read three ways, with its fractures.", on: ["FORGE", "Equator"] },
   ] },
   { name: "Geomechanics & pressure", line: "The stresses and pressures the hole has to stand in.", tools: [
@@ -38,8 +42,8 @@ const DISCIPLINES: readonly Discipline[] = [
     { title: "Hydraulics", icon: Waves, blurb: "Bit pressure drop, jet velocity and annular velocity, with flow and nozzles you set.", on: ["Designs"] },
     { title: "Kick tolerance", icon: ShieldAlert, blurb: "The influx each shoe can take while drilling on.", on: ["Designs"] },
     { title: "Anti-collision", icon: Radar, blurb: "Separation to the neighbouring wells: ladder plot, travelling cylinder and the ISCWSA separation factor.", on: ["FORGE"] },
-    { title: "Plan view", icon: Compass, blurb: "The path from above: north, east and closure, dogleg coloured.", on: ["FORGE", "Designs", "Recorded", "Equator"] },
-    { title: "Vertical section", icon: Activity, blurb: "Departure against TVD, with the formations.", on: ["FORGE", "Designs", "Recorded", "Equator"] },
+    { title: "Plan view", icon: Compass, blurb: "The path from above: north, east and closure, dogleg coloured.", on: ["FORGE", "NorthSea", "Designs", "Recorded", "Equator"] },
+    { title: "Vertical section", icon: Activity, blurb: "Departure against TVD, with the formations.", on: ["FORGE", "NorthSea", "Designs", "Recorded", "Equator"] },
   ] },
   { name: "Well engineering & completions", line: "What is built in the hole, and whether it holds.", tools: [
     { title: "Well designer", icon: PencilRuler, blurb: "Plan a well stage by stage: place, datum, geology and pressures, trajectory, casing, cement, completion, checked live.", on: ["Designs"] },
@@ -127,6 +131,8 @@ const SOURCES: readonly { readonly what: string; readonly from: string; readonly
   { what: "58-32 calibrated stresses", from: "GDR 1032", badge: "documented" },
   { what: "Utah FORGE 16A(78)-32: survey, construction, daily reports", from: "DOE Geothermal Data Repository, GDR 1283 (CC BY 4.0)", badge: "documented" },
   { what: "16B, 58-32, 56-32, 78-32, 78B-32 construction and surveys", from: "End-of-well reports, GDR 1516 · 1006 · 1295 · 1153 · 1330", badge: "documented" },
+  { what: "118 Norwegian North Sea wells: logs, group and formation tops, casing shoes", from: "FORCE 2020 (Zenodo 4351156, CC BY 4.0), the Norwegian Offshore Directorate's data (NLOD)", badge: "documented" },
+  { what: "Lithology for those wells", from: "The FORCE 2020 competition's interpretation", badge: "documented" },
   { what: "Monthly production of 136 Norwegian fields", from: "Norwegian Offshore Directorate (Sodir) FactPages, NLOD", badge: "documented" },
   { what: "The Equator field: wells, horizons, contacts and logs", from: "A synthetic field for petrophysics", badge: "synthetic" },
   { what: "Kestrel A-7, an offshore development well", from: "The deck's example design brief", badge: "synthetic" },
@@ -196,7 +202,7 @@ export function Landing() {
           <tool.icon size={20} strokeWidth={1.6} aria-hidden="true" />
           <b>{tool.title}</b>
           <p>{tool.blurb}</p>
-          <span className="lp-on">{tool.on.map((kind) => <em key={kind} className={`is-${kind.toLowerCase()}`}>{kind === "Designs" ? "Planned wells" : kind === "Recorded" ? "Wells you record" : kind}</em>)}</span>
+          <span className="lp-on">{tool.on.map((kind) => <em key={kind} className={`is-${kind.toLowerCase()}`}>{kind === "Designs" ? "Planned wells" : kind === "Recorded" ? "Wells you record" : kind === "NorthSea" ? "North Sea wells" : kind}</em>)}</span>
         </div>)}</div>
       </div>)}</div>
     </section>

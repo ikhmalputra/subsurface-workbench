@@ -65,7 +65,7 @@ Petrel, Geolog, IP, PROSPER/PIPESIM, MBAL). Each line names what the tool needs.
 | Dataset | Licence | Inside | Unlocks |
 | --- | --- | --- | --- |
 | **Utah FORGE** (GDR / OEDI) | CC BY 4.0 — commercial use with attribution | 16A(78)-32 wireline logs ([GDR 1292](https://gdr.openei.org/submissions/1292): GR, spectral density, neutron, induction resistivity, sonic, FMI, UBI, CBL, temperature; LAS/DLIS); 1 s and 10 s drilling data ([1283](https://gdr.openei.org/submissions/1283)); temperature surveys ([1421](https://gdr.openei.org/submissions/1421)); wells 58-32 ([1006](https://gdr.openei.org/submissions/1006)) and 16B(78)-32 ([1531](https://gdr.openei.org/submissions/1531), [1516](https://gdr.openei.org/submissions/1516)); field trajectories ([1440](https://gdr.openei.org/submissions/1440)); stress logging ([1032](https://gdr.openei.org/submissions/1032)) | Real petrophysics on FORGE; anti-collision across 16A, 16B, 58-32; torque and drag calibrated on 1 s hookload and torque; 1D MEM; thermal loads; cement evaluation |
-| **FORCE 2020** ([Zenodo 4351156](https://zenodo.org/records/4351156)) | CC BY 4.0 (underlying data NLOD 2.0) | LAS for 118 Norwegian wells with labelled lithology, casing depths, tops | Clastic petrophysics on real logs, correlation, facies |
+| **FORCE 2020** ([Zenodo 4351156](https://zenodo.org/records/4351156)) | CC BY 4.0 (underlying data NLOD 2.0) | LAS for 118 Norwegian wells with labelled lithology, casing depths, tops | Correlation (*built*), logs and 3D on real North Sea wells (*built*); clastic petrophysics on real logs, facies |
 | **Sodir FactPages** | NLOD 2.0 — commercial use with attribution | Wellbore headers and coordinates, tops, monthly production by field | Field decline curves, map layers |
 | **BOEM Gulf of America** | US federal, normally public domain | Directional surveys for released wellbores; production by lease and well | Anti-collision at real pad density; decline curves |
 | **Groningen** ([YoDa](https://public.yoda.uu.nl/geo/UU01/1QH0MW.html)) | CC BY 4.0 (to confirm on the record) | 371 wells, > 6,000 logs, tops, PSDM, faults, pressure data | Mapping, volumetrics, gas p/z material balance |
@@ -96,6 +96,34 @@ Each is a real tool on real data, with no overlap with what is built.
    construction, each element with its record and every missing record listed as a gap. FORGE
    follows the time rail (fluid column and BOP while drilling, production casing once completed);
    Kestrel A-7's design, drilling or producing. NORSOK D-010's idea, none of its tables.
+
+7. ~~**Correlation**~~ — *built* 16 Oct 2026: the 118 FORCE 2020 wells in six quadrant areas,
+   side by side on GR, resistivity, density–neutron or sonic and the competition's lithology;
+   the Directorate's group and formation tops joined between neighbouring wells; hung on sea
+   level or flattened on any top; the user's own picks beside the Directorate's, with the
+   difference. The wells also open in Logs, Site in 3D (each group top triangulated between
+   them), Plan view and Vertical section.
+
+8. ~~**Well tie**~~ — *built* 17 Oct 2026, at FORGE 58-32 rather than 16A: 16A's open-hole logs
+   start at 5,000 ft MD, below its granite top at 4,700 ft, while 58-32 has sonic (2,150–7,569 ft)
+   and density across its contact and sits inside the PSDM sub-volume (894 m along the 16A section,
+   197 m off it). Impedance, reflectivity, a sonic time–depth relation and a Ricker wavelet make the
+   synthetic; the person drags it onto an event and Fit refines shift and stretch locally, because a
+   wide search locks onto other cycles. Near the 1,225 m PSDM event: +57 m, 3% stretch, r 0.52.
+
+9. ~~**Horizon picking**~~ — *built* 17 Oct 2026 on the FORGE PSDM sub-volume: click a reflector on
+   any slice in 3D (or on the inline section) and it is tracked trace to trace, best-correlated
+   step first, peak or trough, within a step and a correlation the user sets (a strong event tracks
+   over ~90% of the volume in ~10 ms, so it re-tracks live). The surface is drawn depth-coloured in
+   3D, as a contoured structure map and on the section, and joins Site in 3D. Kept in the browser.
+   Faults followed the same day: sticks picked on inlines, joined into a surface; a horizon stops
+   at a fault and is seeded again across it, which gives the throw (median step across its cut-offs)
+   and the gap it opens on the structure map.
+10. ~~**Maps & probabilistic volumetrics**~~ — *built* 17 Oct 2026 on the FORCE 2020 wells: a
+   zone's top and thickness mapped between the wells by thin-plate spline; a contact you set makes
+   a closure from the crest you click, up to its spill; N/G, porosity and pay Sw from each well's
+   logs set the ranges; 4,000 Monte Carlo runs give P90/P50/P10 with a tornado. FORCE has no fluid
+   contacts, so the contact is a what-if.
 
 Shaly-sand saturation, permeability and Monte Carlo extend the clastic petrophysics, which still
 runs on synthetic logs; FORCE 2020 would give it real ones. Hydraulics with rheology waits for a source with Fann readings.

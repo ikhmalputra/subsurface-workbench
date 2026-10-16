@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { motion } from "motion/react";
-import { Maximize2, X } from "lucide-react";
+import { Expand, Maximize2, Shrink, X } from "lucide-react";
 import type { ModuleId } from "../modules/registry.ts";
 import { fusionRule, fusionRules, moduleById, signalColour, signalName } from "../modules/registry.ts";
 import type { Rect } from "./layout.ts";
+import { COLS, ROWS } from "./layout.ts";
 import { actions, deck as deckStore, useDeck } from "./store.ts";
 
 const useDeckState = () => deckStore.get();
@@ -25,6 +26,7 @@ export function Tile({ id, geometry, subtitle, onGhost, children }: { readonly i
   const spec = moduleById[id];
   const rect = useDeck((deck) => deck.tiles[id]);
   const isStage = useDeck((deck) => deck.stage === id);
+  const focused = useDeck((deck) => deck.focus === id);
   const arriving = useDeck((deck) => deck.pulses.findLast((pulse) => pulse.to.includes(id)));
   const [gesture, setGesture] = useState<{ kind: "move" | "resize"; dx: number; dy: number } | null>(null);
   const start = useRef<{ x: number; y: number } | null>(null);
@@ -33,7 +35,8 @@ export function Tile({ id, geometry, subtitle, onGhost, children }: { readonly i
   const siteId = useDeck((deck) => deck.siteId);
   const aimedHere = useDeck((deck) => deck.fuseAim?.to === id ? deck.fuseAim : null);
   const fusions = useDeck((deck) => deck.fusions);
-  const fusedHere = Object.entries(fusions).filter(([key]) => key.endsWith(`>${id}`));
+  // A fusion from a module this deck no longer has (an old layout, a link) is skipped, not drawn.
+  const fusedHere = Object.entries(fusions).filter(([key]) => key.endsWith(`>${id}`) && key.split(">")[0]! in moduleById);
 
   useEffect(() => {
     if (!arriving) return;
@@ -43,13 +46,14 @@ export function Tile({ id, geometry, subtitle, onGhost, children }: { readonly i
   }, [arriving?.id]);
 
   if (!rect) return null;
-  const box = geometry.toPx(rect);
+  // In focus the tile spreads over the whole grid; its own place in the layout is kept for when it goes back.
+  const box = geometry.toPx(focused ? { col: 0, row: 0, w: COLS, h: ROWS } : rect);
   const target = (kind: "move" | "resize", dx: number, dy: number): Rect => {
     const cells = geometry.toCells(dx, dy);
     return kind === "move" ? { ...rect, col: rect.col + cells.col, row: rect.row + cells.row } : { ...rect, w: rect.w + cells.col, h: rect.h + cells.row };
   };
   const begin = (kind: "move" | "resize") => (event: ReactPointerEvent<HTMLElement>) => {
-    if (event.button !== 0 || (kind === "move" && (event.target as HTMLElement).closest("button"))) return;
+    if (event.button !== 0 || focused || (kind === "move" && (event.target as HTMLElement).closest("button"))) return;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     start.current = { x: event.clientX, y: event.clientY };
@@ -94,19 +98,21 @@ export function Tile({ id, geometry, subtitle, onGhost, children }: { readonly i
     : box;
   const Icon = spec.icon;
   return <motion.section
-    className={`tile${isStage ? " is-stage" : ""}${gesture ? " is-dragging" : ""}${flashing ? " is-flash" : ""}`}
+    className={`tile${isStage ? " is-stage" : ""}${focused ? " is-focus" : ""}${gesture ? " is-dragging" : ""}${flashing ? " is-flash" : ""}`}
     style={{ left: 0, top: 0, ["--flash-colour" as string]: flashing ?? "transparent" }}
     initial={{ opacity: 0, scale: 0.96, x: live.x, y: live.y, width: live.width, height: live.height }}
     animate={{ opacity: 1, scale: 1, x: live.x, y: live.y, width: live.width, height: live.height }}
     exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.18 } }}
     transition={gesture ? { duration: 0 } : spring}
     aria-label={spec.title} data-module={id} data-stage={isStage || undefined} data-refused={refused || undefined}>
-    <header className="tile-head" onPointerDown={begin("move")} onPointerMove={move} onPointerUp={end} onPointerCancel={end} onDoubleClick={() => actions.promote(id)}>
+    <header className="tile-head" onPointerDown={begin("move")} onPointerMove={move} onPointerUp={end} onPointerCancel={end} onDoubleClick={() => focused ? actions.setFocus(null) : actions.promote(id)}>
       <span className="tile-icon"><Icon size={15} strokeWidth={1.8} aria-hidden="true" /></span>
       <span className="tile-title">{spec.title}</span>
       {subtitle && <span className="tile-sub">· {subtitle}</span>}
       <span className="tile-signals" title={`Listens to ${spec.listens.map((signal) => signalName[signal]).join(", ")}${spec.emits.length ? ` · sends ${spec.emits.map((signal) => signalName[signal]).join(", ")}` : ""}`} aria-hidden="true">{spec.listens.map((signal) => <i key={signal} style={{ ["--dot" as string]: signalColour[signal] }} />)}</span>
-      {!isStage && <button type="button" className="tile-action" aria-label={`Bring ${spec.title} to the stage`} title="Bring to the stage" onClick={() => actions.promote(id)}><Maximize2 size={14} /></button>}
+      {focused && <span className="tile-esc">Esc to put it back</span>}
+      {!isStage && !focused && <button type="button" className="tile-action" aria-label={`Bring ${spec.title} to the stage`} title="Bring to the stage" onClick={() => actions.promote(id)}><Maximize2 size={14} /></button>}
+      <button type="button" className="tile-action" aria-label={focused ? `Put ${spec.title} back in its tile` : `Spread ${spec.title} over the deck`} aria-pressed={focused} title={focused ? "Back to its tile (Esc)" : "Spread over the whole deck"} onClick={() => actions.setFocus(focused ? null : id)}>{focused ? <Shrink size={14} /> : <Expand size={14} />}</button>
       <button type="button" className="tile-action" aria-label={`Close ${spec.title}`} title="Close" onClick={() => actions.close(id)}><X size={14} /></button>
     </header>
     {fusedHere.length > 0 && <div className="fuse-chips">{fusedHere.map(([key, value]) => <FuseChip key={key} fusion={key} value={value} />)}</div>}

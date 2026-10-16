@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, MotionConfig } from "motion/react";
-import { Cable, Moon, Pencil, Plus, Search, Sun, X } from "lucide-react";
+import { Cable, Link2, Moon, Pencil, Plus, Search, Sun, X } from "lucide-react";
 import { useSubsurfaceSelector } from "@ikhmalputra/subsurface-react/state";
 import { siteById } from "../data/sites.ts";
 import { amplitudeAtMd, useForgeSection } from "../data/forge.ts";
@@ -14,10 +14,14 @@ import type { ModuleId } from "../modules/registry.ts";
 import { moduleById, moduleIds, signalColour } from "../modules/registry.ts";
 import { CommandBar } from "./CommandBar.tsx";
 import { NewWell } from "./NewWell.tsx";
+import { Share } from "./Share.tsx";
+import { openSharedLink } from "./share.ts";
+import { loadForce } from "../data/force.ts";
 import { Dock, gridProbe } from "./Dock.tsx";
 import { cellGeometry } from "./layout.ts";
 import { Links } from "./Links.tsx";
-import { actions, signals, useDeck } from "./store.ts";
+import { actions, deck as deckStore, signals, useDeck } from "./store.ts";
+const deckState = () => deckStore.get();
 import { Tile, type Ghost } from "./Tile.tsx";
 import { TimeRail } from "./TimeRail.tsx";
 import { formatDate, useMoment } from "../data/history.ts";
@@ -28,6 +32,21 @@ const GAP = 10;
 export function Deck() {
   const theme = useDeck((deck) => deck.theme);
   const patch = useDeck((deck) => deck.patch);
+  // Esc puts a tile spread over the deck back, unless something inside it used the key first.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape" && !event.defaultPrevented && deckState().focus && !deckState().commandOpen && !deckState().newWellOpen && !deckState().shareOpen) actions.setFocus(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  // The FORCE 2020 wells' index, so their areas join the globe.
+  useEffect(() => { void loadForce(); }, []);
+  // A shared deck in the link opens over this one; a link pasted into this tab later opens too.
+  useEffect(() => {
+    void openSharedLink();
+    const onHash = () => void openSharedLink();
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
   useEffect(() => { document.documentElement.dataset.deck = theme; document.documentElement.dataset.swTheme = theme === "night" ? "dark" : "light"; }, [theme]);
   return <MotionConfig reducedMotion="user">
     <div className="deck" data-sw-theme={theme === "night" ? "dark" : "light"} data-patch={patch || undefined}>
@@ -39,6 +58,7 @@ export function Deck() {
       <Links />
       <CommandBar />
       <NewWell />
+      <Share />
     </div>
   </MotionConfig>;
 }
@@ -76,6 +96,7 @@ function Bar() {
     </div>
     <div className="bar-end">
       <button type="button" className="new-well" onClick={() => actions.openNewWell(true)} title="Plan a new well: place it, then design it stage by stage"><Plus size={15} />New well</button>
+      <button type="button" className="share-open" onClick={() => actions.openShare(true)} title="A link that opens this deck as it is now, for anyone you send it to"><Link2 size={14} />Share</button>
       <button type="button" className="find" onClick={() => actions.openCommand(true)}><Search size={14} />Fly, find, open or command<kbd>⌘K</kbd></button>
       <button type="button" className="icon-button" aria-pressed={patch} aria-label="Show every live link (hold ⌥)" title="Links between modules · hold ⌥" onClick={() => actions.setPatch(!patch)}><Cable size={15} /></button>
       <button type="button" className="icon-button" aria-label={theme === "night" ? "Switch to the day deck" : "Switch to the night deck"} onClick={() => actions.setTheme(theme === "night" ? "day" : "night")}>{theme === "night" ? <Sun size={15} /> : <Moon size={15} />}</button>
@@ -96,6 +117,7 @@ function Grid({ ghost, onGhost }: { readonly ghost: Ghost | null; readonly onGho
   const element = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 1200, height: 760 });
   const tiles = useDeck((deck) => deck.tiles);
+  const focus = useDeck((deck) => deck.focus);
   const siteId = useDeck((deck) => deck.siteId);
   const site = siteById(siteId);
   useEffect(() => {
@@ -120,7 +142,7 @@ function Grid({ ghost, onGhost }: { readonly ghost: Ghost | null; readonly onGho
     return siteId === "forge" && id !== "site3d" ? "16A(78)-32" : site.map.label;
   };
   const ghostBox = ghost ? geometry.toPx(ghost.rect) : null;
-  return <main className="grid" ref={element}>
+  return <main className="grid" ref={element} data-focus={focus ?? undefined}>
     {ghost && ghostBox && <div className="snap-ghost" data-refused={!ghost.ok || undefined} style={{ left: ghostBox.x, top: ghostBox.y, width: ghostBox.width, height: ghostBox.height }} />}
     <AnimatePresence>
       {moduleIds.filter((id) => tiles[id]).map((id) => <Tile key={id} id={id} geometry={geometry} subtitle={subtitle(id)} onGhost={onGhost}><ModuleBody id={id} /></Tile>)}
@@ -198,7 +220,7 @@ function Lens() {
   const whatIf = isDesignSite(siteId) && design.pending ? { label: design.pending.label, failing: analyse(design.pending.value.brief).failing.length, before: analyse(design.committed.brief).failing.length } : null;
   const dot = (colour: string) => ({ ["--dot" as string]: colour });
   const [fresh, setFresh] = useState(false);
-  useEffect(() => { if (!note) return; setFresh(true); const timer = window.setTimeout(() => setFresh(false), 4000); return () => window.clearTimeout(timer); }, [note]);
+  useEffect(() => { if (!note) return; setFresh(true); const timer = window.setTimeout(() => setFresh(false), note.ms ?? 4000); return () => window.clearTimeout(timer); }, [note]);
   const stringName = (name: string) => name.split(" / ")[1] ?? name;
   return <footer className="lens" aria-live="polite">
     {fresh && note && <span className="toast" role="status">{note.text}</span>}
