@@ -1,10 +1,11 @@
 import { feetToMetres, metresToFeet } from "@ikhmalputra/subsurface-core";
-import { lasCurve, parseLas } from "@ikhmalputra/subsurface-core/records";
+import { lasCurve } from "@ikhmalputra/subsurface-core/records";
 import type { LasFile } from "@ikhmalputra/subsurface-core/records";
 import type { PetrophysicsLogCurve, PetrophysicsWell } from "@ikhmalputra/subsurface-core/contracts";
 import { useFetched } from "./fetch.ts";
 import { forgeWell } from "./sites.ts";
 import { BASE } from "../base.ts";
+import { compute } from "../compute/run.ts";
 
 /**
  * FORGE 16A(78)-32's open-hole logs (GDR 1292, CC BY 4.0): Schlumberger's thru-bit combination,
@@ -24,8 +25,9 @@ const URL = `${BASE}data/forge-16a-openhole-1ft.las`;
 const shoe = forgeWell.components.find((component) => component.id === "intermediate-casing");
 const SHOE_MD = shoe?.rawBottomDepthFt ? feetToMetres(shoe.rawBottomDepthFt) : shoe?.bottomDepthM ?? 0;
 
-function build(buffer: ArrayBuffer): OpenHole {
-  const las = parseLas(new TextDecoder().decode(buffer));
+async function build(buffer: ArrayBuffer): Promise<OpenHole> {
+  // 1.1 MB of text: parsed in the compute worker.
+  const las = await compute("lasFromBuffer", buffer);
   const depthsMdM = Float64Array.from(las.curves[0]!.values, (ft) => feetToMetres(ft ?? Number.NaN));
   const depthReference = { kind: "MD", unit: "m", datum: "RKB" } as const;
   const curves: PetrophysicsLogCurve[] = las.curves.slice(1).map((curve) => ({

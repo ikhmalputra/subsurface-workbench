@@ -217,7 +217,8 @@ export const actions = {
   open(id: ModuleId, from: Origin = "bar") {
     if (state.tiles[id]) { pulse("place", from); if (moduleById[id].opensFocused) actions.setFocus(id); return; }
     const opening = planOpen(state.tiles as Layout, id, minSizes, moduleById[id].size, state.stage, state.lastUsed as Record<string, number>);
-    settle(opening ?? (moduleById[id].opensFocused ? takeStage(id) : null), id, from);
+    settle(opening ?? (moduleById[id].opensOnStage || moduleById[id].opensFocused ? takeStage(id) : null), id, from);
+    if (moduleById[id].opensOnStage && state.tiles[id]) actions.promote(id);
     if (moduleById[id].opensFocused && state.tiles[id]) actions.setFocus(id);
   },
   /** A module dragged in from the dock and dropped on a cell. */

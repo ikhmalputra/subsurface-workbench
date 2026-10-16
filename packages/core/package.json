@@ -86,6 +86,10 @@
     "./hydraulics": {
       "types": "./dist/hydraulics.d.ts",
       "import": "./dist/hydraulics.js"
+    },
+    "./simulation": {
+      "types": "./dist/simulation.d.ts",
+      "import": "./dist/simulation.js"
     }
   },
   "scripts": {

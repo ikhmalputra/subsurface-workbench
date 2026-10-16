@@ -1,49 +1,56 @@
-import { Component, lazy, Suspense, type ErrorInfo, type ReactNode } from "react";
+import { Component, lazy, Suspense, type ComponentType, type ErrorInfo, type ReactNode } from "react";
 import { TriangleAlert } from "lucide-react";
 import { motion } from "motion/react";
 import { useDeck } from "../deck/store.ts";
-import { DrillingRecord } from "./DrillingModules.tsx";
-import { Logs, Seismic } from "./DataModules.tsx";
 import { Empty, Loading } from "./Empty.tsx";
-import { Globe } from "./Globe.tsx";
 import type { ModuleId } from "./registry.ts";
 import { missing, moduleById, pointsToDesigner, pointsToEditor } from "./registry.ts";
-import { Site3D } from "./Site3D.tsx";
-import { Strings } from "./StringModule.tsx";
-import { Construction, Cutaway, Plan, Profile, Section, Well3D } from "./WellModules.tsx";
-import { Cement, Hydraulics, KickTolerance, PressureWindow } from "./EngineeringModules.tsx";
-import { Petrophysics } from "./PetroModule.tsx";
-import { AntiCollision } from "./AntiCollision.tsx";
-import { Curtain } from "./Curtain.tsx";
-import { Geomechanics } from "./Geomechanics.tsx";
-import { Decline } from "./Decline.tsx";
-import { TorqueDrag } from "./TorqueDrag.tsx";
-import { Barriers } from "./Barriers.tsx";
-import { Compare } from "./Compare.tsx";
-import { Designer } from "./Designer.tsx";
-import { WellEditor } from "./WellEditor.tsx";
 import { useRecordsVersion } from "../data/records.ts";
 import { useImportedLogs } from "../data/logs.ts";
 import { useDesignState } from "../data/design.ts";
 import { actions } from "../deck/store.ts";
 
-/** A heavy module fetched the first time its tile opens, so the deck starts without it. */
-function later(load: () => Promise<{ default: () => ReactNode }>, what: string) {
-  const View = lazy(load);
-  return () => <Suspense fallback={<Loading>{`Loading ${what}…`}</Loading>}><View /></Suspense>;
-}
-const Correlation = later(() => import("./Correlation.tsx").then((module) => ({ default: module.Correlation })), "the correlation");
-const WellTie = later(() => import("./WellTie.tsx").then((module) => ({ default: module.WellTie })), "the well tie");
-const Horizons = later(() => import("./Horizons.tsx").then((module) => ({ default: module.Horizons })), "horizon picking");
-const Volumetrics = later(() => import("./Volumetrics.tsx").then((module) => ({ default: module.Volumetrics })), "the maps and volumes");
+/**
+ * Every module is its own chunk, fetched the first time its tile opens: the deck's first download
+ * carries the shell and the tiles on screen, not all 27 modules. Once the deck is idle the rest are
+ * fetched in the background, so opening one later is instant.
+ */
+const files = {
+  "./AntiCollision.tsx": () => import("./AntiCollision.tsx"),
+  "./Barriers.tsx": () => import("./Barriers.tsx"),
+  "./Compare.tsx": () => import("./Compare.tsx"),
+  "./Correlation.tsx": () => import("./Correlation.tsx"),
+  "./WellTie.tsx": () => import("./WellTie.tsx"),
+  "./Horizons.tsx": () => import("./Horizons.tsx"),
+  "./Volumetrics.tsx": () => import("./Volumetrics.tsx"),
+  "./Curtain.tsx": () => import("./Curtain.tsx"),
+  "./DataModules.tsx": () => import("./DataModules.tsx"),
+  "./Decline.tsx": () => import("./Decline.tsx"),
+  "./Designer.tsx": () => import("./Designer.tsx"),
+  "./DrillingModules.tsx": () => import("./DrillingModules.tsx"),
+  "./EngineeringModules.tsx": () => import("./EngineeringModules.tsx"),
+  "./Geomechanics.tsx": () => import("./Geomechanics.tsx"),
+  "./Globe.tsx": () => import("./Globe.tsx"),
+  "./LiveDrilling.tsx": () => import("./LiveDrilling.tsx"),
+  "./PetroModule.tsx": () => import("./PetroModule.tsx"),
+  "./Site3D.tsx": () => import("./Site3D.tsx"),
+  "./StringModule.tsx": () => import("./StringModule.tsx"),
+  "./TorqueDrag.tsx": () => import("./TorqueDrag.tsx"),
+  "./WellEditor.tsx": () => import("./WellEditor.tsx"),
+  "./WellModules.tsx": () => import("./WellModules.tsx"),
+} as const;
+type ModuleFile = keyof typeof files;
+const view = (file: ModuleFile, name: string): ComponentType => lazy(() => files[file]().then((module) => ({ default: (module as unknown as Record<string, ComponentType>)[name]! })));
+/** Fetch every module's chunk without running it: called once the deck is idle. */
+export function prefetchModules() { for (const load of Object.values(files)) void load().catch(() => undefined); }
 
-const views: Readonly<Record<ModuleId, () => ReactNode>> = {
-  globe: Globe, site3d: Site3D,
-  section: Section, well3d: Well3D, designer: Designer, editor: WellEditor, construction: Construction, compare: Compare, cutaway: Cutaway, plan: Plan, profile: Profile, anticollision: AntiCollision,
-  logs: Logs, seismic: Seismic, curtain: Curtain, correlate: Correlation, tie: WellTie, horizons: Horizons, volumetrics: Volumetrics,
-  drilling: DrillingRecord, torquedrag: TorqueDrag,
-  petro: Petrophysics,
-  strings: Strings, window: PressureWindow, kick: KickTolerance, cement: Cement, hydraulics: Hydraulics, geomech: Geomechanics, barriers: Barriers, decline: Decline,
+const views: Readonly<Record<ModuleId, ComponentType>> = {
+  globe: view("./Globe.tsx", "Globe"), site3d: view("./Site3D.tsx", "Site3D"),
+  section: view("./WellModules.tsx", "Section"), well3d: view("./WellModules.tsx", "Well3D"), designer: view("./Designer.tsx", "Designer"), editor: view("./WellEditor.tsx", "WellEditor"), construction: view("./WellModules.tsx", "Construction"), compare: view("./Compare.tsx", "Compare"), cutaway: view("./WellModules.tsx", "Cutaway"), plan: view("./WellModules.tsx", "Plan"), profile: view("./WellModules.tsx", "Profile"), anticollision: view("./AntiCollision.tsx", "AntiCollision"),
+  logs: view("./DataModules.tsx", "Logs"), seismic: view("./DataModules.tsx", "Seismic"), curtain: view("./Curtain.tsx", "Curtain"), correlate: view("./Correlation.tsx", "Correlation"), tie: view("./WellTie.tsx", "WellTie"), horizons: view("./Horizons.tsx", "Horizons"), volumetrics: view("./Volumetrics.tsx", "Volumetrics"),
+  drilling: view("./DrillingModules.tsx", "DrillingRecord"), torquedrag: view("./TorqueDrag.tsx", "TorqueDrag"),
+  petro: view("./PetroModule.tsx", "Petrophysics"),
+  strings: view("./StringModule.tsx", "Strings"), window: view("./EngineeringModules.tsx", "PressureWindow"), kick: view("./EngineeringModules.tsx", "KickTolerance"), rig: view("./LiveDrilling.tsx", "LiveDrilling"), cement: view("./EngineeringModules.tsx", "Cement"), hydraulics: view("./EngineeringModules.tsx", "Hydraulics"), geomech: view("./Geomechanics.tsx", "Geomechanics"), barriers: view("./Barriers.tsx", "Barriers"), decline: view("./Decline.tsx", "Decline"),
 };
 
 /**
@@ -76,6 +83,6 @@ export function ModuleBody({ id }: { readonly id: ModuleId }) {
   const View = views[id];
   return <motion.div key={`${siteId ?? "world"}:${reason ? "empty" : "live"}`} className="module-body" initial={{ opacity: 0, filter: "blur(6px)" }} animate={{ opacity: 1, filter: "blur(0px)" }} transition={{ duration: 0.35, ease: [0.2, 0.8, 0.2, 1] }}>
     {reason ? <Empty icon={spec.icon} title={id === "designer" ? "No planned well here" : pointsToDesigner(reason) ? "Not designed yet" : pointsToEditor(reason) ? "Not entered yet" : siteId ? `Nothing to draw for this site` : "No site chosen"}
-      action={id === "designer" ? { label: "+ New well", run: () => actions.openNewWell(true) } : pointsToDesigner(reason) ? { label: "Open the Well designer", run: () => actions.promote("designer") } : pointsToEditor(reason) ? { label: "Open the Well editor", run: () => actions.promote("editor") } : undefined}>{reason}</Empty> : <ModuleBoundary title={spec.title}><View /></ModuleBoundary>}
+      action={id === "designer" ? { label: "+ New well", run: () => actions.openNewWell(true) } : pointsToDesigner(reason) ? { label: "Open the Well designer", run: () => actions.promote("designer") } : pointsToEditor(reason) ? { label: "Open the Well editor", run: () => actions.promote("editor") } : undefined}>{reason}</Empty> : <ModuleBoundary title={spec.title}><Suspense fallback={<Loading>{`Loading ${spec.title}…`}</Loading>}><View /></Suspense></ModuleBoundary>}
   </motion.div>;
 }

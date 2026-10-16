@@ -1603,6 +1603,28 @@
  },
  {
   "package": "@ikhmalputra/subsurface-core",
+  "entry": "@ikhmalputra/subsurface-core/simulation",
+  "exports": [
+   {
+    "name": "defaultFlowGpm",
+    "kind": "function"
+   },
+   {
+    "name": "DrillingSimulator",
+    "kind": "class"
+   },
+   {
+    "name": "hazardsFromPlan",
+    "kind": "function"
+   },
+   {
+    "name": "rockOf",
+    "kind": "function"
+   }
+  ]
+ },
+ {
+  "package": "@ikhmalputra/subsurface-core",
   "entry": "@ikhmalputra/subsurface-core/state",
   "exports": [
    {
