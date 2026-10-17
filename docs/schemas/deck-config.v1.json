@@ -7,6 +7,8 @@
   "additionalProperties": false,
   "required": ["sources"],
   "properties": {
+    "$schema": { "type": "string" },
+    "about": { "type": "string", "description": "Notes for the people editing this file; the deck ignores it." },
     "version": { "type": "integer", "const": 1, "description": "The schema this file is written for. Missing means 1. A deck refuses a config written for a newer schema." },
     "sources": {
       "type": "array",

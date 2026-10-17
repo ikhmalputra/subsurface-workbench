@@ -23,6 +23,7 @@
     "lucide-react": "1.52.0",
     "maplibre-gl": "6.14.0",
     "motion": "13.4.6",
+    "oauth4webapi": "^3.8.8",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "three": "0.186.1"

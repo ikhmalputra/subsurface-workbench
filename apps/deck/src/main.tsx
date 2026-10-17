@@ -13,6 +13,12 @@ import "./styles/frame-production.css";
 import "./styles/frame-engineering.css";
 import "./styles/frame-petro-rig.css";
 import "./styles/frame-design.css";
-import { Deck } from "./deck/Deck.tsx";
+import { loadDeckConfig } from "./data/catalogue.ts";
+import { completeSignInIfCallback } from "./auth/oidc.ts";
 
+// The config names the identity providers, and a load may be the provider sending the person back:
+// both are settled before the deck draws, so no module ever sees a half-signed-in state.
+await loadDeckConfig();
+await completeSignInIfCallback();
+const { Deck } = await import("./deck/Deck.tsx");
 createRoot(document.getElementById("root")!).render(<StrictMode><Deck /></StrictMode>);

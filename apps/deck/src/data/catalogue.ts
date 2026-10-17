@@ -3,7 +3,8 @@ import type { CataloguedWell, DataProblem, WellBundle, WellDataSource } from "@i
 import { BASE } from "../base.ts";
 import { registerCrs } from "@ikhmalputra/subsurface-core/gis";
 import { SOURCE_TYPES, contractJsonSource, parseDeckConfig } from "./sources/config.ts";
-import { osduAdapter } from "./sources/osdu.ts";
+import { osduAdapter, provideTokens } from "./sources/osdu.ts";
+import { authProfile, authState, configureAuth, guardAuthFor, subscribeAuth } from "../auth/oidc.ts";
 import type { SourceConfig } from "./sources/config.ts";
 import { addDetail, addFullWell, addWells, catalogueField, catalogueState, dropSource, fieldHasDetail, fullWell, setCatalogueState, setFieldStatus, sourceEnabled, touchField } from "./catalogue-state.ts";
 import type { SourceStatus } from "./catalogue-state.ts";
@@ -167,28 +168,45 @@ export async function openWell(key: string, wellId: string) {
   } catch { /* the simplified path stays in use */ }
 }
 
+let configLoading: Promise<void> | null = null;
+/** Reads the host's config.json once (or keeps the default without one), installs the tenant's CRSs and identity providers. */
+export function loadDeckConfig(): Promise<void> {
+  configLoading ??= (async () => {
+    try {
+      const response = await fetch(`${BASE}config.json`, { cache: "no-cache" });
+      if (response.status === 404) setCatalogueState({ configNote: "No config.json beside the deck: the bundled samples and this browser's wells." });
+      else if (!response.ok) setCatalogueState({ configNote: `config.json could not be read (HTTP ${response.status}): the bundled samples and this browser's wells.` });
+      else {
+        const { config, problems: found } = parseDeckConfig(await response.json());
+        // The tenant's own CRSs, usable from here on wherever a record names one.
+        for (const [code, proj4] of Object.entries(config.crs?.definitions ?? {})) registerCrs(code, proj4);
+        setCatalogueState({ config, configProblems: found, configNote: `${config.sources.length} source${config.sources.length === 1 ? "" : "s"} from config.json.` });
+      }
+    } catch (cause) {
+      setCatalogueState({ configNote: `config.json is not valid JSON (${cause instanceof Error ? cause.message : String(cause)}): the bundled samples and this browser's wells.` });
+    }
+    configureAuth(catalogueState().config, BASE);
+    provideTokens((profile) => authProfile(profile) ? guardAuthFor(profile) : null);
+  })();
+  return configLoading;
+}
+
 let started = false;
-/** Reads the host's config.json (or keeps the default without one), then every source it names. */
+/** Reads the config, then every source it names; a source whose profile signs in later is read again then. */
 export async function startCatalogue(): Promise<void> {
   if (started) return;
   started = true;
   // The FORCE index arrives on its own: the samples are read again when it does (not as each well's logs come in).
   let forceCount = forceWells().length;
   onForceChange(() => { const count = forceWells().length; if (count !== forceCount) { forceCount = count; if (sourceEnabled("samples")) loadSamples(); } });
-  try {
-    const response = await fetch(`${BASE}config.json`, { cache: "no-cache" });
-    if (response.status === 404) setCatalogueState({ configNote: "No config.json beside the deck: the bundled samples and this browser's wells." });
-    else if (!response.ok) setCatalogueState({ configNote: `config.json could not be read (HTTP ${response.status}): the bundled samples and this browser's wells.` });
-    else {
-      const { config, problems: found } = parseDeckConfig(await response.json());
-      // The tenant's own CRSs, usable from here on wherever a record names one.
-      for (const [code, proj4] of Object.entries(config.crs?.definitions ?? {})) registerCrs(code, proj4);
-      setCatalogueState({ config, configProblems: found, configNote: `${config.sources.length} source${config.sources.length === 1 ? "" : "s"} from config.json.` });
-    }
-  } catch (cause) {
-    setCatalogueState({ configNote: `config.json is not valid JSON (${cause instanceof Error ? cause.message : String(cause)}): the bundled samples and this browser's wells.` });
-  }
+  await loadDeckConfig();
   await refreshCatalogue();
+  // A profile that signs in (or out) changes what its sources can serve: read them again.
+  let signedIn = JSON.stringify(Object.fromEntries(Object.entries(authState().profiles).map(([name, profile]) => [name, profile.status === "signed-in"])));
+  subscribeAuth(() => {
+    const now = JSON.stringify(Object.fromEntries(Object.entries(authState().profiles).map(([name, profile]) => [name, profile.status === "signed-in"])));
+    if (now !== signedIn) { signedIn = now; void refreshCatalogue(); }
+  });
 }
 
 export { catalogueState, sourceEnabled, useCatalogue, useCatalogueVersion } from "./catalogue-state.ts";

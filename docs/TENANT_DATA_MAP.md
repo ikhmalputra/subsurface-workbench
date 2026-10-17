@@ -203,8 +203,10 @@ They are ranked by how many tools each one unlocks. One adapter here means one c
 
 **OSDU.** `@ikhmalputra/subsurface-core/osdu` reads a platform through Search (`query_with_cursor`, a page of well headers at a time, one batched query per page for field names) and the Wellbore DDMS bulk endpoints (the definitive trajectory and the markers of each field opened). Columns are mapped through the records' own property lists, lengths to metres and angles to degrees, azimuths to true or grid north, the datum chain followed to sea level, as-ingested positions reprojected when the platform gave no WGS 84 ones. One well's trouble is reported on that well. The deck wires an `osdu` source from `config.json`; its sign-in arrives with the OIDC phase.
 
+**Sign-in.** `apps/deck/src/auth/oidc.ts` signs in with the tenant's own OpenID Connect provider (authorization code with PKCE, a public client, tokens in memory only, single-flight refresh, silent renewal with a loop guard, sign-out across tabs and at the provider); `docs/IDP_GUIDE.md` covers Entra ID, Okta, Keycloak and Cognito. The OSDU source takes its token from the profile named in `config.json`.
+
 **Next:**
-- sign-in (OIDC) and the OSDU adapter checked against the mock platform;
+- the sign-in and the OSDU adapter checked end to end against the mock platform;
 - the logs object (C6), which lets Logs, Petrophysics and Correlation read a tenant's wells;
 - `Place` for edits to a tenant's well;
 - the site-kind literals left in `registry.ts`.

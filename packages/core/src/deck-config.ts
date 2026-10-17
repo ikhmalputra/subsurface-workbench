@@ -108,7 +108,8 @@ export function parseDeckConfig(json: unknown, options: { readonly strict?: bool
   if (!Number.isInteger(version) || (version as number) < 1) return { config: DEFAULT_CONFIG, problems: [`config.json has an invalid "version" (${JSON.stringify(json.version)}): using the default.`] };
   if ((version as number) > CONFIG_SCHEMA_VERSION) return { config: DEFAULT_CONFIG, problems: [`config.json is written for config schema ${version}; this build reads schema ${CONFIG_SCHEMA_VERSION}. Upgrade the deck, or write the config for schema ${CONFIG_SCHEMA_VERSION}.`] };
   for (const key of secretKeys(json)) problems.push(`"${key}" looks like a credential. A config is public: it must never hold one. The entry holding it is ignored.`);
-  const known = new Set(["version", "sources", "auth", "share", "csp", "instance", "telemetry", "crs"]);
+  // "about", "$schema" and "$comment" are for the people editing the file; the deck reads past them.
+  const known = new Set(["version", "sources", "auth", "share", "csp", "instance", "telemetry", "crs", "about", "$schema", "$comment"]);
   for (const key of Object.keys(json)) if (!known.has(key)) problems.push(`${options.strict ? "" : "Note: "}unknown key "${key}" in config.json${options.strict ? "" : " (ignored)"}.`);
 
   // Identity providers first, so sources can name them.
