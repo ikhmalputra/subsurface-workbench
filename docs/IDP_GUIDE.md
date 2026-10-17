@@ -19,8 +19,9 @@ The deck signs users in with your own OpenID Connect provider, as a **public cli
    }
    ```
    A config that holds a secret is refused.
-4. **Allow the deck's origin on the platform (CORS).** The browser calls your OSDU directly, so the platform's allowed origins must include the deck's origin, with the `authorization`, `data-partition-id` and `content-type` headers. This is the most common cause of "could not reach the platform".
-5. **Entitlements.** The users need the platform's groups for the partition (e.g. `users.datalake.viewers` and the data groups). A 403 in the Data sources tool names the partition.
+4. **Allow the deck's origin on the platform (CORS).** The browser calls your OSDU directly, so the platform's allowed origins must include the deck's origin, with the `authorization`, `data-partition-id` and `content-type` headers. This is the most common cause of "could not reach the platform". Also **expose `Retry-After`** (`Access-Control-Expose-Headers: Retry-After`): without it the browser hides how long a rate-limited platform asked the deck to wait, and the deck has to guess (from one second, doubling).
+5. **Compress JSON on the platform's ingress** (gzip or Brotli for `application/json`; on ingress-nginx, `use-gzip: "true"`, which is off by default). A 200-well field's detail is about 2.8 MB uncompressed; over a slow VPN or a site link that is the difference between seconds and a minute. The browser decompresses on its own; the deck needs nothing.
+6. **Entitlements.** The users need the platform's groups for the partition (e.g. `users.datalake.viewers` and the data groups). A 403 in the Data sources tool names the partition.
 
 The deployment's Content-Security-Policy `connect-src` is rendered from the config: the platform's origin and the provider's origins are added automatically. Only when a provider's token endpoint is on **another host** than its issuer (Cognito, some Entra configurations) do you need to name it: `"metadata": { "tokenEndpoint": "https://…" }`, or add the origin under `"csp": { "connectSrc": [...] }`.
 

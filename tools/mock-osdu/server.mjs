@@ -11,6 +11,7 @@
 // Without --idp a mock identity provider starts in this process on --idp-port (4102). Records are
 // generated per field on demand (records.mjs), so 200,000 wells cost nothing until asked for.
 // Plain node:http and node:crypto, no dependencies.
+import { gzipSync } from "node:zlib";
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
@@ -54,7 +55,7 @@ export function pandasJson({ columns, rows }, orient = "split") {
 export function createMockOsdu(options = {}) {
   const {
     port = 4100, adminPort = 4101, host = "127.0.0.1", profile = "clean", perField = 200, partition = "opendes", allowOrigin = "http://127.0.0.1:8080",
-    seed = 7, cursorTtlS = 60, idp: idpUrl, jwks: jwksProvider, issuer, log: logLine = () => {},
+    seed = 7, cursorTtlS = 60, gzip = false, idp: idpUrl, jwks: jwksProvider, issuer, log: logLine = () => {},
   } = options;
   if (!PROFILES.includes(profile)) throw new RangeError(`--profile must be one of ${PROFILES.join(", ")}`);
   const wells = options.wells ?? (profile === "huge" ? 200_000 : 1000), stations = options.stations ?? (profile === "huge" ? 2000 : 300);
@@ -202,6 +203,9 @@ export function createMockOsdu(options = {}) {
     if (fault.oversizeBytes > 0 && text.endsWith("}")) text = `${text.slice(0, -1)},"padding":"${"x".repeat(fault.oversizeBytes)}"}`;
     let body = Buffer.from(text, "utf8");
     if (fault.truncateJson) body = body.subarray(0, Math.max(1, Math.floor(body.length / 2)));
+    // --gzip: compressed as a platform's ingress with compression on would send it, when the client accepts it and no output fault is set.
+    const outputFault = fault.reset || fault.truncateJson || fault.trickleBytesPerS > 0 || fault.oversizeBytes > 0;
+    if (gzip && !outputFault && /\bgzip\b/.test(response.req?.headers["accept-encoding"] ?? "")) { body = gzipSync(body); headers = { ...headers, "content-encoding": "gzip", vary: "Accept-Encoding" }; }
     if (fault.reset) {
       response.locals.reset = true;
       response.writeHead(status, { "content-type": "application/json; charset=utf-8", "content-length": String(body.length), ...headers });
@@ -235,7 +239,7 @@ export function createMockOsdu(options = {}) {
     const url = new URL(request.url, `http://${host}`);
     const origin = request.headers.origin;
     const originAllowed = origin !== undefined && origin === allowOrigin;
-    if (originAllowed) { response.setHeader("access-control-allow-origin", origin); response.setHeader("vary", "Origin"); response.setHeader("access-control-expose-headers", "x-request-id, correlation-id"); }
+    if (originAllowed) { response.setHeader("access-control-allow-origin", origin); response.setHeader("vary", "Origin"); response.setHeader("access-control-expose-headers", "x-request-id, correlation-id, retry-after"); }
     if (request.method === "OPTIONS") {
       // Preflight: only the deck's origin, only the headers the adapter sends. Another origin is refused outright.
       if (!originAllowed) { response.writeHead(403); response.end(); return; }
@@ -317,7 +321,7 @@ export function parseServerArgs(argv) {
   return {
     wells: number("--wells"), perField: number("--per-field", 200), stations: number("--stations"), profile: flag("--profile", "clean"),
     port: number("--port", 4100), adminPort: number("--admin-port", 4101), allowOrigin: flag("--allow-origin", "http://127.0.0.1:8080"), partition: flag("--partition", "opendes"),
-    idp: flag("--idp"), idpPort: number("--idp-port", 4102), seed: number("--seed", 7), cursorTtlS: number("--cursor-ttl", 60), tokenTtlS: number("--token-ttl", 300), clockSkewS: number("--clock-skew", 0),
+    idp: flag("--idp"), idpPort: number("--idp-port", 4102), gzip: argv.includes("--gzip"), seed: number("--seed", 7), cursorTtlS: number("--cursor-ttl", 60), tokenTtlS: number("--token-ttl", 300), clockSkewS: number("--clock-skew", 0),
   };
 }
 

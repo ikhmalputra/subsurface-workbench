@@ -111,6 +111,18 @@ export function locationFromOsdu(data: Readonly<Record<string, unknown>>, proble
 export const cellField = (longitude: number, latitude: number) => { const lat = Math.floor(latitude), lon = Math.floor(longitude); return { id: `osdu-cell:${lat}:${lon}`, name: `Unassigned ${Math.abs(lat)}°${lat < 0 ? "S" : "N"} ${Math.abs(lon)}°${lon < 0 ? "W" : "E"}` }; };
 
 // ── Records to the contract ───────────────────────────────────────────────────────────────────
+/**
+ * The fields a detail search asks for, exactly those the mappers read: a whole record carries
+ * lineage, ACLs, legal tags and dataset links the deck never uses, and on a slow link a field's
+ * detail was 3 MB, a third of it unread (found by tools/stress/throttle.mjs). osdu.test.ts maps the
+ * mock platform's records whole and trimmed to these, and requires the same result.
+ */
+export const DETAIL_FIELDS = Object.freeze({
+  wellbore: Object.freeze(["id", "kind", "version", "modifyTime", "data.WellID", "data.FacilityName", "data.FacilityStates", "data.FacilityOperators", "data.VerticalMeasurements", "data.DefaultVerticalMeasurementID", "data.DefinitiveTrajectoryID"]),
+  trajectory: Object.freeze(["id", "kind", "version", "modifyTime", "data.WellboreID", "data.Name", "data.AzimuthReferenceType", "data.AvailableTrajectoryStationProperties"]),
+  markerSet: Object.freeze(["id", "kind", "version", "modifyTime", "data.WellboreID", "data.Name", "data.VerticalMeasurement", "data.Markers", "data.AvailableMarkerProperties"]),
+});
+
 const provenanceOf = (record: OsduRecord, partition: string) => ({ kind: "tenant" as const, source: `OSDU ${partition}, ${record.kind}`, record: { standard: "OSDU" as const, kind: record.kind, id: record.id } });
 
 export function wellFromOsdu(record: OsduRecord, partition: string, fieldNames: ReadonlyMap<string, string>, problems: DataProblem[]): CanonicalWell {
@@ -343,13 +355,13 @@ export function osduSource(options: OsduSourceOptions): WellDataSource {
     },
     detail: async (wellIds, signal) => {
       // The wells themselves (the bundle carries the well whole) and their wellbores, each one batched query per 50 ids.
-      const [wellRecords, wellbores] = await Promise.all([byField("id", wellIds, kinds.well, WELL_FIELDS, signal), byField("data.WellID", wellIds, kinds.wellbore, undefined, signal)]);
+      const [wellRecords, wellbores] = await Promise.all([byField("id", wellIds, kinds.well, WELL_FIELDS, signal), byField("data.WellID", wellIds, kinds.wellbore, DETAIL_FIELDS.wellbore, signal)]);
       const headerProblems: DataProblem[] = [];
       const wellsById = new Map((await wellsOf(wellRecords, headerProblems, signal)).map((entry) => [entry.id, entry]));
       const boreIds = wellbores.map((record) => refToId(record.id));
       const [trajectories, markerSets] = await Promise.all([
-        byField("data.WellboreID", boreIds, kinds.trajectory, undefined, signal),
-        byField("data.WellboreID", boreIds, kinds.markerSet, undefined, signal),
+        byField("data.WellboreID", boreIds, kinds.trajectory, DETAIL_FIELDS.trajectory, signal),
+        byField("data.WellboreID", boreIds, kinds.markerSet, DETAIL_FIELDS.markerSet, signal),
       ]);
       const boresByWell = new Map<string, OsduRecord[]>();
       for (const record of wellbores) { const wellId = refToId(str(record.data.WellID) ?? ""); boresByWell.set(wellId, [...(boresByWell.get(wellId) ?? []), record]); }

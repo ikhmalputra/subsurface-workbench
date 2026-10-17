@@ -41,6 +41,7 @@ and serve the deck from the origin given as `--allow-origin`; any other origin i
 | `--idp-port`, `--token-ttl`, `--clock-skew` | 4102, 300, 0 | the embedded identity provider |
 | `--seed` | 7 | the fault engine's seed |
 | `--cursor-ttl` | 60 | seconds a search cursor lives idle |
+| `--gzip` | off | compress JSON responses when the client accepts gzip, as a platform ingress with compression on does (never together with an output fault) |
 
 ## The data
 

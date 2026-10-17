@@ -14,7 +14,7 @@ import "./styles/frame-engineering.css";
 import "./styles/frame-petro-rig.css";
 import "./styles/frame-design.css";
 import { loadDeckConfig } from "./data/catalogue.ts";
-import { completeSignInIfCallback } from "./auth/oidc.ts";
+import { completeSignInIfCallback, resumeSessions } from "./auth/oidc.ts";
 import { BASE } from "./base.ts";
 import { startUpdateWatch } from "./deck/version.ts";
 import { recordError } from "./deck/diagnostics.ts";
@@ -26,8 +26,11 @@ window.addEventListener("unhandledrejection", (event) => recordError(event.reaso
 // The config names the identity providers, and a load may be the provider sending the person back:
 // both are settled before the deck draws, so no module ever sees a half-signed-in state.
 await loadDeckConfig();
-await completeSignInIfCallback();
-// A release rolled out under an open tab is announced in the lens bar (version.json on this origin only).
-startUpdateWatch({ base: BASE });
-const { Deck } = await import("./deck/Deck.tsx");
-createRoot(document.getElementById("root")!).render(<StrictMode><Deck /></StrictMode>);
+// A reload keeps no token: a profile this tab was signed in to goes back through the provider's session first.
+const leaving = !(await completeSignInIfCallback()) && await resumeSessions();
+if (!leaving) {
+  // A release rolled out under an open tab is announced in the lens bar (version.json on this origin only).
+  startUpdateWatch({ base: BASE });
+  const { Deck } = await import("./deck/Deck.tsx");
+  createRoot(document.getElementById("root")!).render(<StrictMode><Deck /></StrictMode>);
+}
