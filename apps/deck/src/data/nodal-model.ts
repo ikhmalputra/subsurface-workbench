@@ -300,3 +300,48 @@ export function forecastBand(well: WellCase, inputs: NodalInputs, calibration: C
   const run = (fit: { stoiip: number; aquifer: number }) => forecastCases(well, inputs, calibration, tests, production, { ...matched.tank, stoiip: fit.stoiip, aquifer: fit.aquifer }, f);
   return { main: forecastCases(well, inputs, calibration, tests, production, tank, f), low: run(lo), high: run(hi), tanks: { low: lo, high: hi } };
 }
+
+/** The tubing as Predict runs it, at any wellhead pressure, rate, water, GOR and lift gas: one traverse. */
+export function wellTraverse(well: WellCase, inputs: NodalInputs, calibration: Calibration | null, at: { readonly whpPsia: number; readonly liquidRate: number; readonly waterCut: number; readonly gor?: number; readonly liftMscfD: number; readonly stepFt?: number }) {
+  const { fluid, flow } = basis(well, inputs, calibration);
+  return traverse({ whp: at.whpPsia, fluid: { ...fluid, gor: at.gor ?? fluid.gor }, liquidRate: at.liquidRate, waterCut: at.waterCut, tubing: tubingOf(well, at.liftMscfD), path: well.path, tempAt: well.tempAt, stepFt: at.stepFt ?? 150, ...flow });
+}
+
+/**
+ * The wellhead pressure that makes the well flow a given liquid rate: the flowing bottom-hole
+ * pressure the inflow gives at that rate, carried up the tubing by bisection on the wellhead
+ * pressure (the outflow rises with it). Null when no choke setting reaches that rate.
+ */
+export function whpForRate(well: WellCase, inputs: NodalInputs, calibration: Calibration | null, rate: number): number | null {
+  const { ipr } = basis(well, inputs, calibration);
+  const pwf = ipr.pwf(rate);
+  if (pwf === null) return null;
+  const bottom = (whp: number) => wellTraverse(well, inputs, calibration, { whpPsia: whp, liquidRate: rate, waterCut: inputs.waterCut, liftMscfD: inputs.liftMscfD, stepFt: 300 }).bottomPressure ?? Infinity;
+  let lo = 14.7, hi = 3000;
+  if (bottom(lo) > pwf) return null;
+  for (let i = 0; i < 26; i++) { const mid = (lo + hi) / 2; if (bottom(mid) > pwf) hi = mid; else lo = mid; }
+  return (lo + hi) / 2 - 14.7;
+}
+
+/** The injection gas pressure down the annulus from a surface pressure (psig), by MD in metres. */
+export function casingProfile(well: WellCase, surfacePsig: number, liftGasSg: number, toMdM: number, steps = 24) {
+  return Array.from({ length: steps + 1 }, (_, i) => {
+    const mdM = toMdM * i / steps, md = mdM * FT_PER_M;
+    const m = well.path.mdFt, t = well.path.tvdFt;
+    let tvd = t.at(-1)!;
+    for (let k = 1; k < m.length; k++) if (md <= m[k]!) { tvd = t[k - 1]! + (t[k]! - t[k - 1]!) * (md - m[k - 1]!) / (m[k]! - m[k - 1]! || 1); break; }
+    return { mdM, psia: casingPressureAt(surfacePsig + 14.7, liftGasSg, tvd, well.tempAt) };
+  });
+}
+
+/** The conditions on a date between tests: each test's own, read straight between them (lift gas held from the earlier). */
+export function conditionsOn(tests: readonly WellTest[], date: string) {
+  const sorted = [...tests].sort((a, b) => Date.parse(a.date) - Date.parse(b.date)), t = Date.parse(date);
+  if (!sorted.length) return null;
+  if (t <= Date.parse(sorted[0]!.date)) return sorted[0]!;
+  for (let i = 1; i < sorted.length; i++) {
+    const a = sorted[i - 1]!, b = sorted[i]!, tb = Date.parse(b.date);
+    if (t <= tb) { const f = (t - Date.parse(a.date)) / (tb - Date.parse(a.date)); const mix = (x: number, y: number) => x + (y - x) * f; return { ...a, date, liquidRate: mix(a.liquidRate, b.liquidRate), waterCut: mix(a.waterCut, b.waterCut), whp: mix(a.whp, b.whp), gor: mix(a.gor, b.gor), gaugePressure: null, reservoirPressure: null }; }
+  }
+  return sorted.at(-1)!;
+}
