@@ -1346,6 +1346,10 @@
   "entry": "@ikhmalputra/subsurface-core/data-contract",
   "exports": [
    {
+    "name": "bundleShapeProblem",
+    "kind": "function"
+   },
+   {
     "name": "bundleSource",
     "kind": "function"
    },

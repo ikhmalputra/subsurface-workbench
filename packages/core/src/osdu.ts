@@ -63,8 +63,10 @@ const LENGTH: Readonly<Record<string, number>> = { m: 1, metre: 1, meter: 1, met
 const ANGLE: Readonly<Record<string, number>> = { dega: 1, deg: 1, degree: 1, degrees: 1, "°": 1, rad: 180 / Math.PI, radian: 180 / Math.PI, grad: 0.9, gon: 0.9 };
 const unitKey = (ref: string | undefined) => endOfRef(ref).trim().toLowerCase();
 /** A length in metres, or null when the unit is unknown. */
-export function lengthToMetres(value: number, uomRef: string | undefined): number | null { const factor = LENGTH[unitKey(uomRef)]; return factor === undefined ? null : value * factor; }
-export function angleToDegrees(value: number, uomRef: string | undefined): number | null { const factor = ANGLE[unitKey(uomRef)]; return factor === undefined ? null : value * factor; }
+// Own keys only: a unit named "constructor" or "__proto__" (a hostile record) is unknown, not Object.prototype's.
+const factorIn = (table: Readonly<Record<string, number>>, uomRef: string | undefined) => { const key = unitKey(uomRef); return Object.hasOwn(table, key) ? table[key] : undefined; };
+export function lengthToMetres(value: number, uomRef: string | undefined): number | null { const factor = factorIn(LENGTH, uomRef); return factor === undefined ? null : value * factor; }
+export function angleToDegrees(value: number, uomRef: string | undefined): number | null { const factor = factorIn(ANGLE, uomRef); return factor === undefined ? null : value * factor; }
 /** Metres per unit for a length unit the adapter knows, else null; an absent unit is taken as metres. */
 const metresPer = (uomRef: string | undefined) => uomRef === undefined ? 1 : LENGTH[unitKey(uomRef)] ?? null;
 const degreesPer = (uomRef: string | undefined) => uomRef === undefined ? 1 : ANGLE[unitKey(uomRef)] ?? null;
@@ -182,7 +184,8 @@ export function wellboreFromOsdu(record: OsduRecord, partition: string, problems
 
 /** The rows of a bulk table as objects by column name, whatever orientation the DDMS answered in. */
 export function tableRows(table: OsduTable): readonly Readonly<Record<string, unknown>>[] {
-  if (Array.isArray(table)) return table as readonly Readonly<Record<string, unknown>>[];
+  // Rows that are not objects (a null in a hand-written table) are skipped, not read.
+  if (Array.isArray(table)) return table.filter(isObject);
   if (isObject(table) && Array.isArray(table.columns) && Array.isArray(table.data)) {
     const columns = table.columns as readonly string[];
     return (table.data as readonly (readonly unknown[])[]).map((row) => Object.fromEntries(columns.map((column, i) => [column, row[i]])));
@@ -191,7 +194,7 @@ export function tableRows(table: OsduTable): readonly Readonly<Record<string, un
     const byColumn = table as Readonly<Record<string, Readonly<Record<string, unknown>>>>;
     const columns = Object.keys(byColumn).filter((column) => isObject(byColumn[column]));
     const first = columns[0] ? Object.keys(byColumn[columns[0]]!) : [];
-    return first.map((key) => Object.fromEntries(columns.map((column) => [column, byColumn[column]![key]])));
+    return first.map((key) => Object.fromEntries(columns.map((column) => [column, byColumn[column]![key]]))).filter(isObject);
   }
   return [];
 }
@@ -277,7 +280,8 @@ export function describeOsduError(cause: unknown, partition: string, baseUrl: st
     return cause.message;
   }
   if (cause instanceof TypeError) return `The browser could not reach ${baseUrl}: blocked by CORS on the platform (its allowed origins must include this deck's), or by this deployment's Content-Security-Policy connect-src.`;
-  return cause instanceof Error ? cause.message : String(cause);
+  // A thrown non-Error (a rejected promise's bare value) is named as such, never "[object Object]" to the reader.
+  return cause instanceof Error ? cause.message : typeof cause === "string" && cause.trim() ? cause : "The platform's reply could not be read (an error with no message).";
 }
 
 export function osduSource(options: OsduSourceOptions): WellDataSource {

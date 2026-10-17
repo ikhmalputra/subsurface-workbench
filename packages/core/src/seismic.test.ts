@@ -203,3 +203,17 @@ test("a cut along any line takes the nearest bins and is clipped to the cube", (
   assert.equal(missed.inside, null);
   assert.equal(missed.traces.traceCount, 0);
 });
+
+test("SEG-Y: a header that claims more than the file holds is refused in words, never a typed-array crash (found by fuzzing)", () => {
+  const head = new Uint8Array(3600);
+  const view = new DataView(head.buffer);
+  view.setUint16(3224, 5, false); view.setUint16(3220, 100, false);
+  view.setInt16(3504, 3, false); // three extended textual headers the file does not have
+  assert.throws(() => parseSegy(head.buffer), (error: unknown) => error instanceof Error && !(error instanceof RangeError) && /SEG-Y file ends inside its 3 extended textual headers/.test(error.message));
+  // The same header with a body one trace short of two whole traces yields exactly one trace, not a negative count.
+  view.setInt16(3504, 0, false);
+  const partial = new Uint8Array(3600 + 240 + 400 + 100); partial.set(head);
+  const file = parseSegy(partial.buffer);
+  assert.equal(file.traceCount, 1);
+  assert.equal(file.data.length, 100);
+});

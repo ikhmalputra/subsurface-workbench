@@ -188,12 +188,13 @@ export function parseSegy(buffer: ArrayBuffer, options: ParseSegyOptions = {}): 
   const text = decodeText(new Uint8Array(buffer, 0, 3200));
   const extended = Math.max(0, binary.extendedTextHeaders);
   const firstTrace = 3600 + extended * 3200;
+  if (buffer.byteLength < firstTrace) throw new Error(`SEG-Y file ends inside its ${extended} extended textual header${extended === 1 ? "" : "s"}: ${buffer.byteLength} bytes, ${firstTrace} needed before the first trace`);
   const layout = { ...standardTraceHeaderLayout, ...options.layout };
   let sampleCount = binary.samplesPerTrace;
   if (sampleCount === 0 && buffer.byteLength >= firstTrace + 240) sampleCount = view.getUint16(firstTrace + 114, little);
   if (sampleCount === 0) throw new Error("SEG-Y sample count is zero in both binary and first trace header");
   const traceBytes = 240 + sampleCount * formatBytes[sampleFormat];
-  const available = Math.floor((buffer.byteLength - firstTrace) / traceBytes);
+  const available = Math.max(0, Math.floor((buffer.byteLength - firstTrace) / traceBytes));
   const traceCount = Math.min(available, options.maxTraces ?? Infinity);
   const data = new Float32Array(traceCount * sampleCount);
   const traces: SegyTrace[] = [];

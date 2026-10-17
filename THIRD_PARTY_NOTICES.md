@@ -219,7 +219,7 @@ Every runtime dependency of `@ikhmalputra/subsurface-core`, `@ikhmalputra/subsur
 
 ## Development tooling
 
-Not shipped to clients: 147 packages. Licence families: MIT (106), Apache-2.0 (19), ISC (9), BSD-2-Clause (7), BSD-3-Clause (2), MPL-2.0 (2), LGPL-3.0-or-later (1), BlueOak-1.0.0 (1).
+Not shipped to clients: 149 packages. Licence families: MIT (108), Apache-2.0 (19), ISC (9), BSD-2-Clause (7), BSD-3-Clause (2), MPL-2.0 (2), LGPL-3.0-or-later (1), BlueOak-1.0.0 (1).
 
 | Package | Version | Licence | Author |
 |---|---|---|---|
@@ -299,6 +299,7 @@ Not shipped to clients: 147 packages. Licence families: MIT (106), Apache-2.0 (1
 | [esrecurse](https://github.com/estools/esrecurse) | 4.3.0 | BSD-2-Clause |  |
 | [estraverse](https://github.com/estools/estraverse) | 5.3.0 | BSD-2-Clause |  |
 | [esutils](https://github.com/estools/esutils) | 2.0.3 | BSD-2-Clause |  |
+| [fast-check](https://fast-check.dev/) | 4.10.2 | MIT | Nicolas DUBIEN |
 | [fast-deep-equal](https://github.com/epoberezkin/fast-deep-equal#readme) | 3.1.3 | MIT | Evgeny Poberezkin |
 | [fast-json-stable-stringify](https://github.com/epoberezkin/fast-json-stable-stringify) | 2.1.0 | MIT | James Halliday |
 | [fast-levenshtein](https://github.com/hiddentao/fast-levenshtein#readme) | 2.0.6 | MIT | Ramesh Nair |
@@ -349,6 +350,7 @@ Not shipped to clients: 147 packages. Licence families: MIT (106), Apache-2.0 (1
 | [prelude-ls](http://preludels.com) | 1.2.1 | MIT | George Zahariev |
 | [property-graph](https://github.com/donmccurdy/property-graph#readme) | 4.1.0 | MIT | Don McCurdy |
 | [punycode](https://mths.be/punycode) | 2.3.1 | MIT | Mathias Bynens |
+| [pure-rand](https://github.com/dubzzz/pure-rand#readme) | 8.4.2 | MIT | Nicolas DUBIEN |
 | [rolldown](https://rolldown.rs/) | 1.2.13 | MIT |  |
 | [semver](https://github.com/npm/node-semver#readme) | 7.8.5 | ISC | GitHub Inc. |
 | [sharp](https://sharp.pixelplumbing.com) | 0.35.5 | Apache-2.0 | Lovell Fuller |

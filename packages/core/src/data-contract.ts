@@ -184,12 +184,36 @@ export interface DataProblem {
 }
 
 const finite = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
+const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
+const isProblem = (value: unknown): value is DataProblem => isObject(value) && typeof value.message === "string" && (value.severity === "error" || value.severity === "warning");
+const idOf = (value: { readonly id: unknown }) => typeof value.id === "string" ? value.id : typeof value.id === "number" ? String(value.id) : "";
+
+/**
+ * Whether a bundle is in the contract's shape at all: the objects where it says objects, the lists
+ * where it says lists. Found by fuzzing a backend's drift (tools/fuzz): a record outside the shape
+ * is one well left out with its reason, not a thrown error that loses the batch it came in.
+ */
+export function bundleShapeProblem(bundle: unknown): DataProblem | null {
+  const refuse = (what: string): DataProblem => ({ object: "well", id: isObject(bundle) && isObject(bundle.well) ? idOf(bundle.well as { id: unknown }) : "", severity: "error", message: `Not in the data contract's shape: ${what}.` });
+  if (!isObject(bundle)) return refuse("the record is not an object");
+  if (!isObject(bundle.well)) return refuse("`well` is not an object");
+  if (bundle.well.location !== null && bundle.well.location !== undefined && !isObject(bundle.well.location)) return refuse("`well.location` is neither an object nor null");
+  if (!isObject(bundle.well.provenance)) return refuse("`well.provenance` is not an object");
+  if (!Array.isArray(bundle.wellbores)) return refuse("`wellbores` is not a list");
+  for (const item of bundle.wellbores) {
+    if (!isObject(item) || !isObject(item.wellbore)) return refuse("a wellbore entry has no `wellbore` object");
+    if (!isObject(item.wellbore.datum)) return refuse("a wellbore has no `datum` object");
+    if (!Array.isArray(item.trajectories) || !item.trajectories.every((t) => isObject(t) && Array.isArray(t.stations) && t.stations.every(isObject))) return refuse("a wellbore's `trajectories` is not a list of trajectories with `stations` lists");
+    if (!Array.isArray(item.markerSets) || !item.markerSets.every((m) => isObject(m) && Array.isArray(m.markers) && m.markers.every(isObject))) return refuse("a wellbore's `markerSets` is not a list of marker sets with `markers` lists");
+  }
+  return null;
+}
 
 export function validateWell(well: CanonicalWell): readonly DataProblem[] {
   const problems: DataProblem[] = [];
-  const add = (severity: DataProblem["severity"], message: string) => problems.push({ object: "well", id: well.id, severity, message });
-  if (!well.id) add("error", "The well has no id.");
-  if (!well.name.trim()) add("warning", "The well has no name.");
+  const add = (severity: DataProblem["severity"], message: string) => problems.push({ object: "well", id: idOf(well), severity, message });
+  if (!idOf(well)) add("error", "The well has no id.");
+  if (typeof well.name !== "string" || !well.name.trim()) add("warning", "The well has no name.");
   if (well.location) {
     const { longitude, latitude } = well.location;
     if (!finite(longitude) || longitude < -180 || longitude > 180) add("error", `Longitude ${longitude} is outside −180° to 180°.`);
@@ -202,9 +226,9 @@ export function validateWell(well: CanonicalWell): readonly DataProblem[] {
 
 export function validateWellbore(wellbore: CanonicalWellbore): readonly DataProblem[] {
   const problems: DataProblem[] = [];
-  const add = (severity: DataProblem["severity"], message: string) => problems.push({ object: "wellbore", id: wellbore.id, severity, message });
-  if (!wellbore.id) add("error", "The wellbore has no id.");
-  if (!wellbore.wellId) add("error", "The wellbore names no well.");
+  const add = (severity: DataProblem["severity"], message: string) => problems.push({ object: "wellbore", id: idOf(wellbore), severity, message });
+  if (!idOf(wellbore)) add("error", "The wellbore has no id.");
+  if (typeof wellbore.wellId !== "string" || !wellbore.wellId) add("error", "The wellbore names no well.");
   if (wellbore.datum.elevationM !== null && !finite(wellbore.datum.elevationM)) add("error", "The depth datum's elevation is not a number.");
   if (wellbore.datum.elevationM === null) add("warning", `The ${wellbore.datum.reference} elevation is not given: depths cannot be put below sea level.`);
   if (wellbore.totalDepthMdM !== null && (!finite(wellbore.totalDepthMdM) || wellbore.totalDepthMdM <= 0)) add("error", `Total depth ${wellbore.totalDepthMdM} m is not a depth.`);
@@ -220,12 +244,14 @@ export function validateWellbore(wellbore: CanonicalWellbore): readonly DataProb
  */
 export function validateTrajectory(trajectory: CanonicalTrajectory): readonly DataProblem[] {
   const problems: DataProblem[] = [];
-  const add = (severity: DataProblem["severity"], message: string) => problems.push({ object: "trajectory", id: trajectory.id, severity, message });
+  const add = (severity: DataProblem["severity"], message: string) => problems.push({ object: "trajectory", id: idOf(trajectory), severity, message });
   const stations = trajectory.stations;
   if (stations.length < 2) add("error", `${stations.length} station${stations.length === 1 ? "" : "s"}: a path needs two.`);
   stations.forEach((station, index) => {
     const at = `Station ${index + 1} (MD ${station.mdM})`;
     if (!finite(station.mdM)) { add("error", `${at}: MD is not a number.`); return; }
+    // MD is measured down from the datum; a station above it is one the path maths refuses, so it is refused here, in words (found by fuzzing).
+    if (station.mdM < 0) add("error", `${at}: MD is above the depth datum.`);
     if (index > 0 && !(station.mdM > stations[index - 1]!.mdM)) add("error", `${at}: MD does not increase from the station before (${stations[index - 1]!.mdM}).`);
     const angles = station.inclinationDeg !== undefined && station.azimuthDeg !== undefined;
     const positions = station.tvdM !== undefined && station.northM !== undefined && station.eastM !== undefined;
@@ -245,9 +271,9 @@ export function validateTrajectory(trajectory: CanonicalTrajectory): readonly Da
 
 export function validateMarkerSet(set: CanonicalMarkerSet, totalDepthMdM: number | null): readonly DataProblem[] {
   const problems: DataProblem[] = [];
-  const add = (severity: DataProblem["severity"], message: string) => problems.push({ object: "markers", id: set.id, severity, message });
+  const add = (severity: DataProblem["severity"], message: string) => problems.push({ object: "markers", id: idOf(set), severity, message });
   for (const marker of set.markers) {
-    if (!finite(marker.mdM) || marker.mdM < 0) add("error", `${marker.name}: MD ${marker.mdM} is not a depth.`);
+    if (!finite(marker.mdM) || marker.mdM < 0) add("error", `${typeof marker.name === "string" ? marker.name : "A marker"}: MD ${marker.mdM} is not a depth.`);
     else if (totalDepthMdM !== null && marker.mdM > totalDepthMdM + 0.5) add("warning", `${marker.name} at ${marker.mdM} m MD is below the wellbore's ${totalDepthMdM} m total depth.`);
   }
   return problems;
@@ -350,7 +376,10 @@ export interface WellBundle {
  * the problems say why.
  */
 export function catalogueWell(bundle: WellBundle, sourceId: string): { readonly entry: CataloguedWell | null; readonly problems: readonly DataProblem[] } {
-  const problems: DataProblem[] = [...(bundle.problems ?? [])];
+  // A backend that drifted from the contract (a field missing, a list that is not a list) costs its own well, never the batch.
+  const shape = bundleShapeProblem(bundle);
+  if (shape) return { entry: null, problems: [shape] };
+  const problems: DataProblem[] = [...(Array.isArray(bundle.problems) ? bundle.problems.filter(isProblem) : [])];
   const flag = (list: readonly DataProblem[]) => { problems.push(...list); return !list.some((problem) => problem.severity === "error"); };
   if (!flag(validateWell(bundle.well))) return { entry: null, problems };
   const wellbores = bundle.wellbores.filter((item) => flag(validateWellbore(item.wellbore))).map((item): CataloguedWellbore => {

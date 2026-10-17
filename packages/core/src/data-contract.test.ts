@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bundleSource, gridConvergenceDeg, loadWellCatalogue, readDetail, readHeaders, resolveTrajectory, simplifyPath, trueToGrid, validateMarkerSet, validateTrajectory, validateWell, validateWellbore } from "./data-contract.ts";
+import { bundleShapeProblem, bundleSource, catalogueWell, gridConvergenceDeg, loadWellCatalogue, readDetail, readHeaders, resolveTrajectory, simplifyPath, trueToGrid, validateMarkerSet, validateTrajectory, validateWell, validateWellbore } from "./data-contract.ts";
 import type { CanonicalMarkerSet, CanonicalTrajectory, CanonicalWell, CanonicalWellbore, WellBundle, WellDataSource } from "./data-contract.ts";
 
 const provenance = { kind: "synthetic" as const, source: "test" };
@@ -137,4 +137,39 @@ test("a simplified path keeps its shape within the tolerance, and its ends", () 
     worst = Math.max(worst, nearest);
   }
   assert.ok(worst <= 1 + 1e-9, `worst ${worst} m`);
+});
+
+test("catalogueWell: a record outside the contract's shape costs that well, with its reason, not the batch (found by fuzzing)", () => {
+  const sound: WellBundle = { well: { id: "w", name: "W", field: null, location: null, environment: null, waterDepthM: null, groundElevationM: null, provenance: { kind: "tenant", source: "t" } }, wellbores: [] };
+  assert.ok(catalogueWell(sound, "s").entry, "a sound bundle is catalogued");
+  const drifted: unknown[] = [
+    null, "well", { well: "w", wellbores: [] }, { well: { ...sound.well, location: 5 }, wellbores: [] }, { well: sound.well, wellbores: {} },
+    { well: sound.well, wellbores: [{ wellbore: { id: "b", wellId: "w", name: "B", status: "drilled", datum: { reference: "RKB", elevationM: 10 }, totalDepthMdM: null, provenance: sound.well.provenance }, trajectories: [{ id: "t", stations: null }], markerSets: [] }] },
+    { well: sound.well, wellbores: [{ wellbore: { id: "b", wellId: "w", name: "B", status: "drilled", datum: { reference: "RKB", elevationM: 10 }, totalDepthMdM: null, provenance: sound.well.provenance }, trajectories: [], markerSets: [{ id: "m", markers: [1] }] }] },
+    JSON.parse('{"well":{"__proto__":{"polluted":1},"polluted":1},"wellbores":[]}'),
+  ];
+  for (const bundle of drifted) {
+    const { entry, problems } = catalogueWell(bundle as WellBundle, "s");
+    assert.equal(entry, null);
+    assert.equal(problems.length, 1);
+    assert.match(problems[0]!.message, /Not in the data contract's shape/);
+  }
+  assert.equal(bundleShapeProblem(sound), null);
+  assert.equal(("polluted" in {}), false, "a __proto__ key in a record never reaches Object.prototype");
+  // Names and ids of the wrong type are a problem said in words, not a crash.
+  const nameless = { ...sound, well: { ...sound.well, name: undefined as unknown as string } };
+  assert.match(catalogueWell(nameless, "s").problems[0]!.message, /no name/);
+  assert.equal(validateWellbore({ id: 7 as unknown as string, wellId: 3 as unknown as string, name: "x", status: "drilled", datum: { reference: "RKB", elevationM: null }, totalDepthMdM: null, provenance: sound.well.provenance }).filter((p) => p.severity === "error").length, 1, "a numeric wellbore id is an id; a numeric well reference is not");
+});
+
+test("validateTrajectory: a station above the datum (negative MD) is refused in words, where the path maths would have thrown (found by fuzzing)", () => {
+  const stations = [{ mdM: -5, inclinationDeg: 0, azimuthDeg: 0 }, { mdM: 100, inclinationDeg: 0, azimuthDeg: 0 }];
+  const trajectory: CanonicalTrajectory = { id: "t", wellboreId: "b", name: "T", kind: "survey", azimuthReference: "grid", stations, provenance: { kind: "tenant", source: "t" } };
+  const errors = validateTrajectory(trajectory).filter((p) => p.severity === "error");
+  assert.equal(errors.length, 1);
+  assert.match(errors[0]!.message, /above the depth datum/);
+  const bundle: WellBundle = { well: { id: "w", name: "W", field: null, location: null, environment: null, waterDepthM: null, groundElevationM: null, provenance: trajectory.provenance }, wellbores: [{ wellbore: { id: "b", wellId: "w", name: "B", status: "drilled", datum: { reference: "RKB", elevationM: 10 }, totalDepthMdM: 100, provenance: trajectory.provenance }, trajectories: [trajectory], markerSets: [] }] };
+  const { entry } = catalogueWell(bundle, "s");
+  assert.ok(entry);
+  assert.equal(entry.wellbores[0]!.trajectory, null, "the path is left out, the well kept");
 });

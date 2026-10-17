@@ -77,3 +77,10 @@ test("the published 10 ft mud log parses with provenance", () => {
   assert.match(las.parameters.SRC?.value ?? "", /^https:\/\/gdr\.openei\.org\//);
   assert.ok((lasCurve(las, "ROP")?.values.filter((value) => value !== null).length ?? 0) > 1000);
 });
+
+test("LAS: a NULL header that is not a number falls back to −999.25, so the null marker still nulls (found by fuzzing)", () => {
+  const text = ["~V", " VERS. 2.0 : v", " WRAP. NO : w", "~W", " NULL. abc : null", "~C", " DEPT.M : depth", " GR.API : gamma", "~A", " 100 -999.25", " 101 55"].join("\n");
+  const las = parseLas(text);
+  assert.equal(las.nullValue, -999.25);
+  assert.deepEqual([...las.curves[1]!.values], [null, 55]);
+});
