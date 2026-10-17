@@ -30,7 +30,9 @@
     "version": "changeset version",
     "release": "node tools/release/release.mjs",
     "release:verify": "node tools/release/verify-release.mjs",
-    "test:release-tools": "node --test tools/release/release.test.mjs"
+    "test:release-tools": "node --test tools/release/release.test.mjs",
+    "mock:osdu": "node tools/mock-osdu/server.mjs",
+    "test:mock-osdu": "node --test tools/mock-osdu/mock.test.mjs"
   },
   "devDependencies": {
     "@changesets/cli": "^3.0.3",
