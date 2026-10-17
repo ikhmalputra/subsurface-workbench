@@ -7,6 +7,7 @@
 // - the heap within budget throughout; zero page errors.
 //
 //   node tools/stress/throttle.mjs         # report: output/reports/throttle.json
+//   node tools/stress/throttle.mjs cpu4x   # one condition (cpu4x, vpn, poor, poor-uncompressed)
 import { mkdirSync, writeFileSync } from "node:fs";
 import { BUDGETS } from "../budgets.mjs";
 import { fieldButton, fieldText, launch, mark, openDeck, reading, signIn, sourcesListed, startStand, worstStalls } from "./harness.mjs";
@@ -28,7 +29,8 @@ const check = (name, ok, detail) => { results.push({ name, ok, detail }); consol
 const browser = await launch();
 let stand = null;
 try {
-  for (const [name, condition] of Object.entries(CONDITIONS)) {
+  const only = process.argv.slice(2);
+  for (const [name, condition] of Object.entries(CONDITIONS).filter(([n]) => !only.length || only.includes(n))) {
     stand = await startStand({ profile: "clean", wells: 1000, perField: 200, stations: 120, ports: 4120, gzip: condition.gzip });
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, colorScheme: "dark" });
     const page = await context.newPage();
@@ -73,6 +75,11 @@ try {
     await mark(deck, "field read → site in 3D");
     await deck.locator('.dock-item[data-id="site3d"]').click().catch(() => {});
     await deck.waitForTimeout(4000);
+    // Only the selected well's picks are labelled, so only its labels are made: none with no well selected, never one per pick in the field.
+    const picks = await deck.locator("[data-testid='site-scene'] .sw-scene-label.is-pick:not(.is-cursor)").count();
+    const selected = await deck.locator("[data-testid='site-scene']").getAttribute("data-selected-well").catch(() => "");
+    const names = await deck.locator("[data-testid='site-scene'] .sw-scene-label.is-well").count();
+    check(`${name}: pick labels for the selected well only`, names > 0 && picks <= (selected ? 40 : 0), `${names} well names, ${picks} pick labels, ${selected ? `well ${selected} selected` : "no well selected"}`);
     const measured = await reading(deck);
     check(`${name}: worst stall`, measured.worstStallMs <= B.longTaskMs, `${measured.worstStallMs} ms over ${measured.stalls} stalls (budget ${B.longTaskMs}); worst: ${(await worstStalls(deck, 4)).join("; ")}`);
     check(`${name}: heap`, measured.heapMB <= B.heapMB, `${measured.heapMB} MB (budget ${B.heapMB})`);
