@@ -4,6 +4,7 @@ import type { PetrophysicsLogCurve, ShaleVolumeMethod } from "@ikhmalputra/subsu
 import { PetrophysicsCrossplot } from "@ikhmalputra/subsurface-react/2d";
 import { useWire } from "./wire.ts";
 import { CrystallinePetrophysics } from "./PetroCrystalline.tsx";
+import { ForcePetrophysics } from "./PetroForce.tsx";
 
 import { fmt } from "../format.ts";
 const pct = (value: number | null) => value === null ? "not computed" : `${fmt(value * 100, 1)} %`;
@@ -31,7 +32,7 @@ interface Parameters {
  */
 export function Petrophysics() {
   const wire = useWire("petro");
-  return wire.place?.siteId === "forge" ? <CrystallinePetrophysics /> : <ClasticPetrophysics />;
+  return wire.place?.siteId === "forge" ? <CrystallinePetrophysics /> : wire.place?.kind === "force" ? <ForcePetrophysics /> : <ClasticPetrophysics />;
 }
 
 function ClasticPetrophysics() {

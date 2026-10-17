@@ -91,6 +91,22 @@
       "types": "./dist/simulation.d.ts",
       "import": "./dist/simulation.js"
     },
+    "./integrity": {
+      "types": "./dist/integrity.d.ts",
+      "import": "./dist/integrity.js"
+    },
+    "./attributes": {
+      "types": "./dist/attributes.d.ts",
+      "import": "./dist/attributes.js"
+    },
+    "./petro-clastic": {
+      "types": "./dist/petro-clastic.d.ts",
+      "import": "./dist/petro-clastic.js"
+    },
+    "./induced-seismicity": {
+      "types": "./dist/induced-seismicity.d.ts",
+      "import": "./dist/induced-seismicity.js"
+    },
     "./production": {
       "types": "./dist/production.d.ts",
       "import": "./dist/production.js"

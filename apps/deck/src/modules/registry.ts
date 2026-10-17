@@ -18,10 +18,10 @@ export const signalName: Readonly<Record<Signal, string>> = { place: "Place", ob
 export type ModuleId =
   | "globe" | "site3d"
   | "designer" | "editor" | "section" | "well3d" | "construction" | "compare" | "cutaway" | "plan" | "profile" | "anticollision"
-  | "logs" | "seismic" | "curtain" | "correlate" | "tie" | "horizons" | "volumetrics"
+  | "logs" | "seismic" | "curtain" | "correlate" | "tie" | "horizons" | "attributes" | "volumetrics"
   | "drilling" | "rig" | "torquedrag"
   | "petro"
-  | "strings" | "window" | "kick" | "cement" | "hydraulics" | "geomech" | "barriers"
+  | "strings" | "window" | "kick" | "cement" | "hydraulics" | "geomech" | "stimulation" | "barriers"
   | "decline" | "nodal";
 
 /** What kind of place a site is: FORGE's records, the Equator field, a FORCE 2020 area, a planned well (Kestrel A-7 or the user's), or a drilled well entered on the deck. */
@@ -54,14 +54,16 @@ export const modules: readonly ModuleSpec[] = [
   { id: "globe", title: "Globe", icon: Globe2, group: "Geophysics & geology", blurb: "Every located well on an offline globe; draw a section line on it", listens: ["place", "depth", "view"], emits: ["place", "view"], min: { w: 3, h: 3 }, size: { w: 5, h: 8 }, depthIndexed: false },
   { id: "site3d", title: "Site in 3D", icon: Box, group: "Geophysics & geology", blurb: "Wells, horizons and seismic in one frame", listens: ["place", "depth", "view"], emits: ["place", "view"], min: { w: 3, h: 4 }, size: { w: 5, h: 8 }, depthIndexed: false },
   { id: "seismic", title: "Seismic section", icon: AudioWaveform, group: "Geophysics & geology", blurb: "PSDM along the well, or the inline or crossline moved in the 3D site", listens: ["place", "object", "depth", "view"], emits: ["depth", "view"], min: { w: 3, h: 4 }, size: { w: 5, h: 6 }, depthIndexed: true },
+  { id: "attributes", title: "Attributes", icon: Layers, group: "Geophysics & geology", blurb: "The PSDM in a chair display you orbit and sweep: envelope, phase, frequency, RMS, dip-steered coherence and fault likelihood over the amplitude", listens: ["place", "depth"], emits: ["depth"], min: { w: 5, h: 5 }, size: { w: 8, h: 8 }, depthIndexed: false, opensFocused: true },
   { id: "curtain", title: "Section line", icon: Slice, group: "Geophysics & geology", blurb: "The PSDM along a line drawn on the globe, with the wells that pass near it", listens: ["place", "depth", "view"], emits: ["depth"], min: { w: 4, h: 4 }, size: { w: 6, h: 5 }, depthIndexed: true },
   { id: "correlate", title: "Correlation", icon: AlignHorizontalSpaceAround, group: "Geophysics & geology", blurb: "A field's wells side by side on their logs and tops: flatten on a top, pick your own", listens: ["place", "depth"], emits: ["place", "depth"], min: { w: 5, h: 5 }, size: { w: 8, h: 8 }, depthIndexed: false, opensFocused: true },
   { id: "tie", title: "Well tie", icon: AudioLines, group: "Geophysics & geology", blurb: "The seismic the logs predict, tied to the PSDM: shift, stretch and fit, scored by correlation", listens: ["place", "depth"], emits: ["depth"], min: { w: 5, h: 5 }, size: { w: 8, h: 8 }, depthIndexed: false, opensFocused: true },
   { id: "horizons", title: "Horizons & faults", icon: Layers, group: "Geophysics & geology", blurb: "Click a reflector in 3D and it is tracked through the PSDM; pick faults as sticks and the horizon stops at them, with the throw", listens: ["place"], emits: [], min: { w: 5, h: 5 }, size: { w: 8, h: 8 }, depthIndexed: false, opensFocused: true },
   { id: "volumetrics", title: "Maps & volumetrics", icon: MapIcon, group: "Geophysics & geology", blurb: "A zone mapped between the wells, a contact you set, and the in-place volume as P90, P50 and P10 from the wells' own logs", listens: ["place"], emits: [], min: { w: 5, h: 5 }, size: { w: 8, h: 8 }, depthIndexed: false, opensFocused: true },
   { id: "logs", title: "Logs", icon: ListTree, group: "Petrophysics", blurb: "The well's LAS curves; Shift-drag to brush an interval", listens: ["place", "object", "depth", "time"], emits: ["depth"], min: { w: 3, h: 4 }, size: { w: 4, h: 8 }, depthIndexed: true },
-  { id: "petro", title: "Petrophysics", icon: ScatterChart, group: "Petrophysics", blurb: "Porosity, saturation and pay over the brushed interval", listens: ["place", "object", "depth"], emits: ["object", "depth"], min: { w: 4, h: 4 }, size: { w: 5, h: 8 }, depthIndexed: false },
+  { id: "petro", title: "Petrophysics", icon: ScatterChart, group: "Petrophysics", blurb: "The rock the logs read: clay, porosity, shaly-sand saturation from a Pickett plot you drag, permeability and pay as P90/P50/P10", listens: ["place", "object", "depth"], emits: ["object", "depth"], min: { w: 4, h: 4 }, size: { w: 5, h: 8 }, depthIndexed: false },
   { id: "geomech", title: "Geomechanics", icon: Mountain, group: "Geomechanics & pressure", blurb: "A 1D mechanical earth model: stresses, collapse and breakdown against the mud used", listens: ["place", "depth"], emits: ["depth"], min: { w: 4, h: 6 }, size: { w: 5, h: 8 }, depthIndexed: true },
+  { id: "stimulation", title: "Stimulation", icon: Activity, group: "Geomechanics & pressure", blurb: "Pump FORGE's 2022 stages in 3D: the fracture grows along SHmax, the pressure slips natural fractures, events by magnitude, b-value and the traffic light", listens: ["place", "depth"], emits: ["depth"], min: { w: 5, h: 6 }, size: { w: 8, h: 8 }, depthIndexed: false, opensFocused: true },
   { id: "window", title: "Pressure window", icon: Layers2, group: "Geomechanics & pressure", blurb: "Pore, fracture and the mud weights between them", listens: ["place", "depth", "whatif"], emits: ["depth", "whatif"], min: { w: 3, h: 4 }, size: { w: 4, h: 8 }, depthIndexed: true },
   { id: "drilling", title: "Drilling record", icon: CalendarDays, group: "Drilling", blurb: "Days vs depth, hole sections, runs and the daily reports", listens: ["place", "object", "depth", "time"], emits: ["object", "depth", "time"], min: { w: 3, h: 4 }, size: { w: 4, h: 6 }, depthIndexed: true },
   { id: "rig", title: "Live drilling", icon: Drill, group: "Drilling", blurb: "Drill the planned well in simulation, second by second: kicks, losses, washouts and well control", listens: ["place", "depth"], emits: ["depth"], min: { w: 4, h: 6 }, size: { w: 8, h: 8 }, depthIndexed: false, opensOnStage: true },
@@ -80,7 +82,7 @@ export const modules: readonly ModuleSpec[] = [
   { id: "cement", title: "Cement", icon: Droplets, group: "Well engineering & completions", blurb: "Slurry volumes and the column against fracture", listens: ["place", "object", "whatif"], emits: ["object", "whatif"], min: { w: 3, h: 4 }, size: { w: 4, h: 5 }, depthIndexed: false },
   { id: "barriers", title: "Well barriers", icon: ShieldCheck, group: "Well engineering & completions", blurb: "Primary and secondary barrier envelopes on the construction, with what the records say of each element", listens: ["place", "depth", "time", "whatif"], emits: [], min: { w: 4, h: 6 }, size: { w: 6, h: 8 }, depthIndexed: false },
   { id: "decline", title: "Decline curves", icon: TrendingDown, group: "Production", blurb: "Arps decline on any Norwegian field's monthly production (Sodir)", listens: [], emits: [], min: { w: 4, h: 5 }, size: { w: 6, h: 7 }, depthIndexed: false },
-  { id: "nodal", title: "Nodal analysis", icon: Fuel, group: "Production", blurb: "What the reservoir delivers against what the tubing lifts: the operating point, the flow up the tubing, and how lift gas, tubing, water and wellhead pressure move it", listens: ["place"], emits: [], min: { w: 4, h: 5 }, size: { w: 8, h: 8 }, depthIndexed: false, opensFocused: true },
+  { id: "nodal", title: "Nodal analysis", icon: Fuel, group: "Production", blurb: "What the reservoir delivers against what the tubing lifts: the operating point, the flow up the tubing, and how lift gas, tubing, water and wellhead pressure move it; and each annulus's pressure against its MAASP as the well warms up", listens: ["place"], emits: [], min: { w: 4, h: 5 }, size: { w: 8, h: 8 }, depthIndexed: false, opensFocused: true },
   { id: "editor", title: "Well editor", icon: FilePen, group: "Your data", blurb: "A drilled well's records: survey, formation tops, casing, hole and cement, and LAS logs; enter them, paste or import them, or edit an existing well's", listens: ["place", "object"], emits: ["object"], min: { w: 4, h: 6 }, size: { w: 5, h: 8 }, depthIndexed: false },
   { id: "compare", title: "Compare wells", icon: GitCompareArrows, group: "Your data", blurb: "Several wells' construction side by side, on one depth scale and one diameter scale, string by string", listens: ["place", "depth", "whatif"], emits: ["depth"], min: { w: 4, h: 5 }, size: { w: 7, h: 8 }, depthIndexed: false },
 ];
@@ -117,10 +119,11 @@ const availability: Readonly<Partial<Record<ModuleId, { readonly sites: readonly
   tie: { sites: ["forge"], why: "A well tie needs sonic, density and seismic at one well; at Utah FORGE, 58-32 has all three. Fly to Utah FORGE." },
   correlate: { sites: ["force"], why: "Correlation reads logs and tops across a field's wells. The FORCE 2020 wells in the Norwegian North Sea have both: fly to one of their areas from the globe or ⌘K." },
   seismic: { sites: ["forge"], why: "Only Utah FORGE has seismic: the PSDM volume around 16A(78)-32." },
+  attributes: { sites: ["forge"], why: "Attributes are computed on seismic; only Utah FORGE has a PSDM volume. Fly to Utah FORGE." },
   curtain: { sites: ["forge"], why: "A section line cuts the PSDM volume; only Utah FORGE has one." },
   torquedrag: { sites: ["forge"], why: "Torque and drag is calibrated on reported string weights; only Utah FORGE 16A(78)-32 has them, in its daily reports." },
   drilling: { sites: ["forge"], why: "Only Utah FORGE has been drilled: daily reports, hole sections and runs exist only for it." },
-  petro: { sites: ["forge", "equator"], why: "A planned well has not been drilled, so it has no logs." },
+  petro: { sites: ["forge", "equator", "force"], why: "A planned well has not been drilled, so it has no logs." },
   strings: { sites: ["forge", "design", "recorded"], why: "The Equator wells have no casing records. Add them in the Well editor." },
   window: { sites: ["design"], why: "A pressure window needs pore and fracture pressures; only planned wells (Kestrel A-7 or one you create with + New well) carry them." },
   kick: { sites: ["design"], why: "Kick tolerance needs fracture gradients at the shoes; only planned wells carry them." },
@@ -128,6 +131,7 @@ const availability: Readonly<Partial<Record<ModuleId, { readonly sites: readonly
   nodal: { sites: ["design"], why: "Nodal analysis needs a well's completion, perforations and reservoir pressure: a planned well has them. Open Kestrel A-7 or plan one with + New well." },
   cement: { sites: ["design"], why: "Cement design needs planned slurries and fracture gradients; only planned wells carry them." },
   barriers: { sites: ["forge", "design", "recorded"], why: "Barrier envelopes are drawn on a construction; the Equator wells have none. Add casing records in the Well editor." },
+  stimulation: { sites: ["forge"], why: "The stimulation model runs on Utah FORGE: 16A's logged stresses and fracture intensity, and the April 2022 stages. Fly to Utah FORGE." },
   geomech: { sites: ["forge"], why: "A mechanical earth model needs logged rock strength and stresses; only Utah FORGE has them (16A's IsoMechPro and 58-32's calibrated stresses)." },
   hydraulics: { sites: ["design"], why: "Hydraulics need a hole section, mud and drill string; a planned well supplies them, with flow and nozzles you set." },
 };
@@ -135,7 +139,6 @@ const availability: Readonly<Partial<Record<ModuleId, { readonly sites: readonly
 /** What the FORCE 2020 wells carry, for the modules that need more. */
 const FORCE_HAS = "The FORCE 2020 wells carry logs, the Directorate's tops, interpreted lithology and casing shoe depths, not the records this module reads.";
 const forceWhy: Readonly<Partial<Record<ModuleId, string>>> = {
-  petro: "Petrophysics runs on FORGE and the Equator field. The FORCE wells' curves are in Logs and Correlation.",
   section: "The FORCE wells carry casing shoe depths, not a construction record. Their shoes are marked in Logs and Correlation.",
   construction: "The FORCE wells carry casing shoe depths, not a construction record.",
   seismic: "FORCE 2020 carries no seismic.", curtain: "FORCE 2020 carries no seismic.", tie: "FORCE 2020 carries no seismic to tie to.", horizons: "FORCE 2020 carries no seismic to pick horizons on.",

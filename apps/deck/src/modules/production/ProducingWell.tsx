@@ -232,6 +232,23 @@ export function ProducingWell({ scene, cursorMdM, onHover, onPin, playing = true
       ctx.fillStyle = "rgba(226, 232, 240, 0.92)"; ctx.font = "600 10.5px 'IBM Plex Sans', sans-serif"; ctx.textAlign = "left";
       ctx.fillText(`${Math.round(s.whpPsig)} psig`, cx + treeW / 2 + 36, wingY - 9);
 
+      // ---- integrity: each annulus lit by its pressure against its MAASP, labelled where it ends (packer or cement) ----
+      const annuli = s.annuli ?? [], reach = annuli.length ? Math.max(...annuli.map((an) => r(an.outerIdIn))) + 22 : 0;
+      for (const an of annuli) {
+        const ri = r(an.innerOdIn), ro = r(an.outerIdIn), yb = y(Math.min(an.bottomMdM, s.mdMax)), t = Math.max(0, Math.min(1.2, an.ratio));
+        const hue = t < 0.6 ? 140 - t / 0.6 * 95 : t < 1 ? 45 - (t - 0.6) / 0.4 * 45 : 0, alpha = 0.32 + 0.35 * Math.min(1, t);
+        ctx.fillStyle = `hsla(${hue}, 85%, 55%, ${alpha})`;
+        ctx.fillRect(cx - ro, scale.top, ro - ri, yb - scale.top); ctx.fillRect(cx + ri, scale.top, ro - ri, yb - scale.top);
+        if (t >= 1 && Math.floor(clock * 3) % 2 === 0) { ctx.strokeStyle = "#f87171"; ctx.lineWidth = 2; ctx.strokeRect(cx + ri, scale.top, ro - ri, yb - scale.top); }
+        // The bottom of the annulus, a leader out past the casings, and its pressure against its MAASP.
+        ctx.strokeStyle = `hsla(${hue}, 90%, 70%, 0.85)`; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(cx + ri, yb); ctx.lineTo(cx + reach, yb); ctx.stroke();
+        ctx.font = "600 10.5px 'IBM Plex Mono', monospace"; ctx.textAlign = "left";
+        const lw = ctx.measureText(an.label).width;
+        ctx.fillStyle = "rgba(8, 12, 20, 0.78)"; ctx.fillRect(cx + reach + 2, yb - 8, lw + 8, 15);
+        ctx.fillStyle = `hsl(${hue}, 90%, 70%)`; ctx.fillText(an.label, cx + reach + 6, yb + 3.5);
+      }
+
       // ---- the depth cursor shared with the deck ----
       if (cursor !== null && cursor <= s.mdMax) {
         const cy = y(cursor);

@@ -16,6 +16,8 @@ import { ProducingWell } from "./production/ProducingWell.tsx";
 import { Dial, NodalInstrument, PressureLane, Slider } from "./production/controls.tsx";
 import { LifeStrip } from "./production/LifeStrip.tsx";
 import { sceneFlow, sceneFrame, unloadingAt } from "./production/scene.ts";
+import { IntegritySide, LimitsTable, hoursLabel as hoursLabelOf } from "./production/IntegritySide.tsx";
+import { annuliOf, annulusPressures, rameyOf } from "../data/integrity-model.ts";
 import type { SceneValve, WellScene } from "./production/scene.ts";
 import { fmt } from "../format.ts";
 import { useWire } from "./wire.ts";
@@ -30,8 +32,8 @@ import { useWire } from "./wire.ts";
  */
 
 const KEY = "deck-nodal-v1";
-type Lens = "match" | "operate" | "lift" | "life";
-type Drawer = "inputs" | "tests" | "valves" | "tank" | null;
+type Lens = "match" | "operate" | "lift" | "life" | "integrity";
+type Drawer = "inputs" | "tests" | "valves" | "tank" | "limits" | null;
 type Kept = {
   readonly inputs: NodalInputs; readonly compare: Compare; readonly view?: string; readonly lens?: Lens;
   readonly tests?: readonly WellTest[]; readonly lab?: LabPvt | null; readonly synthetic?: boolean;
@@ -49,7 +51,7 @@ type Kept = {
 const SAMPLE_VERSION = 3;
 function readKept(): Record<string, Kept> { try { const v = JSON.parse(localStorage.getItem(KEY) ?? "{}") as Record<string, Kept>; return v && typeof v === "object" && !Array.isArray(v) ? v : {}; } catch { return {}; } }
 const okKept = (k: Kept | undefined): k is Kept => !!k && !!k.inputs && typeof k.inputs === "object" && Object.keys(defaultNodal).every((key) => key in k.inputs);
-const LENS_NAME: Readonly<Record<Lens, string>> = { match: "Match", operate: "Operate", lift: "Lift", life: "Life" };
+const LENS_NAME: Readonly<Record<Lens, string>> = { match: "Match", operate: "Operate", lift: "Lift", life: "Life", integrity: "Integrity" };
 const lensOf = (k: Kept): Lens => k.lens ?? (k.view === "match" ? "match" : k.view === "lift" ? "lift" : k.view === "forecast" || k.view === "history" ? "life" : "operate");
 
 export function Nodal() {
@@ -102,6 +104,18 @@ export function Nodal() {
     frameId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frameId);
   }, [unload.playing]);
+
+  // ---- integrity: the start-up clock (hours on production, log), what has been bled ----
+  const annuli = useMemo(() => annuliOf(brief), [brief]);
+  const [startup, setStartup] = useState({ hours: 24, playing: false });
+  const [bled, setBled] = useState<Record<string, number>>({});
+  useEffect(() => {
+    if (!startup.playing) return;
+    let frameId = 0, last = performance.now();
+    const tick = (now: number) => { const dt = (now - last) / 1000; last = now; setStartup((u) => { const lh = Math.log10(Math.max(0.1, u.hours)) + dt / 3.5; const hours = 10 ** Math.min(Math.log10(24 * 365), lh); return { hours, playing: hours < 24 * 365 - 1 }; }); frameId = requestAnimationFrame(tick); };
+    frameId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frameId);
+  }, [startup.playing]);
 
   // ---- life: the tank matched to the build-ups, then both cases month by month across the indistinguishable tanks ----
   const tankFit = useMemo(() => typeof well === "string" || lens !== "life" || !usable ? null : tankMatch(well, tests, production, calibration!), [well, lens, usable, tests, production, calibration]);
@@ -205,7 +219,14 @@ export function Nodal() {
     subtitle = !point ? "Not flowing: the tubing cannot lift what the reservoir delivers" : entry && !entry.ok ? `Lift gas cannot enter at ${fmt(Math.round(well.liftDepthMdM ?? 0))} m: casing ${fmt(Math.round(entry.casing - 14.7))} against tubing ${fmt(Math.round(entry.tubing - 14.7))} psig` : liftOn(inputs.liftMscfD) ? "Flowing on gas lift" : "Flowing naturally";
   }
 
-  const lensButtons = (["match", "operate", "lift", "life"] as const).filter((l) => l !== "lift" || well.lift === "gas-lift");
+  // Integrity: the operating well, its annuli lit by pressure against MAASP as it warms up.
+  const integrityRows = lens === "integrity" && typeof annuli !== "string" ? annulusPressures(annuli, rameyOf(brief, point?.rate ?? 0, inputs.waterCut, well.midPerfMdM), startup.hours, liftOn(inputs.liftMscfD) ? lift.operatingPsig : null, bled) : [];
+  if (lens === "integrity") {
+    scene = { ...scene, annuli: integrityRows.map((r) => ({ name: r.annulus.name, innerOdIn: r.annulus.innerOdIn, outerIdIn: r.annulus.outerIdIn, bottomMdM: r.annulus.bottomMdM, ratio: r.ratio, label: `${r.annulus.name} ${fmt(Math.round(r.psi))} / ${fmt(Math.round(r.annulus.maasp.maaspPsi))}` })) };
+    laneLines = [tubingLine(solved.traverse, "tubing"), ...integrityRows.map((r) => ({ key: r.annulus.name, pts: [0, r.annulus.bottomMdM].map((md) => ({ mdM: md, psia: r.psi + 14.7 + r.annulus.fluidSg * 0.433 * (md === 0 ? 0 : r.annulus.bottomTvdFt) })), className: `pw-line-ann is-${r.annulus.name}`, label: `${r.annulus.name} annulus`, labelAtEnd: true }))];
+    subtitle = `${typeof annuli === "string" ? annuli : `${annuli.length} annuli`} · ${hoursLabelOf(startup.hours)} on production at ${fmt(Math.round(point?.rate ?? 0))} STB/d`;
+  }
+  const lensButtons = (["match", "operate", "lift", "life", "integrity"] as const).filter((l) => l !== "lift" || well.lift === "gas-lift");
   const correlation = calibration ? CORRELATIONS.find((c) => c.id === calibration.flow.correlation)?.name : null;
   return <div className="pw" data-lens={lens}>
     <header className="pw-bar">
@@ -279,6 +300,9 @@ export function Nodal() {
             <button type="button" className="tie-button" onClick={() => setDrawer("valves")}>Valve schedule</button>
           </div>
         </> : <p className="nodal-hint">The completion has no gas lift: choose it in the Well designer&apos;s Completion stage.</p>)}
+        {lens === "integrity" && (typeof annuli === "string" ? <p className="nodal-hint">{annuli}</p> : <IntegritySide rows={integrityRows} hours={startup.hours} playing={startup.playing} lifting={liftOn(inputs.liftMscfD)}
+          onHours={(hours) => setStartup({ hours, playing: false })} onPlay={() => setStartup((u) => ({ hours: u.playing ? u.hours : u.hours >= 24 * 365 * 0.9 ? 0.1 : u.hours, playing: !u.playing }))}
+          onBleed={(name, psi) => setBled((b) => ({ ...b, [name]: psi }))} onLimits={() => setDrawer("limits")} />)}
         {lens === "life" && (usable ? (cases ? <LifeSide cases={cases} f={forecastInputs} lifeCase={kept.lifeCase ?? "lift"} onCase={(c) => setKept((k) => ({ ...k, lifeCase: c }))}
           onForecast={(patch) => setKept((k) => ({ ...k, forecast: { ...defaultForecast, ...k.forecast, ...patch } }))} onTank={() => setDrawer("tank")} entryOk={!entry || entry.ok} liftMscfD={inputs.liftMscfD} />
           : <p className="nodal-hint">Matching the tank to the build-ups…</p>)
@@ -288,13 +312,14 @@ export function Nodal() {
     {lens === "life" && <LifeStrip production={production} tests={tests} band={cases?.band ?? null} showLift={(kept.lifeCase ?? "lift") === "lift"} cursorMs={cursorMs ?? todayMs} todayMs={todayMs}
       onCursor={(ms) => signals.setTimeCursor(ms, wire.source)} />}
     {drawer && <div className="pw-drawer" role="dialog" aria-label="Details">
-      <header><b>{drawer === "inputs" ? "Inputs and assumptions" : drawer === "tests" ? "Tests, lab and correlations" : drawer === "valves" ? "Valve schedule" : "Tank match"}</b>
+      <header><b>{drawer === "inputs" ? "Inputs and assumptions" : drawer === "tests" ? "Tests, lab and correlations" : drawer === "valves" ? "Valve schedule" : drawer === "limits" ? "Annulus limits" : "Tank match"}</b>
         <button type="button" className="cor-icon" aria-label="Close" onClick={() => setDrawer(null)}><X size={13} /></button></header>
       <div className="pw-drawer-body">
         {drawer === "tests" && <>
           <MatchView tests={tests} lab={lab} synthetic={!!kept.synthetic} result={result} stale={stale} onTests={(next) => setKept((k) => ({ ...k, tests: next, synthetic: false }))} onLab={(next) => setKept((k) => ({ ...k, lab: next }))} onMatch={match} />
           {result && <HistoryView result={result} well={well} inputs={inputs} />}
         </>}
+        {drawer === "limits" && integrityRows.length > 0 && <LimitsTable rows={integrityRows} />}
         {drawer === "valves" && designed && <ValveSchedule result={designed} lift={lift} brief={brief} calibrated={usable} />}
         {drawer === "tank" && cases && tankFit && <>
           <TankCard matched={tankFit} tank={cases.tank} aquifer={tankAquifer} onAquifer={(a) => setKept((k) => ({ ...k, tankAquifer: a }))} production={production} synthetic={!!kept.synthetic} />

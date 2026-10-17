@@ -21,6 +21,10 @@
     "src/known.ts",
     "src/hydraulics.ts",
     "src/simulation.ts",
-    "src/production.ts"
+    "src/production.ts",
+    "src/induced-seismicity.ts",
+    "src/petro-clastic.ts",
+    "src/attributes.ts",
+    "src/integrity.ts"
   ]
 }
