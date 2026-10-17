@@ -1,6 +1,7 @@
 import { catalogueWell, readDetail, readHeaders } from "@ikhmalputra/subsurface-core/data-contract";
 import type { CataloguedWell, DataProblem, WellBundle, WellDataSource } from "@ikhmalputra/subsurface-core/data-contract";
 import { BASE } from "../base.ts";
+import { registerCrs } from "@ikhmalputra/subsurface-core/gis";
 import { SOURCE_TYPES, contractJsonSource, parseDeckConfig } from "./sources/config.ts";
 import type { SourceConfig } from "./sources/config.ts";
 import { addDetail, addFullWell, addWells, catalogueField, catalogueState, dropSource, fieldHasDetail, fullWell, setCatalogueState, setFieldStatus, sourceEnabled, touchField } from "./catalogue-state.ts";
@@ -178,6 +179,8 @@ export async function startCatalogue(): Promise<void> {
     else if (!response.ok) setCatalogueState({ configNote: `config.json could not be read (HTTP ${response.status}): the bundled samples and this browser's wells.` });
     else {
       const { config, problems: found } = parseDeckConfig(await response.json());
+      // The tenant's own CRSs, usable from here on wherever a record names one.
+      for (const [code, proj4] of Object.entries(config.crs?.definitions ?? {})) registerCrs(code, proj4);
       setCatalogueState({ config, configProblems: found, configNote: `${config.sources.length} source${config.sources.length === 1 ? "" : "s"} from config.json.` });
     }
   } catch (cause) {

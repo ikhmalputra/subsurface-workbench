@@ -59,6 +59,8 @@ export interface DeckConfig {
   readonly instance?: { readonly id?: string; readonly name?: string };
   /** The tenant's own OpenTelemetry collector; nothing is ever sent anywhere else. */
   readonly telemetry?: { readonly endpoint?: string };
+  /** Coordinate reference systems of the tenant's own (a local grid, an engineering CRS), by code, as proj4 strings; EPSG codes come with the SDK. */
+  readonly crs?: { readonly definitions: Readonly<Record<string, string>> };
 }
 
 export const DEFAULT_CONFIG: DeckConfig = Object.freeze({ version: 1, sources: Object.freeze([{ type: "samples" }, { type: "browser" }] as const) });
@@ -106,7 +108,7 @@ export function parseDeckConfig(json: unknown, options: { readonly strict?: bool
   if (!Number.isInteger(version) || (version as number) < 1) return { config: DEFAULT_CONFIG, problems: [`config.json has an invalid "version" (${JSON.stringify(json.version)}): using the default.`] };
   if ((version as number) > CONFIG_SCHEMA_VERSION) return { config: DEFAULT_CONFIG, problems: [`config.json is written for config schema ${version}; this build reads schema ${CONFIG_SCHEMA_VERSION}. Upgrade the deck, or write the config for schema ${CONFIG_SCHEMA_VERSION}.`] };
   for (const key of secretKeys(json)) problems.push(`"${key}" looks like a credential. A config is public: it must never hold one. The entry holding it is ignored.`);
-  const known = new Set(["version", "sources", "auth", "share", "csp", "instance", "telemetry"]);
+  const known = new Set(["version", "sources", "auth", "share", "csp", "instance", "telemetry", "crs"]);
   for (const key of Object.keys(json)) if (!known.has(key)) problems.push(`${options.strict ? "" : "Note: "}unknown key "${key}" in config.json${options.strict ? "" : " (ignored)"}.`);
 
   // Identity providers first, so sources can name them.
@@ -200,6 +202,19 @@ export function parseDeckConfig(json: unknown, options: { readonly strict?: bool
     if (endpoint === undefined) config.telemetry = {};
     else if (isHttps(endpoint)) config.telemetry = { endpoint };
     else problems.push('"telemetry.endpoint" must be an https URL (ignored).');
+  }
+  if (json.crs !== undefined) {
+    const defs = isObject(json.crs) ? json.crs.definitions : undefined;
+    if (!isObject(defs)) problems.push('"crs.definitions" must map codes ("LOCAL:field-grid") to proj4 strings.');
+    else {
+      const definitions: Record<string, string> = {};
+      for (const [code, value] of Object.entries(defs)) {
+        if (!/^[A-Z][A-Z0-9_-]*:[A-Za-z0-9._-]+$/.test(code)) problems.push(`crs.definitions: "${code}" is not a CRS code like "LOCAL:field-grid" (ignored).`);
+        else if (typeof value !== "string" || !/\+proj=[a-z]+/.test(value)) problems.push(`crs.definitions.${code} must be a proj4 string with +proj= (ignored).`);
+        else definitions[code] = value;
+      }
+      config.crs = { definitions };
+    }
   }
   return { config, problems };
 }

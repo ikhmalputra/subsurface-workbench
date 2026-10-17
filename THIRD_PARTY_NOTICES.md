@@ -218,7 +218,7 @@ Every runtime dependency of `@ikhmalputra/subsurface-core`, `@ikhmalputra/subsur
 
 ## Development tooling
 
-Not shipped to clients: 146 packages. Licence families: MIT (106), Apache-2.0 (19), ISC (8), BSD-2-Clause (7), BSD-3-Clause (2), MPL-2.0 (2), LGPL-3.0-or-later (1), BlueOak-1.0.0 (1).
+Not shipped to clients: 147 packages. Licence families: MIT (106), Apache-2.0 (19), ISC (9), BSD-2-Clause (7), BSD-3-Clause (2), MPL-2.0 (2), LGPL-3.0-or-later (1), BlueOak-1.0.0 (1).
 
 | Package | Version | Licence | Author |
 |---|---|---|---|
@@ -288,6 +288,7 @@ Not shipped to clients: 146 packages. Licence families: MIT (106), Apache-2.0 (1
 | [deep-is](https://github.com/thlorenz/deep-is#readme) | 0.1.4 | MIT | Thorsten Lorenz |
 | [detect-libc](https://github.com/lovell/detect-libc#readme) | 2.1.2 | Apache-2.0 | Lovell Fuller |
 | [entities](https://github.com/fb55/entities#readme) | 8.1.0 | BSD-2-Clause | Felix Boehm |
+| [epsg-index](https://github.com/derhuerst/epsg-index) | 2.0.0 | ISC | Jannis R |
 | [escape-string-regexp](https://github.com/sindresorhus/escape-string-regexp#readme) | 4.0.0 | MIT | Sindre Sorhus |
 | [eslint](https://eslint.org) | 10.0.1 | MIT | Nicholas C. Zakas |
 | [eslint-scope](https://github.com/eslint/js/blob/main/packages/eslint-scope/README.md) | 9.1.2 | BSD-2-Clause |  |
