@@ -70,7 +70,7 @@ export const SOURCE_TYPES = Object.freeze({
   samples: { label: "Bundled samples", standard: "Utah FORGE, FORCE 2020, Equator and Kestrel A-7", available: true },
   browser: { label: "This browser", standard: "Wells entered, imported or designed on the deck", available: true },
   "contract-json": { label: "Wells file", standard: "Data contract JSON (subsurface-wells)", available: true },
-  osdu: { label: "OSDU", standard: "OSDU Search and Wellbore DDMS", available: false },
+  osdu: { label: "OSDU", standard: "OSDU Search and Wellbore DDMS", available: true },
   "witsml-etp": { label: "WITSML store", standard: "WITSML 2.1 over ETP 1.2", available: false },
   "ppdm-api": { label: "PPDM", standard: "An API over a PPDM 3.9 database", available: false },
 } as const);

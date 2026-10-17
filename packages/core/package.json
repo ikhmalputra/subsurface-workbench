@@ -107,6 +107,10 @@
       "types": "./dist/fetch-guard.d.ts",
       "import": "./dist/fetch-guard.js"
     },
+    "./osdu": {
+      "types": "./dist/osdu.d.ts",
+      "import": "./dist/osdu.js"
+    },
     "./quakeml": {
       "types": "./dist/quakeml.d.ts",
       "import": "./dist/quakeml.js"

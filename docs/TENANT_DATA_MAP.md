@@ -201,8 +201,10 @@ They are ranked by how many tools each one unlocks. One adapter here means one c
 
 **CRS.** `@ikhmalputra/subsurface-core/gis` reprojects between 2,372 coordinate reference systems on the datums oil-and-gas records use (a table generated from the EPSG dataset by `tools/build-crs-defs.mjs`, loaded on demand with `ensureCrs`), plus any local CRS a tenant defines in `config.json` `crs.definitions`. Datum shifts are Helmert transformations and `datumShiftOf` says how good each is; grid convergence is found by projection, for any grid. Checked against IOGP Guidance Note 7-2 worked examples and against FORCE's published positions.
 
+**OSDU.** `@ikhmalputra/subsurface-core/osdu` reads a platform through Search (`query_with_cursor`, a page of well headers at a time, one batched query per page for field names) and the Wellbore DDMS bulk endpoints (the definitive trajectory and the markers of each field opened). Columns are mapped through the records' own property lists, lengths to metres and angles to degrees, azimuths to true or grid north, the datum chain followed to sea level, as-ingested positions reprojected when the platform gave no WGS 84 ones. One well's trouble is reported on that well. The deck wires an `osdu` source from `config.json`; its sign-in arrives with the OIDC phase.
+
 **Next:**
-- the OSDU adapter: Search plus Wellbore DDMS for wells, wellbores, trajectories and marker sets;
+- sign-in (OIDC) and the OSDU adapter checked against the mock platform;
 - the logs object (C6), which lets Logs, Petrophysics and Correlation read a tenant's wells;
 - `Place` for edits to a tenant's well;
 - the site-kind literals left in `registry.ts`.

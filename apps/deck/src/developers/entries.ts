@@ -19,6 +19,7 @@ export const ENTRY_NOTES: Readonly<Record<string, string>> = {
   "@ikhmalputra/subsurface-core/induced-seismicity": "Induced seismicity from a stimulation: stress on fractures, Coulomb failure as pressure diffuses from the stages, magnitudes, b-value, seismogenic index and a traffic light.",
   "@ikhmalputra/subsurface-core/integrity": "Annulus integrity: MAASP per ISO 16530-1 with its governing limit, Ramey flowing temperature, and thermal annulus pressure build-up.",
   "@ikhmalputra/subsurface-core/known": "Values that may be unknown: reported, derived or absent with a reason, combined without inventing anything.",
+  "@ikhmalputra/subsurface-core/osdu": "A tenant's OSDU platform as a source of wells: Search paged by cursor for the headers, Wellbore DDMS bulk data for the definitive path and the markers of each field opened, units to metres and degrees, the datum chain followed to sea level, and one well's trouble kept to itself.",
   "@ikhmalputra/subsurface-core/offset-wells": "Score an offset well against a new one, adopt its casing, geology and completion, and see what changed and what fails.",
   "@ikhmalputra/subsurface-core/petro-clastic": "Clastic petrophysics: shale volume, effective porosity, Archie, Simandoux and Indonesia saturation, Pickett fit, permeability, pay and a Monte Carlo of it.",
   "@ikhmalputra/subsurface-core/records": "Operational history: daily reports, BHA and service runs, hole sections, days vs depth, the well as of a date, and a LAS 2.0 reader and writer (depth- or time-indexed).",
