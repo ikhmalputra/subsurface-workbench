@@ -518,14 +518,17 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
     // ── Wells ────────────────────────────────────────────────────────────────────────────────
     const wellMaterials = new Map<string, THREE.MeshStandardMaterial>();
     const wellTubes: THREE.Mesh[] = [];
-    // One geometry and material for every marker, one geometry for every wellhead cap: a 200-well field
-    // with 20 tops each built 4,000 of each, every one a GPU upload and pipeline on the first draw (a
-    // 1 s freeze on a slow machine; found by tools/stress/throttle.mjs). Markers are only shown or hidden.
+    // Every marker is one instance of one mesh, and every wellhead cap shares one geometry: a 200-well
+    // field with 20 tops each made 4,000 marker meshes, and the renderer's first draw set up bindings
+    // for each, half a second on a slow machine (found by tools/stress/throttle.mjs). A marker is
+    // hidden by shrinking its instance to nothing.
     const markerGeometry = keep(new THREE.SphereGeometry(radius * 2.1, 14, 10));
     const markerMaterial = keep(new THREE.MeshStandardMaterial({ color: "#1d232b", roughness: 0.5 }));
     const capGeometry = keep(new THREE.CylinderGeometry(radius * 2.6, radius * 2.6, radius * 2.2, 20));
-    /** Everything drawn along a well, with the MD it spans, so a reach can cut it. */
-    const alongWells: { readonly wellId: string; readonly object: THREE.Object3D; readonly start: number; readonly end: number; readonly segments?: number; readonly marker?: string }[] = [];
+    const markerAt: THREE.Vector3[] = [];
+    /** Everything drawn along a well, with the MD it spans, so a reach can cut it; a marker is an instance of `markers`. */
+    type AlongWell = { readonly wellId: string; readonly start: number; readonly end: number; readonly marker?: string } & ({ readonly object: THREE.Object3D; readonly segments?: number; readonly instance?: undefined } | { readonly object?: undefined; readonly segments?: undefined; readonly instance: number });
+    const alongWells: AlongWell[] = [];
     wells.forEach((well, index) => {
       const colour = WELL_COLOURS[index % WELL_COLOURS.length]!;
       const points: THREE.Vector3[] = [];
@@ -563,13 +566,51 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
         const p = pointAtMd(well, marker.mdM);
         if (!p) continue;
         const position = at(...p);
-        const ring = new THREE.Mesh(markerGeometry, markerMaterial);
-        ring.position.copy(position);
-        groups.wells.add(ring);
-        const pick = label(marker.label, position.clone().add(new THREE.Vector3(radius * 5, 0, 0)), "pick", 1, { wellId: well.id, layer: "wells" });
-        alongWells.push({ wellId: well.id, object: ring, start: marker.mdM, end: marker.mdM, marker: marker.label }, { wellId: well.id, object: pick, start: marker.mdM, end: marker.mdM, marker: marker.label });
+        alongWells.push({ wellId: well.id, start: marker.mdM, end: marker.mdM, marker: marker.label, instance: markerAt.length });
+        markerAt.push(position);
       }
     });
+    const markers = keep(new THREE.InstancedMesh(markerGeometry, markerMaterial, Math.max(1, markerAt.length)));
+    {
+      const matrix = new THREE.Matrix4();
+      markerAt.forEach((position, i) => markers.setMatrixAt(i, matrix.makeTranslation(position)));
+      markers.count = markerAt.length;
+      markers.instanceMatrix.needsUpdate = true;
+      // Bounds from every marker shown, so one shown again later is never culled.
+      markers.computeBoundingSphere();
+      groups.wells.add(markers);
+    }
+    const zero = new THREE.Matrix4().makeScale(0, 0, 0), place = new THREE.Matrix4();
+    /** The labels of the selected well's picks, each with the marker it names. */
+    let pickLabels: { readonly item: AlongWell; readonly text: ReturnType<typeof label> }[] = [];
+    let reachState: { depths: Readonly<Record<string, number>> | null; hidden: Readonly<Record<string, readonly string[]>> | null } = { depths: null, hidden: null };
+    /** Whether something along a well shows at the current reach, and how much of a path does. */
+    const reachOf = (item: AlongWell): { visible: boolean; part: number } => {
+      if (item.marker !== undefined && reachState.hidden?.[item.wellId]?.includes(item.marker)) return { visible: false, part: 0 };
+      const limit = reachState.depths?.[item.wellId];
+      if (limit === undefined) return { visible: true, part: 1 };
+      if (!item.segments) return { visible: item.end <= limit, part: 1 };
+      const part = THREE.MathUtils.clamp((limit - item.start) / Math.max(1e-6, item.end - item.start), 0, 1);
+      return { visible: part > 0, part };
+    };
+    /**
+     * Labels for the selected well's picks (a one-well scene's always), any other's taken away: only the
+     * selected well's picks are shown (see `placeLabels`), so a field's other 4,000 are never made.
+     */
+    const labelPicks = (id: string | null) => {
+      const owner = wells.length === 1 ? wells[0]!.id : id;
+      if (pickLabels.length && pickLabels[0]!.item.wellId === owner) return;
+      for (const entry of pickLabels) labels.remove(entry.text);
+      pickLabels = [];
+      if (owner === null) return;
+      for (const item of alongWells) {
+        if (item.wellId !== owner || item.instance === undefined) continue;
+        const text = label(item.marker!, markerAt[item.instance]!.clone().add(new THREE.Vector3(radius * 5, 0, 0)), "pick", 1, { wellId: owner, layer: "wells" });
+        text.visible = reachOf(item).visible;
+        pickLabels.push({ item, text });
+      }
+    };
+    labelPicks(null);
 
     let highlightMesh: THREE.Mesh | null = null;
     let ribbonGroup: THREE.Group | null = null, ribbonLabel: ReturnType<typeof label> | null = null;
@@ -1034,6 +1075,7 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
       },
       select(id) {
         selected = id;
+        labelPicks(id);
         for (const [wellId, material] of wellMaterials) material.emissiveIntensity = wellId === id ? 0.55 : 0;
         labels.each((entry) => { if (entry.options.owner && entry.kind === "name") entry.element.classList.toggle("is-selected", entry.options.owner === id); });
         invalidate();
@@ -1041,16 +1083,18 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
       fit() { fitTo(whole, home.clone().normalize()); },
       look(named) { cube.look(named); invalidate(); },
       reach(depths, hidden) {
+        reachState = { depths, hidden };
         for (const item of alongWells) {
-          if (item.marker !== undefined && hidden?.[item.wellId]?.includes(item.marker)) { item.object.visible = false; continue; }
-          const limit = depths?.[item.wellId];
-          if (limit === undefined) { item.object.visible = true; if (item.segments && item.object instanceof THREE.Mesh) item.object.geometry.setDrawRange(0, Infinity); continue; }
-          if (!item.segments || !(item.object instanceof THREE.Mesh)) { item.object.visible = item.end <= limit; continue; }
-          const part = THREE.MathUtils.clamp((limit - item.start) / Math.max(1e-6, item.end - item.start), 0, 1);
-          const total = item.object.geometry.index?.count ?? 0;
-          item.object.geometry.setDrawRange(0, part >= 1 ? total : Math.ceil(part * item.segments) * (total / item.segments));
-          item.object.visible = part > 0;
+          const { visible, part } = reachOf(item);
+          if (item.instance !== undefined) { markers.setMatrixAt(item.instance, visible ? place.makeTranslation(markerAt[item.instance]!) : zero); continue; }
+          item.object.visible = visible;
+          if (item.segments && item.object instanceof THREE.Mesh) {
+            const total = item.object.geometry.index?.count ?? 0;
+            item.object.geometry.setDrawRange(0, part >= 1 ? Infinity : Math.ceil(part * item.segments) * (total / item.segments));
+          }
         }
+        markers.instanceMatrix.needsUpdate = true;
+        for (const { item, text } of pickLabels) text.visible = reachOf(item).visible;
         invalidate();
       },
       curtain(plane) {

@@ -141,7 +141,7 @@ two origins (`tools/stress/harness.mjs`). They are t1 steps in `tools/ci/run.mjs
 |---|---|---|
 | `tools/e2e/auth.mjs` | code flow with PKCE; storage, URL, cookie and history checked for tokens; 45 s of 6 s tokens; a reload; a forged callback; the provider's session ending; clocks ±4 minutes off | 16 of 16 |
 | `tools/stress/faults.mjs` | 50 ms latency; 30 % 5xx; 429 with Retry-After; expired cursors; trickled bodies then leaving the field; a 30 % 401 storm; truncated JSON with dropped connections | 19 of 19 |
-| `tools/stress/throttle.mjs` | CPU 4×; a VPN (5 Mbit/s, 80 ms); a poor link (400 kbit/s, 400 ms), with the platform compressing and without | 21 of 22 (below) |
+| `tools/stress/throttle.mjs` | CPU 4×; a VPN (5 Mbit/s, 80 ms); a poor link (400 kbit/s, 400 ms), with the platform compressing and without | 26 of 26 |
 | `tools/e2e/xss.mjs` | the `hostile` tenant: HTML and SVG handlers in every name, `__proto__` ids, a 100,000-character name, numbers that are not JSON; list, fields, 3D, search, share | 14 of 14 |
 
 Measured (200-well field, 120 stations a well, 20 tops):
@@ -149,10 +149,10 @@ Measured (200-well field, 120 stations a well, 20 tops):
 | | Field ready | Worst main-thread stall | Heap |
 |---|---|---|---|
 | 50 ms latency | 2.8–3.4 s (budget 8 s), 216 requests (budget 406), 6 in flight (budget 6) | | 211–280 MB |
-| CPU 4× | 2.4–3.2 s (budget 15 s); globe 1.1 s (budget 4 s) | **460 ms (budget 400)** | 86–125 MB |
-| VPN, compressed | 4.1 s (budget 15 s) | 134 ms | 83 MB |
-| Poor link, compressed | 25 s (budget 45 s), progress shown while reading | 126 ms | 92 MB |
-| Poor link, uncompressed | 76 s (measured, not budgeted: 2.8 MB at 400 kbit/s) | 137 ms | 75 MB |
+| CPU 4× | 1.9–2.4 s (budget 15 s); globe 1.1–1.6 s (budget 4 s) | 206–229 ms (budget 400) | 64–82 MB |
+| VPN, compressed | 4.1 s (budget 15 s) | 64–67 ms | 63–85 MB |
+| Poor link, compressed | 25 s (budget 45 s), progress shown while reading | 59–75 ms | 63–67 MB |
+| Poor link, uncompressed | 70 s (measured, not budgeted: 2.8 MB at 400 kbit/s) | 58–64 ms | 68–70 MB |
 
 What the suites found, each fixed with a test that fails without the fix:
 
@@ -180,18 +180,32 @@ What the suites found, each fixed with a test that fails without the fix:
 9. **Scene labels forced a layout per label per frame** (read a size, write a transform, read the
    next): 1,000 layouts for 1,000 labels. Read, compute, then write: at most 3 (`scene-labels.test.mjs`).
 10. **Every well marker had its own sphere geometry and material**, 4,000 GPU uploads and pipelines
-    on a field's first draw; every wellhead cap its own cylinder. Shared now.
+    on a field's first draw; every wellhead cap its own cylinder. Shared now. Even shared, each
+    marker was still its own mesh, and the renderer's first draw set up bindings for every one: 0.5 s
+    of a 200-well field's first frame at CPU 4×. The markers are now one instanced mesh (a marker the
+    time rail hides is shrunk to nothing), and that frame takes about 0.2 s.
 11. **Horizons were triangulated twice each**, by a Bowyer–Watson that recomputed every circumcircle
     per point: once per surface now, circles computed once (same triangles as before, tested
     against the old algorithm).
 12. **OSDU detail searches fetched whole records.** They ask for the fields the mappers read
     (`DETAIL_FIELDS`), proven equivalent on the mock's clean and quirky records: 3.08 → 2.81 MB a
     field.
+13. **Every pick in a field had a label**, 4,000 page elements made, measured and placed, though only
+    the selected well's picks are ever shown. They are made for the selected well when it is
+    selected (a one-well site's always). The throttle suite counts them: 4,000 before, 20 now.
 
-At CPU 4× the worst stall went from 1,172 ms to about 460 ms, the field from 6.2 s to 2.4–3.2 s
-and the heap from 143 MB to under 130 MB. The stall budget (400 ms) is still broken and the check
-stays red: what remains is the site scene built in one task when a field's paths arrive. Spreading
-that build across frames is the next step.
+At CPU 4× the worst stall went from 1,172 ms to 206–229 ms, the field from 6.2 s to 1.9–2.4 s and
+the heap from 143 MB to under 85 MB. Without 10 (the instanced markers) and 13, the stall is 475 ms
+and the throttle suite fails both checks.
+
+What is left at CPU 4×, from a CPU profile of a 200-well field opening:
+- The scene is built once per detail batch: the site rebuilds when each batch of 100 wells arrives
+  (`siteOfField` keys on the field's version), so the second build draws all 200 again. The
+  builds take about 150 and 210 ms, mostly 200 well paths (`TubeGeometry`).
+- The first draw after the last build takes about 230 ms: shader and binding set-up for the 200
+  paths, 200 caps and 20 horizons.
+Neither is near the budget. If a larger field needs it, build the paths across frames, or once
+the field is read whole.
 
 Also seen, not changed here:
 - A first load is 4.2 MB, 2.5 MB of it the globe's imagery (`gis/world-imagery.jpg`): the globe
