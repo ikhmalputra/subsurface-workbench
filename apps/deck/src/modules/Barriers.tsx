@@ -3,6 +3,9 @@ import { scaleLinear } from "d3-scale";
 import { barrierEnvelopes, forgeStringWeights, mdAtTvd, pressureAt, tvdAtMd } from "@ikhmalputra/subsurface-core";
 import type { BarrierElement, BarrierEnvelopes, BarrierPhase, WellComponent } from "@ikhmalputra/subsurface-core";
 import { useDesign } from "../data/design.ts";
+import { annuliOf, bseeLimits } from "../data/integrity-model.ts";
+import { useIntegrityStatus } from "../data/integrity-store.ts";
+import { actions } from "../deck/store.ts";
 import { formatDate, useMoment } from "../data/history.ts";
 import { useForgeOpenHole, valueAt } from "../data/openhole.ts";
 import { fmt } from "../format.ts";
@@ -93,6 +96,7 @@ export function Barriers() {
         </table>
         {envelopes.shared.length > 0 && <p className="petro-note"><b>In both envelopes:</b> {envelopes.shared.join(", ")} — one failure there would take both.</p>}
         <p className="petro-note"><b>Gaps in the records ({envelopes.gaps.length}):</b> {envelopes.gaps.length ? envelopes.gaps.join("; ") : "none"}.</p>
+        {!forge && kestrelPhase === "producing" && <Annuli siteId={place.siteId} />}
       </div>
     </div>
     <p className="petro-note">Two envelopes, each able to stop flow on its own, after the well-barrier idea of NORSOK D-010 (Standards Norway); its element acceptance tables are copyrighted and not reproduced, so this lists what each element&apos;s records say rather than judging them against those tables. {forge ? "FORGE follows the time cursor: a fluid column while the hole is being drilled, the production casing once it is cemented. Mud weights and BOP test dates are the daily reports'; a stated test date later than its report is not used." : "Kestrel A-7 is a design: every element is planned, none tested."}</p>
@@ -150,3 +154,34 @@ function Drawing({ envelopes, components, depthM, cursor }: { readonly envelopes
   </div>;
 }
 
+
+/**
+ * The producing well's annuli beside its envelopes: each one's MAASP and the limit that sets it,
+ * BSEE's MAWOP, and, once Nodal's integrity lens has read them, its pressure and whether its record
+ * shows sustained casing pressure (a leak in the envelope it sits between).
+ */
+function Annuli({ siteId }: { readonly siteId: string }) {
+  const { brief } = useDesign();
+  const status = useIntegrityStatus();
+  const annuli = useMemo(() => annuliOf(brief), [brief]);
+  if (typeof annuli === "string") return null;
+  const limits = bseeLimits(annuli, false);
+  const live = status?.siteId === siteId ? status : null;
+  return <section className="barrier-annuli">
+    <h4>Annuli <small>{live ? `as Nodal's integrity lens reads them, ${Math.round(live.hours / 24)} days on production` : "limits only: open Nodal analysis › Integrity for their pressures"}</small></h4>
+    <table className="acx-table">
+      <thead><tr><th>Annulus</th><th>MAASP</th><th>MAWOP</th><th>Now</th><th>Record</th></tr></thead>
+      <tbody>{annuli.map((a) => {
+        const l = limits.find((x) => x.name === a.name), s = live?.annuli.find((x) => x.name === a.name);
+        return <tr key={a.name} className={s?.sustained ? "is-gap" : undefined}>
+          <td>{a.name}</td>
+          <td>{fmt(Math.round(a.maasp.maaspPsi))} psi<small> · {a.maasp.governing}</small></td>
+          <td>{l ? `${fmt(Math.round(l.mawopPsi))} psi` : "–"}</td>
+          <td>{s ? `${fmt(Math.round(s.psi))} psi${s.measuredPsi !== null ? ` (measured ${fmt(Math.round(s.measuredPsi))})` : ""}` : "–"}</td>
+          <td>{s?.sustained === true ? "sustained casing pressure" : s?.sustained === false ? "bleeds off: thermal" : "no diagnostic yet"}</td>
+        </tr>;
+      })}</tbody>
+    </table>
+    {live?.annuli.some((x) => x.sustained) && <p className="petro-note"><b>A barrier is leaking.</b> An annulus that builds back after a bleed has a path through the cement or casing between envelopes. <button type="button" className="tie-button" onClick={() => actions.open("nodal")}>Open the integrity lens</button></p>}
+  </section>;
+}

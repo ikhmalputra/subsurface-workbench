@@ -163,8 +163,12 @@ Each is a real tool on real data, with no overlap with what is built.
    its Coulomb critical pressure (once: the Kaiser effect), its magnitude from its size, so
    Gutenberg–Richter b ≈ 1 emerges. Read as a monitoring team does: Aki's b, Shapiro's seismogenic
    index, the triggering front and the exceedance probability, under a traffic light. 3D scene with
-   16A, 16B and 58-32, the Mohr circle with the fractures moving to failure, a job strip. Not yet:
-   FORGE's event catalogue (public on the GDR; needs an OK to download), the time rail and Site in 3D.
+   16A, 16B and 58-32, the Mohr circle with the fractures moving to failure, a job strip. Round 2:
+   a catalogue read as QuakeML 1.2 (a synthetic stand-in until FORGE's is downloaded) beside the
+   model, and Match to the catalogue (SHmax from each stage's cloud, D from the triggering front:
+   it recovers the stand-in's hidden N31°E and 0.11 m²/s as N30°E and 0.13); the job on the time
+   rail beside the drilling days; the stages and events in Site in 3D. Not yet: FORGE's own
+   catalogue (public on the GDR; needs an OK to download).
 
 13. ~~**Clastic petrophysics on real logs**~~ — *built* 17 Oct 2026 on the 118 FORCE 2020 wells: Vsh
    (linear or Larionov) between gamma-ray lines from each well's own percentiles, shale-corrected
@@ -175,7 +179,9 @@ Each is a real tool on real data, with no overlap with what is built.
    is a virtual core (clay, grains, and pores water or hydrocarbon by Sw) beside the logs, with the
    cutoffs, the gamma-ray lines, the shale point and the Pickett water line all dragged by hand.
    Troll's Sognefjord in 31/2-7 reads 40 m of gas pay; Sleipner's Utsira, a water sand. No core, so
-   permeability is a correlation and says so.
+   permeability is a correlation and says so. Round 2: brushing both ways (an interval on the
+   tracks lights the crossplots; a box on a crossplot marks the tracks), and an edited
+   interpretation is kept and read by Maps & volumetrics for that well.
 
 14. ~~**Seismic attributes**~~ — *built* 17 Oct 2026 on the FORGE PSDM volume (110 × 61 traces, 641
    samples): envelope, instantaneous phase and frequency from the analytic trace (FFT Hilbert), RMS
@@ -184,7 +190,8 @@ Each is a real tool on real data, with no overlap with what is built.
    (coherence ≈ 2.4 s once). Shown in a chair display you orbit, with the inline, crossline and
    depth slices swept by dragging their faces, the attribute in colour over the amplitude, 16A
    through the cube, Horizons' fault sticks drawn, and the depth cursor setting the depth slice.
-   Not yet: fault sticks snapping to fault likelihood, and horizons tracking on phase.
+   Round 2: the attributes on Horizons' and Site in 3D's slices and Horizons' section; fault sticks
+   snap to the fault likelihood's ridge; horizons track on a chosen phase (zero crossings too).
 
 15. ~~**Well integrity: annulus pressure and MAASP**~~ — *built* 17 Oct 2026 as the living well's
    Integrity lens, on Kestrel A-7's design (synthetic, labelled). A runs to the packer; B and C run
@@ -195,13 +202,14 @@ Each is a real tool on real data, with no overlap with what is built.
    the operating rate. Each annulus warms by an assumed share of the tubing's rise. The thermal APB
    is αΔT/(κ + C), with the strings ballooning elastically. The cutaway lights each annulus from
    green to red against its MAASP. A log clock plays the start-up from 6 minutes to a year. A
-   bleeds while it builds again with further heat, and A holds the lift gas while gas lifting. Not
-   yet:
-   - a check against a published APB case;
-   - the sustained-casing-pressure flag;
-   - the deck's time rail driving the start-up;
-   - Barriers showing the same annuli;
-   - FORGE's measured temperatures (GDR 1421, a download awaiting an OK).
+   bleeds while it builds again with further heat, and A holds the lift gas while gas lifting.
+   Round 2, on synthetic stand-ins in LAS 2.0: the rock's conductivity calibrated to a DTS survey
+   (recovers the hidden 2.05 and excludes the assumed 1.4); an annulus record whose bleed-downs are
+   judged against heat for sustained casing pressure, with BSEE's MAWOP and diagnose-above limits
+   (NTL 2009-G01); the start-up on the deck's time rail, the well as its tests had it on a past
+   date; Barriers listing the annuli. The thin-wall compliance is checked against a thick-wall
+   Lamé solution. Not yet: a published APB case to test against; FORGE's measured temperatures
+   (GDR 1421, a download awaiting an OK).
 
 The Equator wells keep the earlier clastic module on their synthetic logs. Hydraulics with rheology waits for a source with Fann readings.
 

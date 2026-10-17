@@ -231,7 +231,25 @@ export function WellsMap({ sites, workerUrl, basemapUrl, basemapAttribution, ima
         markers.current.push(new library.Marker({ element: tag, anchor: "left", offset: [10, 0] }).setLngLat([...well.head]).addTo(instance));
       }
     });
-    return () => { cancelled = true; };
+    // Labels never sit on one another: after each redraw, a site or well label that would land on one
+    // already placed (the selected site first, then sites before wells) is hidden until the map zooms in.
+    let frame = 0;
+    const declutter = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const placed: DOMRect[] = [];
+        const order = [...markers.current].map((marker) => marker.getElement()).sort((a, b) => Number(b.classList.contains("is-selected")) - Number(a.classList.contains("is-selected")) || Number(b.classList.contains("sw-wells-map-site")) - Number(a.classList.contains("sw-wells-map-site")));
+        for (const element of order) {
+          element.style.visibility = "";
+          const box = element.getBoundingClientRect();
+          if (box.width === 0) continue;
+          const hit = placed.some((other) => box.left < other.right - 1 && box.right > other.left + 1 && box.top < other.bottom - 1 && box.bottom > other.top + 1);
+          if (hit) element.style.visibility = "hidden"; else placed.push(box);
+        }
+      });
+    };
+    instance.on("render", declutter);
+    return () => { cancelled = true; instance.off("render", declutter); cancelAnimationFrame(frame); };
   }, [ready, sites, selectedSiteId, selectedWellId]);
 
   // The host's cursor point: one marker, moved rather than rebuilt, so it can follow a pointer.

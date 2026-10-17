@@ -1,5 +1,5 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import { Pause, Play, RotateCcw, X } from "lucide-react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { Pause, Play, RotateCcw } from "lucide-react";
 import { useSubsurfaceSelector } from "@ikhmalputra/subsurface-react/state";
 import { CORRELATIONS, pressureAtDate } from "@ikhmalputra/subsurface-core/production";
 import type { LabPvt, ProductionMonth, WellTest } from "@ikhmalputra/subsurface-core/production";
@@ -16,8 +16,13 @@ import { ProducingWell } from "./production/ProducingWell.tsx";
 import { Dial, NodalInstrument, PressureLane, Slider } from "./production/controls.tsx";
 import { LifeStrip } from "./production/LifeStrip.tsx";
 import { sceneFlow, sceneFrame, unloadingAt } from "./production/scene.ts";
-import { IntegritySide, LimitsTable, hoursLabel as hoursLabelOf } from "./production/IntegritySide.tsx";
-import { annuliOf, annulusPressures, rameyOf } from "../data/integrity-model.ts";
+import { IntegrityClock, IntegrityGauges, LimitsTable, RecordCard, SurveyCard, hoursLabel as hoursLabelOf, integrityNotes } from "./production/IntegritySide.tsx";
+import { Frame, Inspector, Status } from "./frame/Frame.tsx";
+import { ASSUMED_CONDUCTIVITY, annuliOf, annulusPressures, bseeLimits, measuredAt, rameyOf, recordTests } from "../data/integrity-model.ts";
+import { calibrateConductivity, flowingTemperature as flowingTemperatureAt } from "@ikhmalputra/subsurface-core/integrity";
+import { tvdAtMd } from "@ikhmalputra/subsurface-core/well-design";
+import { useAnnulusRecord, useTemperatureSurvey } from "../data/standard-files.ts";
+import { integrityStatus } from "../data/integrity-store.ts";
 import type { SceneValve, WellScene } from "./production/scene.ts";
 import { fmt } from "../format.ts";
 import { useWire } from "./wire.ts";
@@ -51,6 +56,7 @@ type Kept = {
 const SAMPLE_VERSION = 3;
 function readKept(): Record<string, Kept> { try { const v = JSON.parse(localStorage.getItem(KEY) ?? "{}") as Record<string, Kept>; return v && typeof v === "object" && !Array.isArray(v) ? v : {}; } catch { return {}; } }
 const okKept = (k: Kept | undefined): k is Kept => !!k && !!k.inputs && typeof k.inputs === "object" && Object.keys(defaultNodal).every((key) => key in k.inputs);
+const DRAWER_NAME: Readonly<Record<NonNullable<Drawer>, string>> = { inputs: "Inputs and assumptions", tests: "Tests, lab and correlations", valves: "Valve schedule", limits: "Annulus limits", tank: "Tank match" };
 const LENS_NAME: Readonly<Record<Lens, string>> = { match: "Match", operate: "Operate", lift: "Lift", life: "Life", integrity: "Integrity" };
 const lensOf = (k: Kept): Lens => k.lens ?? (k.view === "match" ? "match" : k.view === "lift" ? "lift" : k.view === "forecast" || k.view === "history" ? "life" : "operate");
 
@@ -109,13 +115,9 @@ export function Nodal() {
   const annuli = useMemo(() => annuliOf(brief), [brief]);
   const [startup, setStartup] = useState({ hours: 24, playing: false });
   const [bled, setBled] = useState<Record<string, number>>({});
-  useEffect(() => {
-    if (!startup.playing) return;
-    let frameId = 0, last = performance.now();
-    const tick = (now: number) => { const dt = (now - last) / 1000; last = now; setStartup((u) => { const lh = Math.log10(Math.max(0.1, u.hours)) + dt / 3.5; const hours = 10 ** Math.min(Math.log10(24 * 365), lh); return { hours, playing: hours < 24 * 365 - 1 }; }); frameId = requestAnimationFrame(tick); };
-    frameId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frameId);
-  }, [startup.playing]);
+  // The rock's conductivity: assumed until the temperature survey calibrates it.
+  const [rock, setRock] = useState<{ k: number; fit: ReturnType<typeof calibrateConductivity> | null }>({ k: ASSUMED_CONDUCTIVITY, fit: null });
+  const survey = useTemperatureSurvey(), record = useAnnulusRecord();
 
   // ---- life: the tank matched to the build-ups, then both cases month by month across the indistinguishable tanks ----
   const tankFit = useMemo(() => typeof well === "string" || lens !== "life" || !usable ? null : tankMatch(well, tests, production, calibration!), [well, lens, usable, tests, production, calibration]);
@@ -128,6 +130,38 @@ export function Nodal() {
   const lastTest = [...tests].sort((a, b) => Date.parse(a.date) - Date.parse(b.date)).at(-1);
   const todayMs = lastTest ? Date.parse(lastTest.date) : Date.now();
   const cursorMs = useSubsurfaceSelector(signals, (state) => state.time?.cursorMs ?? null);
+  // Integrity's clock is the deck's time: hours on production since the life on the rail began (first production).
+  const lifeStart = production[0] ? Date.parse(`${production[0].month}-01`) : tests[0] ? Date.parse(tests[0].date) : null;
+  const integrityHours = lifeStart !== null && cursorMs !== null && cursorMs >= lifeStart ? Math.max(0.1, (cursorMs - lifeStart) / 3.6e6) : startup.hours;
+  const setIntegrityHours = (hours: number) => { setStartup((u) => ({ ...u, hours })); if (lifeStart !== null) signals.setTimeCursor(Math.round(lifeStart + hours * 3.6e6), "deck:nodal"); };
+  const hoursRef = useRef({ hours: integrityHours, set: setIntegrityHours });
+  hoursRef.current = { hours: integrityHours, set: setIntegrityHours };
+  useEffect(() => {
+    if (!startup.playing) return;
+    let frameId = 0, last = performance.now();
+    const tick = (now: number) => {
+      const dt = (now - last) / 1000; last = now;
+      const next = 10 ** Math.min(Math.log10(24 * 365), Math.log10(Math.max(0.1, hoursRef.current.hours)) + dt / 3.5);
+      hoursRef.current.set(next);
+      if (next >= 24 * 365 - 1) { setStartup((u) => ({ ...u, playing: false })); return; }
+      frameId = requestAnimationFrame(tick);
+    };
+    frameId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frameId);
+  }, [startup.playing]);
+  // The record's period ran at the first test's rate and water cut; the thermal build-up it is judged against uses them, with the rock as calibrated.
+  const recordRamey = useMemo(() => typeof well === "string" ? null : rameyOf(brief, tests[0]?.liquidRate ?? survey.value?.rate ?? 0, tests[0]?.waterCut ?? survey.value?.waterCut ?? 0, well.midPerfMdM, rock.k), [brief, well, tests, survey.value, rock.k]);
+  const diagnostics = useMemo(() => record.value && recordRamey && typeof annuli !== "string" ? recordTests(annuli, record.value, recordRamey) : null, [record.value, recordRamey, annuli]);
+  // Barriers reads the annuli as this lens last saw them.
+  const statusRef = useRef<Parameters<typeof integrityStatus.set>[0]>(null);
+  useEffect(() => { integrityStatus.set(statusRef.current); });
+  const calibrate = () => {
+    const s = survey.value;
+    if (!s || typeof well === "string") return;
+    const base = rameyOf(brief, s.rate ?? tests[0]?.liquidRate ?? 0, s.waterCut ?? tests[0]?.waterCut ?? 0, s.producingMdM ?? well.midPerfMdM);
+    const fit = calibrateConductivity(base, s.hours ?? 720, s.mdM.map((m, i) => ({ tvdFt: tvdAtMd(brief, m) * FT_PER_M, tempF: s.tempF[i]! })));
+    setRock({ k: fit.k, fit });
+  };
   // The well's life on the deck's time rail: offered whenever there is a history, with the forecast once there is one.
   useEffect(() => {
     if (!tests.length && !production.length) return;
@@ -220,122 +254,140 @@ export function Nodal() {
   }
 
   // Integrity: the operating well, its annuli lit by pressure against MAASP as it warms up.
-  const integrityRows = lens === "integrity" && typeof annuli !== "string" ? annulusPressures(annuli, rameyOf(brief, point?.rate ?? 0, inputs.waterCut, well.midPerfMdM), startup.hours, liftOn(inputs.liftMscfD) ? lift.operatingPsig : null, bled) : [];
+  // On a date in the well's history, the well as its tests had it then (rate, water cut, lift gas or not); otherwise as operated now.
+  const pastDate = lifeStart !== null && cursorMs !== null && cursorMs <= todayMs ? new Date(cursorMs).toISOString().slice(0, 10) : null;
+  const then = pastDate ? conditionsOn(tests, pastDate) : null;
+  const integrityRate = then ? then.liquidRate : point?.rate ?? 0, integrityWc = then ? then.waterCut : inputs.waterCut;
+  const integrityLift = then ? then.liftGasScfD > 0 && well.lift === "gas-lift" : liftOn(inputs.liftMscfD);
+  const integrityRows = lens === "integrity" && typeof annuli !== "string" ? annulusPressures(annuli, rameyOf(brief, integrityRate, integrityWc, well.midPerfMdM, rock.k), integrityHours, integrityLift ? lift.operatingPsig : null, bled) : [];
+  const bsee = typeof annuli !== "string" ? bseeLimits(annuli, integrityLift) : [];
+  if (lens === "integrity") statusRef.current = { siteId, hours: integrityHours, annuli: integrityRows.map((r) => {
+    const limit = bsee.find((b) => b.name === r.annulus.name), done = (diagnostics?.[r.annulus.name] ?? []).filter((t) => t.endH + 24 <= integrityHours);
+    return { name: r.annulus.name, psi: r.psi, source: r.source, maaspPsi: r.annulus.maasp.maaspPsi, governing: r.annulus.maasp.governing, mawopPsi: limit?.mawopPsi ?? NaN, mawopBy: limit?.mawopBy ?? "", measuredPsi: record.value ? measuredAt(record.value, r.annulus.name, integrityHours) : null, sustained: done.length ? done.some((t) => t.sustained) : null };
+  }) };
   if (lens === "integrity") {
     scene = { ...scene, annuli: integrityRows.map((r) => ({ name: r.annulus.name, innerOdIn: r.annulus.innerOdIn, outerIdIn: r.annulus.outerIdIn, bottomMdM: r.annulus.bottomMdM, ratio: r.ratio, label: `${r.annulus.name} ${fmt(Math.round(r.psi))} / ${fmt(Math.round(r.annulus.maasp.maaspPsi))}` })) };
     laneLines = [tubingLine(solved.traverse, "tubing"), ...integrityRows.map((r) => ({ key: r.annulus.name, pts: [0, r.annulus.bottomMdM].map((md) => ({ mdM: md, psia: r.psi + 14.7 + r.annulus.fluidSg * 0.433 * (md === 0 ? 0 : r.annulus.bottomTvdFt) })), className: `pw-line-ann is-${r.annulus.name}`, label: `${r.annulus.name} annulus`, labelAtEnd: true }))];
-    subtitle = `${typeof annuli === "string" ? annuli : `${annuli.length} annuli`} · ${hoursLabelOf(startup.hours)} on production at ${fmt(Math.round(point?.rate ?? 0))} STB/d`;
+    subtitle = `${typeof annuli === "string" ? annuli : `${annuli.length} annuli`} · ${hoursLabelOf(integrityHours)} on production at ${fmt(Math.round(integrityRate))} STB/d${then ? ` (${pastDate})` : ""} · rock k ${rock.k.toFixed(2)}${rock.fit ? " (calibrated)" : " (assumed)"}`;
   }
   const lensButtons = (["match", "operate", "lift", "life", "integrity"] as const).filter((l) => l !== "lift" || well.lift === "gas-lift");
   const correlation = calibration ? CORRELATIONS.find((c) => c.id === calibration.flow.correlation)?.name : null;
-  return <div className="pw" data-lens={lens}>
-    <header className="pw-bar">
-      <span className="pw-title"><b>{brief.identity.name || "This design"}</b><small>{subtitle}</small></span>
+  // ---- the frame: the well and its pressure on the canvas, the lens's controls in the inspector, details as pages ----
+  const page = drawer ? { title: DRAWER_NAME[drawer], context: `${brief.identity.name || "This well"} · ${LENS_NAME[lens]}`, backLabel: "Back to the well", onBack: () => setDrawer(null), body: <>
+    {drawer === "tests" && <>
+      <MatchView tests={tests} lab={lab} synthetic={!!kept.synthetic} result={result} stale={stale} onTests={(next) => setKept((k) => ({ ...k, tests: next, synthetic: false }))} onLab={(next) => setKept((k) => ({ ...k, lab: next }))} onMatch={match} />
+      {result && <HistoryView result={result} well={well} inputs={inputs} />}
+    </>}
+    {drawer === "limits" && integrityRows.length > 0 && <LimitsTable rows={integrityRows} />}
+    {drawer === "valves" && designed && <ValveSchedule result={designed} lift={lift} brief={brief} calibrated={usable} />}
+    {drawer === "tank" && cases && tankFit && <>
+      <TankCard matched={tankFit} tank={cases.tank} aquifer={tankAquifer} onAquifer={(a) => setKept((k) => ({ ...k, tankAquifer: a }))} production={production} synthetic={!!kept.synthetic} />
+      <WorCard cases={cases.band.main} />
+    </>}
+    {drawer === "inputs" && <InputsDrawer inputs={inputs} set={set} calibration={calibration} onReset={() => setKept((k) => ({ ...k, inputs: defaultNodal }))} tubingOdIn={well.tubingOdIn}
+      liftDepthMdM={well.liftDepthMdM} designed={injectionMdM !== null} onLiftDepth={(mdM) => setKept((k) => ({ ...k, injectionMdM: mdM }))} packerMdM={brief.completion?.packerMdM ?? null} />}
+  </> } : null;
+  const facts = <div className="pw-facts">
+    <span><small>Reservoir</small><b>{fmt(Math.round(prOf))}</b><em>psia</em></span>
+    <span><small>Flowing BHP</small><b>{point ? fmt(Math.round(point.pwf)) : "–"}</b><em>psia</em></span>
+    <span><small>PI</small><b>{solved.ipr.pi.toFixed(2)}</b><em>STB/d/psi</em></span>
+    <span><small>Bubble point</small><b>{fmt(Math.round(solved.bubblePointPsi))}</b><em>psia</em></span>
+  </div>;
+  const inspector = lens === "operate" ? <Inspector id="nodal-operate" initial="point" sections={[
+    { id: "point", title: "Operating point", summary: point ? `${fmt(Math.round(point.rate))} STB/d at ${fmt(Math.round(point.pwf))} psia` : "no flow", body: <NodalInstrument ipr={solved.ipr} vlp={solved.vlp} point={point} test={calibration && Number.isFinite(calibration.lastPwf) ? { rate: calibration.lastTest.liquidRate, pwf: calibration.lastPwf } : null}
+      onRate={(rate) => { const whp = whpForRate(well, inputs, calibration, rate); if (whp !== null) set({ whpPsi: Math.max(20, Math.round(whp)) }); }} /> },
+    { id: "controls", title: "Controls", summary: `${fmt(inputs.whpPsi)} psig · ${Math.round(inputs.waterCut * 100)}% water`, body: <div className="pw-dials">
+      <Dial label="Wellhead, psig" value={inputs.whpPsi} min={20} max={1500} step={5} show={(v) => fmt(v)} onChange={(whpPsi) => set({ whpPsi })} />
+      {well.lift === "gas-lift" && <Dial label="Lift gas, Mscf/d" value={inputs.liftMscfD} min={0} max={5000} step={50} tone="#38bdf8" show={(v) => fmt(v)} sub={entry && !entry.ok ? "cannot enter" : undefined} onChange={(liftMscfD) => set({ liftMscfD })} />}
+      <Dial label="Water cut" value={Math.round(inputs.waterCut * 100)} min={0} max={95} step={1} tone="#60a5fa" show={(v) => `${v}%`} onChange={(v) => set({ waterCut: v / 100 })} />
+      <Dial label={calibration ? "Depletion from now" : "Depletion"} value={Math.round(inputs.depletion * 100)} min={0} max={70} step={1} tone="#a78bfa" show={(v) => `${v}%`} onChange={(v) => set({ depletion: v / 100 })} />
+    </div> },
+    { id: "facts", title: "The well now", summary: `PI ${solved.ipr.pi.toFixed(2)}`, body: facts },
+  ]} links={[{ label: "Inputs and assumptions", onOpen: () => setDrawer("inputs") }]} />
+    : lens === "match" ? <Inspector id="nodal-match" initial="tests" head={<div className="pw-actions">
+      <button type="button" className={`tie-button${!calibration || stale ? " is-primary" : ""}`} onClick={match} disabled={!tests.length}>{calibration && !stale ? "Match again" : "Match"}</button>
+    </div>} sections={[
+      { id: "tests", title: "Tests", summary: `${tests.length} · ${(kept.testDate ?? lastTest?.date) ?? "–"}`, body: <div className="pw-tests" role="listbox" aria-label="Tests">
+        {[...tests].sort((a, b) => Date.parse(b.date) - Date.parse(a.date)).map((t) => {
+          const chosen = (kept.testDate ?? lastTest?.date) === t.date;
+          return <button key={t.date} type="button" role="option" aria-selected={chosen} onClick={() => setKept((k) => ({ ...k, testDate: t.date }))}>
+            <b>{t.date}</b><span>{fmt(Math.round(t.liquidRate))} STB/d · {Math.round(t.waterCut * 100)}% water{t.liftGasScfD > 0 ? " · lifted" : ""}</span>
+            {t.gaugePressure !== null && <i>gauge {fmt(Math.round(t.gaugePressure - 14.7))} psig</i>}
+          </button>;
+        })}
+      </div> },
+      { id: "fit", title: "Fit at the gauge", summary: scene.gauge && scene.gauge.model !== null ? `${scene.gauge.model >= scene.gauge.measured ? "+" : ""}${fmt(Math.round(scene.gauge.model - scene.gauge.measured))} psi` : "–", body: <>
+        {scene.gauge && scene.gauge.model !== null && <p className={`pw-gaugefit${Math.abs(scene.gauge.model - scene.gauge.measured) > 30 ? " is-warn" : ""}`}>Model {fmt(Math.round(scene.gauge.model - 14.7))} psig against the gauge&apos;s {fmt(Math.round(scene.gauge.measured - 14.7))}: {scene.gauge.model >= scene.gauge.measured ? "+" : ""}{fmt(Math.round(scene.gauge.model - scene.gauge.measured))} psi</p>}
+        {calibration && <p className="nodal-hint">{correlation}: holdup × {calibration.flow.resolved?.holdup === false ? "1 (not resolved)" : calibration.flow.holdupFactor.toFixed(2)}, friction × {calibration.flow.resolved?.friction === false ? "1 (not resolved)" : calibration.flow.frictionFactor.toFixed(2)}; PI {calibration.pi.toFixed(2)} STB/d/psi at the last test.</p>}
+      </> },
+    ]} links={[{ label: "Tests, lab and correlations", onOpen: () => setDrawer("tests") }]} />
+    : lens === "lift" ? (designed ? <Inspector id="nodal-lift" initial="unload" head={designed.design.operating ? <div className="pw-unload">
+      <button type="button" className="rail-button" aria-label={unload.playing ? "Pause unloading" : "Play unloading"} onClick={() => setUnload((u) => ({ t: u.t >= 1 ? 0 : u.t, playing: !u.playing }))}>{unload.playing ? <Pause size={13} /> : <Play size={13} />}</button>
+      <input type="range" min={0} max={1} step={0.001} value={unload.t} aria-label="Unloading" onChange={(event) => setUnload({ t: Number(event.target.value), playing: false })} />
+      <span>{unload.t >= 1 ? "unloaded" : "unloading"}</span>
+    </div> : <p className="nodal-hint is-warn">{designed.design.reason}</p>} sections={[
+      { id: "unload", title: "Pressures and gas", summary: `${fmt(lift.kickoffPsig)} / ${fmt(lift.operatingPsig)} psig`, body: <div className="pw-dials">
+        <Dial label="Kickoff, psig" value={lift.kickoffPsig} min={600} max={3000} step={10} tone="#38bdf8" show={(v) => fmt(v)} onChange={(kickoffPsig) => setKept((k) => ({ ...k, lift: { ...lift, kickoffPsig, operatingPsig: Math.min(lift.operatingPsig, kickoffPsig) } }))} />
+        <Dial label="Operating, psig" value={lift.operatingPsig} min={500} max={3000} step={10} tone="#38bdf8" show={(v) => fmt(v)} onChange={(operatingPsig) => setKept((k) => ({ ...k, lift: { ...lift, operatingPsig, kickoffPsig: Math.max(lift.kickoffPsig, operatingPsig) } }))} />
+        <Dial label="Gas available, Mscf/d" value={lift.availableMscfD} min={200} max={8000} step={50} tone="#f59e0b" show={(v) => fmt(v)} onChange={(availableMscfD) => setKept((k) => ({ ...k, lift: { ...lift, availableMscfD } }))} />
+        <Dial label="Drop per valve, psi" value={lift.perValveDropPsi} min={10} max={50} step={5} tone="#a78bfa" show={(v) => `${v}`} onChange={(perValveDropPsi) => setKept((k) => ({ ...k, lift: { ...lift, perValveDropPsi } }))} />
+      </div> },
+      { id: "performance", title: "Performance", summary: designed.optimum ? `best ${fmt(Math.round(designed.optimum.economic.gasScfD / 1000))} Mscf/d` : "–", body: <>
+        <Performance result={designed} lift={lift} current={inputs.liftMscfD} waterCut={inputs.waterCut} />
+        {designed.design.operating && designed.optimum && <button type="button" className="tie-button is-primary" onClick={() => { const op = designed.design.operating!, best = designed.optimum!; setKept((k) => ({ ...k, lens: "operate", injectionMdM: Math.round(op.mdFt / FT_PER_M), inputs: { ...k.inputs, liftMscfD: Math.round(best.economic.gasScfD / 1000) } })); }}>Operate at this design</button>}
+      </> },
+    ]} links={[{ label: "Valve schedule", onOpen: () => setDrawer("valves") }]} /> : <p className="nodal-hint">The completion has no gas lift: choose it in the Well designer&apos;s Completion stage.</p>)
+    : lens === "integrity" ? (typeof annuli === "string" ? <p className="nodal-hint">{annuli}</p> : <Inspector id="nodal-integrity" initial="annuli"
+      head={<IntegrityClock hours={integrityHours} playing={startup.playing} onHours={(hours) => { setStartup((u) => ({ ...u, playing: false })); setIntegrityHours(hours); }} onPlay={() => { if (!startup.playing && integrityHours >= 24 * 365 * 0.9) setIntegrityHours(0.1); setStartup((u) => ({ ...u, playing: !u.playing })); }} />}
+      sections={[
+        { id: "annuli", title: "Annuli", summary: integrityRows.map((r) => `${r.annulus.name} ${Math.round(r.ratio * 100)}%`).join(" · "), body: <IntegrityGauges rows={integrityRows} hours={integrityHours} onBleed={(name, psi) => setBled((b) => ({ ...b, [name]: psi }))} bsee={bsee} record={record} diagnostics={diagnostics} /> },
+        { id: "rock", title: "Rock, from the survey", summary: `k ${rock.k.toFixed(2)} ${rock.fit ? "calibrated" : "assumed"}`, body: <SurveyCard survey={survey} rock={rock} onCalibrate={calibrate} onAssume={() => setRock({ k: ASSUMED_CONDUCTIVITY, fit: null })}
+          surveyModel={survey.value && typeof well !== "string" ? (k: number) => { const s = survey.value!; const base = rameyOf(brief, s.rate ?? 0, s.waterCut ?? 0, s.producingMdM ?? well.midPerfMdM, k); return s.mdM.map((m) => flowingTemperatureAt(base, tvdAtMd(brief, m) * FT_PER_M, s.hours ?? 720)); } : null} /> },
+        { id: "record", title: "Annulus record", summary: diagnostics && Object.values(diagnostics).some((t) => t.some((x) => x.sustained)) ? "sustained casing pressure" : record.value ? "no SCP" : "–", body: <RecordCard record={record} diagnostics={diagnostics} hours={integrityHours} onHours={(hours) => { setStartup((u) => ({ ...u, playing: false })); setIntegrityHours(hours); }}
+          thermal={recordRamey && typeof annuli !== "string" ? (name: string, h: number) => annulusPressures(annuli.filter((a) => a.name === name), recordRamey, Math.max(0.1, h), null, {})[0]?.thermal ?? 0 : null} bsee={bsee} /> },
+        { id: "notes", title: "Assumptions", body: <p className="nodal-hint">{integrityNotes(integrityLift)}</p> },
+      ]} links={[{ label: "Every limit, annulus by annulus", onOpen: () => setDrawer("limits") }]} />)
+    : (usable ? (cases ? <Inspector id="nodal-life" initial="forecast" sections={[
+      { id: "forecast", title: "Forecast", summary: `${forecastInputs.years} years`, body: <LifeSide cases={cases} f={forecastInputs} lifeCase={kept.lifeCase ?? "lift"} onCase={(c) => setKept((k) => ({ ...k, lifeCase: c }))}
+        onForecast={(patch) => setKept((k) => ({ ...k, forecast: { ...defaultForecast, ...k.forecast, ...patch } }))} entryOk={!entry || entry.ok} liftMscfD={inputs.liftMscfD} /> },
+    ]} links={[{ label: "Tank match and water trend", onOpen: () => setDrawer("tank") }]} />
+      : <p className="nodal-hint">Matching the tank to the build-ups…</p>)
+      : <p className="nodal-hint">{stale ? "The tests changed since the match: match again, then the forecast follows." : "Match the well to its tests first (the Match lens): the forecast runs on the matched model."} The history is on the time rail already.</p>);
+  return <Frame name="nodal" className="pw" title={brief.identity.name || "This design"} subtitle={subtitle}
+    tools={<>
       <span className="pw-lenses" role="tablist" aria-label="Lens">
         {lensButtons.map((l) => <button key={l} type="button" role="tab" aria-selected={lens === l} onClick={() => { setKept((k) => ({ ...k, lens: l })); setDrawer(null); }}>{LENS_NAME[l]}</button>)}
       </span>
       <span className={`pw-badge${calibration && !stale ? " is-on" : stale ? " is-stale" : ""}`} title={calibration ? `Matched ${calibration.at} on ${calibration.tests} tests` : "Assumed inputs until matched to the well's tests"}>
         {calibration ? <>{stale ? "Out of date" : kept.synthetic ? "Matched · synthetic tests" : "Matched"}<small>±{fmt(Math.round(calibration.flow.mae))} psi · {correlation}</small></> : <>Uncalibrated<small>assumed inputs</small></>}
       </span>
-      <span className="pw-readout">
-        <span><small>Oil</small><b>{fmt(Math.round(scene.oilRate))}</b></span>
-        <span><small>Liquid</small><b>{fmt(Math.round(scene.liquidRate))}</b></span>
-        <span><small>Water</small><b>{Math.round(scene.waterCut * 100)}%</b></span>
-        <em>STB/d · oil {fmt(Math.round(scene.oilRate * SM3_PER_STB))} Sm³/d</em>
-      </span>
-    </header>
-    <div className="pw-stage">
+    </>}
+    numbers={<>
+      <span><small>Oil</small><b>{fmt(Math.round(scene.oilRate))}</b></span>
+      <span><small>Liquid</small><b>{fmt(Math.round(scene.liquidRate))}</b></span>
+      <span><small>Water</small><b>{Math.round(scene.waterCut * 100)}%</b></span>
+      <em>STB/d · oil {fmt(Math.round(scene.oilRate * SM3_PER_STB))} Sm³/d</em>
+    </>}
+    canvas={<div className="pw-split" data-lens={lens}>
       <ProducingWell scene={scene} cursorMdM={wire.cursor} onHover={wire.hover} onPin={wire.pin} />
       <PressureLane mdMax={scene.mdMax} lines={laneLines} points={lanePoints} cursorMdM={wire.cursor} onHover={wire.hover} onPin={wire.pin} />
-      <aside className="pw-side">
-        {lens === "operate" && <>
-          <NodalInstrument ipr={solved.ipr} vlp={solved.vlp} point={point} test={calibration && Number.isFinite(calibration.lastPwf) ? { rate: calibration.lastTest.liquidRate, pwf: calibration.lastPwf } : null}
-            onRate={(rate) => { const whp = whpForRate(well, inputs, calibration, rate); if (whp !== null) set({ whpPsi: Math.max(20, Math.round(whp)) }); }} />
-          <div className="pw-dials">
-            <Dial label="Wellhead, psig" value={inputs.whpPsi} min={20} max={1500} step={5} show={(v) => fmt(v)} onChange={(whpPsi) => set({ whpPsi })} />
-            {well.lift === "gas-lift" && <Dial label="Lift gas, Mscf/d" value={inputs.liftMscfD} min={0} max={5000} step={50} tone="#38bdf8" show={(v) => fmt(v)} sub={entry && !entry.ok ? "cannot enter" : undefined} onChange={(liftMscfD) => set({ liftMscfD })} />}
-            <Dial label="Water cut" value={Math.round(inputs.waterCut * 100)} min={0} max={95} step={1} tone="#60a5fa" show={(v) => `${v}%`} onChange={(v) => set({ waterCut: v / 100 })} />
-            <Dial label={calibration ? "Depletion from now" : "Depletion"} value={Math.round(inputs.depletion * 100)} min={0} max={70} step={1} tone="#a78bfa" show={(v) => `${v}%`} onChange={(v) => set({ depletion: v / 100 })} />
-          </div>
-          <div className="pw-facts">
-            <span><small>Reservoir</small><b>{fmt(Math.round(prOf))}</b><em>psia</em></span>
-            <span><small>Flowing BHP</small><b>{point ? fmt(Math.round(point.pwf)) : "–"}</b><em>psia</em></span>
-            <span><small>PI</small><b>{solved.ipr.pi.toFixed(2)}</b><em>STB/d/psi</em></span>
-            <span><small>Bubble point</small><b>{fmt(Math.round(solved.bubblePointPsi))}</b><em>psia</em></span>
-          </div>
-          <button type="button" className="tie-button" onClick={() => setDrawer("inputs")}>Inputs and assumptions</button>
-        </>}
-        {lens === "match" && <>
-          <div className="pw-tests" role="listbox" aria-label="Tests">
-            {[...tests].sort((a, b) => Date.parse(b.date) - Date.parse(a.date)).map((t) => {
-              const chosen = (kept.testDate ?? lastTest?.date) === t.date;
-              return <button key={t.date} type="button" role="option" aria-selected={chosen} onClick={() => setKept((k) => ({ ...k, testDate: t.date }))}>
-                <b>{t.date}</b><span>{fmt(Math.round(t.liquidRate))} STB/d · {Math.round(t.waterCut * 100)}% water{t.liftGasScfD > 0 ? " · lifted" : ""}</span>
-                {t.gaugePressure !== null && <i>gauge {fmt(Math.round(t.gaugePressure - 14.7))} psig</i>}
-              </button>;
-            })}
-          </div>
-          {scene.gauge && scene.gauge.model !== null && <p className={`pw-gaugefit${Math.abs(scene.gauge.model - scene.gauge.measured) > 30 ? " is-warn" : ""}`}>Model {fmt(Math.round(scene.gauge.model - 14.7))} psig against the gauge&apos;s {fmt(Math.round(scene.gauge.measured - 14.7))}: {scene.gauge.model >= scene.gauge.measured ? "+" : ""}{fmt(Math.round(scene.gauge.model - scene.gauge.measured))} psi</p>}
-          <div className="pw-actions">
-            <button type="button" className={`tie-button${!calibration || stale ? " is-primary" : ""}`} onClick={match} disabled={!tests.length}>{calibration && !stale ? "Match again" : "Match"}</button>
-            <button type="button" className="tie-button" onClick={() => setDrawer("tests")}>Tests, lab and correlations</button>
-          </div>
-          {calibration && <p className="nodal-hint">{correlation}: holdup × {calibration.flow.resolved?.holdup === false ? "1 (not resolved)" : calibration.flow.holdupFactor.toFixed(2)}, friction × {calibration.flow.resolved?.friction === false ? "1 (not resolved)" : calibration.flow.frictionFactor.toFixed(2)}; PI {calibration.pi.toFixed(2)} STB/d/psi at the last test.</p>}
-        </>}
-        {lens === "lift" && (designed ? <>
-          {designed.design.operating ? <div className="pw-unload">
-            <button type="button" className="rail-button" aria-label={unload.playing ? "Pause unloading" : "Play unloading"} onClick={() => setUnload((u) => ({ t: u.t >= 1 ? 0 : u.t, playing: !u.playing }))}>{unload.playing ? <Pause size={13} /> : <Play size={13} />}</button>
-            <input type="range" min={0} max={1} step={0.001} value={unload.t} aria-label="Unloading" onChange={(event) => setUnload({ t: Number(event.target.value), playing: false })} />
-            <span>{unload.t >= 1 ? "unloaded" : "unloading"}</span>
-          </div> : <p className="nodal-hint is-warn">{designed.design.reason}</p>}
-          <div className="pw-dials">
-            <Dial label="Kickoff, psig" value={lift.kickoffPsig} min={600} max={3000} step={10} tone="#38bdf8" show={(v) => fmt(v)} onChange={(kickoffPsig) => setKept((k) => ({ ...k, lift: { ...lift, kickoffPsig, operatingPsig: Math.min(lift.operatingPsig, kickoffPsig) } }))} />
-            <Dial label="Operating, psig" value={lift.operatingPsig} min={500} max={3000} step={10} tone="#38bdf8" show={(v) => fmt(v)} onChange={(operatingPsig) => setKept((k) => ({ ...k, lift: { ...lift, operatingPsig, kickoffPsig: Math.max(lift.kickoffPsig, operatingPsig) } }))} />
-            <Dial label="Gas available, Mscf/d" value={lift.availableMscfD} min={200} max={8000} step={50} tone="#f59e0b" show={(v) => fmt(v)} onChange={(availableMscfD) => setKept((k) => ({ ...k, lift: { ...lift, availableMscfD } }))} />
-            <Dial label="Drop per valve, psi" value={lift.perValveDropPsi} min={10} max={50} step={5} tone="#a78bfa" show={(v) => `${v}`} onChange={(perValveDropPsi) => setKept((k) => ({ ...k, lift: { ...lift, perValveDropPsi } }))} />
-          </div>
-          <Performance result={designed} lift={lift} current={inputs.liftMscfD} waterCut={inputs.waterCut} />
-          <div className="pw-actions">
-            {designed.design.operating && designed.optimum && <button type="button" className="tie-button is-primary" onClick={() => { const op = designed.design.operating!, best = designed.optimum!; setKept((k) => ({ ...k, lens: "operate", injectionMdM: Math.round(op.mdFt / FT_PER_M), inputs: { ...k.inputs, liftMscfD: Math.round(best.economic.gasScfD / 1000) } })); }}>Operate at this design</button>}
-            <button type="button" className="tie-button" onClick={() => setDrawer("valves")}>Valve schedule</button>
-          </div>
-        </> : <p className="nodal-hint">The completion has no gas lift: choose it in the Well designer&apos;s Completion stage.</p>)}
-        {lens === "integrity" && (typeof annuli === "string" ? <p className="nodal-hint">{annuli}</p> : <IntegritySide rows={integrityRows} hours={startup.hours} playing={startup.playing} lifting={liftOn(inputs.liftMscfD)}
-          onHours={(hours) => setStartup({ hours, playing: false })} onPlay={() => setStartup((u) => ({ hours: u.playing ? u.hours : u.hours >= 24 * 365 * 0.9 ? 0.1 : u.hours, playing: !u.playing }))}
-          onBleed={(name, psi) => setBled((b) => ({ ...b, [name]: psi }))} onLimits={() => setDrawer("limits")} />)}
-        {lens === "life" && (usable ? (cases ? <LifeSide cases={cases} f={forecastInputs} lifeCase={kept.lifeCase ?? "lift"} onCase={(c) => setKept((k) => ({ ...k, lifeCase: c }))}
-          onForecast={(patch) => setKept((k) => ({ ...k, forecast: { ...defaultForecast, ...k.forecast, ...patch } }))} onTank={() => setDrawer("tank")} entryOk={!entry || entry.ok} liftMscfD={inputs.liftMscfD} />
-          : <p className="nodal-hint">Matching the tank to the build-ups…</p>)
-          : <p className="nodal-hint">{stale ? "The tests changed since the match: match again, then the forecast follows." : "Match the well to its tests first (the Match lens): the forecast runs on the matched model."} The history is on the time rail already.</p>)}
-      </aside>
-    </div>
-    {lens === "life" && <LifeStrip production={production} tests={tests} band={cases?.band ?? null} showLift={(kept.lifeCase ?? "lift") === "lift"} cursorMs={cursorMs ?? todayMs} todayMs={todayMs}
-      onCursor={(ms) => signals.setTimeCursor(ms, wire.source)} />}
-    {drawer && <div className="pw-drawer" role="dialog" aria-label="Details">
-      <header><b>{drawer === "inputs" ? "Inputs and assumptions" : drawer === "tests" ? "Tests, lab and correlations" : drawer === "valves" ? "Valve schedule" : drawer === "limits" ? "Annulus limits" : "Tank match"}</b>
-        <button type="button" className="cor-icon" aria-label="Close" onClick={() => setDrawer(null)}><X size={13} /></button></header>
-      <div className="pw-drawer-body">
-        {drawer === "tests" && <>
-          <MatchView tests={tests} lab={lab} synthetic={!!kept.synthetic} result={result} stale={stale} onTests={(next) => setKept((k) => ({ ...k, tests: next, synthetic: false }))} onLab={(next) => setKept((k) => ({ ...k, lab: next }))} onMatch={match} />
-          {result && <HistoryView result={result} well={well} inputs={inputs} />}
-        </>}
-        {drawer === "limits" && integrityRows.length > 0 && <LimitsTable rows={integrityRows} />}
-        {drawer === "valves" && designed && <ValveSchedule result={designed} lift={lift} brief={brief} calibrated={usable} />}
-        {drawer === "tank" && cases && tankFit && <>
-          <TankCard matched={tankFit} tank={cases.tank} aquifer={tankAquifer} onAquifer={(a) => setKept((k) => ({ ...k, tankAquifer: a }))} production={production} synthetic={!!kept.synthetic} />
-          <WorCard cases={cases.band.main} />
-        </>}
-        {drawer === "inputs" && <InputsDrawer inputs={inputs} set={set} calibration={calibration} onReset={() => setKept((k) => ({ ...k, inputs: defaultNodal }))} tubingOdIn={well.tubingOdIn}
-          liftDepthMdM={well.liftDepthMdM} designed={injectionMdM !== null} onLiftDepth={(mdM) => setKept((k) => ({ ...k, injectionMdM: mdM }))} packerMdM={brief.completion?.packerMdM ?? null} />}
-      </div>
     </div>}
-  </div>;
+    inspector={inspector}
+    strip={lens === "life" ? <LifeStrip production={production} tests={tests} band={cases?.band ?? null} showLift={(kept.lifeCase ?? "lift") === "lift"} cursorMs={cursorMs ?? todayMs} todayMs={todayMs}
+      onCursor={(ms) => signals.setTimeCursor(ms, wire.source)} /> : undefined}
+    status={<Status items={[
+      kept.synthetic ? "Synthetic test history (generated from a hidden well model)" : `${tests.length} tests`,
+      calibration ? `Matched ${calibration.at} on ${calibration.tests} tests · ${correlation}` : "Uncalibrated: assumed inputs until matched",
+      lens === "integrity" ? `Rock k ${rock.k.toFixed(2)} ${rock.fit ? "(calibrated to the survey)" : "(assumed)"} · ${record.value?.synthetic ? "synthetic annulus record" : record.value ? record.value.name : "no annulus record"}` : null,
+    ]} />}
+    page={page} />;
 }
 
+
 /** Outlook and forecast controls for the Life lens. */
-function LifeSide({ cases, f, lifeCase, onCase, onForecast, onTank, entryOk, liftMscfD }: {
+function LifeSide({ cases, f, lifeCase, onCase, onForecast, entryOk, liftMscfD }: {
   readonly cases: { readonly tank: { readonly stoiip: number }; readonly band: ReturnType<typeof forecastBand> }; readonly f: ForecastInputs; readonly lifeCase: "natural" | "lift";
-  readonly onCase: (c: "natural" | "lift") => void; readonly onForecast: (patch: Partial<ForecastInputs>) => void; readonly onTank: () => void; readonly entryOk: boolean; readonly liftMscfD: number;
+  readonly onCase: (c: "natural" | "lift") => void; readonly onForecast: (patch: Partial<ForecastInputs>) => void; readonly entryOk: boolean; readonly liftMscfD: number;
 }) {
   const { band } = cases, k = (v: number) => fmt(Math.round(v / 1e3));
   const span = (pick: (c: typeof band.main) => Parameters<typeof cumOil>[0]) => { const v = [band.low, band.high, band.main].map((c) => cumOil(pick(c))); return [Math.min(...v), Math.max(...v)] as const; };
@@ -353,7 +405,6 @@ function LifeSide({ cases, f, lifeCase, onCase, onForecast, onTank, entryOk, lif
       <Dial label="Facility liquid, STB/d" value={f.maxLiquid} min={2000} max={30000} step={500} tone="#94a3b8" show={(v) => `${fmt(v)}`} onChange={(maxLiquid) => onForecast({ maxLiquid })} />
     </div>
     <p className="nodal-hint">Oil in place {fmt(Math.round(band.tanks.low.stoiip / 1e6))}–{fmt(Math.round(band.tanks.high.stoiip / 1e6))} MMSTB fits the build-ups equally: the band on the strip. Drag the strip or the time rail to see the well on any date.</p>
-    <button type="button" className="tie-button" onClick={onTank}>Tank match and water trend</button>
   </>;
 }
 

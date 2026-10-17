@@ -25,6 +25,7 @@
     "src/induced-seismicity.ts",
     "src/petro-clastic.ts",
     "src/attributes.ts",
-    "src/integrity.ts"
+    "src/integrity.ts",
+    "src/quakeml.ts"
   ]
 }

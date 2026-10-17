@@ -227,11 +227,12 @@ function Lens() {
   const whatIf = isDesignSite(siteId) && design.pending ? { label: design.pending.label, failing: analyse(design.pending.value.brief).failing.length, before: analyse(design.committed.brief).failing.length } : null;
   const dot = (colour: string) => ({ ["--dot" as string]: colour });
   const [fresh, setFresh] = useState(false);
-  useEffect(() => { if (!note) return; setFresh(true); const timer = window.setTimeout(() => setFresh(false), note.ms ?? 4000); return () => window.clearTimeout(timer); }, [note]);
+  useEffect(() => { if (!note) return; setFresh(true); const timer = window.setTimeout(() => setFresh(false), note.ms ?? 6000); return () => window.clearTimeout(timer); }, [note]);
   const stringName = (name: string) => name.split(" / ")[1] ?? name;
   return <footer className="lens" aria-live="polite">
-    {fresh && note && <span className="toast" role="status">{note.text}</span>}
     <span><i className="lens-dot" style={dot(signalColour.place)} /><b>{site ? site.map.label : "The world"}</b>{site ? ` · ${site.map.provenance}` : " · choose a site"}{place && site && site.wells.length > 1 ? <> · well <b>{place.label}</b></> : null}</span>
+    {/* A note is a line in this bar, never a layer over the deck. */}
+    {fresh && note && <span className="lens-note" role="status">{note.text}</span>}
     {whatIf && <span className="lens-whatif"><i className="lens-dot" style={dot(signalColour.whatif)} /><b>What-if</b> · {whatIf.label} · {whatIf.failing ? `${whatIf.failing} string${whatIf.failing === 1 ? "" : "s"} fail` : "every string passes"}{whatIf.before !== whatIf.failing ? ` (was ${whatIf.before})` : ""}</span>}
     {here && md !== null && place && <span className="mono"><i className="lens-dot" style={dot(signalColour.depth)} />
       <b>{fmt(md)} m MD</b>{here.tvd === null ? " · TVD not surveyed" : ` · ${fmt(here.tvd)} m ${place.siteId === "equator" ? "TVDSS" : "TVD"}`}

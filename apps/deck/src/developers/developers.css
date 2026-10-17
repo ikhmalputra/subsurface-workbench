@@ -152,3 +152,19 @@
 .dv-foot h2 { margin: 0; font-size: 34px; font-weight: 600; letter-spacing: -.02em; }
 .dv-foot p { margin: 8px 0 0; color: var(--ink-2); }
 .dv-foot .dv-fine { grid-column: 1 / -1; margin-top: 30px; padding-top: 22px; border-top: 1px solid var(--edge); color: var(--ink-3); font-size: 13px; }
+
+/* The catalogue example */
+.ex-catalogue { display: flex; flex-direction: column; gap: 8px; }
+.ex-catalogue svg { max-width: 100%; }
+.ex-grid { stroke: var(--sw-grid, rgba(160, 172, 255, .08)); }
+.ex-tick { font: 10px "IBM Plex Mono", monospace; fill: var(--sw-muted, #9aa3c0); }
+.ex-dot { fill: #38bdf8; }
+.ex-fit { stroke: #f472b6; stroke-width: 1.6; stroke-dasharray: 5 3; }
+.ex-mc { stroke: var(--sw-muted, #9aa3c0); stroke-dasharray: 2 3; }
+.ex-amber { stroke: #fbbf24; } .ex-red { stroke: #f87171; }
+.ex-slider { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--sw-muted, #9aa3c0); }
+.ex-slider b { color: var(--sw-ink, #e8ebf7); min-width: 28px; }
+.ex-slider input { flex: 1; }
+.ex-light { margin: 0; padding: 8px 10px; border-radius: 10px; font-size: 12px; color: var(--sw-ink, #e8ebf7); background: rgba(34, 197, 94, .12); }
+.ex-light b { text-transform: capitalize; margin-right: 6px; }
+.ex-light.is-amber { background: rgba(251, 191, 36, .14); } .ex-light.is-red { background: rgba(248, 113, 113, .16); }

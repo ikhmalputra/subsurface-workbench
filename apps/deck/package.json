@@ -10,7 +10,8 @@
     "build:pages": "DECK_BASE=/subsurface-workbench/ vite build --outDir ../../output/pages --emptyOutDir && touch ../../output/pages/.nojekyll",
     "typecheck": "tsc --noEmit",
     "sdk:reference": "node scripts/sdk-reference.mjs",
-    "test": "node --test test/*.test.ts"
+    "test": "node --test test/*.test.ts",
+    "synthetic": "node tools/make-synthetic.ts"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "5.3.0",

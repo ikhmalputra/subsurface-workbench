@@ -102,3 +102,75 @@ export const thermalApb = (deltaTF: number, alphaPerF: number, kappaPerPsi: numb
 
 /** Water-based fluids near 150 °F: expansion 2.5×10⁻⁴ /°F, compressibility 2.8×10⁻⁶ /psi. */
 export const WATER = { alphaPerF: 2.5e-4, kappaPerPsi: 2.8e-6 } as const;
+
+// ── Calibration: the rock's heat conduction from a temperature survey ─────────────────────────
+/**
+ * The earth conductivity that makes Ramey's profile fit a flowing temperature survey (DTS, PLT or a
+ * gradient run) taken at a known rate and time on production. The data constrain the relaxation
+ * distance, w·c·f(t)/(2πk), so with the rate and time known they constrain k. Golden-section on
+ * log k; the range is every k whose misfit an F-test (95%, one parameter) cannot tell from the best.
+ */
+export function calibrateConductivity(base: RameyInput, hours: number, survey: readonly { readonly tvdFt: number; readonly tempF: number }[], bounds: readonly [number, number] = [0.3, 6]) {
+  const usable = survey.filter((p) => Number.isFinite(p.tvdFt) && Number.isFinite(p.tempF) && p.tvdFt <= base.depthFt);
+  const sse = (k: number) => usable.reduce((s, p) => s + (flowingTemperature({ ...base, earthConductivity: k }, p.tvdFt, hours) - p.tempF) ** 2, 0);
+  let lo = Math.log(bounds[0]), hi = Math.log(bounds[1]);
+  const g = (Math.sqrt(5) - 1) / 2;
+  let a = hi - g * (hi - lo), b = lo + g * (hi - lo), fa = sse(Math.exp(a)), fb = sse(Math.exp(b));
+  for (let i = 0; i < 80; i++) {
+    if (fa < fb) { hi = b; b = a; fb = fa; a = hi - g * (hi - lo); fa = sse(Math.exp(a)); }
+    else { lo = a; a = b; fa = fb; b = lo + g * (hi - lo); fb = sse(Math.exp(b)); }
+  }
+  const k = Math.exp((lo + hi) / 2), best = sse(k), n = usable.length;
+  // F(1, n−1) at 95% is about 3.84 for large n; the bound is SSE ≤ best·(1 + F/(n−1)).
+  const limit = best * (1 + 3.84 / Math.max(1, n - 1));
+  // Each end of the range: where the misfit climbs through the limit, by bisection on log k (the bound itself if it never does).
+  const edge = (to: number) => { if (sse(to) <= limit) return to; let inside = Math.log(k), outside = Math.log(to); for (let i = 0; i < 50; i++) { const mid = (inside + outside) / 2; if (sse(Math.exp(mid)) <= limit) inside = mid; else outside = mid; } return Math.exp(inside); };
+  return { k, rmsF: Math.sqrt(best / Math.max(1, n)), n, range: [edge(bounds[0]), edge(bounds[1])] as const, atBoundary: Math.abs(Math.log(k / bounds[0])) < 0.01 || Math.abs(Math.log(k / bounds[1])) < 0.01 };
+}
+
+// ── Sustained casing pressure: the diagnostic test ────────────────────────────────────────────
+/**
+ * BSEE's limits for a casing pressure (NTL 2009-G01, after API RP 90): MAWOP, the lesser of 50% of
+ * the evaluated string's minimum internal yield (MIYP), 80% of the next outer string's MIYP and 75%
+ * of the inner string's collapse; and the share of MIYP above which a pressure must be diagnosed
+ * (10% on the A annulus, except under active gas lift; 20% on the outer annuli).
+ */
+export function casingPressureLimits(input: { readonly annulus: string; readonly miypPsi: number; readonly nextOuterMiypPsi: number | null; readonly innerCollapsePsi: number; readonly gasLift?: boolean }) {
+  const candidates = [{ by: "50% of its MIYP", psi: 0.5 * input.miypPsi }, ...(input.nextOuterMiypPsi ? [{ by: "80% of the next outer string's MIYP", psi: 0.8 * input.nextOuterMiypPsi }] : []), { by: "75% of the inner string's collapse", psi: 0.75 * input.innerCollapsePsi }];
+  const mawop = candidates.reduce((m, c) => c.psi < m.psi ? c : m);
+  const share = input.annulus === "A" ? (input.gasLift ? null : 0.1) : 0.2;
+  return { mawopPsi: mawop.psi, mawopBy: mawop.by, diagnoseAbovePsi: share === null ? null : share * input.miypPsi, share };
+}
+
+export interface BleedTest { readonly startH: number; readonly endH: number; readonly fromPsi: number; readonly toPsi: number; readonly bledToZero: boolean; readonly hoursToBleed: number; readonly rebuildPsi: number | null; readonly thermalPsi: number; readonly sustained: boolean }
+/**
+ * Every bleed-down in a pressure record (a fall of more than half to under 15% of where it started,
+ * within a day), and the 24 hours after it: how far it built back, against how far heat alone
+ * could build it over the same hours (`thermalAt`, the thermal pressure at a time on production).
+ * Building back more than heat explains, by more than 100 psi and 10% of the starting pressure,
+ * is sustained casing pressure: something is feeding the annulus.
+ */
+export function bleedTests(hours: readonly number[], psi: readonly (number | null)[], thermalAt: (h: number) => number): BleedTest[] {
+  const out: BleedTest[] = [];
+  const at = (h: number) => { let best: number | null = null, d = Infinity; for (let i = 0; i < hours.length; i++) { const v = psi[i]; if (v === null || v === undefined) continue; const dd = Math.abs(hours[i]! - h); if (dd < d) { d = dd; best = v; } } return d <= 2 ? best : null; };
+  for (let i = 1; i < hours.length; i++) {
+    const p0 = psi[i - 1], p1 = psi[i];
+    if (p0 === null || p1 === null || p0 === undefined || p1 === undefined || p1 >= p0 * 0.9 || p0 < 50) continue;
+    // A fall starts here: follow it while it keeps falling (or sits near zero), up to 24 hours.
+    let j = i, low = p1;
+    while (j + 1 < hours.length && hours[j + 1]! - hours[i - 1]! <= 24) { const v = psi[j + 1]; if (v === null || v === undefined || v > low + Math.max(5, 0.02 * p0)) break; low = Math.min(low, v); j++; }
+    if (low > 0.15 * p0 || p0 - low < 0.5 * p0) continue;
+    // It ends where it first reached its lowest (or zero): sitting at zero afterwards is not bleeding.
+    const zero = Math.max(25, 0.03 * p0);
+    let k = i;
+    while (k < j && (psi[k] ?? Infinity) > Math.max(low, Math.min(zero, p0))) k++;
+    if ((psi[k] ?? Infinity) <= zero) low = Math.min(low, psi[k]!);
+    const startH = hours[i - 1]!, endH = hours[k]!;
+    const after = at(endH + 24);
+    const thermal = Math.max(0, thermalAt(endH + 24) - thermalAt(endH));
+    const rebuild = after === null ? null : after - low;
+    out.push({ startH, endH, fromPsi: p0, toPsi: low, bledToZero: low <= zero, hoursToBleed: endH - startH, rebuildPsi: rebuild, thermalPsi: thermal, sustained: rebuild !== null && rebuild - thermal > Math.max(100, 0.1 * p0) });
+    i = j;
+  }
+  return out;
+}

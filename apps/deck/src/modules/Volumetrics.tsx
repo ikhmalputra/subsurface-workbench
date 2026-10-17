@@ -11,9 +11,13 @@ import type { GridFrame } from "../data/map-model.ts";
 import { monteCarlo, tornado } from "../data/volumetrics-model.ts";
 import type { Fluid, InputName, Range, VolumeInputs } from "../data/volumetrics-model.ts";
 import { rangeOf, topIn, zonePetro, zoneWells } from "../data/zone-model.ts";
+import { useInterpretations } from "../data/petro-interpretations.ts";
+import { zoneThroughInterpretation } from "../data/petro-force-model.ts";
 import type { ZonePetro, ZoneWell } from "../data/zone-model.ts";
 import { fmt } from "../format.ts";
 import { Loading } from "./Empty.tsx";
+import { Frame, Inspector, Status } from "./frame/Frame.tsx";
+import { placeLabels } from "./frame/labels.ts";
 import { useSize } from "./useSize.ts";
 
 /**
@@ -127,7 +131,16 @@ export function Volumetrics() {
   // ── The logs ─────────────────────────────────────────────────────────────────────────────
   const logged = useMemo(() => zone.filter((entry) => entry.baseMd !== null).map((entry) => entry.well), [zone]);
   const { logs } = useForceLogs(logged);
-  const petro = useMemo(() => new Map(zone.flatMap((entry): [string, ZonePetro][] => { const l = logs.get(entry.well.id); const p = l && entry.baseMd ? zonePetro(l, entry.topMd, entry.baseMd) : null; return p ? [[entry.well.id, p]] : []; })), [zone, logs]);
+  // A well the petrophysicist has interpreted in Petrophysics is read through that interpretation; the rest by the quick-look below.
+  const interpretations = useInterpretations();
+  const [useYours, setUseYours] = useState(true);
+  const petro = useMemo(() => new Map(zone.flatMap((entry): [string, ZonePetro & { readonly by: string }][] => {
+    const l = logs.get(entry.well.id), own = useYours ? interpretations[entry.well.id] : undefined;
+    if (!l || !entry.baseMd) return [];
+    const p = own ? zoneThroughInterpretation(l, entry.topMd, entry.baseMd, own.interpretation) : zonePetro(l, entry.topMd, entry.baseMd);
+    return p ? [[entry.well.id, { ...p, by: own ? "yours" : "quick-look" }]] : [];
+  })), [zone, logs, interpretations, useYours]);
+  const interpreted = [...petro.values()].filter((p) => p.by === "yours").length, interpretable = zone.filter((entry) => interpretations[entry.well.id]).length;
   const fromWells = useMemo(() => {
     const p = [...petro.values()], pay = p.flatMap((entry) => entry.paySw === null ? [] : [entry.paySw]);
     return { ntg: rangeOf(p.map((entry) => entry.ntg)), porosity: rangeOf(p.map((entry) => entry.porosity)), sw: rangeOf(pay), wells: p.length, payWells: pay.length };
@@ -186,9 +199,26 @@ export function Volumetrics() {
 
   if (!site) return null;
   const fluidName = setup.fluid === "oil" ? "STOIIP" : "GIIP";
-  return <div className="vol">
-    <header className="tie-bar vol-bar">
-      <span className="tie-title"><b>{site.map.label}</b></span>
+  const ranges = <table className="vol-ranges">
+    <tbody>
+      <tr><th>{LABEL.contact}</th><td colSpan={3}><span className="vol-spread">± <input id="vol-spread" type="number" min={0} max={300} step={5} value={setup.spread} onChange={(event) => setSetup((current) => ({ ...current, spread: Math.max(0, Number(event.target.value) || 0) }))} /> m</span></td><td><small>yours</small></td></tr>
+      {(["ntg", "porosity", "sw", "fvf"] as const).map((name) => {
+        const { value, from } = range(name), percent = name !== "fvf", k = percent ? 100 : 1;
+        const set = (key: keyof Range, raw: string) => { const v = Number(raw) / k; if (raw.trim() !== "" && Number.isFinite(v)) setSetup((current) => ({ ...current, ranges: { ...current.ranges, [name]: { ...value, [key]: v } } })); };
+        return <tr key={name}>
+          <th>{LABEL[name]}{percent && <small> %</small>}</th>
+          {(["low", "mode", "high"] as const).map((key) => <td key={key}><input id={`vol-${name}-${key}`} type="number" step={percent ? 1 : setup.fluid === "gas" ? 0.0005 : 0.05} value={percent ? Math.round(value[key] * 10000) / 100 : Number(value[key].toPrecision(4))} onChange={(event) => set(key, event.target.value)} aria-label={`${LABEL[name]}, ${key === "mode" ? "most likely" : key}`} /></td>)}
+          <td><small>{from}</small>{from === "yours" && <button type="button" className="cor-icon" aria-label={`Back to the ${LABEL[name]} from the wells`} onClick={() => setSetup((current) => ({ ...current, ranges: { ...current.ranges, [name]: undefined } }))}><RotateCcw size={11} /></button>}</td>
+        </tr>;
+      })}
+    </tbody>
+  </table>;
+  const warnings = map && trap ? <>
+    {map.based < 3 && <p className="vol-warn">{map.based ? `Only ${map.based} well${map.based === 1 ? "" : "s"} reach${map.based === 1 ? "es" : ""} ${setup.base} below ${setup.top}: the zone is taken as ${fmt(Math.round(map.meanThickness))} m thick everywhere.` : `No well reaches ${setup.base} below ${setup.top}: the zone has no thickness and no volume. Choose another base.`}</p>}
+    {!trap.closes && <p className="vol-warn">{map.highs.length ? `This high ${trap.spill === null ? "does not close: above any contact it runs off the area the wells support" : `closes by only ${Math.round(trap.spill - trap.crestDepth)} m, within the map's noise`}. Click a closed high (▲) for volumes.` : "No high closes on the wells alone in this zone, so there is no volume to measure. The surface shown is the high the shallowest well drains up to; try another zone, or pick tops in Correlation to tie more wells."}</p>}
+  </> : null;
+  return <Frame name="volumetrics" className="vol" title={site.map.label} subtitle={`${setup.top} to ${setup.base} · ${fluidName} from the wells' own logs`}
+    tools={<>
       <label className="vol-field">Zone<select id="vol-top" value={setup.top} onChange={(event) => { const top = event.target.value, bases = below(top); setSetup((current) => ({ ...current, top, base: bases.some((entry) => entry.name === current.base) ? current.base : bases[0]?.name ?? current.base, crest: null, contact: null })); }}>{names.map((entry) => <option key={entry.name}>{entry.name}</option>)}</select></label>
       <label className="vol-field">to<select id="vol-base" value={setup.base} onChange={(event) => setSetup((current) => ({ ...current, base: event.target.value }))}>{below(setup.top).map((entry) => <option key={entry.name}>{entry.name}</option>)}</select></label>
       <span className="log-sets" role="group" aria-label="Fluid">
@@ -196,18 +226,16 @@ export function Volumetrics() {
       </span>
       {trap && trap.deepest > trap.crestDepth + 1 && <label className="tie-slider vol-contact">{setup.fluid === "oil" ? "OWC" : "GWC"} <b>{fmt(Math.round(contact))} m</b>
         <input id="vol-contact" type="range" min={Math.ceil(trap.crestDepth + 1)} max={Math.floor(trap.deepest)} step={1} value={Math.round(contact)} onChange={(event) => setSetup((current) => ({ ...current, contact: Number(event.target.value) }))} /></label>}
-      {trap && <span className={`tie-r${!trap.closes ? " is-warn" : ""}`} title={!trap.closes ? `This high has under ${MIN_RELIEF} m of closure on the wells alone: no trap the map can measure.` : "The deepest contact the closure holds before it spills"}>
-        {trap.spill === null ? "open" : `${fmt(Math.round(trap.spill))} m`}<small>{trap.spill === null ? "does not close" : trap.closes ? "spill" : `spill · ${Math.round(trap.spill - trap.crestDepth)} m relief`}</small></span>}
-      {trap && !trap.closes && <span className="vol-p is-none"><b>No trap</b><em>the high does not close</em></span>}
-      {result && <span className="vol-p">{([["P90", result.p90], ["P50", result.p50], ["P10", result.p10]] as const).map(([name, v]) => <span key={name}><small>{name}</small><b>{show(volume(v, setup.fluid).big)}</b></span>)}<em>{volume(0, setup.fluid).unit} {fluidName}<br />P50 ≈ {show(volume(result.p50, setup.fluid).alt)} {volume(0, setup.fluid).altUnit}</em></span>}
-    </header>
-    {!map || !trap ? <p className="hz-empty">Fewer than three of this area&apos;s wells reach {setup.top}: nothing to map. Choose another zone.</p> : <div className="vol-stage">
+    </>}
+    numbers={result ? <>{([["P90", result.p90], ["P50", result.p50], ["P10", result.p10]] as const).map(([name, v]) => <span key={name}><small>{name}</small><b>{show(volume(v, setup.fluid).big)}</b></span>)}<em>{volume(0, setup.fluid).unit} {fluidName}</em></>
+      : trap ? <span title={!trap.closes ? `This high has under ${MIN_RELIEF} m of closure on the wells alone: no trap the map can measure.` : "The deepest contact the closure holds before it spills"}><small>{trap.spill === null ? "does not close" : trap.closes ? "spill" : "no trap"}</small><b>{trap.spill === null ? "open" : `${fmt(Math.round(trap.spill))} m`}</b></span> : undefined}
+    canvas={!map || !trap ? <p className="hz-empty">Fewer than three of this area&apos;s wells reach {setup.top}: nothing to map. Choose another zone.</p> : <div className="vol-split">
       <section className="tie-3d vol-3d" aria-label="The zone in 3D">
         <Suspense fallback={<Loading>Starting the 3D map…</Loading>}>
           <SiteScene key={`${area}-${setup.top}-${setup.base}`} title={`${setup.top} in 3D`} depthLabel={site.depthLabel} originLabel={site.originLabel} wells={wells} surfaces={surfaces} fence={fence} initialExaggeration={10} legend={false} />
         </Suspense>
       </section>
-      <aside className="tie-side vol-side">
+      <div className="vol-mapcol">
         <ZoneMap zone={zone} map={map} highs={map.highs} crest={trap.crest} mask={closed?.mask ?? null} contact={contact} fluid={setup.fluid} onCrest={(node) => setSetup((current) => ({ ...current, crest: [map.frame.x0 + (node % map.frame.nx) * map.frame.cell, map.frame.y0 + Math.floor(node / map.frame.nx) * map.frame.cell], contact: null }))} />
         {closed && <dl className="vol-trap">
           <div><dt>Crest</dt><dd>{fmt(Math.round(trap.crestDepth))} m</dd></div>
@@ -215,35 +243,21 @@ export function Volumetrics() {
           <div><dt>Area</dt><dd>{(closed.cells * map.frame.cell ** 2 / 1e6).toFixed(1)} km²</dd></div>
           <div><dt>Rock volume</dt><dd>{show(readCurve(trap.curve.contacts, trap.curve.volumes, contact) / 1e9)} km³</dd></div>
         </dl>}
-        {map.based < 3 && <p className="vol-warn">{map.based ? `Only ${map.based} well${map.based === 1 ? "" : "s"} reach${map.based === 1 ? "es" : ""} ${setup.base} below ${setup.top}: the zone is taken as ${fmt(Math.round(map.meanThickness))} m thick everywhere.` : `No well reaches ${setup.base} below ${setup.top}: the zone has no thickness and no volume. Choose another base.`}</p>}
-        {!trap.closes && <p className="vol-warn">{map.highs.length ? `This high ${trap.spill === null ? "does not close: above any contact it runs off the area the wells support" : `closes by only ${Math.round(trap.spill - trap.crestDepth)} m, within the map's noise`}. Click a closed high (▲) for volumes.` : "No high closes on the wells alone in this zone, so there is no volume to measure. The surface shown is the high the shallowest well drains up to; try another zone, or pick tops in Correlation to tie more wells."}</p>}
-        {result && <Results result={result} swings={swings} fluid={setup.fluid} />}
-      </aside>
-      <aside className="tie-side vol-inputs">
-        <h3>Ranges <small>low · most likely · high</small></h3>
-        <table className="vol-ranges">
-          <tbody>
-            <tr><th>{LABEL.contact}</th><td colSpan={3}><span className="vol-spread">± <input id="vol-spread" type="number" min={0} max={300} step={5} value={setup.spread} onChange={(event) => setSetup((current) => ({ ...current, spread: Math.max(0, Number(event.target.value) || 0) }))} /> m</span></td><td><small>yours</small></td></tr>
-            {(["ntg", "porosity", "sw", "fvf"] as const).map((name) => {
-              const { value, from } = range(name), percent = name !== "fvf", k = percent ? 100 : 1;
-              const set = (key: keyof Range, raw: string) => { const v = Number(raw) / k; if (raw.trim() !== "" && Number.isFinite(v)) setSetup((current) => ({ ...current, ranges: { ...current.ranges, [name]: { ...value, [key]: v } } })); };
-              return <tr key={name}>
-                <th>{LABEL[name]}{percent && <small> %</small>}</th>
-                {(["low", "mode", "high"] as const).map((key) => <td key={key}><input id={`vol-${name}-${key}`} type="number" step={percent ? 1 : setup.fluid === "gas" ? 0.0005 : 0.05} value={percent ? Math.round(value[key] * 10000) / 100 : Number(value[key].toPrecision(4))} onChange={(event) => set(key, event.target.value)} aria-label={`${LABEL[name]}, ${key === "mode" ? "most likely" : key}`} /></td>)}
-                <td><small>{from}</small>{from === "yours" && <button type="button" className="cor-icon" aria-label={`Back to the ${LABEL[name]} from the wells`} onClick={() => setSetup((current) => ({ ...current, ranges: { ...current.ranges, [name]: undefined } }))}><RotateCcw size={11} /></button>}</td>
-              </tr>;
-            })}
-          </tbody>
-        </table>
-        <h3>Wells in the zone <small>{zone.length} reach {setup.top}</small></h3>
-        <WellTable zone={zone} petro={petro} />
-      </aside>
+      </div>
     </div>}
-    <p className="petro-note">
-      {FORCE_SOURCE}. The top is mapped between the wells by thin-plate spline, the thickness likewise; nothing constrains either between wells. FORCE 2020 has no fluid contacts: the contact is yours, a what-if, and the closure is everything above it connected to the crest you click on the map.
-      Net rock: shale volume (gamma ray, linear) under 40% and porosity (density, with neutron where logged) over 10%; water saturation by Archie (a 1, m 2, n 2, Rw 0.05 Ω·m) over the net rock with Sw under 0.6. {fluidName} = rock volume × N/G × φ × (1 − Sw) ÷ {setup.fluid === "oil" ? "Bo" : "Bg"}, sampled 4,000 times; P90 is the volume exceeded in 90% of the runs.
-    </p>
-  </div>;
+    inspector={map && trap ? <Inspector id="volumetrics" initial="volumes" head={warnings} sections={[
+      result && { id: "volumes", title: "Volumes", summary: `P50 ${show(volume(result.p50, setup.fluid).big)} ${volume(0, setup.fluid).unit}`, body: <Results result={result} swings={swings} fluid={setup.fluid} /> },
+      { id: "ranges", title: "Ranges", summary: "low · most likely · high", body: ranges },
+      { id: "wells", title: "Wells in the zone", summary: `${zone.length}${interpretable ? ` · ${interpretable} ✎` : ""}`, body: <>
+        {interpretable > 0 && <label className="vol-yours"><input type="checkbox" checked={useYours} onChange={(event) => setUseYours(event.target.checked)} /> Read {interpretable === 1 ? "that well" : `those ${interpretable} wells`} through your Petrophysics interpretation{interpreted ? ` (${interpreted} in use)` : ""}</label>}
+        <WellTable zone={zone} petro={petro} />
+      </> },
+      { id: "method", title: "Method and sources", body: <p className="nodal-hint">{FORCE_SOURCE}. The top is mapped between the wells by thin-plate spline, the thickness likewise; nothing constrains either between wells. FORCE 2020 has no fluid contacts: the contact is yours, a what-if, and the closure is everything above it connected to the crest you click on the map. {interpreted ? `${interpreted} well${interpreted === 1 ? " is" : "s are"} read through your Petrophysics interpretation (marked ✎). The others: ` : ""}net rock is shale volume (gamma ray, linear) under 40% and porosity (density, with neutron where logged) over 10%; water saturation by Archie (a 1, m 2, n 2, Rw 0.05 Ω·m) with Sw under 0.6. {fluidName} = rock volume × N/G × φ × (1 − Sw) ÷ {setup.fluid === "oil" ? "Bo" : "Bg"}, sampled 4,000 times; P90 is the volume exceeded in 90% of the runs.</p> },
+    ]} /> : undefined}
+    status={<Status items={[
+      "Click a closed high (▲) on the map to measure it · drag the contact in the toolbar",
+      "FORCE 2020 has no fluid contacts: the contact is yours, a what-if",
+    ]} />} />;
 }
 
 /** The zone's top from above: depth-coloured, contoured every 50 m, the closure shaded, its contact outlined; click to grow the closure from another crest. */
@@ -293,7 +307,7 @@ function ZoneMap({ zone, map, highs, crest, mask, contact, fluid, onCrest }: {
       <svg width={W} height={H}>
         {contours.map(({ level, lines }) => lines.map((line, i) => <polyline key={`${level}-${i}`} points={line.map(([px, py]) => `${x(px).toFixed(1)},${y(py).toFixed(1)}`).join(" ")} className={`vol-contour${level % 250 === 0 ? " is-index" : ""}`} />))}
         {rings.map((ring, i) => <polyline key={i} points={ring.map(([px, py]) => `${x(px).toFixed(1)},${y(py).toFixed(1)}`).join(" ")} className="vol-ring" style={{ stroke: FLUID_COLOUR[fluid] }} />)}
-        {zone.map((entry) => <g key={entry.well.id} transform={`translate(${x(entry.x)},${y(entry.y)})`}><circle r={3.5} /><text x={5} y={-4}>{entry.well.name}</text></g>)}
+        {(() => { const shown = placeLabels(zone.map((entry) => ({ x: x(entry.x) + 5, y: y(entry.y) - 4, text: entry.well.name })), { charW: 6.2 }); return zone.map((entry, i) => <g key={entry.well.id} transform={`translate(${x(entry.x)},${y(entry.y)})`}><circle r={3.5} />{shown[i] ? <text x={5} y={-4}>{entry.well.name}</text> : <title>{entry.well.name}</title>}</g>); })()}
         {highs.filter((high) => high.crest !== crest).map((high) => <g key={high.crest} transform={`translate(${x(frame.x0 + (high.crest % frame.nx) * frame.cell)},${y(frame.y0 + Math.floor(high.crest / frame.nx) * frame.cell)})`} className="vol-high">
           <title>{`A closed high: crest ${fmt(Math.round(high.depth))} m, spills at ${fmt(Math.round(high.spill))} m. Click to use it.`}</title>
           <path d="M0,-5 L4.5,3 L-4.5,3 Z" /><text x={6} y={3}>{fmt(Math.round(high.spill - high.depth))} m</text></g>)}
@@ -340,13 +354,13 @@ function Results({ result, swings, fluid }: { readonly result: ReturnType<typeof
 }
 
 /** The wells in the zone: where they meet it and what their logs read there. */
-function WellTable({ zone, petro }: { readonly zone: readonly ZoneWell[]; readonly petro: ReadonlyMap<string, ZonePetro> }) {
+function WellTable({ zone, petro }: { readonly zone: readonly ZoneWell[]; readonly petro: ReadonlyMap<string, ZonePetro & { readonly by?: string }> }) {
   const rows = [...zone].sort((a, b) => a.top - b.top);
   return <div className="vol-wells">
     <table>
       <thead><tr><th>Well</th><th>Top m</th><th>Thick m</th><th>N/G</th><th>φ</th><th>Pay m</th></tr></thead>
       <tbody>{rows.map((entry) => { const p = petro.get(entry.well.id); return <tr key={entry.well.id} data-pay={p && p.payM >= 10 ? "" : undefined}>
-        <td>{entry.well.name}</td><td>{fmt(Math.round(entry.top))}</td><td>{entry.base === null ? "–" : fmt(Math.round(entry.base - entry.top))}</td>
+        <td>{entry.well.name}{p?.by === "yours" && <span className="vol-mine" title="Read through your Petrophysics interpretation"> ✎</span>}</td><td>{fmt(Math.round(entry.top))}</td><td>{entry.base === null ? "–" : fmt(Math.round(entry.base - entry.top))}</td>
         <td>{p ? p.ntg.toFixed(2) : "–"}</td><td>{p ? p.porosity.toFixed(2) : "–"}</td><td>{p ? fmt(Math.round(p.payM)) : "–"}</td>
       </tr>; })}</tbody>
     </table>

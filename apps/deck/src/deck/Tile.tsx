@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { motion } from "motion/react";
-import { Expand, Maximize2, Shrink, X } from "lucide-react";
+import { Expand, Shrink, X } from "lucide-react";
 import type { ModuleId } from "../modules/registry.ts";
 import { fusionRule, fusionRules, moduleById, signalColour, signalName } from "../modules/registry.ts";
 import type { Rect } from "./layout.ts";
@@ -20,7 +20,8 @@ export const TRAVEL_MS = 320;
 
 /**
  * A module in glass. Drag the head to move it, the corner to resize it; either snaps to the grid on
- * release. Double-click the head, or the expand button, to bring it to the stage; the cross closes it.
+ * release. Double-click the head, or the expand button, to spread it over the deck (Esc puts it back);
+ * the cross closes it. One way to make a tile big, not two.
  */
 export function Tile({ id, geometry, subtitle, onGhost, children }: { readonly id: ModuleId; readonly geometry: Geometry; readonly subtitle?: string; readonly onGhost: (ghost: Ghost | null) => void; readonly children: ReactNode }) {
   const spec = moduleById[id];
@@ -105,14 +106,13 @@ export function Tile({ id, geometry, subtitle, onGhost, children }: { readonly i
     exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.18 } }}
     transition={gesture ? { duration: 0 } : spring}
     aria-label={spec.title} data-module={id} data-stage={isStage || undefined} data-refused={refused || undefined}>
-    <header className="tile-head" onPointerDown={begin("move")} onPointerMove={move} onPointerUp={end} onPointerCancel={end} onDoubleClick={() => focused ? actions.setFocus(null) : actions.promote(id)}>
+    <header className="tile-head" onPointerDown={begin("move")} onPointerMove={move} onPointerUp={end} onPointerCancel={end} onDoubleClick={() => actions.setFocus(focused ? null : id)}>
       <span className="tile-icon"><Icon size={15} strokeWidth={1.8} aria-hidden="true" /></span>
       <span className="tile-title">{spec.title}</span>
       {subtitle && <span className="tile-sub">· {subtitle}</span>}
       <span className="tile-signals" title={`Listens to ${spec.listens.map((signal) => signalName[signal]).join(", ")}${spec.emits.length ? ` · sends ${spec.emits.map((signal) => signalName[signal]).join(", ")}` : ""}`} aria-hidden="true">{spec.listens.map((signal) => <i key={signal} style={{ ["--dot" as string]: signalColour[signal] }} />)}</span>
       {focused && <span className="tile-esc">Esc to put it back</span>}
-      {!isStage && !focused && <button type="button" className="tile-action" aria-label={`Bring ${spec.title} to the stage`} title="Bring to the stage" onClick={() => actions.promote(id)}><Maximize2 size={14} /></button>}
-      <button type="button" className="tile-action" aria-label={focused ? `Put ${spec.title} back in its tile` : `Spread ${spec.title} over the deck`} aria-pressed={focused} title={focused ? "Back to its tile (Esc)" : "Spread over the whole deck"} onClick={() => actions.setFocus(focused ? null : id)}>{focused ? <Shrink size={14} /> : <Expand size={14} />}</button>
+      <button type="button" className="tile-action" aria-label={focused ? `Put ${spec.title} back in its tile` : `Expand ${spec.title} over the deck`} aria-pressed={focused} title={focused ? "Back to its tile (Esc)" : "Expand over the deck (or double-click the head)"} onClick={() => actions.setFocus(focused ? null : id)}>{focused ? <Shrink size={14} /> : <Expand size={14} />}</button>
       <button type="button" className="tile-action" aria-label={`Close ${spec.title}`} title="Close" onClick={() => actions.close(id)}><X size={14} /></button>
     </header>
     {fusedHere.length > 0 && <div className="fuse-chips">{fusedHere.map(([key, value]) => <FuseChip key={key} fusion={key} value={value} />)}</div>}

@@ -94,14 +94,14 @@ on after shut-in. Real-time systems update b, Σ and the exceedance probability 
 - [x] Deck module `stimulation`, "Stimulation", in Geomechanics & pressure:
   - [x] **Scene:** a 3D view around 16A's toe. The well and the stage intervals; the monitoring
         wells' geophone strings; the pressure front as a translucent shell; events as spheres sized
-        by magnitude and coloured by time; the fracture planes that slipped. Orbit and zoom. Joining Site in 3D is *not done*.
+        by magnitude and coloured by time; the fracture planes that slipped. Orbit and zoom. Site in 3D draws the stages on 16A and both event clouds (model and catalogue) while the module is open (round 2).
   - [x] **Lenses:**
     - Plan: stage, rate and volume by dial; stresses and friction.
     - Pump: play the schedule; the pressure and the events grow live; a traffic light with its
       response.
     - Read: the r–t plot with the front, Gutenberg–Richter with b, rate against volume with Σ, and
       the Mohr circle with the fractures as points moving to failure.
-  - [ ] **Shared rails:** the time rail plays the stimulation (April 2022 hours) — *not done*: FORGE's rail is its drilling record; the module has its own job clock. The depth cursor shows on 16A.
+  - [x] **Shared rails:** the time rail offers the stimulation beside FORGE's drilling days (a switch on the rail); scrubbing either moves the other. The depth cursor shows on 16A (round 2).
   - [x] **Honesty:** "model" badge; the catalogue-comparison panel says it is not loaded. b carries its ±σ.
 - [x] Verify in the browser (tile and stage); run all checks; record in the study and the source record.
 
@@ -150,7 +150,7 @@ labelled lithology and formation tops (CC BY 4.0, NLOD). No core.
   - [x] **Results:** Vsh, φ, Sw and k tracks redraw live, the pay flags shade, and dragging cutoffs
         on the tracks moves them.
   - [x] **Lenses:** Clay, Porosity, Saturation (Pickett), Pay (cutoffs and Monte Carlo).
-  - [ ] **Shared rails and links:** the depth cursor (hover and pin) is done; a brushed interval and P90/P50/P10 pay feeding Volumetrics' ranges are *not done*.
+  - [x] **Shared rails and links:** the depth cursor (hover and pin); Shift-drag on the tracks brushes an interval that lights its samples on every crossplot; a box dragged on a crossplot picks samples that are marked on the tracks; the interpretation, once edited, is kept and Maps & volumetrics reads that well through it (round 2). P90/P50/P10 pay itself is not fed: Volumetrics draws its own ranges from the wells it reads.
   - [x] **Honesty:** no core, so permeability is labelled as from a correlation. The parameter
         ranges are the user's and shown.
 - [x] Verify; all checks; record in the study.
@@ -188,12 +188,13 @@ horizons faster with that guide.
   - [x] each test fails if the window or dip is wrong.
 - [x] Compute: attribute volumes in the worker, in chunks, cached per attribute, with progress shown.
 - [x] Deck:
-  - [x] **Scene:** attributes in the 3D cube, in their own chair display (inside Horizons and Site in 3D: *not done*) on the inline, crossline and
+  - [x] **Scene:** attributes in the 3D cube, in their own chair display (and, round 2, on Horizons' slices and section and Site in 3D's slices) on the inline, crossline and
         time slices. Co-rendering: amplitude grey with the attribute in colour, opacity by dial.
   - [x] **Interaction:**
     - Choose an attribute by lens: Amplitude, Envelope, Phase, Coherence, Fault likelihood.
     - Sweep a slice and the attribute follows.
-    - Fault sticks snapping to fault likelihood, and horizon tracking on phase: *not done*.
+    - Fault sticks snap to the fault likelihood's ridge within three traces (round 2).
+    - Horizons track on a chosen instantaneous phase, zero crossings included (round 2). Tested: on a peak it tracks as the amplitude does; through a dim, noisy stretch it does no better, so it is not offered as more robust.
   - [x] **Shared rails:** the depth cursor sets the depth slice.
 - [x] Verify; all checks; record.
 
@@ -227,13 +228,14 @@ a download and an OK.
   - [x] APB per annulus from ΔT, fluid expansion and the annulus's elastic compliance over its free
         length (from the top of cement up);
   - [x] bleed-off and build-up;
-  - [ ] a sustained-casing-pressure flag when the pressure builds back above the thermal
-        prediction: *not done* (there is no measured build-up to compare; the panel explains the
-        test).
+  - [x] a sustained-casing-pressure flag when the pressure builds back above the thermal
+        prediction: every bleed-down in an annulus record, the 24 h build-back against heat's,
+        with BSEE's MAWOP and diagnose-above limits (NTL 2009-G01, after API RP 90) (round 2).
 - [x] Tests (core `integrity.test.ts`, deck `integrity.test.ts`):
   - [x] MAASP against a hand-worked annulus;
-  - [ ] APB against a published case (Oudeman) within 10%: *not done*, no published case at hand
-        to quote; the rigid limit and the compliance ordering are tested instead;
+  - [ ] APB against a published case (Oudeman) within 10%: *not done*, no published worked case
+        found to quote. Instead the thin-wall compliance is checked against a thick-wall Lamé
+        solution, worked independently, within 10% for three casing pairs (round 2);
   - [x] a rigid annulus gives the incompressible limit, and a compliant one less;
   - [x] Ramey's limits (no flow, very high rate, at the perforations) and warming with time;
   - [x] each test fails if the governing limit is wrong.
@@ -246,11 +248,72 @@ a download and an OK.
         scene. The annuli are tinted by pressure, not temperature; ΔT is in the gauge.
   - [x] **Readout:** a gauge per annulus with its pressure, MAASP and governing limit, and the
         pressure lane drawing each annulus's column; a drawer with every limit.
-  - [ ] **Shared rails:** *not done*. The start-up has its own clock, not the deck's time rail,
-        and Barriers does not show the annuli yet.
+  - [x] **Shared rails:** the start-up clock is the deck's time on production; the annulus record
+        and the rail scrub each other; on a past date the well runs as its tests had it then.
+        Barriers lists the annuli with MAASP, MAWOP, pressure and the record's verdict (round 2).
   - [x] **Honesty:** design data, assumed packer rating, fluids and heat shares, labelled in the
         panel. Kestrel's temperature is from the design's gradient.
 - [x] Verify; all checks; record.
+
+## Round 2 (17 Oct 2026): the rest, on synthetic data in the industry's formats
+
+The data each feature was missing is generated as a stand-in, in the format the real data comes in,
+so a real file drops in through the same reader (each module has a Load button):
+
+| Stand-in | Format | Generated from | Read by |
+|---|---|---|---|
+| FORGE 16A April 2022 microseismic catalogue | QuakeML 1.2 BED (FDSN), lat/lon WGS84, depth below sea level, Mw | a hidden stimulation model (D 0.11, SHmax N31°E, size exponent 3.25), an assumed geophone array in 58-32 that misses small far events, location and magnitude noise | Stimulation: overlay, comparison, Match to the catalogue |
+| Kestrel A-7 day-30 DTS | LAS 2.0, depth-indexed (DEPT m, TEMP °F), survey rate and time in ~Parameter | Ramey with a hidden rock conductivity (2.05) and gauge noise | Integrity: Calibrate to the survey |
+| Kestrel A-7 annulus pressures, 120 days hourly | LAS 2.0, time-indexed (ETIM h, PA_A/B/C psig) | thermal build-up with hidden heat shares, a diagnostic bleed of B and C on day 45, a leak behind B's cement | Integrity: record, bleed tests, SCP flag; Barriers |
+
+Generated by `apps/deck/tools/make-synthetic.ts` into `packages/fixtures/data/synthetic/`; each
+file says SYNTHETIC in its header. Tests check that each method finds the hidden truth: the match
+recovers SHmax N30°E and D 0.13; the calibration's range holds 2.05 and excludes the assumed 1.4;
+B is flagged and C is not.
+
+The dock: hovering (or focusing) a tool shows a card beside it: a capture of the tool at work, what
+it does, where it works and whether it works here (and what it waits for), the signals it follows
+and sets, what can be dropped on it, and how it opens. The captures are made by
+`tools/capture-tool-previews.mjs`. It goes as soon as the pointer leaves the dock and the card, on
+Esc or a scroll, and has its own close button.
+
+Tiles: one way to make a tile big. "Bring to the stage" and "Spread over the deck" did the same
+thing, so only Expand is left (the button, a double-click on the head, or a click on an open
+module's dock icon; Esc puts it back). Opening a module while another is expanded puts that one
+back first, so nothing opens hidden behind it. Opening never refuses: when no room keeps every
+tile readable, the tiles used longest ago close, and the note says which.
+
+Pages, not layers: Nodal's details (tests, lab and correlations; inputs; valve schedule; tank
+match; annulus limits) used to open as a translucent drawer over the well, and inside it the
+history charts were drawn over the tables. Each now opens as an opaque page in place of the well,
+"Back to the well" (or Esc) returns, and every card keeps its own height, so nothing sits on
+anything else.
+
+## The five-zone frame (17 Oct 2026)
+
+Overlaps kept returning because each module placed things wherever there was room: drawers over
+the well, cards stacked under cards, hint pills over the 3D, a toast over the deck, chart labels
+placed by hand. The fix is structural, not a patch: every rebuilt module is drawn in the same five
+zones (`apps/deck/src/modules/frame/Frame.tsx`), and nothing is positioned over another zone.
+
+| Zone | Holds | Rule |
+|---|---|---|
+| Toolbar | title and context, lenses and tools, key numbers | one line; scrolls sideways before it wraps |
+| Canvas | the object: the well, the 3D, the logs, the section | never covered |
+| Inspector | sections that fold, one open at a time; links to pages | a new feature adds a section, not a card |
+| Strip | one timeline or chart along the rails | optional |
+| Status | notes, hints, sources, one line | replaces toasts and hint pills |
+
+Details open as a page in place of the canvas and inspector, with the way back in its head (and
+Esc). A small tile shows the toolbar and canvas only. Labels follow one rule
+(`modules/frame/labels.ts`, and the 3D scene's label layer): a label that would land on another,
+or under the scene's own panels, is dropped. The deck's notes are a line in its status bar.
+
+On the frame: Nodal, Stimulation, Petrophysics, Attributes, Horizons, Correlation, Well tie,
+Maps & volumetrics. The rest draw a single view and are held to the same rule by the audit.
+
+`tools/audit-overlaps.mjs` opens every module, as a tile and expanded, through every lens, at
+1440 × 1000 and 1280 × 800, and fails on text over text, panels over panels and spills.
 
 ## Order and hand-over
 

@@ -90,7 +90,7 @@ export function CommandBar() {
         </Command.Group>}
         <Command.Group heading="Modules">
           {modules.map((spec) => tiles[spec.id]
-            ? <Command.Item key={spec.id} value={`stage ${spec.title}`} keywords={[spec.blurb, "open", spec.group]} onSelect={run(() => actions.promote(spec.id))}><i />Bring {spec.title} to the stage<kbd>{spec.group} · open</kbd></Command.Item>
+            ? <Command.Item key={spec.id} value={`expand ${spec.title}`} keywords={[spec.blurb, "open", "stage", spec.group]} onSelect={run(() => actions.setFocus(spec.id))}><i />Expand {spec.title} over the deck<kbd>{spec.group} · open</kbd></Command.Item>
             : <Command.Item key={spec.id} value={`open ${spec.title}`} keywords={[spec.blurb, spec.group]} onSelect={run(() => actions.open(spec.id))}><i />Open {spec.title}<kbd>{spec.group}</kbd></Command.Item>)}
         </Command.Group>
         <Command.Group heading="Close">

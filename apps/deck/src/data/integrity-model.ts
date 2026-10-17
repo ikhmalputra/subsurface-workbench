@@ -1,7 +1,8 @@
 import { casingTable, findPipe, pipeRatings, pressureAt, tubingTable, tvdAtMd } from "@ikhmalputra/subsurface-core/well-design";
 import type { WellDesignBrief } from "@ikhmalputra/subsurface-core";
-import { WATER, annulusCompliance, flowingTemperature, maasp, thermalApb } from "@ikhmalputra/subsurface-core/integrity";
-import type { AnnulusInput, RameyInput } from "@ikhmalputra/subsurface-core/integrity";
+import { WATER, annulusCompliance, bleedTests, casingPressureLimits, flowingTemperature, maasp, thermalApb } from "@ikhmalputra/subsurface-core/integrity";
+import type { AnnulusInput, BleedTest, RameyInput } from "@ikhmalputra/subsurface-core/integrity";
+import type { AnnulusRecord } from "./synthetic.ts";
 
 /**
  * A designed well's annuli as integrity management reads them: A between the tubing and the
@@ -61,13 +62,15 @@ export function annuliOf(brief: WellDesignBrief): Annulus[] | string {
 }
 
 /** The production's thermal input: the flowing rate and fluid, the rock, and the depth it comes from. */
-export function rameyOf(brief: WellDesignBrief, liquidStbD: number, waterCut: number, producingMdM: number): RameyInput {
+/** The rock's conductivity Ramey starts from, Btu/(hr·ft·°F): a typical sedimentary value, until a survey calibrates it. */
+export const ASSUMED_CONDUCTIVITY = 1.4;
+export function rameyOf(brief: WellDesignBrief, liquidStbD: number, waterCut: number, producingMdM: number, earthConductivity = ASSUMED_CONDUCTIVITY): RameyInput {
   const g = brief.geology, toF = (cDeg: number) => cDeg * 9 / 5 + 32;
   const sg = 0.85 * (1 - waterCut) + 1.03 * waterCut, lbmPerBbl = 350 * sg;
   return {
     surfaceF: toF(g.surfaceTemperatureC), gradientFPerFt: g.geothermalGradientCPerKm * 1.8 / 3280.84, depthFt: tvdAtMd(brief, producingMdM) * FT,
     massRateLbmS: liquidStbD * lbmPerBbl / 86400, heatCapacity: 0.5 * (1 - waterCut) + 1 * waterCut,
-    earthConductivity: 1.4, earthDiffusivity: 0.04, wellRadiusFt: 0.35,
+    earthConductivity, earthDiffusivity: 0.04, wellRadiusFt: 0.35,
   };
 }
 
@@ -89,4 +92,32 @@ export function annulusPressures(annuli: readonly Annulus[], ramey: RameyInput, 
     const psi = gas ? liftPsig! : Math.max(0, thermal - (bled[a.name] ?? 0));
     return { annulus: a, deltaT, thermal, psi, source: gas ? "lift gas" as const : a.trapped ? "thermal" as const : "vented" as const, ratio: a.maasp.maaspPsi > 0 ? psi / a.maasp.maaspPsi : Infinity };
   });
+}
+
+/** BSEE's limits for each annulus (NTL 2009-G01): MAWOP and the pressure above which it must be diagnosed. */
+export function bseeLimits(annuli: readonly Annulus[], gasLift: boolean) {
+  return annuli.map((a, k) => ({ name: a.name, ...casingPressureLimits({ annulus: a.name, miypPsi: a.input.outerBurstPsi, nextOuterMiypPsi: annuli[k + 1]?.input.outerBurstPsi ?? null, innerCollapsePsi: a.input.innerCollapsePsi, gasLift: a.name === "A" && gasLift }) }));
+}
+
+/** The record's value for an annulus at a time on production (the nearest sample within two hours), psi. */
+export function measuredAt(record: AnnulusRecord, name: string, hours: number): number | null {
+  const series = record.psi[name];
+  if (!series || !record.hours.length) return null;
+  let lo = 0, hi = record.hours.length - 1;
+  while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (record.hours[mid]! <= hours) lo = mid; else hi = mid; }
+  const i = Math.abs(record.hours[lo]! - hours) <= Math.abs(record.hours[hi]! - hours) ? lo : hi;
+  return Math.abs(record.hours[i]! - hours) <= 2 ? series[i] ?? null : null;
+}
+
+/** Each annulus's bleed-downs in the record, judged against the thermal build-up the model gives over the same hours. */
+export function recordTests(annuli: readonly Annulus[], record: AnnulusRecord, ramey: RameyInput): Readonly<Record<string, readonly BleedTest[]>> {
+  const out: Record<string, BleedTest[]> = {};
+  for (const a of annuli) {
+    const series = record.psi[a.name];
+    if (!series) continue;
+    const cache = new Map<number, number>();
+    const thermal = (h: number) => { const key = Math.round(h * 10); let v = cache.get(key); if (v === undefined) { v = annulusPressures([a], ramey, Math.max(0.1, h), null, {})[0]!.thermal; cache.set(key, v); } return v; };
+    out[a.name] = bleedTests(record.hours, series, thermal);
+  }
+  return out;
 }

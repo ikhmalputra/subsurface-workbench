@@ -75,3 +75,23 @@ export function likeliestZone(logs: ForceLogs, zones: readonly Zone[], p: Interp
   for (const z of zones) { const s = interpretZone(samplesIn(logs, z.topMdM, z.baseMdM), p, logs.well.step); const out = payOf(s, p.cutoffs), score = out.column * 1e4 + out.net; if (score > most) { most = score; best = z; } }
   return best;
 }
+
+/**
+ * A zone in one well read through the petrophysicist's interpretation, in the shape Maps &
+ * volumetrics reads: gross and net metres, net-to-gross, net porosity, pore-weighted water
+ * saturation of the net rock, and the pay (Sw under the interpretation's cutoff) with its own Sw.
+ */
+export function zoneThroughInterpretation(logs: ForceLogs, topMdM: number, baseMdM: number, p: Interpretation) {
+  const rows = interpretZone(samplesIn(logs, topMdM, baseMdM), p, logs.well.step);
+  if (!rows.length) return null;
+  let gross = 0, net = 0, phiNet = 0, pore = 0, water = 0, pay = 0, payPore = 0, payWater = 0;
+  for (const r of rows) {
+    if (!Number.isFinite(r.phi) || !Number.isFinite(r.sw) || !Number.isFinite(r.vsh)) continue;
+    gross += r.stepM;
+    if (r.vsh > p.cutoffs.vsh || r.phi < p.cutoffs.phi) continue;
+    net += r.stepM; phiNet += r.phi * r.stepM; pore += r.phi * r.stepM; water += r.phi * Math.min(1, r.sw) * r.stepM;
+    if (r.sw <= p.cutoffs.sw) { pay += r.stepM; payPore += r.phi * r.stepM; payWater += r.phi * r.sw * r.stepM; }
+  }
+  if (!gross) return null;
+  return { grossM: gross, netM: net, ntg: net / gross, porosity: net ? phiNet / net : 0, sw: pore ? water / pore : 1, payM: pay, paySw: payPore ? payWater / payPore : null };
+}

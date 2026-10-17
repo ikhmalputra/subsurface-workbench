@@ -46,9 +46,12 @@ export class LabelLayer {
   }
 
   /** Project every label for this camera; `filter` hides labels a host's own layers have turned off. */
-  place(camera: THREE.Camera, filter?: (label: SceneLabel) => boolean) {
+  place(camera: THREE.Camera, filter?: (label: SceneLabel) => boolean, obstacles: readonly Element[] = []) {
     const width = this.root.clientWidth, height = this.root.clientHeight;
-    const taken: { x0: number; y0: number; x1: number; y1: number }[] = [];
+    // The host's own panels over the view (toolbar, readout, view cube) are taken before any label: none is drawn under them.
+    const origin = this.root.getBoundingClientRect();
+    const taken: { x0: number; y0: number; x1: number; y1: number }[] = obstacles.map((element) => element.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0)
+      .map((r) => ({ x0: r.left - origin.left - 4, y0: r.top - origin.top - 4, x1: r.right - origin.left + 4, y1: r.bottom - origin.top + 4 }));
     const order = [...this.labels].sort((a, b) => b.priority - a.priority);
     for (const label of order) {
       let visible = (filter?.(label) ?? true) && this.inScene(label);
@@ -60,8 +63,9 @@ export class LabelLayer {
           const w = label.element.offsetWidth || 40, h = label.element.offsetHeight || 14;
           const floating = label.kind === "name" || label.kind === "pick";
           const left = floating ? x + Math.min(0, width - 8 - (x + w)) : x;
-          const box = floating ? { x0: left - 2, y0: y - h, x1: left + w + 2, y1: y + 2 } : { x0: x - w / 2, y0: y - h / 2, x1: x + w / 2, y1: y + h / 2 };
-          if (label.kind !== "tick" && taken.some((r) => box.x0 < r.x1 && box.x1 > r.x0 && box.y0 < r.y1 && box.y1 > r.y0)) visible = false;
+          const box = floating ? { x0: left - 2, y0: y - h, x1: left + w + 2, y1: y + 2 } : label.kind === "tick" ? tickBox(label, x, y, w, h) : { x0: x - w / 2, y0: y - h / 2, x1: x + w / 2, y1: y + h / 2 };
+          // Every label, ticks too, gives way to one already placed (placed by priority): nothing is drawn over anything.
+          if (taken.some((r) => box.x0 < r.x1 && box.x1 > r.x0 && box.y0 < r.y1 && box.y1 > r.y0)) visible = false;
           else {
             taken.push(box);
             label.element.style.transform = `translate(${left.toFixed(1)}px, ${y.toFixed(1)}px) ${anchor(label)}`;
@@ -94,6 +98,14 @@ export class LabelLayer {
     for (let object: THREE.Object3D | null = label; object; object = object.parent) if (!object.visible) return false;
     return true;
   }
+}
+
+/** A tick's box on screen, as its anchor places it (see `anchor`). */
+function tickBox(label: SceneLabel, x: number, y: number, w: number, h: number) {
+  const classes = label.element.classList;
+  if (classes.contains("is-depth")) return { x0: x - w - 8, y0: y - h / 2, x1: x - 8, y1: y + h / 2 };
+  if (classes.contains("is-east")) return { x0: x - w / 2, y0: y + 6, x1: x + w / 2, y1: y + 6 + h };
+  return { x0: x + 8, y0: y - h / 2, x1: x + 8 + w, y1: y + h / 2 };
 }
 
 /** Where each kind of label sits against its point: ticks beside their edge, names above-right. */

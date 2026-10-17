@@ -4,16 +4,19 @@ import { forgeNeighbours, forgeSeismicSection, seismicImage, tvdToSeismicDepth }
 import type { SeismicCube } from "@ikhmalputra/subsurface-core";
 import { siteById, useForgeCube, useForgeVolume } from "../data/sites.ts";
 import { useForgeTerrain, withoutFlatGround } from "../data/terrain.ts";
-import { depthColour } from "../data/horizon-model.ts";
+import { depthColour, phaseFromBytes } from "../data/horizon-model.ts";
+import { ATTRIBUTE_MAPS, attributeAsSeismic, useAttributeVolume } from "../data/attribute-volumes.ts";
+import type { AttributeVolume } from "../data/attribute-volumes.ts";
 import type { Polarity } from "../data/horizon-model.ts";
 import { addHorizon, depthsOf, gridOf, removeHorizon, surfaceOf, updateHorizon, useHorizons } from "../data/horizons.ts";
 import type { Horizon } from "../data/horizons.ts";
 import { addFault, addStickPoint, allSticks, faultSurfaceOf, faultsKey, removeFault, stickLinesOf, undoStickPoint, updateFault, useFaults } from "../data/faults.ts";
 import type { Fault } from "../data/faults.ts";
-import { cutOffs, faultAt, faultTrace, throwOf } from "../data/fault-model.ts";
+import { cutOffs, faultAt, faultTrace, snapToRidge, throwOf } from "../data/fault-model.ts";
 import type { SiteFence } from "@ikhmalputra/subsurface-react/3d";
 import { fmt } from "../format.ts";
 import { Loading } from "./Empty.tsx";
+import { Frame, Inspector, Status } from "./frame/Frame.tsx";
 import { useSize } from "./useSize.ts";
 
 /**
@@ -29,6 +32,9 @@ const cut = forgeSeismicSection.subVolume!;
 const SiteScene = lazy(() => import("@ikhmalputra/subsurface-react/3d").then((module) => ({ default: module.SiteScene })));
 type Slices = { readonly inline: number | null; readonly crossline: number | null; readonly depth: number | null };
 type Mode = "horizon" | "fault";
+type Show = "amplitude" | "coherence" | "fault" | "phase";
+const SHOW_LABEL: Readonly<Record<Show, string>> = { amplitude: "Amplitude", coherence: "Coherence", fault: "Fault likelihood", phase: "Phase" };
+const PHASES: readonly { deg: number; label: string }[] = [{ deg: 0, label: "0° peak" }, { deg: 90, label: "+90° zero below" }, { deg: 180, label: "180° trough" }, { deg: -90, label: "−90° zero above" }];
 type Pick = { readonly alongM: number; readonly offsetM: number; readonly depthM: number; readonly slice?: string };
 const toBin = (value: number, from: number) => Math.max(0, Math.round((value - from) / cut.spacingM));
 
@@ -50,10 +56,20 @@ export function Horizons() {
   const [note, setNote] = useState<string | null>(null);
   const current = horizons.find((entry) => entry.id === active) ?? null;
   const fault = faults.find((entry) => entry.id === activeFault) ?? null;
+  // Attributes from the same cube: what the slices and the section show, fault likelihood to snap sticks to, phase to track on.
+  const [show, setShow] = useState<Show>("amplitude");
+  const [snapping, setSnapping] = useState(true);
+  const fl = useAttributeVolume(cube, show === "fault" || (mode === "fault" && snapping) ? "fault" : null);
+  const anyPhase = horizons.some((entry) => entry.on === "phase");
+  const phaseVol = useAttributeVolume(cube, show === "phase" || anyPhase ? "phase" : null);
+  const coh = useAttributeVolume(cube, show === "coherence" ? "coherence" : null);
+  const phase = useMemo(() => phaseVol && cube ? phaseFromBytes(phaseVol.bytes, cube) : undefined, [phaseVol, cube]);
+  const shown: AttributeVolume | null = show === "fault" ? fl : show === "phase" ? phaseVol : show === "coherence" ? coh : null;
+  const seismic = useMemo(() => volume && shown && show !== "amplitude" ? attributeAsSeismic(volume, shown, show) : volume, [volume, shown, show]);
   // Every horizon is tracked against every fault: it stops where one cuts it.
   const sticks = useMemo(() => allSticks(faults), [faults]);
   const stickKey = useMemo(() => faultsKey(faults), [faults]);
-  const grids = useMemo(() => cube ? new Map(horizons.map((entry) => [entry.id, gridOf(entry, cube, sticks, stickKey)])) : new Map<string, Float32Array>(), [horizons, cube, sticks, stickKey]);
+  const grids = useMemo(() => cube ? new Map(horizons.map((entry) => [entry.id, gridOf(entry, cube, sticks, stickKey, phase)])) : new Map<string, Float32Array>(), [horizons, cube, sticks, stickKey, phase]);
   const surfaces = useMemo(() => !site ? [] : [...withoutFlatGround(site.surfaces.filter((surface) => surface.role === "reference"), terrain),
     ...horizons.filter((entry) => entry.visible && grids.has(entry.id)).map((entry) => surfaceOf(entry, grids.get(entry.id)!)).filter((surface) => surface !== null),
     ...faults.filter((entry) => entry.visible).map(faultSurfaceOf).filter((surface) => surface !== null)], [site, horizons, grids, terrain, faults]);
@@ -71,7 +87,10 @@ export function Horizons() {
       if (at.slice && at.slice !== "inline") { setNote("Faults are picked on inlines: click on the inline slice, or on the section."); return; }
       const target = newFault || !fault ? addFault() : fault;
       if (target !== fault) { setActiveFault(target.id); setNewFault(false); }
-      addStickPoint(target.id, o, { a, s });
+      // Onto the fault likelihood's ridge within three traces, if the volume is there and snapping is on.
+      const snapped = snapping && fl && cube ? snapToRidge(fl.bytes, cube, 255, a, o, s) : null;
+      addStickPoint(target.id, o, { a: snapped ? snapped.a : a, s });
+      if (snapping && fl && !snapped) setNote("No fault likelihood ridge within three traces: the point is where you clicked.");
       return;
     }
     const seed = { a: Math.round(a), o, s };
@@ -94,9 +113,27 @@ export function Horizons() {
   if (!site) return null;
   const grid = current ? grids.get(current.id) ?? null : null;
   const range = grid ? depthsOf(grid) : null;
-  return <div className="hz">
-    <header className="tie-bar hz-bar">
-      <span className="tie-title"><b>FORGE PSDM</b></span>
+  const hint = note ?? (mode === "fault" ? (newFault || !fault ? "Click on the fault on the inline slice to start a new fault" : `Adding to ${fault.name}: click down the fault on this inline · move the inline for the next stick · ⌘Z undoes`)
+    : across ? "Click the same reflector on the far side of the fault · Esc to stop"
+    : arming ? `Click a peak or trough on a slice to seed a horizon${horizons.length ? " · Esc to stop" : ""}` : null);
+  const tracking = current ? <>
+    <span className="log-sets" role="group" aria-label="What to follow">
+      <button type="button" aria-pressed={current.polarity === "peak"} onClick={() => updateHorizon(current.id, { polarity: "peak" })}>Peak</button>
+      <button type="button" aria-pressed={current.polarity === "trough"} onClick={() => updateHorizon(current.id, { polarity: "trough" })}>Trough</button>
+    </span>
+    <span className="log-sets" role="group" aria-label="Track on">
+      <button type="button" aria-pressed={current.on !== "phase"} onClick={() => updateHorizon(current.id, { on: "amplitude" })} title="Follow the amplitude's peak or trough">Amplitude</button>
+      <button type="button" aria-pressed={current.on === "phase"} onClick={() => updateHorizon(current.id, { on: "phase", phaseDeg: current.polarity === "trough" ? 180 : 0 })} title="Follow a chosen instantaneous phase: a peak, a trough or a zero crossing">Phase</button>
+    </span>
+    {current.on === "phase" && <label className="hz-check">Phase<select className="hz-select" value={current.phaseDeg ?? 0} aria-label="Phase followed" onChange={(event) => updateHorizon(current.id, { phaseDeg: Number(event.target.value) })}>{PHASES.map((ph) => <option key={ph.deg} value={ph.deg}>{ph.label}</option>)}</select>{!phase && <small> computing…</small>}</label>}
+    <label className="tie-slider">Correlation ≥ <b>{current.minCorrelation.toFixed(2)}</b><input id="hz-correlation" type="range" min={0.4} max={0.95} step={0.01} value={current.minCorrelation} onChange={(event) => updateHorizon(current.id, { minCorrelation: Number(event.target.value) })} /></label>
+    <label className="tie-slider">Step ≤ <b>{current.search * cut.sampleIntervalM} m</b><input id="hz-search" type="range" min={1} max={6} step={1} value={current.search} onChange={(event) => updateHorizon(current.id, { search: Number(event.target.value) })} /></label>
+  </> : <span className="log-sets" role="group" aria-label="What to follow">
+    <button type="button" aria-pressed={polarity === "peak"} onClick={() => setPolarity("peak")}>Peak</button>
+    <button type="button" aria-pressed={polarity === "trough"} onClick={() => setPolarity("trough")}>Trough</button>
+  </span>;
+  return <Frame name="horizons" className="hz" title="FORGE PSDM" subtitle="Horizons and faults, picked by you on the PSDM"
+    tools={<>
       <span className="log-sets hz-mode" role="group" aria-label="What to pick">
         <button type="button" aria-pressed={mode === "horizon"} onClick={() => switchMode("horizon")}>Horizons</button>
         <button type="button" aria-pressed={mode === "fault"} onClick={() => switchMode("fault")}>Faults</button>
@@ -104,42 +141,31 @@ export function Horizons() {
       {mode === "fault" ? <>
         <button type="button" className={`tie-button${newFault ? " is-primary" : ""}`} aria-pressed={newFault} onClick={() => setNewFault((on) => !on)}><Crosshair size={13} aria-hidden="true" />{newFault ? "Click the fault…" : "New fault"}</button>
         <button type="button" className="tie-button" disabled={!fault?.history.length} onClick={() => fault && undoStickPoint(fault.id)} title="Take the last point off (⌘Z)"><Undo2 size={13} aria-hidden="true" />Undo point</button>
-        {fault && <span className="tie-r">{fault.sticks.length}<small>stick{fault.sticks.length === 1 ? "" : "s"} on {fault.name}</small></span>}
+        <label className="hz-check" title="Each point moves onto the ridge of the fault likelihood attribute within three traces"><input type="checkbox" checked={snapping} onChange={(event) => setSnapping(event.target.checked)} /> Snap to fault likelihood{snapping && !fl ? " (computing…)" : ""}</label>
       </> : <>
-      <span className="log-sets" role="group" aria-label="What to follow">
-        <button type="button" aria-pressed={(current?.polarity ?? polarity) === "peak"} onClick={() => current ? updateHorizon(current.id, { polarity: "peak" }) : setPolarity("peak")}>Peak</button>
-        <button type="button" aria-pressed={(current?.polarity ?? polarity) === "trough"} onClick={() => current ? updateHorizon(current.id, { polarity: "trough" }) : setPolarity("trough")}>Trough</button>
-      </span>
-      {current && <label className="tie-slider">Correlation ≥ <b>{current.minCorrelation.toFixed(2)}</b><input id="hz-correlation" type="range" min={0.4} max={0.95} step={0.01} value={current.minCorrelation} onChange={(event) => updateHorizon(current.id, { minCorrelation: Number(event.target.value) })} /></label>}
-      {current && <label className="tie-slider">Step ≤ <b>{current.search * cut.sampleIntervalM} m</b><input id="hz-search" type="range" min={1} max={6} step={1} value={current.search} onChange={(event) => updateHorizon(current.id, { search: Number(event.target.value) })} /></label>}
-      <button type="button" className={`tie-button${arming ? " is-primary" : ""}`} aria-pressed={arming} onClick={() => setArming((on) => !on)}><Crosshair size={13} aria-hidden="true" />{arming ? "Click a reflector…" : "New horizon"}</button>
-      {current && faults.some((entry) => entry.sticks.length) && <button type="button" className={`tie-button${across ? " is-primary" : ""}`} aria-pressed={across} onClick={() => setAcross((on) => !on)} title="Seed the same horizon on the far side of a fault">{across ? "Click it across the fault…" : "Seed across a fault"}</button>}
-      {range && <span className="tie-r is-good">{Math.round(range.coverage * 100)}%<small>tracked</small></span>}
+        <button type="button" className={`tie-button${arming ? " is-primary" : ""}`} aria-pressed={arming} onClick={() => setArming((on) => !on)}><Crosshair size={13} aria-hidden="true" />{arming ? "Click a reflector…" : "New horizon"}</button>
+        {current && faults.some((entry) => entry.sticks.length) && <button type="button" className={`tie-button${across ? " is-primary" : ""}`} aria-pressed={across} onClick={() => setAcross((on) => !on)} title="Seed the same horizon on the far side of a fault">{across ? "Click it across the fault…" : "Seed across a fault"}</button>}
       </>}
-    </header>
-    <div className="tie-stage hz-stage">
-      <section className="tie-3d" aria-label="Horizons and faults in the site" data-arming={arming || across || mode === "fault" || undefined} data-mode={mode}>
-        {volume ? <Suspense fallback={<Loading>Starting the 3D site…</Loading>}>
-          <SiteScene title="FORGE horizons" depthLabel={site.depthLabel} originLabel={site.originLabel} wells={site.wells} surfaces={surfaces}
-            seismic={volume} seismicClip={forgeSeismicSection.section.p99AbsAmplitude} slices={slices} onSlicesChange={(next) => setSlices(next)} onSeismicPick={pick} terrain={terrain} fence={fence} />
-        </Suspense> : <Loading>Loading the PSDM volume…</Loading>}
-        {note ? <p className="hz-hint is-note">{note}</p>
-          : mode === "fault" ? <p className="hz-hint is-fault">{newFault || !fault ? "Click on the fault on the inline slice to start a new fault" : `Adding to ${fault.name}: click down the fault on this inline · move the inline for the next stick · ⌘Z undoes`}</p>
-          : across ? <p className="hz-hint">Click the same reflector on the far side of the fault · Esc to stop</p>
-          : arming && <p className="hz-hint">Click a peak or trough on a slice to seed a horizon{horizons.length ? " · Esc to stop" : ""}</p>}
-      </section>
-      <aside className="tie-side hz-side">
-        <HorizonList horizons={horizons} grids={grids} active={active} onActive={(id) => { setActive(id); if (mode === "fault") switchMode("horizon"); }} />
-        {faults.length > 0 && <FaultList faults={faults} active={mode === "fault" ? activeFault : null} horizon={current} grid={grid} onActive={(id) => { setActiveFault(id); setNewFault(false); if (mode !== "fault") switchMode("fault"); }} />}
-        {cube && grid && current && range && Number.isFinite(range.lo) && <StructureMap horizon={current} grid={grid} slices={slices} faults={faults} />}
-        {cube && <Section cube={cube} offsetM={slices.inline ?? 0} horizons={horizons} grids={grids} active={active} faults={faults} activeFault={mode === "fault" ? activeFault : null} onPick={pick} />}
-      </aside>
-    </div>
-    <p className="petro-note">
-      Seismic: {forgeSeismicSection.attribution} Tracking follows the nearest {current?.polarity ?? polarity} within the step allowed, taking the steps whose waveform (±25 m) correlates best first; where nothing correlates enough, the horizon stops.
-      It is your interpretation, kept in this browser; it is not a mapped surface from FORGE.
-    </p>
-  </div>;
+      <label className="hz-show">Show<select className="hz-select" value={show} onChange={(event) => setShow(event.target.value as Show)} aria-label="What the slices show">{(Object.keys(SHOW_LABEL) as Show[]).map((k) => <option key={k} value={k}>{SHOW_LABEL[k]}</option>)}</select>{show !== "amplitude" && !shown && <small>computing…</small>}</label>
+    </>}
+    numbers={range && mode === "horizon" ? <span><small>Tracked</small><b>{Math.round(range.coverage * 100)}%</b></span> : fault ? <span><small>Sticks</small><b>{fault.sticks.length}</b></span> : undefined}
+    canvas={<section className="tie-3d hz-3d" aria-label="Horizons and faults in the site" data-arming={arming || across || mode === "fault" || undefined} data-mode={mode}>
+      {volume ? <Suspense fallback={<Loading>Starting the 3D site…</Loading>}>
+        <SiteScene title="FORGE horizons" depthLabel={site.depthLabel} originLabel={site.originLabel} wells={site.wells} surfaces={surfaces}
+          seismic={seismic} seismicClip={seismic && seismic !== volume ? 127 * seismic.amplitudePerCount : forgeSeismicSection.section.p99AbsAmplitude} slices={slices} onSlicesChange={(next) => setSlices(next)} onSeismicPick={pick} terrain={terrain} fence={fence} />
+      </Suspense> : <Loading>Loading the PSDM volume…</Loading>}
+    </section>}
+    inspector={<Inspector id={`horizons-${mode}`} initial={mode === "fault" ? "faults" : "horizons"} sections={[
+      { id: "horizons", title: "Horizons", summary: `${horizons.length}${current ? ` · ${current.name}` : ""}`, body: <HorizonList horizons={horizons} grids={grids} active={active} onActive={(id) => { setActive(id); if (mode === "fault") switchMode("horizon"); }} /> },
+      mode === "horizon" && { id: "tracking", title: "Tracking", summary: current ? `${current.on === "phase" ? `phase ${current.phaseDeg ?? 0}°` : current.polarity} · ≥ ${current.minCorrelation.toFixed(2)}` : polarity, body: <div className="hz-tracking">{tracking}</div> },
+      faults.length > 0 && { id: "faults", title: "Faults", summary: `${faults.length}`, body: <FaultList faults={faults} active={mode === "fault" ? activeFault : null} horizon={current} grid={grid} onActive={(id) => { setActiveFault(id); setNewFault(false); if (mode !== "fault") switchMode("fault"); }} /> },
+      cube && grid && current && range && Number.isFinite(range.lo) && { id: "map", title: "Structure map", summary: `${fmt(range.lo)}–${fmt(range.hi)} m`, body: <StructureMap horizon={current} grid={grid} slices={slices} faults={faults} /> },
+    ]} />}
+    strip={cube ? <Section cube={cube} offsetM={slices.inline ?? 0} horizons={horizons} grids={grids} active={active} faults={faults} activeFault={mode === "fault" ? activeFault : null} onPick={pick} overlay={show !== "amplitude" && shown ? { bytes: shown.bytes, map: ATTRIBUTE_MAPS[show]!, label: SHOW_LABEL[show] } : null} /> : undefined}
+    status={<Status items={[
+      hint ? <b className="hz-status-hint">{hint}</b> : !horizons.length ? "No horizons yet: click New horizon, then a reflector on a slice or on the section below" : `${horizons.length} horizon${horizons.length === 1 ? "" : "s"} · ${faults.length} fault${faults.length === 1 ? "" : "s"} · yours, kept in this browser, not a mapped surface from FORGE`,
+      `Seismic: ${forgeSeismicSection.attribution}`,
+    ]} />} />;
 }
 
 function HorizonList({ horizons, grids, active, onActive }: { readonly horizons: readonly Horizon[]; readonly grids: ReadonlyMap<string, Float32Array>; readonly active: string | null; readonly onActive: (id: string) => void }) {
@@ -242,11 +268,12 @@ function StructureMap({ horizon, grid, slices, faults }: { readonly horizon: Hor
 }
 
 /** The inline under the 3D inline slice, with every horizon drawn on it; a click here seeds too. */
-function Section({ cube, offsetM, horizons, grids, active, faults, activeFault, onPick }: {
+function Section({ cube, offsetM, horizons, grids, active, faults, activeFault, onPick, overlay }: {
   readonly cube: SeismicCube; readonly offsetM: number; readonly horizons: readonly Horizon[]; readonly grids: ReadonlyMap<string, Float32Array>; readonly active: string | null;
   readonly faults: readonly Fault[]; readonly activeFault: string | null; readonly onPick: (at: Pick) => void;
+  readonly overlay: { readonly bytes: Uint8Array; readonly map: (t: number) => [number, number, number]; readonly label: string } | null;
 }) {
-  const canvas = useRef<HTMLCanvasElement>(null);
+  const canvas = useRef<HTMLCanvasElement>(null), over = useRef<HTMLCanvasElement>(null);
   const [box, size] = useSize<HTMLDivElement>();
   const o = Math.min(cut.offsetCount - 1, toBin(offsetM, cut.offsetFromM));
   const [top, base] = [80, 400];
@@ -263,15 +290,30 @@ function Section({ cube, offsetM, horizons, grids, active, faults, activeFault, 
     out.data.set(image.data);
     element.getContext("2d")!.putImageData(out, 0, 0);
   }, [cube, o]);
+  // The attribute over the amplitude, one pixel per trace and sample, translucent.
+  useEffect(() => {
+    const element = over.current;
+    if (!element) return;
+    element.width = cut.alongCount; element.height = base - top;
+    const context = element.getContext("2d")!;
+    if (!overlay) { context.clearRect(0, 0, element.width, element.height); return; }
+    const image = context.createImageData(cut.alongCount, base - top);
+    for (let s = top; s < base; s++) for (let a = 0; a < cut.alongCount; a++) {
+      const v = overlay.bytes[(s * cut.offsetCount + o) * cut.alongCount + a]! / 255, [r, g, b] = overlay.map(v), at = ((s - top) * cut.alongCount + a) * 4;
+      image.data[at] = r; image.data[at + 1] = g; image.data[at + 2] = b; image.data[at + 3] = 175;
+    }
+    context.putImageData(image, 0, 0);
+  }, [overlay, o]);
   const x = (a: number) => (a + 0.5) / cut.alongCount * W, y = (s: number) => (s - top) / (base - top) * H;
   return <figure className="hz-section" ref={box}>
-    <figcaption><b>Inline at {fmt(offsetM)} m</b><span>follows the 3D inline slice · click a reflector to seed</span></figcaption>
+    <figcaption><b>Inline at {fmt(offsetM)} m</b><span>{overlay ? `${overlay.label} over the amplitude · ` : ""}follows the 3D inline slice · click a reflector to seed</span></figcaption>
     <div className="hz-section-stage" style={{ height: H }} onClick={(event) => {
       const rect = event.currentTarget.getBoundingClientRect();
       const a = (event.clientX - rect.left) / W * cut.alongCount - 0.5, s = top + (event.clientY - rect.top) / H * (base - top);
       onPick({ alongM: cut.alongFromM + a * cut.spacingM, offsetM, depthM: s * cut.sampleIntervalM - forgeSeismicSection.seismicDatumElevationM + forgeSeismicSection.rkbElevationM, slice: "inline" });
     }}>
       <canvas ref={canvas} style={{ width: W, height: H }} />
+      <canvas ref={over} className="hz-overlay" style={{ width: W, height: H }} />
       <svg width={W} height={H}>
         {horizons.filter((entry) => entry.visible).map((entry) => {
           const grid = grids.get(entry.id);

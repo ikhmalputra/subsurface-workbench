@@ -187,3 +187,27 @@ a:focus-visible { outline: 2px solid var(--signal-depth); outline-offset: 3px; }
 .lp-group > header h3 { display: flex; align-items: center; gap: 10px; }
 .lp-group > header h3::before { content: ""; width: 4px; height: 18px; border-radius: 2px; background: var(--grad); }
 .lp-on em.is-northsea { color: #6ee7b7; background: color-mix(in srgb, #34d399 14%, transparent); }
+
+/* One layout: the five zones, drawn as a frame */
+.lp-zones { display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, 30%); grid-template-rows: auto minmax(220px, 1fr) auto auto; grid-template-areas: "toolbar toolbar" "canvas inspector" "strip strip" "status status"; gap: 10px; padding: 14px; border-radius: 22px; border: 1px solid var(--glass-edge); background: var(--glass); }
+.lp-zone { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--glass-edge); background: color-mix(in srgb, var(--hover) 60%, transparent); }
+.lp-zone b { font-size: 14px; color: var(--ink); }
+.lp-zone span { font-size: 12.5px; color: var(--ink-3); }
+.lp-zone.is-toolbar { grid-area: toolbar; flex-direction: row; align-items: baseline; gap: 12px; }
+.lp-zone.is-canvas { grid-area: canvas; justify-content: flex-end; border-color: color-mix(in srgb, var(--signal-depth) 55%, transparent); background: linear-gradient(160deg, color-mix(in srgb, var(--signal-depth) 18%, transparent), color-mix(in srgb, var(--signal-place) 10%, transparent)); }
+.lp-zone.is-canvas b { font-size: 20px; }
+.lp-zone.is-inspector { grid-area: inspector; gap: 6px; }
+.lp-zone.is-inspector i { font-style: normal; font-size: 12px; color: var(--ink-2); padding: 6px 9px; border-radius: 9px; border: 1px solid var(--glass-edge); }
+.lp-zone.is-inspector i.is-link { color: var(--signal-place); }
+.lp-zone.is-strip { grid-area: strip; flex-direction: row; align-items: baseline; gap: 12px; }
+.lp-zone.is-status { grid-area: status; flex-direction: row; align-items: baseline; gap: 12px; padding: 6px 14px; background: transparent; border-style: dashed; }
+.lp-zone-rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin: 18px 0 0; padding: 0; list-style: none; }
+.lp-zone-rules li { font-size: 14px; line-height: 1.55; color: var(--ink-2); }
+.lp-zone-rules b { color: var(--ink); }
+.lp-formats { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 16px; font-size: 13px; color: var(--ink-3); }
+.lp-formats em { font-style: normal; font-weight: 600; color: var(--ink); padding: 3px 10px; border-radius: 999px; border: 1px solid var(--glass-edge); }
+@media (max-width: 720px) { .lp-zones { grid-template-columns: minmax(0, 1fr); grid-template-areas: "toolbar" "canvas" "inspector" "strip" "status"; } }
+.lp-zone.is-canvas { position: relative; overflow: hidden; min-height: 260px; }
+.lp-zone.is-canvas img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 0% 30%; opacity: .55; }
+.lp-zone.is-canvas b, .lp-zone.is-canvas span { position: relative; text-shadow: 0 1px 8px rgba(0, 0, 0, .8); }
+.lp-zone.is-canvas span { color: var(--ink-2); }
