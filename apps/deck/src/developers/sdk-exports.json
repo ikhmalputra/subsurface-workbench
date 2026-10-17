@@ -1085,6 +1085,48 @@
  },
  {
   "package": "@ikhmalputra/subsurface-core",
+  "entry": "@ikhmalputra/subsurface-core/attributes",
+  "exports": [
+   {
+    "name": "dips",
+    "kind": "function"
+   },
+   {
+    "name": "faultLikelihood",
+    "kind": "function"
+   },
+   {
+    "name": "fft",
+    "kind": "function"
+   },
+   {
+    "name": "instantaneous",
+    "kind": "function"
+   },
+   {
+    "name": "percentile",
+    "kind": "function"
+   },
+   {
+    "name": "perTrace",
+    "kind": "function"
+   },
+   {
+    "name": "rms",
+    "kind": "function"
+   },
+   {
+    "name": "semblance",
+    "kind": "function"
+   },
+   {
+    "name": "toBytes",
+    "kind": "function"
+   }
+  ]
+ },
+ {
+  "package": "@ikhmalputra/subsurface-core",
   "entry": "@ikhmalputra/subsurface-core/contracts",
   "exports": [
    {
@@ -1381,6 +1423,130 @@
  },
  {
   "package": "@ikhmalputra/subsurface-core",
+  "entry": "@ikhmalputra/subsurface-core/induced-seismicity",
+  "exports": [
+   {
+    "name": "bValue",
+    "kind": "function"
+   },
+   {
+    "name": "completeness",
+    "kind": "function"
+   },
+   {
+    "name": "criticalPressure",
+    "kind": "function"
+   },
+   {
+    "name": "erfc",
+    "kind": "function"
+   },
+   {
+    "name": "exceedance",
+    "kind": "function"
+   },
+   {
+    "name": "fractureRadius",
+    "kind": "function"
+   },
+   {
+    "name": "frontDiffusivity",
+    "kind": "function"
+   },
+   {
+    "name": "generateFractures",
+    "kind": "function"
+   },
+   {
+    "name": "jobTimes",
+    "kind": "function"
+   },
+   {
+    "name": "momentMagnitude",
+    "kind": "function"
+   },
+   {
+    "name": "normalOf",
+    "kind": "function"
+   },
+   {
+    "name": "pressureRise",
+    "kind": "function"
+   },
+   {
+    "name": "seededRandom",
+    "kind": "function"
+   },
+   {
+    "name": "seismogenicIndex",
+    "kind": "function"
+   },
+   {
+    "name": "simulateStimulation",
+    "kind": "function"
+   },
+   {
+    "name": "stageRiser",
+    "kind": "function"
+   },
+   {
+    "name": "stressAt",
+    "kind": "function"
+   },
+   {
+    "name": "strikeDipOf",
+    "kind": "function"
+   },
+   {
+    "name": "tractionOn",
+    "kind": "function"
+   },
+   {
+    "name": "trafficLight",
+    "kind": "function"
+   }
+  ]
+ },
+ {
+  "package": "@ikhmalputra/subsurface-core",
+  "entry": "@ikhmalputra/subsurface-core/integrity",
+  "exports": [
+   {
+    "name": "annulusCompliance",
+    "kind": "function"
+   },
+   {
+    "name": "defaultDerating",
+    "kind": "value"
+   },
+   {
+    "name": "flowingTemperature",
+    "kind": "function"
+   },
+   {
+    "name": "maasp",
+    "kind": "function"
+   },
+   {
+    "name": "rameyF",
+    "kind": "function"
+   },
+   {
+    "name": "relaxation",
+    "kind": "function"
+   },
+   {
+    "name": "thermalApb",
+    "kind": "function"
+   },
+   {
+    "name": "WATER",
+    "kind": "value"
+   }
+  ]
+ },
+ {
+  "package": "@ikhmalputra/subsurface-core",
   "entry": "@ikhmalputra/subsurface-core/known",
   "exports": [
    {
@@ -1447,6 +1613,56 @@
    },
    {
     "name": "offsetFromBrief",
+    "kind": "function"
+   }
+  ]
+ },
+ {
+  "package": "@ikhmalputra/subsurface-core",
+  "entry": "@ikhmalputra/subsurface-core/petro-clastic",
+  "exports": [
+   {
+    "name": "effectivePorosity",
+    "kind": "function"
+   },
+   {
+    "name": "interpret",
+    "kind": "function"
+   },
+   {
+    "name": "irreducibleSw",
+    "kind": "function"
+   },
+   {
+    "name": "monteCarloPay",
+    "kind": "function"
+   },
+   {
+    "name": "payOf",
+    "kind": "function"
+   },
+   {
+    "name": "permeability",
+    "kind": "function"
+   },
+   {
+    "name": "pickettFit",
+    "kind": "function"
+   },
+   {
+    "name": "rwAtTemperature",
+    "kind": "function"
+   },
+   {
+    "name": "shaleVolume",
+    "kind": "function"
+   },
+   {
+    "name": "triangular",
+    "kind": "function"
+   },
+   {
+    "name": "waterSaturation",
     "kind": "function"
    }
   ]

@@ -25,15 +25,17 @@ const DISCIPLINES: readonly Discipline[] = [
     { title: "Horizons & faults", icon: Layers, blurb: "Click a reflector on a slice in 3D: it is tracked through FORGE's PSDM into a depth-coloured surface. Pick faults as sticks; the horizon stops at them and shows the throw.", on: ["FORGE"] },
     { title: "Maps & volumetrics", icon: MapIcon, blurb: "Map a reservoir zone between the North Sea wells, set a contact, and get P90, P50 and P10 in-place volumes from the wells' own porosity, net to gross and saturation.", on: ["NorthSea"] },
     { title: "Seismic section", icon: AudioWaveform, blurb: "The PSDM along the well, or the inline and crossline you move in 3D, with the wells and formation tops drawn on it.", on: ["FORGE"] },
+    { title: "Attributes", icon: Layers, blurb: "The FORGE PSDM in a chair display you orbit and sweep: envelope, phase, frequency, RMS, dip-steered coherence and fault likelihood over the amplitude.", on: ["FORGE"] },
     { title: "Section line", icon: Slice, blurb: "Draw a line on the globe: the seismic along it, with every well that passes near.", on: ["FORGE"] },
     { title: "Globe", icon: Globe2, blurb: "Every located well and field on an offline globe; fly to a site or draw a section across it.", on: ["Anywhere"] },
   ] },
   { name: "Petrophysics", line: "What the logs say about the rock and what is in it.", tools: [
     { title: "Logs", icon: ListTree, blurb: "LAS curves on depth tracks: open-hole and mud logs, or files you import. Shift-drag to brush an interval.", on: ["FORGE", "NorthSea", "Recorded", "Equator"] },
-    { title: "Petrophysics", icon: ScatterChart, blurb: "Shale volume, porosity, saturation and pay over the brushed interval; FORGE's granite read three ways, with its fractures.", on: ["FORGE", "Equator"] },
+    { title: "Petrophysics", icon: ScatterChart, blurb: "The North Sea wells read as rock: a virtual core, shaly-sand saturation from a Pickett plot you drag, permeability, and pay as P90/P50/P10. FORGE's granite read three ways, with its fractures.", on: ["FORGE", "NorthSea", "Equator"] },
   ] },
   { name: "Geomechanics & pressure", line: "The stresses and pressures the hole has to stand in.", tools: [
     { title: "Geomechanics", icon: Mountain, blurb: "A 1D mechanical earth model: stresses, collapse and breakdown against the mud used.", on: ["FORGE"] },
+    { title: "Stimulation", icon: Activity, blurb: "Pump FORGE's 2022 stages in 3D: the fracture grows along SHmax, the pressure slips natural fractures, and the events come with their b-value and a traffic light.", on: ["FORGE"] },
     { title: "Pressure window", icon: Layers2, blurb: "Pore pressure, fracture gradient and the mud weights between them. Drag a mud weight to try it.", on: ["Designs"] },
   ] },
   { name: "Drilling", line: "Getting the hole to the target, safely, and what happened on the way.", tools: [
@@ -58,7 +60,7 @@ const DISCIPLINES: readonly Discipline[] = [
   ] },
   { name: "Production", line: "What a field gives back, and how long it will keep giving.", tools: [
     { title: "Decline curves", icon: TrendingDown, blurb: "Arps decline fitted to any of 136 Norwegian fields' monthly production, forecast to an economic limit.", on: ["Anywhere"] },
-    { title: "Nodal analysis", icon: Fuel, blurb: "Black-oil PVT, a Vogel inflow and Beggs & Brill up the real well path: the operating point, the flow pattern up the tubing, and the gas-lift performance curve.", on: ["Designs"] },
+    { title: "Nodal analysis", icon: Fuel, blurb: "The producing well, drawn and flowing: matched to its tests, operated by dial, unloaded valve by valve on gas lift, forecast on the time rail, and its annuli watched against their MAASP as it warms up.", on: ["Designs"] },
   ] },
   { name: "Your data", line: "Bring your own wells in, change existing ones, and set them side by side.", tools: [
     { title: "Well editor", icon: FilePen, blurb: "Record a drilled well (survey, tops, casing, LAS logs) or edit an existing one over its record.", on: ["FORGE", "Recorded", "Equator"] },

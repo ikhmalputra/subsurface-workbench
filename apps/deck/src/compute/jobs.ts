@@ -11,3 +11,5 @@ export const lasFromText = (text: string) => parseLas(text);
 export const segyFromBuffer = (buffer: ArrayBuffer, layout?: typeof forgePsdmVolumeLayout) => parseSegy(buffer, layout ? { layout } : undefined);
 export { geomechanicsRows } from "./geomech.ts";
 export { torqueAndDrag } from "./torque.ts";
+export { stimulate } from "./stimulation.ts";
+export { attribute } from "./attributes.ts";

@@ -154,8 +154,56 @@ Each is a real tool on real data, with no overlap with what is built.
    Next: real tests and production (Volve), multi-well gas allocation (equal slope under a field gas
    limit), operating limits (erosional velocity, heading, sandface below Pb).
 
-Shaly-sand saturation, permeability and Monte Carlo extend the clastic petrophysics, which still
-runs on synthetic logs; FORCE 2020 would give it real ones. Hydraulics with rheology waits for a source with Fann readings.
+12. ~~**Stimulation and induced seismicity**~~ — *built* 17 Oct 2026 on FORGE's April 2022 stages of
+   16A(78)-32 (open hole below 10,787 ft at 50 bpm; perforations at 10,560 and 10,120 ft at 35 bpm;
+   10,054 bbl). 16A's IsoMechPro gradients give Sv, Shmin and pore pressure; the FMI's fracture
+   intensity sets where natural fractures are dense; their sets, SHmax (N25°E, halfway from Shmin to
+   Sv) and friction are assumed and set by dial. Each stage's hydraulic fracture grows along SHmax
+   with the stored volume; pressure diffuses from its faces; a fracture slips when the rise reaches
+   its Coulomb critical pressure (once: the Kaiser effect), its magnitude from its size, so
+   Gutenberg–Richter b ≈ 1 emerges. Read as a monitoring team does: Aki's b, Shapiro's seismogenic
+   index, the triggering front and the exceedance probability, under a traffic light. 3D scene with
+   16A, 16B and 58-32, the Mohr circle with the fractures moving to failure, a job strip. Not yet:
+   FORGE's event catalogue (public on the GDR; needs an OK to download), the time rail and Site in 3D.
+
+13. ~~**Clastic petrophysics on real logs**~~ — *built* 17 Oct 2026 on the 118 FORCE 2020 wells: Vsh
+   (linear or Larionov) between gamma-ray lines from each well's own percentiles, shale-corrected
+   density–neutron porosity (root mean square, right in gas), Archie, Simandoux or Indonesia with Rw
+   from the clean sands' Pickett line (FORCE has no temperature, so at formation temperature),
+   Timur or Coates permeability from a Buckles irreducible saturation, cutoffs to net and pay, and a
+   seeded Monte Carlo over Rw, m, n, Rsh and the cutoffs to P90/P50/P10 with a tornado. The surface
+   is a virtual core (clay, grains, and pores water or hydrocarbon by Sw) beside the logs, with the
+   cutoffs, the gamma-ray lines, the shale point and the Pickett water line all dragged by hand.
+   Troll's Sognefjord in 31/2-7 reads 40 m of gas pay; Sleipner's Utsira, a water sand. No core, so
+   permeability is a correlation and says so.
+
+14. ~~**Seismic attributes**~~ — *built* 17 Oct 2026 on the FORGE PSDM volume (110 × 61 traces, 641
+   samples): envelope, instantaneous phase and frequency from the analytic trace (FFT Hilbert), RMS
+   in a window, local dip from the gradient structure tensor, dip-steered semblance over 3 × 3
+   traces (Marfurt), and fault likelihood thinned to its ridge. Computed in the worker and cached
+   (coherence ≈ 2.4 s once). Shown in a chair display you orbit, with the inline, crossline and
+   depth slices swept by dragging their faces, the attribute in colour over the amplitude, 16A
+   through the cube, Horizons' fault sticks drawn, and the depth cursor setting the depth slice.
+   Not yet: fault sticks snapping to fault likelihood, and horizons tracking on phase.
+
+15. ~~**Well integrity: annulus pressure and MAASP**~~ — *built* 17 Oct 2026 as the living well's
+   Integrity lens, on Kestrel A-7's design (synthetic, labelled). A runs to the packer; B and C run
+   to the inner string's cement, or are open to the formation when the cement sits below the outer
+   shoe. MAASP follows ISO 16530-1: 80% of burst and collapse, the formation at an exposed shoe,
+   and the packer (7,500 psi, assumed), with the binding limit named. Kestrel gives A 4,477 psi
+   (packer), B 4,139 (collapse) and C 3,417 (burst). The flowing temperature comes from Ramey at
+   the operating rate. Each annulus warms by an assumed share of the tubing's rise. The thermal APB
+   is αΔT/(κ + C), with the strings ballooning elastically. The cutaway lights each annulus from
+   green to red against its MAASP. A log clock plays the start-up from 6 minutes to a year. A
+   bleeds while it builds again with further heat, and A holds the lift gas while gas lifting. Not
+   yet:
+   - a check against a published APB case;
+   - the sustained-casing-pressure flag;
+   - the deck's time rail driving the start-up;
+   - Barriers showing the same annuli;
+   - FORGE's measured temperatures (GDR 1421, a download awaiting an OK).
+
+The Equator wells keep the earlier clastic module on their synthetic logs. Hydraulics with rheology waits for a source with Fann readings.
 
 ## 6. Libraries to know
 

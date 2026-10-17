@@ -27,6 +27,8 @@ const files = {
   "./DataModules.tsx": () => import("./DataModules.tsx"),
   "./Decline.tsx": () => import("./Decline.tsx"),
   "./Nodal.tsx": () => import("./Nodal.tsx"),
+  "./Stimulation.tsx": () => import("./Stimulation.tsx"),
+  "./Attributes.tsx": () => import("./Attributes.tsx"),
   "./Designer.tsx": () => import("./Designer.tsx"),
   "./DrillingModules.tsx": () => import("./DrillingModules.tsx"),
   "./EngineeringModules.tsx": () => import("./EngineeringModules.tsx"),
@@ -51,7 +53,7 @@ const views: Readonly<Record<ModuleId, ComponentType>> = {
   logs: view("./DataModules.tsx", "Logs"), seismic: view("./DataModules.tsx", "Seismic"), curtain: view("./Curtain.tsx", "Curtain"), correlate: view("./Correlation.tsx", "Correlation"), tie: view("./WellTie.tsx", "WellTie"), horizons: view("./Horizons.tsx", "Horizons"), volumetrics: view("./Volumetrics.tsx", "Volumetrics"),
   drilling: view("./DrillingModules.tsx", "DrillingRecord"), torquedrag: view("./TorqueDrag.tsx", "TorqueDrag"),
   petro: view("./PetroModule.tsx", "Petrophysics"),
-  strings: view("./StringModule.tsx", "Strings"), window: view("./EngineeringModules.tsx", "PressureWindow"), kick: view("./EngineeringModules.tsx", "KickTolerance"), rig: view("./LiveDrilling.tsx", "LiveDrilling"), cement: view("./EngineeringModules.tsx", "Cement"), hydraulics: view("./EngineeringModules.tsx", "Hydraulics"), geomech: view("./Geomechanics.tsx", "Geomechanics"), barriers: view("./Barriers.tsx", "Barriers"), decline: view("./Decline.tsx", "Decline"), nodal: view("./Nodal.tsx", "Nodal"),
+  strings: view("./StringModule.tsx", "Strings"), window: view("./EngineeringModules.tsx", "PressureWindow"), kick: view("./EngineeringModules.tsx", "KickTolerance"), rig: view("./LiveDrilling.tsx", "LiveDrilling"), cement: view("./EngineeringModules.tsx", "Cement"), hydraulics: view("./EngineeringModules.tsx", "Hydraulics"), geomech: view("./Geomechanics.tsx", "Geomechanics"), stimulation: view("./Stimulation.tsx", "Stimulation"), attributes: view("./Attributes.tsx", "Attributes"), barriers: view("./Barriers.tsx", "Barriers"), decline: view("./Decline.tsx", "Decline"), nodal: view("./Nodal.tsx", "Nodal"),
 };
 
 /**

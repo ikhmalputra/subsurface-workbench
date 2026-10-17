@@ -47,7 +47,7 @@ export function Dial({ label, value, min, max, step, show, onChange, tone = "#f5
 /** Pressure by depth beside the cutaway, on its scale: the tubing, the casing, the reservoir and the gauge. */
 export function PressureLane({ mdMax, lines, points, cursorMdM, onHover, onPin, maxPsi }: {
   readonly mdMax: number;
-  readonly lines: readonly { readonly key: string; readonly pts: readonly { readonly mdM: number; readonly psia: number }[]; readonly className: string; readonly label?: string }[];
+  readonly lines: readonly { readonly key: string; readonly pts: readonly { readonly mdM: number; readonly psia: number }[]; readonly className: string; readonly label?: string; readonly labelAtEnd?: boolean }[];
   readonly points: readonly { readonly key: string; readonly mdM: number; readonly psia: number; readonly className: string; readonly label?: string }[];
   readonly cursorMdM: number | null; readonly onHover: (md: number | null) => void; readonly onPin: (md: number | null) => void; readonly maxPsi?: number;
 }) {
@@ -61,7 +61,9 @@ export function PressureLane({ mdMax, lines, points, cursorMdM, onHover, onPin, 
     <svg width={W} height={H} onPointerMove={(event) => onHover(mdAt(event.clientY, event.currentTarget))} onPointerLeave={() => onHover(null)} onClick={(event) => onPin(mdAt(event.clientY, event.currentTarget))}>
       <text x={10} y={16} className="pw-lane-title">Pressure, psig</text>
       {x.ticks(4).map((t) => <g key={t}><line x1={x(t)} x2={x(t)} y1={d.top} y2={d.bottom} className="nodal-grid" /><text x={x(t)} y={d.top - 6} textAnchor="middle" className="vol-tick">{fmt(t)}</text></g>)}
-      {lines.map((l) => <g key={l.key}><path d={path(l.pts)} className={l.className} />{l.label && l.pts.length > 0 && <text x={Math.min(W - 14, x(l.pts[0]!.psia - 14.7) + 6)} y={d.top + 14 + lines.indexOf(l) * 13} className={`pw-lane-label ${l.className}`}>{l.label}</text>}</g>)}
+      {lines.map((l) => <g key={l.key}><path d={path(l.pts)} className={l.className} />{l.label && l.pts.length > 0 && (l.labelAtEnd
+        ? <text x={x(l.pts.at(-1)!.psia - 14.7) + (x(l.pts.at(-1)!.psia - 14.7) + 70 > W ? -6 : 6)} y={d.y(l.pts.at(-1)!.mdM) + 3.5} textAnchor={x(l.pts.at(-1)!.psia - 14.7) + 70 > W ? "end" : "start"} className={`pw-lane-label ${l.className}`}>{l.label}</text>
+        : <text x={Math.min(W - 14, x(l.pts[0]!.psia - 14.7) + 6)} y={d.top + 14 + lines.indexOf(l) * 13} className={`pw-lane-label ${l.className}`}>{l.label}</text>)}</g>)}
       {points.map((p) => <g key={p.key} transform={`translate(${x(p.psia - 14.7)},${d.y(p.mdM)})`} className={p.className}><circle r={4.5} />{p.label && <text x={-8} y={3.5} textAnchor="end">{p.label}</text>}</g>)}
       {cursorMdM !== null && cursorMdM <= mdMax && <line x1={0} x2={W} y1={d.y(cursorMdM)} y2={d.y(cursorMdM)} className="pw-cursor" />}
     </svg>

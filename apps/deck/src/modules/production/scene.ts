@@ -43,6 +43,8 @@ export interface WellScene {
   readonly gaugeMdM: number | null;
   /** The match lens: the gauge reading and the model there, psia. */
   readonly gauge: { readonly measured: number; readonly model: number | null } | null;
+  /** The integrity lens: each annulus lit by its pressure against its MAASP (ratio 0–1, past 1 is over). */
+  readonly annuli?: readonly { readonly name: string; readonly innerOdIn: number; readonly outerIdIn: number; readonly bottomMdM: number; readonly ratio: number; readonly label: string }[];
 }
 
 /** The casing strings, tubing, packer, perforations and rock from the well design, by MD. */
