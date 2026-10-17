@@ -123,7 +123,8 @@ function Grid({ ghost, onGhost }: { readonly ghost: Ghost | null; readonly onGho
   const element = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 1200, height: 760 });
   const tiles = useDeck((deck) => deck.tiles);
-  const focus = useDeck((deck) => deck.focus);
+  // Focus on a tile that is not open (its place was taken) would hide every tile: drawn as no focus.
+  const focus = useDeck((deck) => deck.focus && deck.tiles[deck.focus] ? deck.focus : null);
   const siteId = useDeck((deck) => deck.siteId);
   const site = siteById(siteId);
   useEffect(() => {

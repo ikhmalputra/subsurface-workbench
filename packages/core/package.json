@@ -90,6 +90,10 @@
     "./simulation": {
       "types": "./dist/simulation.d.ts",
       "import": "./dist/simulation.js"
+    },
+    "./production": {
+      "types": "./dist/production.d.ts",
+      "import": "./dist/production.js"
     }
   },
   "scripts": {

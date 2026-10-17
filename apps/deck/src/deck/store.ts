@@ -151,17 +151,25 @@ function settle(opening: Opening | null, id: ModuleId, from: Origin) {
   const replaced = opening.replaced as ModuleId | null, split = opening.split as ModuleId | null;
   const stage = replaced && replaced === state.stage ? id : state.stage;
   const note = replaced ? `${moduleById[id].title} took the place of ${moduleById[replaced].title}.` : split ? `${moduleById[id].title} shares ${moduleById[split].title}'s room.` : null;
-  set({ tiles: opening.tiles as Tiles, stage, lastUsed: { ...state.lastUsed, [id]: Date.now() }, note: note ? { text: note, at: Date.now() } : state.note });
+  // A focused tile whose place another module took is gone: focus with it, or the deck would hide every tile for one that is not there.
+  const focus = state.focus && !(opening.tiles as Tiles)[state.focus] ? null : state.focus;
+  set({ tiles: opening.tiles as Tiles, stage, focus, lastUsed: { ...state.lastUsed, [id]: Date.now() }, note: note ? { text: note, at: Date.now() } : state.note });
   // A module arriving is told everything at once: the place and whatever else it listens to.
   for (const signal of moduleById[id].listens) if (signal !== "whatif") set({ pulses: [...state.pulses, { id: ++pulseId, signal, from, to: [id], at: performance.now() }] });
 }
 
-/** A module that needs the stage, on a full deck: it takes the stage's tile, which closes. */
+/**
+ * A module that needs the stage, on a full deck: it takes the stage's tile, which closes; when the
+ * stage is too small for it, the largest tile that is big enough.
+ */
 function takeStage(id: ModuleId): Opening | null {
-  const room = state.tiles[state.stage];
   const min = minSizes[id];
-  if (!room || room.w < min.w || room.h < min.h) return null;
-  return { tiles: { ...without(state.tiles, state.stage), [id]: room } as Layout, landed: room, split: null, replaced: state.stage };
+  const fits = (key: string) => { const room = state.tiles[key as ModuleId]; return !!room && room.w >= min.w && room.h >= min.h; };
+  const area = (key: string) => { const room = state.tiles[key as ModuleId]!; return room.w * room.h; };
+  const taken = fits(state.stage) ? state.stage : Object.keys(state.tiles).filter(fits).sort((a, b) => area(b) - area(a))[0] as ModuleId | undefined;
+  if (!taken) return null;
+  const room = state.tiles[taken]!;
+  return { tiles: { ...without(state.tiles, taken), [id]: room } as Layout, landed: room, split: null, replaced: taken };
 }
 
 export const actions = {

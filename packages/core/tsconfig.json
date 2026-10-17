@@ -20,6 +20,7 @@
     "src/gis.ts",
     "src/known.ts",
     "src/hydraulics.ts",
-    "src/simulation.ts"
+    "src/simulation.ts",
+    "src/production.ts"
   ]
 }
