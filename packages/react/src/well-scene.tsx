@@ -783,7 +783,8 @@ export default function WellScene({ design, selectedId, onSelect, layersVisible 
       renderer.render(earth, camera);
       renderer.clearDepth();
       renderer.render(scene, camera);
-      labels.place(camera);
+      // Labels give way to the scene's own panels (toolbar, readout, view cube): none is drawn under them.
+      labels.place(camera, undefined, [...(container.parentElement ?? container).querySelectorAll(".sw-scene-hud, .sw-scene-readout, .sw-viewcube")]);
       setCameraState([...camera.position.toArray(), ...camera.quaternion.toArray()].map((value) => value.toFixed(3)).join(","));
       setTargetState(controls.target.toArray().map((value) => value.toFixed(3)).join(","));
     }

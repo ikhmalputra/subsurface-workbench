@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Pause, Play, RotateCcw } from "lucide-react";
 import { dateToMs, msToDate } from "@ikhmalputra/subsurface-core/records";
 import { useSubsurfaceSelector } from "@ikhmalputra/subsurface-react/state";
@@ -35,6 +35,10 @@ export function TimeRail() {
   const [hover, setHover] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const produced = useTimeline();
+  // At FORGE a module may offer a second timeline (the stimulation); the rail shows it when it appears, and either on request.
+  const [forgeView, setForgeView] = useState<"drilling" | "other">("other");
+  const offered = siteId === "forge" && produced?.siteId === "forge" ? produced.label : null;
+  useEffect(() => { if (offered) setForgeView("other"); }, [offered]);
 
   // Play: one day per step from where the cursor is (or the first report) to rig release.
   useEffect(() => {
@@ -55,6 +59,12 @@ export function TimeRail() {
     return `M0,0 L${points.join(" L")} L100,0 Z`;
   }, []);
 
+  const alternative = siteId === "forge" && produced?.siteId === "forge" ? produced : null;
+  const switcher = alternative ? <span className="rail-switch" role="group" aria-label="Which timeline">
+    <button type="button" aria-pressed={forgeView === "drilling"} onClick={() => setForgeView("drilling")}>Drilling</button>
+    <button type="button" aria-pressed={forgeView === "other"} onClick={() => setForgeView("other")}>{alternative.short ?? alternative.label}</button>
+  </span> : null;
+  if (alternative && forgeView === "other") return <LifeRail line={alternative} cursorMs={cursorMs} switcher={switcher} />;
   if (siteId !== "forge") return produced && produced.siteId === siteId ? <LifeRail line={produced} cursorMs={cursorMs} /> : <div className="rail is-time" data-origin="clock"><span className="rail-label is-time"><i />Time</span><span className="rail-label">{siteId ? "This site has no dated records to replay. A producing well's life appears here once its production is modelled." : "Replays a well's days. Choose Utah FORGE to drive time from here."}</span></div>;
 
   const pct = (day: string) => `${(allDates.indexOf(day) + 0.5) / allDates.length * 100}%`;
@@ -83,6 +93,7 @@ export function TimeRail() {
   const shownHover = hover ? momentOn(hover) : null;
   return <div className="rail is-time" aria-label="Time rail" data-origin="clock">
     <span className="rail-label is-time"><i />Time</span>
+    {switcher}
     <button type="button" className="rail-button" aria-label={playing ? "Pause the replay" : "Replay the well day by day"} title={playing ? "Pause (space)" : "Replay from spud (space)"}
       onClick={() => { if (!playing && (date === null || date === allDates.at(-1))) go(allDates[0]!); setPlaying(!playing); }}>{playing ? <Pause size={13} /> : <Play size={13} />}</button>
     <div className="rail-track time-track" ref={track} role="slider" tabIndex={0} aria-label="Day in the well's history" aria-valuemin={0} aria-valuemax={allDates.length - 1}
@@ -102,26 +113,28 @@ export function TimeRail() {
 }
 
 /** A producing well's life on the rail: history to today, the forecast after; scrub it like the drilling days. */
-function LifeRail({ line, cursorMs }: { readonly line: Timeline; readonly cursorMs: number | null }) {
+function LifeRail({ line, cursorMs, switcher = null }: { readonly line: Timeline; readonly cursorMs: number | null; readonly switcher?: ReactNode }) {
   const track = useRef<HTMLDivElement>(null), dragging = useRef(false);
   const span = line.endMs - line.startMs || 1, pct = (ms: number) => `${Math.max(0, Math.min(100, (ms - line.startMs) / span * 100))}%`;
   const at = (clientX: number) => { const box = track.current!.getBoundingClientRect(); return line.startMs + Math.max(0, Math.min(1, (clientX - box.left) / box.width)) * span; };
-  const set = (ms: number | null) => signals.setTimeCursor(ms === null ? null : Math.round(ms / 86400000) * 86400000, SOURCE);
+  const stepMs = line.stepMs ?? 86400000, describe = line.describe ?? ((ms: number) => `${new Date(ms).toISOString().slice(0, 7)} · ${ms > line.todayMs ? "forecast" : "history"}`);
+  const set = (ms: number | null) => signals.setTimeCursor(ms === null ? null : Math.round(ms / stepMs) * stepMs, SOURCE);
   const area = `M0,100 ${line.profile.map((v, i) => `L${(i / Math.max(1, line.profile.length - 1)) * 100},${100 - v * 92}`).join(" ")} L100,100 Z`;
   const inSpan = cursorMs !== null && cursorMs >= line.startMs && cursorMs <= line.endMs;
   return <div className="rail is-time" aria-label="Time rail" data-origin="clock">
     <span className="rail-label is-time"><i />Time</span>
+    {switcher}
     <div className="rail-track time-track life-track" ref={track} role="slider" tabIndex={0} aria-label={line.label} aria-valuemin={line.startMs} aria-valuemax={line.endMs} aria-valuenow={cursorMs ?? line.todayMs}
       onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); dragging.current = true; set(at(event.clientX)); }}
       onPointerMove={(event) => { if (dragging.current) set(at(event.clientX)); }} onPointerUp={() => { dragging.current = false; }}
-      onKeyDown={(event) => { const now = cursorMs ?? line.todayMs, month = 30.4 * 86400000; if (event.key === "ArrowRight") { event.preventDefault(); set(Math.min(line.endMs, now + month)); } else if (event.key === "ArrowLeft") { event.preventDefault(); set(Math.max(line.startMs, now - month)); } else if (event.key === "Escape") set(null); }}>
+      onKeyDown={(event) => { const now = cursorMs ?? line.todayMs, month = line.stepMs ? (line.endMs - line.startMs) / 100 : 30.4 * 86400000; if (event.key === "ArrowRight") { event.preventDefault(); set(Math.min(line.endMs, now + month)); } else if (event.key === "ArrowLeft") { event.preventDefault(); set(Math.max(line.startMs, now - month)); } else if (event.key === "Escape") set(null); }}>
       <svg className="time-profile life-profile" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d={area} /></svg>
       <span className="life-future" style={{ left: pct(line.todayMs) }} />
       {line.marks.map((mark) => <span key={mark.ms + mark.label} className="time-milestone" style={{ left: pct(mark.ms) }} title={mark.label} />)}
       <span className="time-mark is-today" style={{ left: pct(line.todayMs) }} />
       {inSpan && <span className="time-mark" style={{ left: pct(cursorMs) }} />}
     </div>
-    <span className="rail-value">{inSpan ? <>{new Date(cursorMs).toISOString().slice(0, 7)} · {cursorMs > line.todayMs ? "forecast" : "history"}</> : <>{line.label} · today {new Date(line.todayMs).toISOString().slice(0, 7)}</>}</span>
+    <span className="rail-value">{inSpan ? describe(cursorMs) : line.describe ? line.label : <>{line.label} · today {new Date(line.todayMs).toISOString().slice(0, 7)}</>}</span>
     {inSpan && <button type="button" className="rail-button" aria-label="Back to today" title="Today (Esc)" onClick={() => set(null)}><RotateCcw size={13} /></button>}
   </div>;
 }

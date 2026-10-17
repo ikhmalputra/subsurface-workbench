@@ -1,7 +1,11 @@
-import { lazy, Suspense, useMemo } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { useSubsurfaceSelector } from "@ikhmalputra/subsurface-react/state";
-import { forgeSeismicSection } from "@ikhmalputra/subsurface-core";
-import { siteById, useForgeVolume } from "../data/sites.ts";
+import { forge16aWellheads, forgeSeismicSection } from "@ikhmalputra/subsurface-core";
+import type { SitePointCloud } from "@ikhmalputra/subsurface-react/3d";
+import { useStimulationView } from "../data/stimulation-store.ts";
+import { STAGES_2022 } from "../data/stimulation-model.ts";
+import { siteById, useForgeCube, useForgeVolume } from "../data/sites.ts";
+import { attributeAsSeismic, useAttributeVolume } from "../data/attribute-volumes.ts";
 import { shoes } from "../data/forge.ts";
 import { actions, signals, useDeck } from "../deck/store.ts";
 import { useMoment } from "../data/history.ts";
@@ -52,11 +56,29 @@ export function Site3D() {
     return [...own, ...horizons.filter((entry) => entry.visible).map((entry) => surfaceOf(entry, gridOf(entry, cube, sticks, key))).filter((surface) => surface !== null),
       ...faults.filter((entry) => entry.visible).map(faultSurfaceOf).filter((surface) => surface !== null)];
   }, [site, siteId, seismic.volume, horizons, faults, terrain]);
+  // The stimulation, while its module is open: the stages on 16A and the events, model and catalogue, in the site's frame.
+  const stim = useStimulationView();
+  const atForge = siteId === "forge" && stim !== null;
+  const shift = { e: forge16aWellheads.asBuilt.eastingM - forgeSeismicSection.wellhead.eastingM, n: forge16aWellheads.asBuilt.northingM - forgeSeismicSection.wellhead.northingM, d: forgeSeismicSection.rkbElevationM };
+  const points = useMemo((): SitePointCloud[] | null => !atForge ? null : [
+    { id: "stim-model", label: "Model events", color: "#f59e0b", points: stim.model.map((e) => ({ e: e.x + shift.e, n: e.y + shift.n, d: shift.d - e.z, size: 10 ** (0.3 * (e.mw + 1)), color: e.colour })) },
+    { id: "stim-observed", label: stim.observedLabel ?? "Catalogue", color: "#e2e8f0", opacity: 0.55, points: stim.observed.map((e) => ({ e: e.x + shift.e, n: e.y + shift.n, d: shift.d - e.z, size: 10 ** (0.3 * (e.mw + 1)) })) },
+  ], [atForge, stim, shift.e, shift.n, shift.d]);
+  // Keyed by the stages pumped, not the clock: the wells rebuild the scene, the points do not.
+  const stagesKey = atForge ? stim.stages.map((s) => s.id).join(",") : "";
+  const wells = useMemo(() => !site ? [] : !stagesKey ? site.wells : site.wells.map((well) => well.id !== "forge" ? well : { ...well, intervals: [...(well.intervals ?? []), ...STAGES_2022.filter((s) => stagesKey.split(",").includes(s.id)).map((s) => ({ topMdM: s.topFt * 0.3048, baseMdM: s.baseFt * 0.3048, label: s.label, color: s.colour }))] }), [site, stagesKey]);
+  // At FORGE the slices can show an attribute of the same cube instead of the amplitude.
+  const [show, setShow] = useState<"amplitude" | "coherence" | "fault" | "phase">("amplitude");
+  const { cube } = useForgeCube(siteId === "forge" && show !== "amplitude");
+  const attr = useAttributeVolume(cube, show === "amplitude" ? null : show);
+  const volume = useMemo(() => seismic.volume && attr && show !== "amplitude" ? attributeAsSeismic(seismic.volume, attr, show) : seismic.volume, [seismic.volume, attr, show]);
   if (!site) return null;
   return <Suspense fallback={<Loading>Starting the 3D site…</Loading>}>
-    <SiteScene key={site.map.id} title={`${site.map.label} in 3D`} depthLabel={site.depthLabel} originLabel={site.originLabel} wells={site.wells} surfaces={surfaces} terrain={siteId === "forge" ? terrain : null}
-      seismic={site.hasSeismic ? seismic.volume : null} seismicClip={site.hasSeismic ? forgeSeismicSection.section.p99AbsAmplitude : undefined} seismicNote={site.seismicNote}
+    <SiteScene key={site.map.id} title={`${site.map.label} in 3D`} depthLabel={site.depthLabel} originLabel={site.originLabel} wells={wells} surfaces={surfaces} points={points} terrain={siteId === "forge" ? terrain : null}
+      seismic={site.hasSeismic ? volume : null} seismicClip={site.hasSeismic ? volume && volume !== seismic.volume ? 127 * volume.amplitudePerCount : forgeSeismicSection.section.p99AbsAmplitude : undefined} seismicNote={site.seismicNote}
       selectedWellId={wire.place?.wellId ?? wellId ?? (site.wells.length === 1 ? site.wells[0]!.id : null)} onSelectWell={(id) => actions.selectSite(site.map.id, id, "site3d")} cursor={cursor} reach={reach} hiddenMarkers={hiddenMarkers} highlight={highlight}
-      curtain={curtain} slices={site.hasSeismic ? slices : null} onSlicesChange={(next) => signals.setSeismicSlices({ inline: next.inline, crossline: next.crossline, time_depth: next.depth }, wire.source)} />
+      tools={site.hasSeismic && <label className="sw-site-select s3-show">Slices<select value={show} onChange={(event) => setShow(event.target.value as typeof show)} aria-label="What the seismic slices show">
+      <option value="amplitude">Amplitude</option><option value="coherence">Discontinuity</option><option value="fault">Fault likelihood</option><option value="phase">Phase</option>
+    </select>{show !== "amplitude" && !attr && <small>computing…</small>}</label>} curtain={curtain} slices={site.hasSeismic ? slices : null} onSlicesChange={(next) => signals.setSeismicSlices({ inline: next.inline, crossline: next.crossline, time_depth: next.depth }, wire.source)} />
   </Suspense>;
 }

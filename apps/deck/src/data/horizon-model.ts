@@ -16,6 +16,17 @@ export interface TrackOptions {
   readonly window: number;
   /** The least correlation a step needs. */
   readonly minCorrelation: number;
+  /**
+   * What is followed: the amplitude's peak or trough (waveforms compared by correlation), or a
+   * chosen instantaneous phase, compared by how closely the phase agrees along the window. Phase
+   * can follow what an extremum cannot: a zero crossing (±90°), where the trace changes sign at an
+   * impedance boundary in quadrature, or any phase in between. On a peak or trough it tracks as the
+   * amplitude does; it is not more robust in dim, noisy stretches (the correlation is already blind
+   * to amplitude).
+   */
+  readonly on?: "amplitude" | "phase";
+  /** The phase followed, degrees: 0 a peak, 180 a trough, −90 the zero crossing above a peak, 90 the one below. Default from the polarity. */
+  readonly phaseDeg?: number;
 }
 export const defaultTrack: TrackOptions = { polarity: "peak", search: 3, window: 5, minCorrelation: 0.7 };
 
@@ -67,6 +78,33 @@ class Heap {
   }
 }
 
+/** Instantaneous phase, radians, per sample (the cube's layout), from 0–255 bytes standing for −π…π. */
+export interface PhaseCube { readonly at: (a: number, o: number, s: number) => number }
+export const phaseFromBytes = (bytes: ArrayLike<number>, cube: Pick<SeismicCube, "alongCount" | "offsetCount">): PhaseCube => ({ at: (a, o, s) => bytes[(s * cube.offsetCount + o) * cube.alongCount + a]! / 255 * 2 * Math.PI - Math.PI });
+const wrap = (x: number) => { let v = (x + Math.PI) % (2 * Math.PI); if (v < 0) v += 2 * Math.PI; return v - Math.PI; };
+
+/** The nearest depth within `reach` of `s` where the phase passes through its target (radians), to a fraction of a sample. */
+export function snapPhase(cube: SeismicCube, phase: PhaseCube, a: number, o: number, s: number, target: number, reach = 4): number | null {
+  let best: number | null = null;
+  for (let d = 0; d <= reach; d++) for (const k of d === 0 ? [s] : [s - d, s + d]) {
+    if (k < 0 || k + 1 >= cube.sampleCount) continue;
+    // Phase rises through an event with depth: a crossing is a step from below the target to above it, not across the ±π wrap.
+    const p0 = wrap(phase.at(a, o, k) - target), p1 = wrap(phase.at(a, o, k + 1) - target);
+    if (p0 <= 0 && p1 > 0 && p1 - p0 < Math.PI) { const f = -p0 / (p1 - p0), z = k + f; if (best === null || Math.abs(z - s) < Math.abs(best - s)) best = z; }
+  }
+  return best;
+}
+/** How closely two traces' phase agrees around two depths: the mean cosine of the difference, 1 when identical. */
+function phaseSimilarity(phase: PhaseCube, cube: SeismicCube, a1: number, o1: number, s1: number, a2: number, o2: number, s2: number, half: number): number {
+  let n = 0, sum = 0;
+  for (let k = -half; k <= half; k++) {
+    const p = s1 + k, q = s2 + k;
+    if (p < 0 || q < 0 || p >= cube.sampleCount || q >= cube.sampleCount) continue;
+    sum += Math.cos(phase.at(a1, o1, p) - phase.at(a2, o2, q)); n++;
+  }
+  return n > 2 ? sum / n : 0;
+}
+
 export interface Seed { readonly a: number; readonly o: number; readonly s: number }
 /** Whether a step from one trace to its neighbour, at a depth sample, is barred (e.g. it crosses a fault). */
 export type Barrier = (a: number, o: number, na: number, no: number, s: number) => boolean;
@@ -76,7 +114,10 @@ export type Barrier = (a: number, o: number, na: number, no: number, s: number) 
  * every trace reached, NaN elsewhere. A barrier stops steps across it, so a fault ends the horizon
  * on its side and a seed on the far side carries it on there.
  */
-export function track(cube: SeismicCube, seeds: Seed | readonly Seed[], options: TrackOptions = defaultTrack, barrier?: Barrier): Float32Array {
+export function track(cube: SeismicCube, seeds: Seed | readonly Seed[], options: TrackOptions = defaultTrack, barrier?: Barrier, phase?: PhaseCube): Float32Array {
+  const onPhase = options.on === "phase" && phase !== undefined;
+  const target = (options.phaseDeg ?? (options.polarity === "peak" ? 0 : 180)) * Math.PI / 180;
+  const snapAt = (a: number, o: number, s: number, reach?: number) => onPhase ? snapPhase(cube, phase, a, o, s, target, reach) : snap(cube, a, o, s, options.polarity, reach);
   const grid = new Float32Array(cube.alongCount * cube.offsetCount).fill(NaN);
   const heap = new Heap();
   const offer = (a: number, o: number, s: number) => {
@@ -84,16 +125,16 @@ export function track(cube: SeismicCube, seeds: Seed | readonly Seed[], options:
       const na = a + da, no = o + dof;
       if (na < 0 || no < 0 || na >= cube.alongCount || no >= cube.offsetCount || !Number.isNaN(grid[no * cube.alongCount + na]!)) continue;
       if (barrier?.(a, o, na, no, s)) continue;
-      const found = snap(cube, na, no, Math.round(s), options.polarity, options.search);
+      const found = snapAt(na, no, Math.round(s), options.search);
       if (found === null || Math.abs(found - s) > options.search) continue;
       // Compared at the same rounded place in both traces, moved by the rounded step: rounding each depth
       // on its own would misalign two waveforms either side of a half sample.
-      const score = similarity(cube, a, o, Math.round(s), na, no, Math.round(s) + Math.round(found - s), options.window);
+      const score = onPhase ? phaseSimilarity(phase, cube, a, o, Math.round(s), na, no, Math.round(s) + Math.round(found - s), options.window) : similarity(cube, a, o, Math.round(s), na, no, Math.round(s) + Math.round(found - s), options.window);
       if (score >= options.minCorrelation) heap.push({ score, a: na, o: no, s: found });
     }
   };
   for (const seed of Array.isArray(seeds) ? seeds as readonly Seed[] : [seeds as Seed]) {
-    const start = snap(cube, seed.a, seed.o, Math.round(seed.s), options.polarity);
+    const start = snapAt(seed.a, seed.o, Math.round(seed.s));
     if (start === null || !Number.isNaN(grid[seed.o * cube.alongCount + seed.a]!)) continue;
     grid[seed.o * cube.alongCount + seed.a] = start;
     offer(seed.a, seed.o, start);

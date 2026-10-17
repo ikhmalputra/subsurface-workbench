@@ -15,6 +15,11 @@ export interface Timeline {
   /** A profile to draw, 0–1 (e.g. oil rate), at evenly spaced times across the span. */
   readonly profile: readonly number[];
   readonly marks: readonly { readonly ms: number; readonly label: string }[];
+  /** What the cursor snaps to (a day unless said), and how a time on it reads (a month unless said). */
+  readonly stepMs?: number;
+  readonly describe?: (ms: number) => string;
+  /** The rail's name for this timeline beside another the site has (FORGE: its drilling days). */
+  readonly short?: string;
 }
 let current: Timeline | null = null;
 const listeners = new Set<() => void>();

@@ -115,3 +115,20 @@ export function faultTrace(grid: ArrayLike<number>, alongCount: number, offsetCo
   if (line.length > 1) lines.push(line);
   return lines;
 }
+
+/**
+ * A stick point moved onto the fault: the trace within `reach` of where it was clicked, along the
+ * inline at that depth, where the fault likelihood peaks, refined between traces by a parabola. It
+ * stays where it was when nothing there reads as a fault (the peak under `least`, 0–1).
+ */
+export function snapToRidge(likelihood: ArrayLike<number>, dims: { readonly alongCount: number; readonly offsetCount: number; readonly sampleCount: number }, scale: number, a: number, o: number, s: number, reach = 3, least = 0.35): { readonly a: number; readonly value: number } | null {
+  const si = Math.round(s), ai = Math.round(a);
+  if (si < 0 || si >= dims.sampleCount || o < 0 || o >= dims.offsetCount) return null;
+  const at = (aa: number) => aa < 0 || aa >= dims.alongCount ? -Infinity : likelihood[(si * dims.offsetCount + o) * dims.alongCount + aa]! / scale;
+  let best = ai, value = -Infinity;
+  for (let d = -reach; d <= reach; d++) { const v = at(ai + d); if (v > value || (v === value && Math.abs(d) < Math.abs(best - ai))) { value = v; best = ai + d; } }
+  if (!(value >= least)) return null;
+  const y0 = at(best - 1), y2 = at(best + 1), curve = y0 - 2 * value + y2;
+  const shift = Number.isFinite(y0) && Number.isFinite(y2) && curve < 0 ? Math.max(-0.5, Math.min(0.5, (y0 - y2) / (2 * curve))) : 0;
+  return { a: best + shift, value };
+}

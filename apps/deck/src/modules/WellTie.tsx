@@ -12,6 +12,7 @@ import { bestFit, correlation, impedance, onSeismic, placed, reflectivity, synth
 import type { Fit } from "../data/tie-model.ts";
 import { fmt } from "../format.ts";
 import { Loading } from "./Empty.tsx";
+import { Frame, Inspector, Status } from "./frame/Frame.tsx";
 import { useSize } from "./useSize.ts";
 import { useWire } from "./wire.ts";
 
@@ -98,40 +99,43 @@ export function WellTie() {
   const contact = { depth: placed(logs.depth[step.k]!, logs.depth[0]!, fit), md: logs.md[step.k]! };
   // The synthetic as the site draws it: down 58-32 at each log MD moved by the tie, full colour at its 75th percentile, so the ordinary swings read as strongly as the seismic's.
   const pScale = Array.from(syn, Math.abs).filter(Number.isFinite).sort((x, y) => x - y)[Math.floor(syn.length * 0.75)] || 1;
-  return <div className="tie">
-    <header className="tie-bar">
-      <span className="tie-title"><b>Well tie · 58-32 (MU-ESW1)</b><small>sonic and density across the granite contact, inside the PSDM volume</small></span>
-      <label className="tie-slider">Wavelet <b>{hz} Hz</b><input id="tie-hz" type="range" min={10} max={50} step={1} value={hz} onChange={(event) => setHz(Number(event.target.value))} /></label>
-      <span className="log-sets" role="group" aria-label="Polarity">
-        <button type="button" aria-pressed={polarity === 1} title="An increase in impedance is a peak" onClick={() => setPolarity(1)}>Normal</button>
-        <button type="button" aria-pressed={polarity === -1} title="An increase in impedance is a trough" onClick={() => setPolarity(-1)}>Reversed</button>
-      </span>
-      <span className="tie-fit">Shift <b>{fit.shiftM > 0 ? "+" : ""}{fmt(fit.shiftM, 1)} m</b> · stretch <b>{fmt((fit.stretch - 1) * 100, 1)}%</b></span>
+  const quality = !Number.isFinite(r) ? "none" : r >= 0.5 ? "good" : r >= 0.3 ? "fair" : "poor";
+  return <Frame name="tie" className="tie" title="Well tie · 58-32 (MU-ESW1)" subtitle="sonic and density across the granite contact, inside the PSDM volume"
+    tools={<>
       <button type="button" className="tie-button is-primary" onClick={fitHere} disabled={!inWindow} title="Search 15 m and 3% either side of where the synthetic is now"><Crosshair size={13} aria-hidden="true" />Fit here</button>
       <button type="button" className="tie-button" onClick={() => setFit({ shiftM: 0, stretch: 1 })}><RotateCcw size={13} aria-hidden="true" />Untie</button>
-      <span className={`tie-r is-${!Number.isFinite(r) ? "none" : r >= 0.5 ? "good" : r >= 0.3 ? "fair" : "poor"}`} title="Correlation of the synthetic with the PSDM at the well, inside the tie window">r {Number.isFinite(r) ? r.toFixed(2) : "–"}{lastFit !== null && <small>fitted</small>}</span>
-    </header>
-    <div className="tie-stage">
+    </>}
+    numbers={<>
+      <span className={`tie-r is-${quality}`} title="Correlation of the synthetic with the PSDM at the well, inside the tie window"><small>r{lastFit !== null ? " · fitted" : ""}</small><b>{Number.isFinite(r) ? r.toFixed(2) : "–"}</b></span>
+      <span><small>Shift</small><b>{fit.shiftM > 0 ? "+" : ""}{fmt(fit.shiftM, 1)} m</b></span>
+      <span><small>Stretch</small><b>{fmt((fit.stretch - 1) * 100, 1)}%</b></span>
+    </>}
+    canvas={<div className="tie-split">
       <section className="tie-3d" aria-label="The tie in the site">
         {site && volume ? <TieScene site={site} volume={volume} logs={logs} syn={syn} pScale={pScale} fit={fit} windowM={window_} hoverMd={hoverMd} />
           : <Loading>Loading the PSDM volume…</Loading>}
       </section>
-      <aside className="tie-side">
-        <div className="tie-side-top">
-          {site && <PlanInset site={site} />}
-          {scan && <Scan scan={scan} fit={fit} onShift={(shiftM) => setFit({ ...fit, shiftM })} />}
-        </div>
-        <div className="tie-body">
-          {cubeLoading || !traces ? <Loading>Loading the PSDM volume…</Loading>
-            : <Panel logs={logs} syn={syn} fit={fit} onFit={setFit} traces={traces} at={at} windowM={window_} onWindow={setWindow} wire={wire} contact={contact} onHoverMd={setHoverMd} />}
-        </div>
-      </aside>
-    </div>
-    <p className="petro-note">
-      Logs: {file?.source}; sonic and density binned to 0.5 m, outliers (cycle skips, casing) left out. Seismic: {forgeSeismicSection.attribution}
-      {" "}The PSDM&apos;s velocities are the processor&apos;s, not tied to check-shots or sonic, so a mis-tie of tens of metres is expected; the correlation curve shows every shift that would also fit. Zero-phase Ricker wavelet; reflectivity at normal incidence; time from the sonic alone.
-    </p>
-  </div>;
+      <div className="tie-body">
+        {cubeLoading || !traces ? <Loading>Loading the PSDM volume…</Loading>
+          : <Panel logs={logs} syn={syn} fit={fit} onFit={setFit} traces={traces} at={at} windowM={window_} onWindow={setWindow} wire={wire} contact={contact} onHoverMd={setHoverMd} />}
+      </div>
+    </div>}
+    inspector={<Inspector id="tie" initial="scan" sections={[
+      scan && { id: "scan", title: "Correlation against shift", summary: `r ${Number.isFinite(r) ? r.toFixed(2) : "–"}`, body: <Scan scan={scan} fit={fit} onShift={(shiftM) => setFit({ ...fit, shiftM })} /> },
+      { id: "wavelet", title: "Wavelet and polarity", summary: `${hz} Hz · ${polarity === 1 ? "normal" : "reversed"}`, body: <>
+        <label className="tie-slider">Wavelet <b>{hz} Hz</b><input id="tie-hz" type="range" min={10} max={50} step={1} value={hz} onChange={(event) => setHz(Number(event.target.value))} /></label>
+        <span className="log-sets" role="group" aria-label="Polarity">
+          <button type="button" aria-pressed={polarity === 1} title="An increase in impedance is a peak" onClick={() => setPolarity(1)}>Normal</button>
+          <button type="button" aria-pressed={polarity === -1} title="An increase in impedance is a trough" onClick={() => setPolarity(-1)}>Reversed</button>
+        </span>
+      </> },
+      site && { id: "where", title: "Where the well is", body: <PlanInset site={site} /> },
+      { id: "sources", title: "Sources and caveats", body: <p className="nodal-hint">Logs: {file?.source}; sonic and density binned to 0.5 m, outliers (cycle skips, casing) left out. Seismic: {forgeSeismicSection.attribution} The PSDM&apos;s velocities are the processor&apos;s, not tied to check-shots or sonic, so a mis-tie of tens of metres is expected; the correlation curve shows every shift that would also fit. Zero-phase Ricker wavelet; reflectivity at normal incidence; time from the sonic alone.</p> },
+    ]} />}
+    status={<Status items={[
+      "Drag the synthetic to shift it · drag the ruler to set the tie window · ⇧ drag to pan · Fit here searches 15 m and 3% around it",
+      "The PSDM's velocities are the processor's, untied to check-shots: a mis-tie of tens of metres is expected",
+    ]} />} />;
 }
 
 const SiteScene = lazy(() => import("@ikhmalputra/subsurface-react/3d").then((module) => ({ default: module.SiteScene })));
@@ -363,7 +367,10 @@ function Panel({ logs, syn, fit, onFit, traces, at, windowM, onWindow, wire, con
 }
 
 function Ruler({ y, height, md }: { readonly y: ReturnType<typeof scaleLinear<number, number>>; readonly height: number; readonly md: (depth: number) => number }) {
-  const ticks = y.ticks(Math.max(4, Math.floor(height / 60)));
+  // Ticks only below the head: none is drawn under the ruler's own title.
+  // Each tick carries two lines (TVD over the well's MD): keep them 30 px apart so neither lands on the next.
+  const ticks: number[] = [];
+  for (const tick of y.ticks(Math.max(4, Math.floor(height / 60)))) if (y(tick) > HEAD + 10 && (!ticks.length || Math.abs(y(tick) - y(ticks.at(-1)!)) >= 30)) ticks.push(tick);
   return <g className="tie-ruler">
     <rect className="tie-ruler-hit" x={0} y={HEAD} width={RULER} height={height - HEAD - 8} />
     <text x={RULER - 6} y={13} textAnchor="end" className="tie-th">PSDM depth</text>

@@ -12,6 +12,10 @@ import casingSource from "./examples/CheckCasing.tsx?raw";
 import { LinkedLogs } from "./examples/LinkedLogs.tsx";
 import linkedSource from "./examples/LinkedLogs.tsx?raw";
 import cutawaySource from "./examples/Cutaway3D.tsx?raw";
+import { Catalogue } from "./examples/Catalogue.tsx";
+import catalogueSource from "./examples/Catalogue.tsx?raw";
+import { main as annulusMain } from "./examples/annulus.ts";
+import annulusSource from "./examples/annulus.ts?raw";
 import linkViewsSource from "./guides/LinkViews.tsx?raw";
 import yourDataSource from "./guides/yourData.ts?raw";
 import serverSource from "./guides/server.ts?raw";
@@ -32,10 +36,12 @@ const coreEntries = reference.filter((entry) => entry.package.endsWith("core"));
 const reactEntries = reference.filter((entry) => entry.package.endsWith("react"));
 const unique = (entries: readonly Entry[]) => new Set(entries.flatMap((entry) => entry.exports.map((item) => item.name))).size;
 
-function SurveyConsole() {
-  const lines = useMemo(() => { const out: string[] = []; surveyMain((line) => out.push(line)); return out; }, []);
-  return <div className="ex-console" role="log" aria-label="Output of main()"><span className="ex-prompt">$ node survey.ts</span>{lines.map((line, index) => <span key={index}>{line}</span>)}</div>;
+function Console({ file, main }: { readonly file: string; readonly main: (print: (line: string) => void) => void }) {
+  const lines = useMemo(() => { const out: string[] = []; main((line) => out.push(line)); return out; }, [main]);
+  return <div className="ex-console" role="log" aria-label="Output of main()"><span className="ex-prompt">$ node {file}</span>{lines.map((line, index) => <span key={index}>{line}</span>)}</div>;
 }
+const SurveyConsole = () => <Console file="survey.ts" main={surveyMain} />;
+const AnnulusConsole = () => <Console file="annulus.ts" main={annulusMain} />;
 
 interface Example { readonly id: string; readonly title: string; readonly blurb: string; readonly file: string; readonly source: string; readonly uses: readonly string[]; readonly Result: ComponentType }
 const EXAMPLES: readonly Example[] = [
@@ -51,6 +57,12 @@ const EXAMPLES: readonly Example[] = [
   { id: "linked", title: "Link real data by depth", file: "LinkedLogs.tsx", source: linkedSource, Result: LinkedLogs,
     blurb: "FORGE 16A(78)-32’s published mud log (LAS) beside its as-built construction. One depth link: hover or zoom either view and the other follows, feet and metres converted at the edge.",
     uses: ["subsurface-core", "subsurface-core/records", "subsurface-react/2d", "subsurface-react/state"] },
+  { id: "catalogue", title: "Read a microseismic catalogue", file: "Catalogue.tsx", source: catalogueSource, Result: Catalogue,
+    blurb: "A QuakeML 1.2 catalogue, the format ObsPy and the GDR exchange, read into events; then completeness, Gutenberg–Richter b by maximum likelihood, and a traffic light whose thresholds you drag.",
+    uses: ["subsurface-core/quakeml", "subsurface-core/induced-seismicity"] },
+  { id: "annulus", title: "Screen an annulus", file: "annulus.ts", source: annulusSource, Result: AnnulusConsole,
+    blurb: "MAASP and the limit that sets it (ISO 16530-1), BSEE's MAWOP, the pressure heat builds in trapped fluid, and a bleed-down judged for sustained casing pressure. Core only: it runs in Node.",
+    uses: ["subsurface-core/integrity"] },
   { id: "cutaway", title: "Cut a well open in 3D", file: "Cutaway3D.tsx", source: cutawaySource, Result: () => <Suspense fallback={<p className="ex-readout"><Loader2 size={14} className="dv-spin" /> Loading the 3D engine…</p>}><Cutaway3D /></Suspense>,
     blurb: "The design as modelled parts: casing, cement, tubing, the safety valve, built from the package’s Blender models. Orbit it, select a part, explode it. WebGPU with a WebGL 2 fallback.",
     uses: ["subsurface-core/well-design", "subsurface-react/assembly-three"] },
@@ -98,8 +110,8 @@ const THEME = `<!-- Built in: light by default, or dark, or high-contrast, on an
 }`;
 
 const LAYERS = [
-  { icon: Database, title: "Your data", body: "Surveys, LAS logs, SEG-Y, casing tallies, daily reports, production months: files and records you already have.", chips: ["LAS 2.0", "SEG-Y", "GeoJSON", "GeoTIFF", "JSON contracts"] },
-  { icon: Braces, title: "subsurface-core", body: "Validates it, and computes on it. Framework-free TypeScript; runs in the browser, Node or a worker.", chips: ["trajectory", "well-design", "records", "seismic", "contracts", "units", "state"] },
+  { icon: Database, title: "Your data", body: "Surveys, LAS logs and time series, SEG-Y, QuakeML catalogues, casing tallies, daily reports, production months: files and records you already have.", chips: ["LAS 2.0", "SEG-Y", "QuakeML 1.2", "GeoJSON", "GeoTIFF", "JSON contracts"] },
+  { icon: Braces, title: "subsurface-core", body: "Validates it, and computes on it. Framework-free TypeScript; runs in the browser, Node or a worker.", chips: ["trajectory", "well-design", "records", "seismic", "production", "petro-clastic", "attributes", "induced-seismicity", "integrity", "quakeml", "state"] },
   { icon: Layers3, title: "subsurface-react", body: "Draws it: depth tracks, schematics, plots, the seismic section, 3D scenes and the globe. Every view is controlled.", chips: ["2d", "3d", "gis", "records", "trajectory", "seismic"] },
   { icon: Box, title: "Your app", body: "Owns selection, fetching and persistence, links views through one store, and decides where the data lives.", chips: ["your state", "your storage", "your API"] },
 ];
@@ -212,7 +224,7 @@ export function Developers() {
         <div><dt>2</dt><dd>packages: core (data and calculations) and react (views)</dd></div>
         <div><dt>{reference.length}</dt><dd>entry points, import only what you use</dd></div>
         <div><dt>{unique(coreEntries) + unique(reactEntries)}</dt><dd>exports, every one listed below</dd></div>
-        <div><dt>28</dt><dd>deck modules built on them</dd></div>
+        <div><dt>34</dt><dd>deck modules built on them</dd></div>
       </dl>
     </header>
 
@@ -227,7 +239,7 @@ export function Developers() {
 
     <section className="lp-section" id="fit" aria-labelledby="fit-title">
       <div className="lp-head"><p className="lp-eyebrow">How it fits</p><h2 id="fit-title">Data in, calculations in the middle, views out, your app around it</h2>
-        <p>The deck at <a href={DECK}>/deck/</a> is one app built this way: 28 modules over the same two packages you install.</p></div>
+        <p>The deck at <a href={DECK}>/deck/</a> is one app built this way: 34 modules over the same two packages you install.</p></div>
       <ol className="dv-layers">{LAYERS.map((layer, index) => <li key={layer.title} className="dv-layer">
         <layer.icon size={20} aria-hidden="true" />
         <h3>{layer.title}</h3><p>{layer.body}</p>
@@ -251,7 +263,7 @@ export function Developers() {
         <article className="dv-guide"><div><h3>Allow WebAssembly in your CSP</h3><p>The models are meshopt-compressed glTF; the decoder is WebAssembly. JavaScript <code>eval</code> stays blocked.</p></div><Code source={CSP} label="HTTP header" language="sh" /></article>
         <article className="dv-guide"><div><h3>Theme the views</h3><p>Views read CSS variables, so they sit in your design. Three themes are built in; override any variable to match your own.</p></div><Code source={THEME} label="theme" language="css" /></article>
         <article className="dv-guide"><div><h3>Link views through one store</h3><p>One depth, one well, one selection, shared by any number of views, inside React or out of it.</p></div><Code source={linkViewsSource} label="LinkViews.tsx" /></article>
-        <article className="dv-guide"><div><h3>Bring your own data</h3><p>Validators turn untrusted JSON into typed snapshots or a precise error; parsers read LAS and SEG-Y files.</p></div><Code source={yourDataSource} label="yourData.ts" /></article>
+        <article className="dv-guide"><div><h3>Bring your own data</h3><p>Validators turn untrusted JSON into typed snapshots or a precise error; readers take LAS, SEG-Y and QuakeML, and writers give LAS and QuakeML back.</p></div><Code source={yourDataSource} label="yourData.ts" /></article>
         <article className="dv-guide"><div><h3>Run it on a server</h3><p>Core has no DOM and no React: screen a design in a Node script, a queue worker or an API route.</p></div><Code source={serverSource} label="server.ts" /></article>
       </div>
     </section>

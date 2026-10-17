@@ -336,6 +336,10 @@
     "kind": "value"
    },
    {
+    "name": "formatLas",
+    "kind": "function"
+   },
+   {
     "name": "formatOd",
     "kind": "function"
    },
@@ -1516,6 +1520,18 @@
     "kind": "function"
    },
    {
+    "name": "bleedTests",
+    "kind": "function"
+   },
+   {
+    "name": "calibrateConductivity",
+    "kind": "function"
+   },
+   {
+    "name": "casingPressureLimits",
+    "kind": "function"
+   },
+   {
     "name": "defaultDerating",
     "kind": "value"
    },
@@ -1859,6 +1875,20 @@
  },
  {
   "package": "@ikhmalputra/subsurface-core",
+  "entry": "@ikhmalputra/subsurface-core/quakeml",
+  "exports": [
+   {
+    "name": "readQuakeML",
+    "kind": "function"
+   },
+   {
+    "name": "writeQuakeML",
+    "kind": "function"
+   }
+  ]
+ },
+ {
+  "package": "@ikhmalputra/subsurface-core",
   "entry": "@ikhmalputra/subsurface-core/records",
   "exports": [
    {
@@ -1876,6 +1906,10 @@
    {
     "name": "forgeOperations",
     "kind": "value"
+   },
+   {
+    "name": "formatLas",
+    "kind": "function"
    },
    {
     "name": "historySpan",

@@ -223,9 +223,24 @@ export const actions = {
     set({ tiles: swap(state.tiles, state.stage, id), stage: id, lastUsed: { ...state.lastUsed, [id]: Date.now() } });
   },
   open(id: ModuleId, from: Origin = "bar") {
+    // A module opened while another is spread over the deck: the spread one goes back first, so the new one is not hidden behind it.
+    if (state.focus && state.focus !== id) set({ focus: null });
     if (state.tiles[id]) { pulse("place", from); if (moduleById[id].opensFocused) actions.setFocus(id); return; }
-    const opening = planOpen(state.tiles as Layout, id, minSizes, moduleById[id].size, state.stage, state.lastUsed as Record<string, number>);
-    settle(opening ?? (moduleById[id].opensOnStage || moduleById[id].opensFocused ? takeStage(id) : null), id, from);
+    let opening = planOpen(state.tiles as Layout, id, minSizes, moduleById[id].size, state.stage, state.lastUsed as Record<string, number>)
+      ?? (moduleById[id].opensOnStage || moduleById[id].opensFocused ? takeStage(id) : null);
+    // Still no room that keeps every tile readable: close the tiles used longest ago, one at a time, until it fits. Opening never fails.
+    const closed: ModuleId[] = [];
+    if (!opening) {
+      let tiles = state.tiles as Layout;
+      for (const other of openIds().sort((a, b) => (state.lastUsed[a] ?? 0) - (state.lastUsed[b] ?? 0))) {
+        tiles = without(tiles, other); closed.push(other);
+        opening = planOpen(tiles, id, minSizes, moduleById[id].size, closed.includes(state.stage) ? null : state.stage, state.lastUsed as Record<string, number>);
+        if (opening) break;
+      }
+      if (opening && closed.includes(state.stage)) set({ stage: id });
+    }
+    settle(opening, id, from);
+    if (closed.length && state.tiles[id]) set({ note: { text: `${moduleById[id].title} needed room: ${closed.map((c) => moduleById[c].title).join(" and ")} closed. Reopen ${closed.length === 1 ? "it" : "them"} from the dock.`, at: Date.now() } });
     if (moduleById[id].opensOnStage && state.tiles[id]) actions.promote(id);
     if (moduleById[id].opensFocused && state.tiles[id]) actions.setFocus(id);
   },

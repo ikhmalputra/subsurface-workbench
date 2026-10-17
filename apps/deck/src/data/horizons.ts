@@ -5,7 +5,7 @@ import type { SiteSceneSurface } from "@ikhmalputra/subsurface-react/3d";
 import { depthColour, track } from "./horizon-model.ts";
 import { crosses } from "./fault-model.ts";
 import type { Stick } from "./fault-model.ts";
-import type { Polarity } from "./horizon-model.ts";
+import type { PhaseCube, Polarity } from "./horizon-model.ts";
 
 /**
  * Horizons the user picks on the FORGE PSDM. A horizon is its seed and its tracking settings, kept in
@@ -24,6 +24,9 @@ export interface Horizon {
   readonly more?: readonly { readonly a: number; readonly o: number; readonly s: number }[];
   readonly minCorrelation: number;
   readonly search: number;
+  /** Followed on the amplitude's extremum, or on a phase (degrees) of the instantaneous phase. */
+  readonly on?: "amplitude" | "phase";
+  readonly phaseDeg?: number;
   readonly visible: boolean;
   readonly createdAt: number;
 }
@@ -37,7 +40,7 @@ function readHorizon(value: unknown): Horizon | null {
   const h = value as Partial<Horizon> | null;
   if (!h || typeof h.id !== "string" || !seedOk(h.seed)) return null;
   return { id: h.id, name: typeof h.name === "string" ? h.name : "Horizon", colour: typeof h.colour === "string" ? h.colour : COLOURS[0]!, polarity: h.polarity === "trough" ? "trough" : "peak", seed: h.seed,
-    ...(Array.isArray(h.more) ? { more: h.more.filter(seedOk) } : {}), minCorrelation: finite(h.minCorrelation) ? h.minCorrelation : 0.7, search: finite(h.search) ? h.search : 3, visible: h.visible !== false, createdAt: finite(h.createdAt) ? h.createdAt : 0 };
+    ...(Array.isArray(h.more) ? { more: h.more.filter(seedOk) } : {}), minCorrelation: finite(h.minCorrelation) ? h.minCorrelation : 0.7, search: finite(h.search) ? h.search : 3, ...(h.on === "phase" ? { on: "phase" as const, phaseDeg: finite(h.phaseDeg) ? h.phaseDeg : 0 } : {}), visible: h.visible !== false, createdAt: finite(h.createdAt) ? h.createdAt : 0 };
 }
 let horizons: readonly Horizon[] = (() => { try { const value = JSON.parse(localStorage.getItem(KEY) ?? "[]") as unknown; return Array.isArray(value) ? value.map(readHorizon).filter((h): h is Horizon => h !== null) : []; } catch { return []; } })();
 const listeners = new Set<() => void>();
@@ -65,13 +68,15 @@ export const forgeCube = (counts: Int8Array): SeismicCube => ({ counts, alongCou
 /** Tracked grids, by the settings and the faults that make them. */
 const grids = new Map<string, Float32Array>();
 /** A horizon tracked through the cube, stopping at any of the faults given (their sticks; `faultKey` names them for the cache). */
-export function gridOf(horizon: Horizon, cube: SeismicCube, faults: readonly (readonly Stick[])[] = [], faultKey = ""): Float32Array {
+export function gridOf(horizon: Horizon, cube: SeismicCube, faults: readonly (readonly Stick[])[] = [], faultKey = "", phase?: PhaseCube): Float32Array {
   const seeds = [horizon.seed, ...(horizon.more ?? [])];
-  const key = `${seeds.map((seed) => `${seed.a},${seed.o},${seed.s}`).join(";")}/${horizon.polarity},${horizon.minCorrelation},${horizon.search}/${faultKey}`;
+  // On phase only once the phase volume is there; until then the amplitude, under its own key.
+  const onPhase = horizon.on === "phase" && phase !== undefined;
+  const key = `${seeds.map((seed) => `${seed.a},${seed.o},${seed.s}`).join(";")}/${horizon.polarity},${horizon.minCorrelation},${horizon.search}${onPhase ? `,phase${horizon.phaseDeg ?? 0}` : ""}/${faultKey}`;
   let grid = grids.get(key);
   if (!grid) {
     const barrier = faults.length ? (a: number, o: number, na: number, no: number, s: number) => faults.some((sticks) => crosses(sticks, a, o, na, no, s)) : undefined;
-    grid = track(cube, seeds, { polarity: horizon.polarity, search: horizon.search, window: 5, minCorrelation: horizon.minCorrelation }, barrier);
+    grid = track(cube, seeds, { polarity: horizon.polarity, search: horizon.search, window: 5, minCorrelation: horizon.minCorrelation, ...(onPhase ? { on: "phase" as const, phaseDeg: horizon.phaseDeg ?? 0 } : {}) }, barrier, onPhase ? phase : undefined);
     if (grids.size > 64) grids.clear();
     grids.set(key, grid);
   }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useEffectEvent, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { uniform } from "three/tsl";
@@ -136,6 +136,19 @@ export interface SiteSceneProps {
   readonly legend?: boolean;
   /** The surface brought forward: drawn solid with its label and contours while every other is faint. */
   readonly focusSurfaceId?: string | null;
+  /** The host's own controls, placed in the scene's toolbar rather than over the view. */
+  readonly tools?: ReactNode;
+  /** Point clouds in the site's frame (e.g. microseismic events): each point a sphere sized relative to the wells' markers. */
+  readonly points?: readonly SitePointCloud[] | null;
+}
+
+export interface SitePointCloud {
+  readonly id: string;
+  readonly label: string;
+  /** East, north and depth (site metres), a size (1 is a well marker's), and an optional colour per point. */
+  readonly points: readonly { readonly e: number; readonly n: number; readonly d: number; readonly size: number; readonly color?: string }[];
+  readonly color: string;
+  readonly opacity?: number;
 }
 
 export interface SiteFence {
@@ -247,7 +260,7 @@ function groundImage(url: string): Promise<HTMLImageElement> {
   return image;
 }
 
-export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = [], seismic = null, seismicClip, seismicNote, selectedWellId = null, onSelectWell, cursor = null, reach = null, hiddenMarkers = null, highlight = null, slices: given = null, onSlicesChange, curtain = null, ribbon = null, frame: opening = null, onSeismicPick, terrain = null, fence = null, initialExaggeration = 1, legend = true, focusSurfaceId = null }: SiteSceneProps) {
+export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = [], seismic = null, seismicClip, seismicNote, selectedWellId = null, onSelectWell, cursor = null, reach = null, hiddenMarkers = null, highlight = null, slices: given = null, onSlicesChange, curtain = null, ribbon = null, frame: opening = null, onSeismicPick, terrain = null, fence = null, initialExaggeration = 1, legend = true, focusSurfaceId = null, points = null, tools = null }: SiteSceneProps) {
   const host = useRef<HTMLDivElement>(null);
   const ids = useId();
   const [ready, setReady] = useState(false);
@@ -305,6 +318,7 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
     ribbon(band: SiteSceneProps["ribbon"]): void;
     fence(wall: SiteSceneProps["fence"]): void;
     focusSurface(id: string | null): void;
+    points(clouds: SiteSceneProps["points"]): void;
   } | null>(null);
   const openingRef = useRef(opening);
   /** Where the user left the camera: a rebuild (a new surface, a renamed horizon) keeps it rather than flying back to the opening view. */
@@ -659,6 +673,37 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
       scene.add(group);
       invalidate();
     };
+    // ── Point clouds: instanced spheres, one draw per cloud ─────────────────────────────────
+    let pointGroup: THREE.Group | null = null;
+    let pointLabels: ReturnType<typeof label>[] = [];
+    const pointSphere = keep(new THREE.SphereGeometry(1, 12, 8));
+    const drawPoints = (clouds: SiteSceneProps["points"]) => {
+      if (pointGroup) { scene.remove(pointGroup); pointGroup.traverse((item) => { if (item instanceof THREE.InstancedMesh) { (item.material as THREE.Material).dispose(); item.dispose(); } }); pointGroup = null; }
+      for (const entry of pointLabels) labels.remove(entry);
+      pointLabels = [];
+      if (!clouds?.length) { invalidate(); return; }
+      const group = new THREE.Group(), matrix = new THREE.Matrix4(), colour = new THREE.Color();
+      for (const cloud of clouds) {
+        if (!cloud.points.length) continue;
+        const mesh = new THREE.InstancedMesh(pointSphere, new THREE.MeshBasicMaterial({ color: "#ffffff", transparent: (cloud.opacity ?? 1) < 1, opacity: cloud.opacity ?? 1, depthWrite: (cloud.opacity ?? 1) >= 1 }), cloud.points.length);
+        let sum = new THREE.Vector3();
+        cloud.points.forEach((p, i) => {
+          const at3 = at(p.e, p.n, p.d), r = radius * 1.35 * Math.max(0.3, p.size);
+          matrix.makeScale(r, r, r).setPosition(at3);
+          mesh.setMatrixAt(i, matrix);
+          mesh.setColorAt(i, colour.set(p.color ?? cloud.color));
+          sum = sum.add(at3);
+        });
+        mesh.instanceMatrix.needsUpdate = true;
+        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+        mesh.renderOrder = 9;
+        group.add(mesh);
+        pointLabels.push(label(`${cloud.label} · ${cloud.points.length}`, sum.multiplyScalar(1 / cloud.points.length), "pick", 2, { colour: cloud.color }));
+      }
+      pointGroup = group;
+      scene.add(group);
+      invalidate();
+    };
     // ── The linked depth cursor: one ring, moved along whichever well it is on ─────────────
     const cursorColour = token("--sw-cursor", "#1d4ed8");
     const cursorRing = new THREE.Mesh(keep(new THREE.TorusGeometry(radius * 3.4, radius * 0.7, 10, 32)), keep(new THREE.MeshBasicMaterial({ color: cursorColour, depthTest: false, transparent: true })));
@@ -742,7 +787,7 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
       labels.place(view, (entry) => {
         const layer = entry.options.layer as keyof Layers | undefined;
         return layerState.labels && (!layer || layerState[layer]) && (entry.kind !== "pick" || entry.options.owner === selected || wells.length === 1);
-      });
+      }, [...stage.querySelectorAll(".sw-site-hud, .sw-site-readout, .sw-viewcube")]);
     }
     function draw() {
       frame = 0;
@@ -1007,6 +1052,7 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
       },
       ribbon(band) { ribbonBand = band; drawRibbon(); },
       fence(wall) { drawFence(wall); },
+      points(clouds) { drawPoints(clouds); },
       focusSurface(id) {
         const known = id !== null && surfaceParts.has(id);
         for (const [key, part] of surfaceParts) {
@@ -1080,6 +1126,7 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
   useEffect(() => { if (ready) engine.current?.highlight(highlight); }, [ready, highlight?.wellId, highlight?.topMdM, highlight?.baseMdM, highlight?.color]);
   useEffect(() => { if (ready) engine.current?.ribbon(ribbon); }, [ready, ribbon]);
   useEffect(() => { if (ready) engine.current?.fence(fence); }, [ready, fence]);
+  useEffect(() => { if (ready) engine.current?.points(points); }, [ready, points]);
   useEffect(() => { if (ready) engine.current?.focusSurface(focusSurfaceId); }, [ready, focusSurfaceId]);
   const reachKey = `${reach ? Object.entries(reach).map(([id, md]) => `${id}:${md}`).join("|") : ""}/${hiddenMarkers ? Object.entries(hiddenMarkers).map(([id, labels]) => `${id}:${labels.join(",")}`).join("|") : ""}`;
   useEffect(() => { if (ready) engine.current?.reach(reachRef.current.reach, reachRef.current.hiddenMarkers); }, [ready, reachKey]);
@@ -1102,6 +1149,7 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
           {references.length > 0 && <CommandButton kind="selection" aria-pressed={layers.reference} onClick={() => toggle("reference")}>Datum levels</CommandButton>}
           <CommandButton kind="selection" aria-pressed={layers.labels} onClick={() => toggle("labels")}>Labels</CommandButton>
         </span>
+        {tools}
         <label className="sw-site-select">Vertical ×<select value={exaggeration} onChange={(event) => setExaggeration(Number(event.target.value))}>{[...new Set([1, 2, 3, 5, 10, initialExaggeration])].sort((a, b) => a - b).map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
       </div>
       <SceneViewKeys labels={COMPASS_FACES} onView={(named) => engine.current?.look(named)} />

@@ -1,14 +1,22 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
-import { Pause, Play, RotateCcw } from "lucide-react";
+import { FileUp, Pause, Play, RotateCcw, Wand2 } from "lucide-react";
 import { scaleLinear } from "d3-scale";
 import { bValue, completeness, exceedance, fractureRadius, frontDiffusivity, seismogenicIndex, stageRiser, stressAt, trafficLight } from "@ikhmalputra/subsurface-core/induced-seismicity";
 import type { Fracture, PressureModel, SeismicEvent, Stage } from "@ikhmalputra/subsurface-core/induced-seismicity";
+import { useSubsurfaceSelector } from "@ikhmalputra/subsurface-react/state";
 import { useForgeOpenHole } from "../data/openhole.ts";
-import { STAGES_2022, defaultStimulation, neighbours, pointAt, stageColour, stimulationJob, well16a } from "../data/stimulation-model.ts";
+import { loadOwn, useCatalogue } from "../data/standard-files.ts";
+import { JOB_START_ISO } from "../data/synthetic.ts";
+import type { ObservedCatalogue, ObservedEvent } from "../data/synthetic.ts";
+import { stimulationView } from "../data/stimulation-store.ts";
+import { signals } from "../deck/store.ts";
+import { timeline } from "../deck/timeline.ts";
+import { STAGES_2022, cloudAxis, defaultStimulation, neighbours, pointAt, stageColour, stimulationJob, well16a } from "../data/stimulation-model.ts";
 import type { PathPoint, StimulationInputs } from "../data/stimulation-model.ts";
 import { compute } from "../compute/run.ts";
 import { Dial } from "./production/controls.tsx";
+import { Frame, Inspector, Status } from "./frame/Frame.tsx";
 import { fmt } from "../format.ts";
 import { useSize } from "./useSize.ts";
 import { useWire } from "./wire.ts";
@@ -59,6 +67,47 @@ export function Stimulation() {
     return () => cancelAnimationFrame(frame);
   }, [clock.playing]);
   const t = timeAt(clock.u);
+  /** The clock position of a job time: inside a stage's window, or the end of the window before it. */
+  const uAt = (tt: number) => { let acc = 0; for (const w of windows) { if (tt < w.from) return acc / span; if (tt <= w.to) return (acc + tt - w.from) / span; acc += w.to - w.from; } return 1; };
+
+  // ---- the catalogue: QuakeML, the synthetic stand-in until FORGE's is loaded ----
+  const catalogue = useCatalogue();
+  const observed = catalogue.value;
+  const seen = useMemo(() => observed ? observed.events.filter((e) => e.tS <= t) : [], [observed, t]);
+  const [matching, setMatching] = useState<string | null>(null);
+
+  // ---- the deck's time rail: the job on it, scrubbed there or here ----
+  const jobStart = Date.parse(JOB_START_ISO);
+  const cursorMs = useSubsurfaceSelector(signals, (state) => state.time?.cursorMs ?? null);
+  const wrote = useRef<number | null>(null), driven = useRef(false);
+  const first = windows[0]?.from ?? 0, last = windows.at(-1)?.to ?? 0;
+  useEffect(() => {
+    if (!windows.length) return;
+    const all = result?.value.events ?? [], bins = 160, counts = Array.from({ length: bins }, () => 0);
+    for (const e of all) counts[Math.min(bins - 1, Math.max(0, Math.floor((e.tS - first) / (last - first) * bins)))]! += 1;
+    const top = Math.max(1, ...counts);
+    timeline.set({
+      siteId: "forge", label: "Stimulation, April 2022", short: "Stimulation", startMs: jobStart + first * 1000, endMs: jobStart + last * 1000, todayMs: jobStart + last * 1000, stepMs: 60000,
+      profile: counts.map((c) => Math.sqrt(c / top)), marks: windows.map((w) => ({ ms: jobStart + w.stage.startS * 1000, label: w.stage.label })),
+      describe: (ms) => `${new Date(ms).toISOString().slice(5, 16).replace("T", " ")} UTC · ${hours((ms - jobStart) / 1000)} into the job`,
+    });
+  }, [windows, result, jobStart, first, last]);
+  useEffect(() => () => { if (timeline.get()?.siteId === "forge") timeline.set(null); stimulationView.set(null); }, []);
+  // From the rail: a cursor inside the job moves the clock here (unless it is the one this module wrote).
+  useEffect(() => {
+    if (cursorMs === null || cursorMs === wrote.current || !windows.length) return;
+    const tt = (cursorMs - jobStart) / 1000;
+    if (tt >= first && tt <= last) setClock((c) => ({ ...c, u: uAt(tt), playing: false }));
+  }, [cursorMs]); 
+  // To the rail: once the clock has been moved here, the cursor follows it, a few times a second.
+  useEffect(() => {
+    if (!driven.current) return;
+    const ms = Math.round((jobStart + t * 1000) / 1000) * 1000;
+    if (ms === wrote.current) return;
+    const timer = window.setTimeout(() => { wrote.current = ms; signals.setTimeCursor(ms, "deck:stimulation"); }, 90);
+    return () => window.clearTimeout(timer);
+  }, [t, jobStart]);
+  const drive = (patch: Partial<typeof clock>) => { driven.current = true; setClock((c) => ({ ...c, ...patch })); };
 
   const value = result?.value ?? null;
   const events = useMemo(() => (value?.events ?? []).filter((e) => e.tS <= t), [value, t]);
@@ -74,62 +123,143 @@ export function Stimulation() {
   const amberAt = firstOver(inputs.amber), redAt = firstOver(inputs.red);
   const pRed = sigma !== null && b ? exceedance(sigma, b.b, inputs.red, Math.max(0, planned - pumped)) : null;
 
+  useEffect(() => {
+    stimulationView.set({
+      tS: t, model: events.map((e) => ({ x: e.x, y: e.y, z: e.z, mw: e.mw, colour: stageColour(e.stage) })), observed: seen.map((e) => ({ x: e.x, y: e.y, z: e.z, mw: e.mw })),
+      observedLabel: observed ? observed.synthetic ? "Catalogue (synthetic QuakeML)" : `Catalogue (${observed.name})` : null,
+      stages: STAGES_2022.filter((s) => inputs.stages[s.id]).map((s) => ({ id: s.id, label: s.label, colour: s.colour, topMdM: s.topFt * 0.3048, baseMdM: s.baseFt * 0.3048 })),
+    });
+  }, [events, seen, observed, t, inputs.stages]);
+
+  /**
+   * Match the model to the catalogue as a monitoring team would: SHmax from the cloud's long axis in
+   * plan, then the diffusivity whose model front reads like the catalogue's front (stage 1, the same
+   * envelope fit on both), from runs at eight diffusivities in the worker.
+   */
+  const match = async () => {
+    if (!observed || !openHole || !stages.length) return;
+    const s1 = stages.find((s) => s.id === "1") ?? stages[0]!;
+    const axis = cloudAxis(aboutStages(observed.events, stages));
+    const frontOf = (list: readonly { tS: number; x: number; y: number; z: number }[]) => frontDiffusivity(list.filter((e) => e.tS >= s1.startS && e.tS <= s1.endS * 11).map((e) => ({ tS: e.tS - s1.startS, r: Math.hypot(e.x - s1.center.x, e.y - s1.center.y, e.z - s1.center.z) })));
+    const target = frontOf(observed.events);
+    if (!Number.isFinite(target)) { setMatching("The catalogue has too few events at stage 1 to read a front."); return; }
+    const azimuth = axis ? Math.round(axis.azimuthDeg / 5) * 5 : inputs.shmaxAzimuthDeg;
+    const candidates = [0.015, 0.025, 0.04, 0.06, 0.09, 0.13, 0.19, 0.28];
+    let best = { d: inputs.diffusivity, miss: Infinity, front: NaN };
+    for (const [i, d] of candidates.entries()) {
+      setMatching(`Running the model at D = ${d} m²/s (${i + 1} of ${candidates.length})…`);
+      const run = await compute("stimulate", stimulationJob(openHole.las, { ...inputs, diffusivity: d, shmaxAzimuthDeg: azimuth }));
+      const front = frontOf(run.events), miss = Math.abs(Math.log(front / target));
+      if (Number.isFinite(miss) && miss < best.miss) best = { d, miss, front };
+    }
+    set({ diffusivity: best.d, shmaxAzimuthDeg: azimuth });
+    setMatching(`Matched: SHmax N${azimuth}°E from the long axis of each stage's cloud${axis ? ` (${axis.elongation.toFixed(1)}× longer than wide)` : ""}; D ${best.d} m²/s, whose model front (${best.front.toFixed(3)}) reads closest to the catalogue's (${target.toFixed(3)}).`);
+  };
+
   if (error) return <p className="hz-empty">The FORGE logs did not load: {error}</p>;
   const model: PressureModel | null = job ? job.model : null;
 
-  return <div className="st" data-lens={lens}>
-    <header className="pw-bar">
-      <span className="pw-title"><b>Stimulation · FORGE 16A(78)-32</b><small>April 2022 schedule, 16A&apos;s stresses and fracture intensity · {busy ? "computing…" : `${fmt(all.length)} events in the model`}</small></span>
-      <span className="pw-lenses" role="tablist" aria-label="Lens">
-        {(["plan", "pump", "read"] as const).map((l) => <button key={l} type="button" role="tab" aria-selected={lens === l} onClick={() => setLens(l)}>{l === "plan" ? "Plan" : l === "pump" ? "Pump" : "Read"}</button>)}
-      </span>
-      <span className="pw-badge" title="The model's events, not FORGE's catalogue: the Geo-Energie Suisse catalogue is public on the GDR but not downloaded yet">Model<small>catalogue not loaded</small></span>
-      <span className={`st-light is-${light.light}`} title={light.response}><i /><span><b>{light.light}</b><small>max Mw {Number.isFinite(maxMw) ? maxMw.toFixed(1) : "–"}</small></span></span>
-    </header>
-    <div className="st-stage">
-      <Scene result={value} events={events} stages={stages} model={model} t={t} lens={lens} inputs={inputs} cursorMdM={wire.cursor} onPin={wire.pin} />
-      <aside className="pw-side">
-        {lens === "plan" && <PlanSide inputs={inputs} set={set} result={value} model={model} stages={stages} t={t} />}
-        {lens === "pump" && <>
-          <div className="pw-unload">
-            <button type="button" className="rail-button" aria-label={clock.playing ? "Pause" : "Pump"} onClick={() => setClock((c) => ({ ...c, u: c.u >= 1 ? 0 : c.u, playing: !c.playing }))}>{clock.playing ? <Pause size={13} /> : <Play size={13} />}</button>
-            <input type="range" min={0} max={1} step={0.001} value={clock.u} aria-label="Job time" onChange={(event) => setClock((c) => ({ ...c, u: Number(event.target.value), playing: false }))} />
-            <button type="button" className="rail-button" aria-label="Speed" onClick={() => setClock((c) => ({ ...c, speed: c.speed >= 4 ? 1 : c.speed * 2 }))}>{clock.speed}×</button>
-          </div>
-          <div className="pw-facts">
-            <span><small>Pumped</small><b>{fmt(Math.round(pumped / 0.158987))}</b><em>bbl of {fmt(Math.round(planned / 0.158987))}</em></span>
-            <span><small>Events</small><b>{fmt(events.length)}</b><em>Mc {Number.isFinite(mc) ? mc.toFixed(1) : "–"}</em></span>
-            <span><small>b-value</small><b>{b ? b.b.toFixed(2) : "–"}</b><em>{b ? `± ${b.sigma.toFixed(2)}, ${b.n} events` : "needs 30 events"}</em></span>
-            <span><small>Seismogenic index</small><b>{sigma !== null ? sigma.toFixed(1) : "–"}</b><em>Σ, Shapiro</em></span>
-          </div>
-          <p className={`st-response is-${light.light}`}><b>{light.response}</b>{redAt ? ` · red at ${hours(redAt.tS)} into the job (${stageLabel(redAt.stage)})` : amberAt ? ` · amber at ${hours(amberAt.tS)} (${stageLabel(amberAt.stage)})` : " · the model stays green"}
-            {pRed !== null && ` · P(Mw ≥ ${inputs.red} in the volume still to pump) ${(pRed * 100).toFixed(pRed < 0.1 ? 1 : 0)}%`}</p>
-          <div className="pw-dials">
-            <Dial label="Rate, × reported" value={inputs.rateScale} min={0.25} max={2} step={0.05} tone="#f59e0b" show={(v) => v.toFixed(2)} onChange={(rateScale) => set({ rateScale })} />
-            <Dial label="Diffusivity, m²/s" value={Math.log10(inputs.diffusivity)} min={-3} max={0} step={0.05} tone="#38bdf8" show={(v) => (10 ** v).toFixed(v < -1.5 ? 3 : 2)} onChange={(v) => set({ diffusivity: 10 ** v })} />
-            <Dial label="Amber at Mw" value={inputs.amber} min={-0.5} max={2.5} step={0.1} tone="#fbbf24" show={(v) => v.toFixed(1)} onChange={(amber) => set({ amber, red: Math.max(inputs.red, amber + 0.1) })} />
-            <Dial label="Red at Mw" value={inputs.red} min={0} max={3} step={0.1} tone="#f87171" show={(v) => v.toFixed(1)} onChange={(red) => set({ red, amber: Math.min(inputs.amber, red - 0.1) })} />
-          </div>
-          <div className="pw-cases st-stages" role="group" aria-label="Stages">
-            {STAGES_2022.map((s) => <button key={s.id} type="button" role="checkbox" aria-checked={!!inputs.stages[s.id]} onClick={() => set({ stages: { ...inputs.stages, [s.id]: !inputs.stages[s.id] } })} style={{ ["--tint" as string]: s.colour }}>
-              <small>{s.label}</small><b>{fmt(s.volumeBbl)} bbl</b><em>{s.rateBpm} bpm · {fmt(s.topFt)}–{fmt(s.baseFt)} ft MD</em></button>)}
-          </div>
-        </>}
-        {lens === "read" && <ReadSide events={events} all={all} stages={stages} model={model} mc={mc} b={b} />}
-        <p className="nodal-hint">Model, not the catalogue: stresses and fracture intensity are 16A&apos;s logs; SHmax&apos;s azimuth and ratio, the fracture sets, diffusivity and stress drop are assumed and set here. FORGE&apos;s event catalogue would test it.</p>
-      </aside>
-    </div>
-    <JobStrip windows={windows} events={all} u={clock.u} span={span} onU={(u) => setClock((c) => ({ ...c, u, playing: false }))} red={inputs.red} amber={inputs.amber} />
+  const lensTabs = <span className="pw-lenses" role="tablist" aria-label="Lens">
+    {(["plan", "pump", "read"] as const).map((l) => <button key={l} type="button" role="tab" aria-selected={lens === l} onClick={() => setLens(l)}>{l === "plan" ? "Plan" : l === "pump" ? "Pump" : "Read"}</button>)}
+  </span>;
+  const clockControls = <div className="pw-unload">
+    <button type="button" className="rail-button" aria-label={clock.playing ? "Pause" : "Pump"} onClick={() => drive({ u: clock.u >= 1 ? 0 : clock.u, playing: !clock.playing })}>{clock.playing ? <Pause size={13} /> : <Play size={13} />}</button>
+    <input type="range" min={0} max={1} step={0.001} value={clock.u} aria-label="Job time" onChange={(event) => drive({ u: Number(event.target.value), playing: false })} />
+    <button type="button" className="rail-button" aria-label="Speed" onClick={() => setClock((c) => ({ ...c, speed: c.speed >= 4 ? 1 : c.speed * 2 }))}>{clock.speed}×</button>
   </div>;
+  const inspector = lens === "plan" ? <Inspector id="stimulation-plan" initial="mohr" sections={[
+    { id: "mohr", title: "Stress state", summary: `SHmax N${inputs.shmaxAzimuthDeg}°E · μ ${inputs.frictionMean.toFixed(2)}`, body: <Mohr result={value} model={model} stages={stages} t={t} /> },
+    { id: "assumed", title: "What is assumed", summary: inputs.mode === "fracture" ? "hydraulic fracture" : "diffusion only", body: <PlanDials inputs={inputs} set={set} /> },
+  ]} />
+    : lens === "pump" ? <Inspector id="stimulation-pump" initial="job" head={clockControls} sections={[
+      { id: "job", title: "The job so far", summary: `${fmt(events.length)} events · ${light.light}`, body: <>
+        <div className="pw-facts">
+          <span><small>Pumped</small><b>{fmt(Math.round(pumped / 0.158987))}</b><em>bbl of {fmt(Math.round(planned / 0.158987))}</em></span>
+          <span><small>Events</small><b>{fmt(events.length)}</b><em>{observed ? `catalogue ${fmt(seen.length)} · ` : ""}Mc {Number.isFinite(mc) ? mc.toFixed(1) : "–"}</em></span>
+          <span><small>b-value</small><b>{b ? b.b.toFixed(2) : "–"}</b><em>{b ? `± ${b.sigma.toFixed(2)}, ${b.n} events` : "needs 30 events"}</em></span>
+          <span><small>Seismogenic index</small><b>{sigma !== null ? sigma.toFixed(1) : "–"}</b><em>Σ, Shapiro</em></span>
+        </div>
+        <p className={`st-response is-${light.light}`}><b>{light.response}</b>{redAt ? ` · red at ${hours(redAt.tS)} into the job (${stageLabel(redAt.stage)})` : amberAt ? ` · amber at ${hours(amberAt.tS)} (${stageLabel(amberAt.stage)})` : " · the model stays green"}
+          {pRed !== null && ` · P(Mw ≥ ${inputs.red} in the volume still to pump) ${(pRed * 100).toFixed(pRed < 0.1 ? 1 : 0)}%`}</p>
+      </> },
+      { id: "limits", title: "Rate and traffic light", summary: `amber ${inputs.amber.toFixed(1)} · red ${inputs.red.toFixed(1)}`, body: <div className="pw-dials">
+        <Dial label="Rate, × reported" value={inputs.rateScale} min={0.25} max={2} step={0.05} tone="#f59e0b" show={(v) => v.toFixed(2)} onChange={(rateScale) => set({ rateScale })} />
+        <Dial label="Diffusivity, m²/s" value={Math.log10(inputs.diffusivity)} min={-3} max={0} step={0.05} tone="#38bdf8" show={(v) => (10 ** v).toFixed(v < -1.5 ? 3 : 2)} onChange={(v) => set({ diffusivity: 10 ** v })} />
+        <Dial label="Amber at Mw" value={inputs.amber} min={-0.5} max={2.5} step={0.1} tone="#fbbf24" show={(v) => v.toFixed(1)} onChange={(amber) => set({ amber, red: Math.max(inputs.red, amber + 0.1) })} />
+        <Dial label="Red at Mw" value={inputs.red} min={0} max={3} step={0.1} tone="#f87171" show={(v) => v.toFixed(1)} onChange={(red) => set({ red, amber: Math.min(inputs.amber, red - 0.1) })} />
+      </div> },
+      { id: "stages", title: "Stages", summary: `${STAGES_2022.filter((x) => inputs.stages[x.id]).length} of ${STAGES_2022.length} pumped`, body: <div className="pw-cases st-stages" role="group" aria-label="Stages">
+        {STAGES_2022.map((x) => <button key={x.id} type="button" role="checkbox" aria-checked={!!inputs.stages[x.id]} onClick={() => set({ stages: { ...inputs.stages, [x.id]: !inputs.stages[x.id] } })} style={{ ["--tint" as string]: x.colour }}>
+          <small>{x.label}</small><b>{fmt(x.volumeBbl)} bbl</b><em>{x.rateBpm} bpm · {fmt(x.topFt)}–{fmt(x.baseFt)} ft MD</em></button>)}
+      </div> },
+    ]} />
+    : <Inspector id="stimulation-read" initial="catalogue" sections={[
+      { id: "catalogue", title: "Catalogue against the model", summary: observed ? `${fmt(seen.length)} of ${fmt(observed.events.length)}` : "–", body: <CatalogueCard observed={observed} own={catalogue.own} error={catalogue.error} seen={seen} events={events} stages={stages} matching={matching} onMatch={() => { void match(); }} inputs={inputs} /> },
+      { id: "charts", title: "Front and magnitudes", summary: b ? `b ${b.b.toFixed(2)}` : "–", body: <ReadSide events={events} all={all} seen={seen} stages={stages} model={model} mc={mc} b={b} /> },
+    ]} />;
+  return <Frame name="stimulation" className="st" title="Stimulation · FORGE 16A(78)-32" subtitle={`April 2022 schedule, 16A's stresses and fracture intensity · ${busy ? "computing…" : `${fmt(all.length)} events in the model`}`}
+    tools={<>{lensTabs}<span className={`pw-badge${observed?.synthetic ? " is-synthetic" : ""}`} title={observed ? observed.description || observed.name : catalogue.error ?? "Loading the catalogue…"}>{observed ? observed.synthetic ? "Synthetic catalogue" : "Catalogue" : "Model"}<small>{observed ? `QuakeML · ${fmt(observed.events.length)} events` : catalogue.error ? "catalogue did not load" : "loading catalogue…"}</small></span></>}
+    numbers={<>
+      <span className={`st-light is-${light.light}`} title={light.response}><i /><span><b>{light.light}</b><small>max Mw {Number.isFinite(maxMw) ? maxMw.toFixed(1) : "–"}</small></span></span>
+      <span><small>Events</small><b>{fmt(events.length)}</b></span>
+      <span><small>b</small><b>{b ? b.b.toFixed(2) : "–"}</b></span>
+    </>}
+    canvas={<Scene result={value} events={events} observed={seen} stages={stages} model={model} t={t} lens={lens} inputs={inputs} cursorMdM={wire.cursor} onPin={wire.pin} />}
+    inspector={inspector}
+    strip={<JobStrip windows={windows} events={all} observed={observed?.events ?? []} u={clock.u} span={span} onU={(u) => drive({ u, playing: false })} red={inputs.red} amber={inputs.amber} />}
+    status={<Status items={[
+      "Drag to orbit · wheel to zoom · double-click to reset",
+      "Stresses and fracture intensity from 16A's logs; SHmax, the fracture sets, diffusivity and stress drop assumed or matched",
+      observed?.synthetic ? "Synthetic QuakeML catalogue from a hidden model: load FORGE's (Geo-Energie Suisse, GDR) in Read" : observed ? `Catalogue ${observed.name}` : null,
+    ]} />} />;
+}
+
+/** Events as offsets from the stage that was pumping (or last pumped) when each happened: the cloud's shape, not the well's. */
+const aboutStages = (list: readonly { readonly tS: number; readonly x: number; readonly y: number }[], stages: readonly Stage[]) => list.flatMap((e) => {
+  const s = [...stages].sort((a, b) => b.startS - a.startS).find((x) => x.startS <= e.tS);
+  return s ? [{ x: e.x - s.center.x, y: e.y - s.center.y }] : [];
+});
+
+/** The catalogue beside the model: what each says, the file it came from, and the match. */
+function CatalogueCard({ observed, own, error, seen, events, stages, matching, onMatch, inputs }: {
+  readonly observed: ObservedCatalogue | null; readonly own: boolean; readonly error: string | null; readonly seen: readonly ObservedEvent[]; readonly events: readonly SeismicEvent[];
+  readonly stages: readonly Stage[]; readonly matching: string | null; readonly onMatch: () => void; readonly inputs: StimulationInputs;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const stat = (list: readonly { mw: number; x: number; y: number; tS: number }[]) => {
+    const mags = list.map((e) => Math.round(e.mw * 10) / 10), mc = mags.length ? completeness(mags) : NaN, b = mags.length >= 30 ? bValue(mags, mc) : null, axis = cloudAxis(aboutStages(list, stages));
+    return { n: list.length, max: list.reduce((m, e) => Math.max(m, e.mw), -Infinity), b, axis };
+  };
+  const m = stat(events), o = stat(seen);
+  const cell = (v: number | null | undefined, digits: number) => v === null || v === undefined || !Number.isFinite(v) ? "–" : v.toFixed(digits);
+  return <section className="nodal-card st-cat">
+    <header><small>{observed ? `${observed.synthetic ? "synthetic stand-in" : observed.name} · QuakeML 1.2 · ${observed.magnitudeTypes.join(", ")}` : error ?? "loading…"}</small></header>
+    {observed && <table className="nodal-table st-compare">
+      <thead><tr><th /><th>Model</th><th>Catalogue</th></tr></thead>
+      <tbody>
+        <tr><td>Events so far</td><td>{fmt(m.n)}</td><td>{fmt(o.n)}</td></tr>
+        <tr><td>Largest, Mw</td><td>{cell(m.max, 1)}</td><td>{cell(o.max, 1)}</td></tr>
+        <tr><td>b-value</td><td>{cell(m.b?.b, 2)}</td><td>{cell(o.b?.b, 2)}</td></tr>
+        <tr><td>Long axis, about each stage</td><td>{m.axis ? `N${Math.round(m.axis.azimuthDeg)}°E` : "–"}</td><td>{o.axis ? `N${Math.round(o.axis.azimuthDeg)}°E` : "–"}</td></tr>
+      </tbody>
+    </table>}
+    <div className="pw-actions">
+      <button type="button" className="tie-button is-primary" disabled={!observed || matching?.startsWith("Running") === true} onClick={onMatch}><Wand2 size={11} /> Match to the catalogue</button>
+      <button type="button" className="tie-button" onClick={() => input.current?.click()}><FileUp size={11} /> Load QuakeML…</button>
+      {own && <button type="button" className="tie-button" onClick={() => { void loadOwn("catalogue", null); }}>Back to the stand-in</button>}
+      <input ref={input} type="file" accept=".xml,.qml,.quakeml" hidden onChange={(event) => { const f = event.target.files?.[0]; if (f) void loadOwn("catalogue", f); event.target.value = ""; }} />
+    </div>
+    {matching && <p className="nodal-hint">{matching}</p>}
+    <p className="nodal-hint">Set now: SHmax N{inputs.shmaxAzimuthDeg}°E, D {inputs.diffusivity.toFixed(3)} m²/s. Rings in the scene are the catalogue&apos;s events, at their located positions.</p>
+  </section>;
 }
 
 const hours = (s: number) => s < 86400 ? `${(s / 3600).toFixed(1)} h` : `day ${Math.floor(s / 86400) + 1}, ${((s % 86400) / 3600).toFixed(1)} h`;
 const stageLabel = (id: string) => STAGES_2022.find((s) => s.id === id)?.label ?? `stage ${id}`;
 
 /** Plan: the stress state and the fractures on the Mohr circle; dials for what is assumed. */
-function PlanSide({ inputs, set, result, model, stages, t }: { readonly inputs: StimulationInputs; readonly set: (p: Partial<StimulationInputs>) => void; readonly result: Result | null; readonly model: PressureModel | null; readonly stages: readonly Stage[]; readonly t: number }) {
+function PlanDials({ inputs, set }: { readonly inputs: StimulationInputs; readonly set: (p: Partial<StimulationInputs>) => void }) {
   return <>
-    <Mohr result={result} model={model} stages={stages} t={t} />
     <div className="pw-dials">
       <Dial label="SHmax ratio" value={inputs.shmaxRatio} min={0} max={1} step={0.05} tone="#a78bfa" sub="0 Shmin · 1 Sv" show={(v) => v.toFixed(2)} onChange={(shmaxRatio) => set({ shmaxRatio })} />
       <Dial label="SHmax azimuth, °" value={inputs.shmaxAzimuthDeg} min={0} max={180} step={5} tone="#a78bfa" show={(v) => `N${v}°E`} onChange={(shmaxAzimuthDeg) => set({ shmaxAzimuthDeg })} />
@@ -178,12 +308,14 @@ function Mohr({ result, model, stages, t }: { readonly result: Result | null; re
   </section>;
 }
 /** Read: the triggering front, Gutenberg–Richter and the rate against volume. */
-function ReadSide({ events, all, stages, model, mc, b }: { readonly events: readonly SeismicEvent[]; readonly all: readonly SeismicEvent[]; readonly stages: readonly Stage[]; readonly model: PressureModel | null; readonly mc: number; readonly b: ReturnType<typeof bValue> | null }) {
+function ReadSide({ events, all, seen, stages, model, mc, b }: { readonly events: readonly SeismicEvent[]; readonly all: readonly SeismicEvent[]; readonly seen: readonly ObservedEvent[]; readonly stages: readonly Stage[]; readonly model: PressureModel | null; readonly mc: number; readonly b: ReturnType<typeof bValue> | null }) {
   const [box, size] = useSize<HTMLDivElement>();
   const W = Math.max(240, size.width - 16), H = 150, m = { l: 38, r: 8, t: 8, b: 22 };
   const pts = events.map((e) => { const s = stages.find((x) => x.id === e.stage)!; return { e, t: (e.tS - s.startS) / 3600, r: Math.hypot(e.x - s.center.x, e.y - s.center.y, e.z - s.center.z) }; });
   const D = frontDiffusivity(pts.map((p) => ({ tS: p.t * 3600, r: p.r })));
-  const tMax = Math.max(1, ...pts.map((p) => p.t)), rMax = Math.max(50, ...pts.map((p) => p.r));
+  // The catalogue's events, each against the stage pumping (or last pumped) when it happened.
+  const seenPts = seen.map((e) => { const s = [...stages].reverse().find((x) => x.startS <= e.tS) ?? stages[0]; return s ? { t: (e.tS - s.startS) / 3600, r: Math.hypot(e.x - s.center.x, e.y - s.center.y, e.z - s.center.z), id: s.id } : null; }).filter((p) => p !== null);
+  const tMax = Math.max(1, ...pts.map((p) => p.t), ...seenPts.map((p) => p.t)), rMax = Math.max(50, ...pts.map((p) => p.r), ...seenPts.map((p) => p.r));
   const x = scaleLinear().domain([0, tMax]).range([m.l, W - m.r]), y = scaleLinear().domain([0, rMax * 1.05]).range([H - m.b, m.t]);
   const front = Number.isFinite(D) ? Array.from({ length: 40 }, (_, i) => { const tt = tMax * (i + 1) / 40; return `${i ? "L" : "M"}${x(tt)},${y(Math.min(rMax * 1.05, Math.sqrt(4 * Math.PI * D * tt * 3600)))}`; }).join("") : "";
   // Gutenberg–Richter: log N(≥M).
@@ -191,22 +323,25 @@ function ReadSide({ events, all, stages, model, mc, b }: { readonly events: read
   const counts = Ms.map((M) => ({ M, n: mags.filter((v) => v >= M).length })).filter((c) => c.n > 0);
   const gx = scaleLinear().domain([-2, 2.5]).range([m.l, W - m.r]), gy = scaleLinear().domain([0, Math.max(1, Math.log10(Math.max(1, mags.length)) + 0.3)]).range([H - m.b, m.t]);
   const nAtMc = mags.filter((v) => v >= mc).length;
+  const seenMags = seen.map((e) => e.mw), seenCounts = Ms.map((M) => ({ M, n: seenMags.filter((v) => v >= M).length })).filter((c) => c.n > 0);
   return <>
     <section className="nodal-card" ref={box}>
-      <header><b>Triggering front</b><small>distance from the stage against time · r = √(4πDt), D {Number.isFinite(D) ? D.toFixed(3) : "–"} m²/s{model ? ` (set ${model.diffusivity.toFixed(3)})` : ""}</small></header>
+      <header><b>Triggering front</b><small>distance from the stage against time · r = √(4πDt), D {Number.isFinite(D) ? D.toFixed(3) : "–"} m²/s{model ? ` (set ${model.diffusivity.toFixed(3)})` : ""}{seenPts.length ? " · catalogue ○" : ""}</small></header>
       <svg width={W} height={H}>
         {y.ticks(3).map((v) => <g key={v}><line x1={m.l} x2={W - m.r} y1={y(v)} y2={y(v)} className="nodal-grid" /><text x={m.l - 4} y={y(v) + 3} textAnchor="end" className="vol-tick">{fmt(v)}</text></g>)}
         {x.ticks(4).map((v) => <text key={v} x={x(v)} y={H - 6} textAnchor="middle" className="vol-tick">{v} h</text>)}
         {pts.map((p, i) => <circle key={i} cx={x(p.t)} cy={y(p.r)} r={1.8} style={{ fill: stageColour(p.e.stage) }} />)}
+        {seenPts.map((p, i) => <circle key={`o${i}`} cx={x(p.t)} cy={y(p.r)} r={2.6} className="st-obs" style={{ stroke: stageColour(p.id) }} />)}
         {front && <path d={front} className="st-front" />}
       </svg>
     </section>
     <section className="nodal-card">
-      <header><b>Gutenberg–Richter</b><small>log N(≥M) · b {b ? `${b.b.toFixed(2)} ± ${b.sigma.toFixed(2)}` : "–"} above Mc {Number.isFinite(mc) ? mc.toFixed(1) : "–"}</small></header>
+      <header><b>Gutenberg–Richter</b><small>log N(≥M) · model ● b {b ? `${b.b.toFixed(2)} ± ${b.sigma.toFixed(2)}` : "–"} above Mc {Number.isFinite(mc) ? mc.toFixed(1) : "–"}{seen.length ? " · catalogue ■" : ""}</small></header>
       <svg width={W} height={H}>
         {gy.ticks(3).map((v) => <g key={v}><line x1={m.l} x2={W - m.r} y1={gy(v)} y2={gy(v)} className="nodal-grid" /><text x={m.l - 4} y={gy(v) + 3} textAnchor="end" className="vol-tick">{10 ** v >= 1 ? fmt(Math.round(10 ** v)) : ""}</text></g>)}
         {gx.ticks(5).map((v) => <text key={v} x={gx(v)} y={H - 6} textAnchor="middle" className="vol-tick">{v}</text>)}
         {counts.map((c) => <circle key={c.M} cx={gx(c.M)} cy={gy(Math.log10(c.n))} r={2.5} className="st-gr" />)}
+        {seenCounts.map((c) => <rect key={`o${c.M}`} x={gx(c.M) - 2.6} y={gy(Math.log10(c.n)) - 2.6} width={5.2} height={5.2} className="st-gr-obs" />)}
         {b && Number.isFinite(b.b) && <line x1={gx(mc)} y1={gy(Math.log10(nAtMc))} x2={gx(2.5)} y2={gy(Math.max(0, Math.log10(nAtMc) - b.b * (2.5 - mc)))} className="st-front" />}
         {Number.isFinite(mc) && <line x1={gx(mc)} x2={gx(mc)} y1={m.t} y2={H - m.b} className="vol-mark" />}
       </svg>
@@ -216,13 +351,15 @@ function ReadSide({ events, all, stages, model, mc, b }: { readonly events: read
 }
 
 /** The job: each stage's window side by side, its rate and its events by magnitude; the playhead. */
-function JobStrip({ windows, events, u, span, onU, red, amber }: { readonly windows: readonly { stage: Stage; from: number; to: number }[]; readonly events: readonly SeismicEvent[]; readonly u: number; readonly span: number; readonly onU: (u: number) => void; readonly red: number; readonly amber: number }) {
+function JobStrip({ windows, events, observed, u, span, onU, red, amber }: { readonly windows: readonly { stage: Stage; from: number; to: number }[]; readonly events: readonly SeismicEvent[]; readonly observed: readonly ObservedEvent[]; readonly u: number; readonly span: number; readonly onU: (u: number) => void; readonly red: number; readonly amber: number }) {
   const [box, size] = useSize<HTMLDivElement>();
   const W = Math.max(320, size.width - 12), H = 92, m = { l: 34, r: 6, t: 8, b: 16 };
   const y = scaleLinear().domain([-2, Math.max(1.5, red + 0.3)]).range([H - m.b, m.t]);
   let acc = 0;
   const cols = windows.map((w) => { const x0 = m.l + acc / span * (W - m.l - m.r); acc += w.to - w.from; return { ...w, x0, x1: m.l + acc / span * (W - m.l - m.r) }; });
   const xOf = (stage: string, t: number) => { const c = cols.find((col) => col.stage.id === stage); return c ? c.x0 + (t - c.from) / (c.to - c.from) * (c.x1 - c.x0) : -10; };
+  /** A time anywhere: in a stage's window, or -10 (off the strip) between them. */
+  const xAt = (t: number) => { const c = cols.find((col) => t >= col.from && t <= col.to); return c ? c.x0 + (t - c.from) / (c.to - c.from) * (c.x1 - c.x0) : -10; };
   const drag = useRef(false);
   const at = (event: ReactPointerEvent<SVGSVGElement>) => Math.max(0, Math.min(1, (event.clientX - event.currentTarget.getBoundingClientRect().left - m.l) / (W - m.l - m.r)));
   return <div className="pw-life st-strip" ref={box}>
@@ -235,6 +372,7 @@ function JobStrip({ windows, events, u, span, onU, red, amber }: { readonly wind
         <text x={(c.x0 + c.x1) / 2} y={H - 3} textAnchor="middle" className="vol-tick">{c.stage.label}</text>
       </g>)}
       {events.map((e, i) => <line key={i} x1={xOf(e.stage, e.tS)} x2={xOf(e.stage, e.tS)} y1={y(-2)} y2={y(e.mw)} style={{ stroke: stageColour(e.stage) }} className="st-stem" />)}
+      {observed.map((e, i) => { const xx = xAt(e.tS); return xx < 0 ? null : <circle key={`o${i}`} cx={xx} cy={y(e.mw)} r={2.2} className="st-obs-dot" />; })}
       <g transform={`translate(${m.l + u * (W - m.l - m.r)},0)`} className="pw-playhead"><line y1={m.t - 4} y2={H - m.b} /><path d={`M-5,${m.t - 8} L5,${m.t - 8} L0,${m.t - 1} Z`} /></g>
     </svg>
   </div>;
@@ -247,14 +385,14 @@ function JobStrip({ windows, events, u, span, onU, red, amber }: { readonly wind
  * magnitude, newest brightest. In Plan, the natural fractures near the stages, coloured by how much
  * pressure they need to slip.
  */
-function Scene({ result, events, stages, model, t, lens, inputs, cursorMdM, onPin }: {
-  readonly result: Result | null; readonly events: readonly SeismicEvent[]; readonly stages: readonly Stage[]; readonly model: PressureModel | null; readonly t: number;
+function Scene({ result, events, observed, stages, model, t, lens, inputs, cursorMdM, onPin }: {
+  readonly result: Result | null; readonly events: readonly SeismicEvent[]; readonly observed: readonly ObservedEvent[]; readonly stages: readonly Stage[]; readonly model: PressureModel | null; readonly t: number;
   readonly lens: Lens; readonly inputs: StimulationInputs; readonly cursorMdM: number | null; readonly onPin: (md: number | null) => void;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const view = useRef({ yaw: -0.9, pitch: 0.35, zoom: 1, drag: null as null | { x: number; y: number; yaw: number; pitch: number } });
-  const live = useRef({ result, events, stages, model, t, lens, inputs, cursorMdM });
-  live.current = { result, events, stages, model, t, lens, inputs, cursorMdM };
+  const live = useRef({ result, events, observed, stages, model, t, lens, inputs, cursorMdM });
+  live.current = { result, events, observed, stages, model, t, lens, inputs, cursorMdM };
   useEffect(() => {
     const el = canvas.current, ctx = el?.getContext("2d");
     if (!el || !ctx) return;
@@ -263,7 +401,7 @@ function Scene({ result, events, stages, model, t, lens, inputs, cursorMdM, onPi
     const observer = new ResizeObserver(resize); observer.observe(el); resize();
     const draw = () => {
       frame = requestAnimationFrame(draw);
-      const { result: r, events: ev, stages: st, model: md, t: now, lens: ln, inputs: inp, cursorMdM: cursor } = live.current;
+      const { result: r, events: ev, observed: obs, stages: st, model: md, t: now, lens: ln, inputs: inp, cursorMdM: cursor } = live.current;
       const v = view.current;
       const target = st.length ? { x: st.reduce((s, a) => s + a.center.x, 0) / st.length, y: st.reduce((s, a) => s + a.center.y, 0) / st.length, z: st.reduce((s, a) => s + a.center.z, 0) / st.length } : pointAt(well16a, 3250);
       const cy = Math.cos(v.yaw), sy = Math.sin(v.yaw), cp = Math.cos(v.pitch), sp = Math.sin(v.pitch);
@@ -334,11 +472,16 @@ function Scene({ result, events, stages, model, t, lens, inputs, cursorMdM, onPi
         ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.sx, p.sy, size, 0, Math.PI * 2); ctx.fill();
         if (e.mw >= inp.amber) { ctx.strokeStyle = e.mw >= inp.red ? "#f87171" : "#fbbf24"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(p.sx, p.sy, size + 3, 0, Math.PI * 2); ctx.stroke(); }
       }
+      // The catalogue's events: open rings at their located positions, the newest brightest.
+      for (const e of obs) {
+        const p = project(e), age = now - e.tS, fresh = Math.max(0, 1 - age / 1800), size = Math.max(2.4, 2.6 * 10 ** (0.25 * (e.mw + 1)));
+        ctx.strokeStyle = `rgba(226, 232, 240, ${0.55 + 0.45 * fresh})`; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(p.sx, p.sy, size, 0, Math.PI * 2); ctx.stroke();
+      }
       // Compass.
       const o = { x: 46, y: h - 46 }, axes = [{ v: { x: target.x + 60, y: target.y, z: target.z }, l: "E" }, { v: { x: target.x, y: target.y + 60, z: target.z }, l: "N" }, { v: { x: target.x, y: target.y, z: target.z + 60 }, l: "Up" }];
       const c0 = project(target);
       for (const a of axes) { const p = project(a.v); const dx = (p.sx - c0.sx) / (60 * scale) * 26, dy = (p.sy - c0.sy) / (60 * scale) * 26; ctx.strokeStyle = "rgba(226,232,240,0.7)"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(o.x, o.y); ctx.lineTo(o.x + dx, o.y + dy); ctx.stroke(); ctx.fillStyle = "rgba(226,232,240,0.9)"; ctx.font = "600 10px 'IBM Plex Sans', sans-serif"; ctx.textAlign = "center"; ctx.fillText(a.l, o.x + dx * 1.25, o.y + dy * 1.25 + 3); }
-      ctx.fillStyle = "rgba(226,232,240,0.55)"; ctx.font = "500 10px 'IBM Plex Sans', sans-serif"; ctx.textAlign = "right"; ctx.fillText(`${hours(now)} · drag to orbit, wheel to zoom, double-click to reset`, w - 10, h - 10);
+      ctx.fillStyle = "rgba(226,232,240,0.55)"; ctx.font = "500 10px 'IBM Plex Sans', sans-serif"; ctx.textAlign = "right"; ctx.fillText(hours(now), w - 10, h - 10);
     };
     frame = requestAnimationFrame(draw);
     return () => { cancelAnimationFrame(frame); observer.disconnect(); };

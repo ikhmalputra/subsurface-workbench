@@ -131,3 +131,14 @@ export function stimulationJob(las: LasFile, inputs: StimulationInputs): Stimula
   };
 }
 export const stageColour = (id: string) => STAGES_2022.find((s) => s.id === id)?.colour ?? "#e2e8f0";
+
+/** The cloud's long axis in plan (principal axis of the event positions), as an azimuth 0–180°, and how much longer it is than wide. */
+export function cloudAxis(events: readonly { readonly x: number; readonly y: number }[]): { readonly azimuthDeg: number; readonly elongation: number } | null {
+  if (events.length < 10) return null;
+  const mx = events.reduce((a, e) => a + e.x, 0) / events.length, my = events.reduce((a, e) => a + e.y, 0) / events.length;
+  let sxx = 0, syy = 0, sxy = 0;
+  for (const e of events) { const dx = e.x - mx, dy = e.y - my; sxx += dx * dx; syy += dy * dy; sxy += dx * dy; }
+  const theta = 0.5 * Math.atan2(2 * sxy, sxx - syy), tr = (sxx + syy) / 2, det = Math.sqrt(((sxx - syy) / 2) ** 2 + sxy * sxy);
+  const azimuth = ((90 - theta * 180 / Math.PI) % 180 + 180) % 180;
+  return { azimuthDeg: azimuth, elongation: Math.sqrt((tr + det) / Math.max(1e-9, tr - det)) };
+}

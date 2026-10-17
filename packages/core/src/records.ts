@@ -186,6 +186,55 @@ export function parseLas(text: string): LasFile {
   });
 }
 
+/**
+ * Writes an unwrapped LAS 2.0 file that `parseLas` (and any LAS 2.0 reader) reads back: ~Version,
+ * ~Well with STRT, STOP, STEP and NULL taken from the index curve, ~Curve, ~Parameter and ~ASCII.
+ * The index is the first curve: depth (DEPT, M or FT) or time (TIME or ETIM, any time unit).
+ */
+export function formatLas(file: {
+  readonly well: readonly LasHeaderItem[];
+  readonly parameters?: readonly LasHeaderItem[];
+  readonly curves: readonly (LasHeaderItem & { readonly values: readonly (number | null)[]; readonly digits?: number })[];
+  readonly nullValue?: number;
+  readonly comments?: readonly string[];
+}): string {
+  const nullValue = file.nullValue ?? -999.25;
+  const index = file.curves[0];
+  if (!index) throw new RangeError("A LAS file needs an index curve.");
+  const n = index.values.length;
+  if (file.curves.some((curve) => curve.values.length !== n)) throw new RangeError("Every curve needs one value per index sample.");
+  const indexValues = index.values.filter((v): v is number => v !== null);
+  const step = n > 1 && indexValues.length === n ? (indexValues[n - 1]! - indexValues[0]!) / (n - 1) : 0;
+  const regular = n > 1 && indexValues.length === n && indexValues.every((v, i) => Math.abs(v - (indexValues[0]! + i * step)) < Math.abs(step) * 1e-6 + 1e-9);
+  const pad = (s: string, w: number) => s.length >= w ? `${s} ` : s.padEnd(w);
+  const line = (item: LasHeaderItem) => `${pad(` ${item.mnemonic}.${item.unit}`, 16)}${pad(item.value, 28)}: ${item.description}`;
+  const reserved = new Set(["STRT", "STOP", "STEP", "NULL"]);
+  const fixed: LasHeaderItem[] = [
+    { mnemonic: "STRT", unit: index.unit, value: String(indexValues[0] ?? 0), description: "First index value" },
+    { mnemonic: "STOP", unit: index.unit, value: String(indexValues.at(-1) ?? 0), description: "Last index value" },
+    { mnemonic: "STEP", unit: index.unit, value: regular ? String(Number(step.toFixed(6))) : "0", description: regular ? "Step" : "Irregular sampling" },
+    { mnemonic: "NULL", unit: "", value: String(nullValue), description: "Null value" },
+  ];
+  const value = (v: number | null, digits: number) => v === null || !Number.isFinite(v) ? String(nullValue) : v.toFixed(digits);
+  const rows: string[] = [];
+  for (let i = 0; i < n; i++) rows.push(file.curves.map((curve) => value(curve.values[i] ?? null, curve.digits ?? 4).padStart(12)).join(" "));
+  return [
+    ...(file.comments ?? []).map((c) => `# ${c}`),
+    "~Version Information",
+    line({ mnemonic: "VERS", unit: "", value: "2.0", description: "CWLS LOG ASCII STANDARD - VERSION 2.0" }),
+    line({ mnemonic: "WRAP", unit: "", value: "NO", description: "One line per index step" }),
+    "~Well Information",
+    ...fixed.map(line),
+    ...file.well.filter((item) => !reserved.has(item.mnemonic.toUpperCase())).map(line),
+    "~Curve Information",
+    ...file.curves.map(line),
+    ...(file.parameters?.length ? ["~Parameter Information", ...file.parameters.map(line)] : []),
+    `~ASCII ${file.curves.map((curve) => curve.mnemonic).join(" ")}`,
+    ...rows,
+    "",
+  ].join("\n");
+}
+
 /** Finds a curve by mnemonic, ignoring case and any vendor prefix such as `MUDL_`. */
 export function lasCurve(las: LasFile, mnemonic: string): LasCurve | undefined {
   const wanted = mnemonic.toUpperCase();

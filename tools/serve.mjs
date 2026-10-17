@@ -10,12 +10,12 @@ import { gzipSync } from "node:zlib";
 // migration, so both Playwright projects can exercise their own app in one CI run.
 const app = process.env.SERVE_APP ?? "deck";
 const root = fileURLToPath(new URL(`../apps/${app}/out/`, import.meta.url));
-const types = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".json": "application/json", ".woff2": "font/woff2", ".svg": "image/svg+xml", ".txt": "text/plain", ".ico": "image/x-icon" };
+const types = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".json": "application/json", ".woff2": "font/woff2", ".svg": "image/svg+xml", ".txt": "text/plain", ".ico": "image/x-icon", ".xml": "application/xml" };
 
 // Text and raw data shrink several times under gzip; the meshopt models and images are already
 // compressed. Each file is compressed once per version and kept, so a slow link (a tunnel, a
 // remote viewer) moves a fraction of the bytes.
-const compressible = new Set([".html", ".js", ".mjs", ".css", ".json", ".svg", ".txt", ".las", ".sgy", ".i8"]);
+const compressible = new Set([".html", ".js", ".mjs", ".css", ".json", ".svg", ".txt", ".las", ".sgy", ".i8", ".xml"]);
 const gzipped = new Map();
 function gzipOf(path, data) {
   // Keyed by content, not size: a rebuilt page can keep its length and change its asset hashes.

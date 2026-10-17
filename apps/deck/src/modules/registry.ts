@@ -25,7 +25,7 @@ export type ModuleId =
   | "decline" | "nodal";
 
 /** What kind of place a site is: FORGE's records, the Equator field, a FORCE 2020 area, a planned well (Kestrel A-7 or the user's), or a drilled well entered on the deck. */
-type SiteKind = "forge" | "equator" | "force" | "design" | "recorded";
+export type SiteKind = "forge" | "equator" | "force" | "design" | "recorded";
 /** The subsurface disciplines the dock is grouped by, the same as the landing page's. */
 export type ModuleGroup = "Geophysics & geology" | "Petrophysics" | "Geomechanics & pressure" | "Drilling" | "Well engineering & completions" | "Production" | "Your data";
 
@@ -143,6 +143,17 @@ const forceWhy: Readonly<Partial<Record<ModuleId, string>>> = {
   construction: "The FORCE wells carry casing shoe depths, not a construction record.",
   seismic: "FORCE 2020 carries no seismic.", curtain: "FORCE 2020 carries no seismic.", tie: "FORCE 2020 carries no seismic to tie to.", horizons: "FORCE 2020 carries no seismic to pick horizons on.",
 };
+
+/** The kinds of place a module works at, for the dock's card: null where it works anywhere. */
+export const SITE_KIND_LABEL: Readonly<Record<SiteKind, string>> = { forge: "Utah FORGE", equator: "Equator", force: "FORCE 2020", design: "Planned wells", recorded: "Your wells" };
+export function worksAt(id: ModuleId): readonly SiteKind[] | null {
+  if (id === "globe" || id === "decline" || id === "compare") return null;
+  if (id === "designer") return ["design"];
+  if (id === "editor") return ["forge", "equator", "force", "recorded"];
+  return availability[id]?.sites ?? ["forge", "equator", "force", "design", "recorded"];
+}
+/** The kind of place a site is, as the registry reads it. */
+export const siteKindOf = (siteId: string | null): SiteKind | null => !siteId ? null : siteId === "forge" || siteId === "equator" ? siteId : siteId.startsWith("force-q") ? "force" : isDesignSite(siteId) ? "design" : isRecordedSite(siteId) ? "recorded" : null;
 
 /** What a module needs that the place does not have; null when it can show something. */
 export function missing(id: ModuleId, siteId: string | null): string | null {

@@ -6,6 +6,8 @@ import { useFaults } from "../data/faults.ts";
 import { compute } from "../compute/run.ts";
 import type { AttributeName } from "../compute/attributes.ts";
 import { Dial } from "./production/controls.tsx";
+import { Frame, Inspector, Status } from "./frame/Frame.tsx";
+import { ATTRIBUTE_MAPS, ATTRIBUTE_NAMES } from "../data/attribute-volumes.ts";
 import { useWire } from "./wire.ts";
 
 /**
@@ -17,27 +19,10 @@ import { useWire } from "./wire.ts";
  */
 
 const cut = forgeSeismicSection.subVolume!;
-const NAMES: readonly { readonly id: AttributeName | "amplitude"; readonly label: string; readonly note: string }[] = [
-  { id: "amplitude", label: "Amplitude", note: "The PSDM as delivered." },
-  { id: "envelope", label: "Envelope", note: "Reflection strength: bright where the impedance contrast is strong, whatever the phase." },
-  { id: "phase", label: "Phase", note: "Instantaneous phase: event continuity, independent of amplitude; faults and pinch-outs show as breaks in the bands." },
-  { id: "frequency", label: "Frequency", note: "Instantaneous frequency, cycles per km of depth: softer, thicker or fractured intervals shift it." },
-  { id: "rms", label: "RMS", note: "RMS amplitude in a 65 m window." },
-  { id: "coherence", label: "Coherence", note: "Dip-steered semblance over 3 × 3 traces and 45 m: dark where the reflectors stop carrying on (faults, fracture zones)." },
-  { id: "fault", label: "Fault likelihood", note: "Discontinuity sharpened and thinned to its ridge across the fault: a guide for picking fault sticks in Horizons." },
-];
+const NAMES = ATTRIBUTE_NAMES;
 type Slices = { a: number; o: number; s: number };
 
-/** Colour maps, 0–1 to RGB. */
-const ramp = (stops: readonly [number, number, number][]) => (t: number): [number, number, number] => { const x = Math.max(0, Math.min(1, t)) * (stops.length - 1), i = Math.min(stops.length - 2, Math.floor(x)), f = x - i, a = stops[i]!, b = stops[i + 1]!; return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f]; };
-const MAPS: Readonly<Record<string, (t: number) => [number, number, number]>> = {
-  envelope: ramp([[0, 0, 4], [80, 18, 123], [183, 55, 121], [252, 137, 97], [252, 253, 191]]),
-  phase: (t) => { const h = t * 6, c = 220, x = c * (1 - Math.abs((h % 2) - 1)); const [r, g, b] = h < 1 ? [c, x, 0] : h < 2 ? [x, c, 0] : h < 3 ? [0, c, x] : h < 4 ? [0, x, c] : h < 5 ? [x, 0, c] : [c, 0, x]; return [r + 30, g + 30, b + 30]; },
-  frequency: ramp([[68, 1, 84], [59, 82, 139], [33, 145, 140], [94, 201, 98], [253, 231, 37]]),
-  rms: ramp([[0, 0, 4], [87, 16, 110], [188, 55, 84], [249, 142, 9], [252, 255, 164]]),
-  coherence: ramp([[10, 10, 14], [60, 60, 70], [170, 170, 180], [245, 245, 250]]),
-  fault: ramp([[0, 0, 0], [120, 20, 10], [230, 70, 20], [255, 200, 40], [255, 255, 200]]),
-};
+const MAPS = ATTRIBUTE_MAPS;
 
 export function Attributes() {
   const wire = useWire("attributes");
@@ -66,27 +51,27 @@ export function Attributes() {
   if (error) return <p className="hz-empty">The PSDM volume did not load: {error}</p>;
   if (!cube) return <p className="hz-empty">Loading the FORGE PSDM volume…</p>;
   const attr = name === "amplitude" ? null : volumes[name] ?? null;
-  return <div className="at">
-    <header className="pw-bar">
-      <span className="pw-title"><b>Attributes · FORGE PSDM</b><small>{((cut.alongToM - cut.alongFromM) / 1000).toFixed(2)} × {((cut.offsetToM - cut.offsetFromM) / 1000).toFixed(2)} km · {cut.samples} samples at {cut.sampleIntervalM} m · {busy ? `computing ${busy}…` : info.note}</small></span>
-      <span className="pw-lenses at-lenses" role="tablist" aria-label="Attribute">
-        {NAMES.map((n) => <button key={n.id} type="button" role="tab" aria-selected={name === n.id} onClick={() => setName(n.id)}>{n.label}</button>)}
-      </span>
-    </header>
-    <div className="at-stage">
-      <Chair cube={cube} attr={attr} map={name === "amplitude" ? null : MAPS[name]!} opacity={opacity} slices={slices} onSlices={setSlices} faults={faults.flatMap((f) => f.sticks)} onPin={wire.pin} />
-      <aside className="pw-side">
-        <div className="pw-dials">
-          <Dial label="Inline (across)" value={slices.o} min={0} max={cube.offsetCount - 1} step={1} tone="#38bdf8" show={(v) => `${Math.round(cut.offsetFromM + v * cut.spacingM)} m`} onChange={(o) => setSlices((s) => ({ ...s, o }))} />
-          <Dial label="Crossline (along)" value={slices.a} min={0} max={cube.alongCount - 1} step={1} tone="#f472b6" show={(v) => `${Math.round(cut.alongFromM + v * cut.spacingM)} m`} onChange={(a) => setSlices((s) => ({ ...s, a }))} />
-          <Dial label="Depth slice" value={slices.s} min={0} max={cube.sampleCount - 1} step={1} tone="#f59e0b" show={(v) => `${Math.round(v * cut.sampleIntervalM)} m`} onChange={(s) => setSlices((x) => ({ ...x, s }))} />
-          <Dial label="Attribute opacity" value={opacity} min={0} max={1} step={0.05} tone="#a78bfa" show={(v) => `${Math.round(v * 100)}%`} onChange={setOpacity} />
-        </div>
+  return <Frame name="attributes" className="at" title="Attributes · FORGE PSDM" subtitle={`${((cut.alongToM - cut.alongFromM) / 1000).toFixed(2)} × ${((cut.offsetToM - cut.offsetFromM) / 1000).toFixed(2)} km · ${cut.samples} samples at ${cut.sampleIntervalM} m${busy ? ` · computing ${busy}…` : ""}`}
+    tools={<span className="pw-lenses at-lenses" role="tablist" aria-label="Attribute">
+      {NAMES.map((n) => <button key={n.id} type="button" role="tab" aria-selected={name === n.id} onClick={() => setName(n.id)}>{n.label}</button>)}
+    </span>}
+    canvas={<Chair cube={cube} attr={attr} map={name === "amplitude" ? null : MAPS[name]!} opacity={opacity} slices={slices} onSlices={setSlices} faults={faults.flatMap((f) => f.sticks)} onPin={wire.pin} />}
+    inspector={<Inspector id="attributes" initial="slices" sections={[
+      { id: "slices", title: "Slices", summary: `${Math.round(slices.s * cut.sampleIntervalM)} m depth`, body: <div className="pw-dials">
+        <Dial label="Inline (across)" value={slices.o} min={0} max={cube.offsetCount - 1} step={1} tone="#38bdf8" show={(v) => `${Math.round(cut.offsetFromM + v * cut.spacingM)} m`} onChange={(o) => setSlices((x) => ({ ...x, o }))} />
+        <Dial label="Crossline (along)" value={slices.a} min={0} max={cube.alongCount - 1} step={1} tone="#f472b6" show={(v) => `${Math.round(cut.alongFromM + v * cut.spacingM)} m`} onChange={(a) => setSlices((x) => ({ ...x, a }))} />
+        <Dial label="Depth slice" value={slices.s} min={0} max={cube.sampleCount - 1} step={1} tone="#f59e0b" show={(v) => `${Math.round(v * cut.sampleIntervalM)} m`} onChange={(sv) => setSlices((x) => ({ ...x, s: sv }))} />
+      </div> },
+      { id: "colour", title: "Colour", summary: name === "amplitude" ? "grey" : `${Math.round(opacity * 100)}% over the amplitude`, body: <>
+        <div className="pw-dials"><Dial label="Attribute opacity" value={opacity} min={0} max={1} step={0.05} tone="#a78bfa" show={(v) => `${Math.round(v * 100)}%`} onChange={setOpacity} /></div>
         {attr && <div className="at-legend"><i style={{ background: `linear-gradient(90deg, ${Array.from({ length: 8 }, (_, k) => `rgb(${MAPS[name]!(k / 7).map(Math.round).join(",")})`).join(",")})` }} /><span><small>{name === "phase" ? "−180°" : name === "coherence" ? "discontinuous" : "low"}</small><small>{name === "phase" ? "+180°" : name === "coherence" ? "continuous" : "high"}</small></span></div>}
-        <p className="nodal-hint">{info.note} Drag a slice&apos;s face to sweep it; drag elsewhere to orbit; scroll to zoom. The deck&apos;s depth cursor moves the depth slice. {faults.length ? `${faults.length} fault${faults.length === 1 ? "" : "s"} from Horizons drawn as sticks.` : "Faults picked in Horizons appear here as sticks."}</p>
-      </aside>
-    </div>
-  </div>;
+      </> },
+      { id: "about", title: "What it shows", body: <p className="nodal-hint">{info.note}</p> },
+    ]} />}
+    status={<Status items={[
+      "Drag a slice's face to sweep it · drag elsewhere to orbit · scroll to zoom · the depth cursor moves the depth slice",
+      faults.length ? `${faults.length} fault${faults.length === 1 ? "" : "s"} from Horizons drawn as sticks` : "Faults picked in Horizons appear here as sticks",
+    ]} />} />;
 }
 
 /**
@@ -178,7 +163,7 @@ function Chair({ cube, attr, map, opacity, slices, onSlices, faults, onPin }: {
       ctx.fillStyle = "rgba(226,232,240,0.6)"; ctx.font = "500 10px 'IBM Plex Sans', sans-serif";
       const lab = (p: { x: number; y: number }, text: string) => ctx.fillText(text, p.x, p.y);
       lab(P(na, 0, 0), `along ${Math.round(cut.alongToM)} m`); lab(P(0, no, 0), `across ${Math.round(cut.offsetToM)} m`); lab(P(0, 0, ns), `${Math.round(ns * cut.sampleIntervalM)} m`);
-      ctx.textAlign = "right"; ctx.fillText("drag a face to sweep it · drag to orbit · scroll to zoom · double-click to reset", w - 10, h - 10);
+      // How to use it is said in the status line, not written over the cube.
       (el as HTMLCanvasElement & { faces?: typeof faces }).faces = faces;
     };
     frame = requestAnimationFrame(draw);
