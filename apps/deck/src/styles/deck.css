@@ -2110,3 +2110,8 @@ body::before { content: ""; position: fixed; inset: 0; pointer-events: none; z-i
 .ds-auth-row > span { display: flex; flex-direction: column; min-width: 0; }
 .ds-auth-row b { font: 600 var(--t-12) var(--font-ui); color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ds-auth-row small { font-size: var(--t-11); color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* A release rolled out under an open tab: a line in the lens bar with the one control, never a layer. */
+.lens-update { color: var(--ink); font-weight: 600; padding: 0 8px; border-radius: 6px; background: color-mix(in srgb, var(--signal-time) 18%, transparent); }
+.lens-update button { font: inherit; font-weight: 600; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 5px; padding: 0 8px; margin: 0 2px; cursor: pointer; }
+.lens-update button:hover { border-color: var(--ink-3); }

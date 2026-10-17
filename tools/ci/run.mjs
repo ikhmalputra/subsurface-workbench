@@ -49,6 +49,7 @@ const STEPS = [
   { name: "fuzz", tier: "t0", cmd: ["node", "tools/fuzz/run.mjs", "--runs", "500"], script: "tools/fuzz/run.mjs" },
   { name: "audit", tier: "t0", cmd: ["pnpm", "audit", "--audit-level", "high"], network: true },
   { name: "build", tier: "t0", cmd: ["pnpm", "build"] },
+  { name: "release-tools", tier: "t0", cmd: ["pnpm", "test:release-tools"], script: "tools/release/release.test.mjs" },
   { name: "render-adapters", tier: "t0", cmd: ["pnpm", "test:render-adapters"] },
   { name: "packages", tier: "t0", cmd: ["pnpm", "test:packages"], network: true },
   { name: "budget", tier: "t0", cmd: ["pnpm", "test:budget"] },
