@@ -1472,6 +1472,10 @@
     "kind": "function"
    },
    {
+    "name": "compositeShape",
+    "kind": "function"
+   },
+   {
     "name": "CORRELATIONS",
     "kind": "value"
    },
@@ -1549,6 +1553,10 @@
    },
    {
     "name": "matchTank",
+    "kind": "function"
+   },
+   {
+    "name": "nitrogenAt60",
     "kind": "function"
    },
    {

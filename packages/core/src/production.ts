@@ -31,7 +31,7 @@ export interface BlackOil {
 /**
  * How the correlations are brought onto a lab report, as PROSPER and Pipesim do: the bubble point
  * scaled (and the solution-gas curve with it, so all the gas is in solution at the matched bubble
- * point), the formation volume factor and the oil viscosity multiplied.
+ * point), the oil's swelling (Bo − 1) and its viscosity multiplied.
  */
 export interface PvtTuning { readonly pbFactor: number; readonly boFactor: number; readonly muFactor: number }
 const tuned = (fluid: BlackOil) => fluid.tuning ?? { pbFactor: 1, boFactor: 1, muFactor: 1 };
@@ -52,14 +52,20 @@ export function solutionGor(fluid: BlackOil, p: number, tempF: number): number {
   return Math.min(fluid.gor, Math.max(0, fluid.gasSg * ((q / 18.2 + 1.4) * 10 ** (0.0125 * fluid.api - 0.00091 * tempF)) ** (1 / 0.83)));
 }
 
-/** Oil formation volume factor, rb/STB: Standing when saturated, Vasquez–Beggs compressibility above the bubble point. */
+/**
+ * Oil formation volume factor, rb/STB: Standing when saturated (a match factor scales its swelling,
+ * Bo − 1, so stock-tank oil stays at 1), and above the bubble point Vasquez–Beggs' compressibility
+ * co = A/p integrated: Bo = Bob (pb/p)^A. A is floored where the correlation, outside its range
+ * (very low GOR, cool oil), would turn negative and make the oil swell under pressure.
+ */
 export function oilFvf(fluid: BlackOil, p: number, tempF: number): number {
   const pb = bubblePoint(fluid, tempF), rs = solutionGor(fluid, Math.min(p, pb), tempF);
-  const saturated = (r: number) => tuned(fluid).boFactor * (0.9759 + 0.00012 * (r * Math.sqrt(fluid.gasSg / oilSg(fluid.api)) + 1.25 * tempF) ** 1.2);
+  const saturated = (r: number) => 1 + tuned(fluid).boFactor * (0.9759 + 0.00012 * (r * Math.sqrt(fluid.gasSg / oilSg(fluid.api)) + 1.25 * tempF) ** 1.2 - 1);
   if (p <= pb) return saturated(rs);
-  const co = (-1433 + 5 * fluid.gor + 17.2 * tempF - 1180 * fluid.gasSg + 12.61 * fluid.api) / (p * 1e5);
-  return saturated(fluid.gor) * Math.exp(-co * (p - pb));
+  return saturated(fluid.gor) * (pb / p) ** undersaturatedA(fluid, tempF);
 }
+/** Vasquez–Beggs' A: the undersaturated oil compressibility is A/p (1/psi); floored at 1×10⁻⁶ /psi at 3,000 psia. */
+const undersaturatedA = (fluid: BlackOil, tempF: number) => Math.max(0.003, (-1433 + 5 * fluid.gor + 17.2 * tempF - 1180 * fluid.gasSg + 12.61 * fluid.api) * 1e-5);
 
 /** Oil viscosity, cp: Beggs–Robinson dead and live oil, Vasquez–Beggs above the bubble point. */
 export function oilViscosity(fluid: BlackOil, p: number, tempF: number): number {
@@ -79,7 +85,11 @@ export function oilDensity(fluid: BlackOil, p: number, tempF: number): number {
 /** Gas compressibility factor Z (Dranchuk–Abou-Kassem on Sutton pseudo-criticals). */
 export function gasZ(gasSg: number, p: number, tempF: number): number {
   const tpc = 169.2 + 349.5 * gasSg - 74 * gasSg * gasSg, ppc = 756.8 - 131 * gasSg - 3.6 * gasSg * gasSg;
-  const tr = rankine(tempF) / tpc, pr = p / ppc;
+  return zReduced(p / ppc, rankine(tempF) / tpc);
+}
+
+/** Z at a reduced pressure and temperature (Dranchuk–Abou-Kassem). */
+function zReduced(pr: number, tr: number): number {
   const A = [0.3265, -1.07, -0.5339, 0.01569, -0.05165, 0.5475, -0.7361, 0.1844, 0.1056, 0.6134, 0.721];
   const c1 = A[0]! + A[1]! / tr + A[2]! / tr ** 3 + A[3]! / tr ** 4 + A[4]! / tr ** 5;
   const c2 = A[5]! + A[6]! / tr + A[7]! / tr ** 2, c3 = A[8]! * (A[6]! / tr + A[7]! / tr ** 2);
@@ -141,27 +151,36 @@ export interface Inflow {
   readonly pwf: (rate: number) => number | null;
 }
 
-/** The well's inflow: straight line above the bubble point, Vogel's curve below it (composite IPR), applied to total liquid. */
-export function inflow(reservoir: Reservoir, fluid: BlackOil, piOverride?: number): Inflow {
+/**
+ * The well's inflow of total liquid: a straight line above the bubble point; below it the Petrobras
+ * composite, Vogel's curve on the oil fraction and a straight line on the water. The productivity
+ * index is a liquid one: measured from tests, or Darcy's on oil properties when assumed.
+ */
+export function inflow(reservoir: Reservoir, fluid: BlackOil, piOverride?: number, waterCut = 0): Inflow {
   const pi = piOverride ?? productivityIndex(reservoir, fluid), pr = reservoir.pressure;
-  const pb = Math.min(pr, bubblePoint(fluid, reservoir.tempF));
-  const qb = pi * (pr - pb), vogelMax = pi * pb / 1.8;
-  const rate = (pwf: number) => {
-    const p = Math.max(0, Math.min(pr, pwf));
-    if (p >= pb) return pi * (pr - p);
-    const x = pb > 0 ? p / pb : 0;
-    return qb + vogelMax * (1 - 0.2 * x - 0.8 * x * x);
-  };
+  const pb = Math.min(pr, bubblePoint(fluid, reservoir.tempF)), fw = Math.max(0, Math.min(1, waterCut));
+  const rate = (pwf: number) => pi * compositeShape(pr, pb, Math.max(0, Math.min(pr, pwf)), fw);
   const aof = rate(0);
   const pwf = (q: number) => {
     if (q < 0 || q > aof) return null;
+    const qb = pi * (pr - pb);
     if (q <= qb) return pr - q / pi;
-    // Vogel's quadratic in x = pwf/pb, solved for the root in 0..1.
-    const c = (q - qb) / vogelMax - 1, disc = 0.04 - 3.2 * c;
-    const x = (-0.2 + Math.sqrt(Math.max(0, disc))) / 1.6;
-    return Math.max(0, x * pb);
+    // Below the bubble point the composite is monotone in pwf: bisect.
+    let lo = 0, hi = pb;
+    for (let i = 0; i < 60; i++) { const mid = (lo + hi) / 2; if (rate(mid) > q) lo = mid; else hi = mid; }
+    return (lo + hi) / 2;
   };
   return { pi, bubblePoint: pb, aof, rate, pwf };
+}
+
+/**
+ * The composite inflow per unit productivity index (Petrobras): straight above the bubble point;
+ * below it, the oil fraction follows Vogel (free gas cuts its mobility) and the water a straight line.
+ */
+export function compositeShape(pr: number, pb: number, pwf: number, waterCut: number): number {
+  if (pwf >= pb) return pr - pwf;
+  const x = pb > 0 ? pwf / pb : 0;
+  return (pr - pb) + (1 - waterCut) * pb / 1.8 * (1 - 0.2 * x - 0.8 * x * x) + waterCut * (pb - pwf);
 }
 
 // ── Outflow: Beggs & Brill ────────────────────────────────────────────────────────────────────
@@ -217,6 +236,15 @@ function insitu(input: FlowInput) {
   return { d, theta, sinT: Math.sin(theta), rough: (input.roughnessIn ?? 0.0006) / input.idIn, vsl, vsg, vm, rhoL, rhoG, muL, muG, sigma, lambda, hf: input.holdupFactor ?? 1, ff: input.frictionFactor ?? 1 };
 }
 
+/**
+ * Near single-phase gas (no-slip liquid under 1%) both correlations leave their data: Hagedorn &
+ * Brown's chart never reads below 0.07 holdup. The holdup is eased onto the no-slip value on a log
+ * scale between 1% and 0.01% liquid, so the gradient meets the gas-only one without a jump.
+ */
+const toGas = (holdup: number, lambda: number) => lambda >= 0.01 ? holdup : lambda + (holdup - lambda) * Math.max(0, Math.log(lambda / 1e-4) / Math.log(100));
+/** Kinetic energy term (Beggs & Brill's Ek): the gradient over (1 − Ek). Matters near the top of gas-lifted wells. */
+const accelerated = (gradient: number, rhoS: number, vm: number, vsg: number, p: number) => gradient / (1 - Math.min(0.9, rhoS * vm * vsg / (32.174 * p * 144)));
+
 /** One phase only, at either end: no pattern to pick. */
 function singlePhase(f: ReturnType<typeof insitu>): FlowPoint {
   const liquid = f.lambda >= 0.9999, rho = liquid ? f.rhoL : f.rhoG, mu = liquid ? f.muL : f.muG;
@@ -227,8 +255,9 @@ function singlePhase(f: ReturnType<typeof insitu>): FlowPoint {
 
 /**
  * The pressure gradient at one point in the tubing (Beggs & Brill with Payne's correction): flow
- * pattern from the Froude number and no-slip liquid fraction, holdup corrected for inclination,
- * friction from the two-phase factor. `angleDeg` is from horizontal (90 = straight up).
+ * pattern from the Froude number and no-slip liquid fraction, holdup corrected for inclination (up
+ * and down), friction from the two-phase factor, and the kinetic term. `angleDeg` is from horizontal
+ * (90 = straight up).
  */
 export function beggsBrill(input: FlowInput): FlowPoint {
   const f = insitu(input);
@@ -247,20 +276,23 @@ export function beggsBrill(input: FlowInput): FlowPoint {
   const holdupOf = (kind: "segregated" | "intermittent" | "distributed") => {
     const [a, b, c] = kind === "segregated" ? [0.98, 0.4846, 0.0868] : kind === "intermittent" ? [0.845, 0.5351, 0.0173] : [1.065, 0.5824, 0.0609];
     const h0 = Math.max(lambda, a * lambda ** b / nfr ** c);
-    // Inclination: uphill coefficients; distributed flow needs none.
+    // Inclination: uphill coefficients (none for distributed flow); downhill, one set for every pattern.
     let C = 0;
-    if (kind !== "distributed" && sinT > 0) {
+    if (sinT > 0 && kind !== "distributed") {
       const [e, g1, g2, h] = kind === "segregated" ? [0.011, -3.768, 3.539, -1.614] : [2.96, 0.305, -0.4473, 0.0978];
       C = Math.max(0, (1 - lambda) * Math.log(e * lambda ** g1 * nlv ** g2 * nfr ** h));
-    }
+    } else if (sinT < 0) C = Math.max(0, (1 - lambda) * Math.log(4.7 * lambda ** -0.3692 * nlv ** 0.1244 * nfr ** -0.5056));
     const s = Math.sin(1.8 * theta), psi = 1 + C * (s - s ** 3 / 3);
-    // Payne: Beggs & Brill over-predict holdup uphill.
-    return Math.min(1, Math.max(lambda, h0 * psi * (sinT > 0 ? 0.924 : 1)));
+    // Payne: Beggs & Brill over-predict holdup, 0.924 uphill and 0.685 downhill.
+    const h = h0 * psi * (sinT > 0 ? 0.924 : sinT < 0 ? 0.685 : 1);
+    // Uphill the gas cannot lag the liquid, so holdup stays at or above no-slip (Payne's factor can
+    // take it under, which the published order allows); downhill the liquid runs ahead and may fall below.
+    return Math.min(1, sinT > 0 ? Math.max(lambda, h) : Math.max(1e-4, h));
   };
   let holdup: number;
   if (pattern === "transition") { const A = (l3 - nfr) / (l3 - l2); holdup = A * holdupOf("segregated") + (1 - A) * holdupOf("intermittent"); }
   else holdup = holdupOf(pattern);
-  holdup = Math.min(1, Math.max(lambda, holdup * f.hf));
+  holdup = toGas(Math.min(1, Math.max(sinT > 0 ? lambda : 1e-4, holdup * f.hf)), lambda);
 
   const rhoN = rhoL * lambda + rhoG * (1 - lambda), muN = muL * lambda + muG * (1 - lambda);
   const re = 1488 * rhoN * vm * d / muN, fn = friction(re, rough);
@@ -269,13 +301,13 @@ export function beggsBrill(input: FlowInput): FlowPoint {
   const ftp = f.ff * fn * Math.exp(S);
   const rhoS = rhoL * holdup + rhoG * (1 - holdup);
   const elevation = rhoS * sinT / 144, fr = ftp * rhoN * vm * vm / (2 * 32.174 * d) / 144;
-  return { gradient: elevation + fr, elevation, friction: fr, pattern, holdup, noSlip: lambda, vsl, vsg };
+  return { gradient: accelerated(elevation + fr, rhoS, vm, vsg, input.p), elevation, friction: fr, pattern, holdup, noSlip: lambda, vsl, vsg };
 }
 
 /**
  * The pressure gradient by Hagedorn & Brown (1965), as modified in Brill & Mayhill: holdup from the
- * correlation's three charts (curve fits), Griffith's bubble flow where the gas is too little to slug,
- * and holdup never below the no-slip fraction. Built on vertical wells: the elevation term uses the
+ * correlation's three charts (curve fits), Griffith's bubble flow where the gas is too little to slug
+ * (friction then on the liquid), holdup never below the no-slip fraction, and the kinetic term. Built on vertical wells: the elevation term uses the
  * well's inclination, the holdup does not.
  */
 export function hagedornBrown(input: FlowInput): FlowPoint {
@@ -285,7 +317,8 @@ export function hagedornBrown(input: FlowInput): FlowPoint {
   let holdup: number, pattern: FlowPattern;
   // Griffith: bubble flow while the gas fraction is under the boundary.
   const lb = Math.max(0.13, 1.071 - 0.2218 * vm * vm / d);
-  if (vsg / vm < lb) {
+  const bubble = vsg / vm < lb;
+  if (bubble) {
     const vs = 0.8;
     holdup = 1 - 0.5 * (1 + vm / vs - Math.sqrt((1 + vm / vs) ** 2 - 4 * vsg / vs));
     pattern = "distributed";
@@ -295,17 +328,25 @@ export function hagedornBrown(input: FlowInput): FlowPoint {
     const cnl = (0.0019 + 0.0322 * nl - 0.6642 * nl * nl + 4.9951 * nl ** 3) / (1 - 10.0147 * nl + 33.8696 * nl * nl + 277.2817 * nl ** 3);
     const x1 = nlv / ngv ** 0.575 * (input.p / 14.7) ** 0.1 * cnl / nd;
     const hlPsi = Math.sqrt(Math.max(0, (0.0047 + 1123.32 * x1 + 729489.64 * x1 * x1) / (1 + 1097.1566 * x1 + 722153.97 * x1 * x1)));
-    const x2 = ngv * nl ** 0.38 / nd ** 2.14;
+    // The secondary chart ends at 0.09; the fit has a pole just past it.
+    const x2 = Math.min(0.09, ngv * nl ** 0.38 / nd ** 2.14);
     const psi = x2 <= 0.01 ? 1 : (1.0886 - 69.9473 * x2 + 2334.3497 * x2 * x2 - 12896.683 * x2 ** 3) / (1 - 53.4401 * x2 + 1517.9369 * x2 * x2 - 8419.8115 * x2 ** 3);
     holdup = hlPsi * psi;
     pattern = "intermittent";
   }
-  holdup = Math.min(1, Math.max(lambda, holdup * f.hf));
+  holdup = toGas(Math.min(1, Math.max(lambda, holdup * f.hf)), lambda);
   const rhoS = rhoL * holdup + rhoG * (1 - holdup), rhoN = rhoL * lambda + rhoG * (1 - lambda);
-  const muS = muL ** holdup * muG ** (1 - holdup);
-  const re = 1488 * rhoN * vm * d / muS, fr0 = f.ff * friction(re, rough);
-  const elevation = rhoS * sinT / 144, fr = fr0 * rhoN * rhoN * vm * vm / (2 * 32.174 * d * rhoS) / 144;
-  return { gradient: elevation + fr, elevation, friction: fr, pattern, holdup, noSlip: lambda, vsl, vsg };
+  let fr: number;
+  if (bubble) {
+    // Griffith bubble flow: friction on the liquid at its in-situ velocity.
+    const vL = vsl / holdup, re = 1488 * rhoL * vL * d / muL;
+    fr = f.ff * friction(re, rough) * rhoL * vL * vL / (2 * 32.174 * d) / 144;
+  } else {
+    const muS = muL ** holdup * muG ** (1 - holdup), re = 1488 * rhoN * vm * d / muS;
+    fr = f.ff * friction(re, rough) * rhoN * rhoN * vm * vm / (2 * 32.174 * d * rhoS) / 144;
+  }
+  const elevation = rhoS * sinT / 144;
+  return { gradient: accelerated(elevation + fr, rhoS, vm, vsg, input.p), elevation, friction: fr, pattern, holdup, noSlip: lambda, vsl, vsg };
 }
 
 export const gradientBy: Readonly<Record<Correlation, (input: FlowInput) => FlowPoint>> = { "beggs-brill": beggsBrill, "hagedorn-brown": hagedornBrown };
@@ -324,7 +365,7 @@ export interface Tubing {
   readonly liftGasScfD: number;
 }
 export interface Traverse {
-  /** Pressure at the producing depth, psia; null when the column cannot be carried (flow reversal, pressure ≤ 0). */
+  /** Pressure at the producing depth, psia; null when the pressure leaves 0–20,000 psia (the tubing cannot carry the rate). */
   readonly bottomPressure: number | null;
   readonly points: readonly ({ readonly mdFt: number; readonly tvdFt: number; readonly p: number; readonly tempF: number } & FlowPoint)[];
 }
@@ -353,21 +394,24 @@ export function traverse(input: {
   const points: Traverse["points"][number][] = [];
   let p = input.whp;
   const at = (md: number, pressure: number) => {
-    const tvdA = tvdAtMd(path, Math.max(0, md - 5)), tvdB = tvdAtMd(path, md + 5);
-    const angle = Math.asin(Math.max(-1, Math.min(1, (tvdB - tvdA) / 10))) * 180 / Math.PI;
+    const mdA = Math.max(0, md - 5), mdB = md + 5, tvdA = tvdAtMd(path, mdA), tvdB = tvdAtMd(path, mdB);
+    const angle = Math.asin(Math.max(-1, Math.min(1, (tvdB - tvdA) / (mdB - mdA)))) * 180 / Math.PI;
     const tvd = tvdAtMd(path, md), tempF = input.tempAt(tvd);
     const lift = tubing.liftDepthFt !== null && md <= tubing.liftDepthFt ? tubing.liftGasScfD : 0;
     return { tvd, tempF, flow: gradientBy[input.correlation ?? "beggs-brill"]({ p: pressure, tempF, fluid, oilRate: oil, waterRate: water, liftGasScfD: lift, idIn: tubing.idIn, angleDeg: angle, holdupFactor: input.holdupFactor, frictionFactor: input.frictionFactor }) };
   };
   const bottom = Math.min(tubing.depthFt, input.toMdFt ?? tubing.depthFt);
+  const lift = tubing.liftDepthFt !== null && tubing.liftGasScfD > 0 ? tubing.liftDepthFt : null;
   for (let md = 0; md < bottom;) {
-    const ds = Math.min(step, bottom - md);
+    // A step ends at the injection point, so the gas joins exactly there.
+    const ds = lift !== null && md < lift && md + step > lift ? lift - md : Math.min(step, bottom - md);
     const here = at(md, p);
     points.push({ mdFt: md, tvdFt: here.tvd, p, tempF: here.tempF, ...here.flow });
     const mid = at(md + ds / 2, p + here.flow.gradient * ds / 2);
     p += mid.flow.gradient * ds;
     md += ds;
-    if (!Number.isFinite(p) || p <= 0) return { bottomPressure: null, points };
+    // Beyond 20,000 psia the PVT correlations are long past their data: the tubing cannot carry this rate.
+    if (!Number.isFinite(p) || p <= 0 || p > 20000) return { bottomPressure: null, points };
   }
   const end = at(bottom, p);
   points.push({ mdFt: bottom, tvdFt: end.tvd, p, tempF: end.tempF, ...end.flow });
@@ -390,8 +434,8 @@ export function outflowCurve(rates: ArrayLike<number>, run: (rate: number) => nu
  * reaches what the tubing needs (the stable crossing, right of the outflow curve's minimum). Null
  * when the curves never meet: the well does not flow naturally at these conditions.
  */
-export function operatingPoint(ipr: Inflow, vlp: NodalCurve): OperatingPoint | null {
-  let found: OperatingPoint | null = null;
+export function operatingPoint(ipr: Inflow, vlp: NodalCurve, exact?: (rate: number) => number | null): OperatingPoint | null {
+  let found: OperatingPoint | null = null, bracket: [number, number] | null = null;
   for (let i = 1; i < vlp.rates.length; i++) {
     const q0 = vlp.rates[i - 1]!, q1 = vlp.rates[i]!, v0 = vlp.pressures[i - 1]!, v1 = vlp.pressures[i]!;
     const i0 = ipr.pwf(q0), i1 = ipr.pwf(q1);
@@ -400,7 +444,17 @@ export function operatingPoint(ipr: Inflow, vlp: NodalCurve): OperatingPoint | n
     if (d0 >= 0 && d1 < 0) {
       const t = d0 / (d0 - d1), rate = q0 + (q1 - q0) * t;
       found = { rate, pwf: v0 + (v1 - v0) * t };
+      bracket = [q0, q1];
     }
+  }
+  // The grid only brackets the crossing; read straight between grid points the rate is off by up to a
+  // few per cent, enough to make slopes (the gas-lift curve's) jagged. With the outflow itself, bisect.
+  if (found && bracket && exact) {
+    let [a, b] = bracket;
+    const gap = (q: number) => { const v = exact(q), w = ipr.pwf(q); return v === null || w === null || !Number.isFinite(v) ? NaN : w - v; };
+    for (let k = 0; k < 18 && b - a > 1e-4 * b; k++) { const m = (a + b) / 2, g = gap(m); if (!Number.isFinite(g)) break; if (g >= 0) a = m; else b = m; }
+    const rate = (a + b) / 2, pwf = exact(rate);
+    if (pwf !== null && Number.isFinite(pwf)) found = { rate, pwf };
   }
   return found;
 }
@@ -445,7 +499,8 @@ export interface LabPvt { readonly bubblePoint: number; readonly rsb: number; re
 export function matchPvt(fluid: BlackOil, lab: LabPvt, tempF: number) {
   const plain: BlackOil = { ...fluid, api: lab.api ?? fluid.api, gasSg: lab.gasSg ?? fluid.gasSg, gor: lab.rsb, tuning: undefined };
   const pb = bubblePoint(plain, tempF), bo = oilFvf(plain, pb, tempF), mu = oilViscosity(plain, pb, tempF);
-  const tuning: PvtTuning = { pbFactor: lab.bubblePoint / pb, boFactor: lab.boAtPb / bo, muFactor: lab.muAtPb / mu };
+  // The Bo factor scales the swelling (Bo − 1), as oilFvf applies it.
+  const tuning: PvtTuning = { pbFactor: lab.bubblePoint / pb, boFactor: (lab.boAtPb - 1) / (bo - 1), muFactor: lab.muAtPb / mu };
   return { tuning, fluid: { ...plain, tuning } as BlackOil, correlation: { bubblePoint: pb, boAtPb: bo, muAtPb: mu }, lab };
 }
 
@@ -460,7 +515,8 @@ const testRun = (model: WellModel, test: WellTest, flow: FlowTuning, toMdFt?: nu
 
 /** The model's gauge pressure for each test with a gauge reading, against the reading: residuals (model − measured), mean absolute error and bias, psi. */
 export function gaugeFit(model: WellModel, tests: readonly WellTest[], flow: FlowTuning) {
-  const rows = tests.filter((test) => test.gaugeMdFt !== null && test.gaugePressure !== null).map((test) => {
+  // A gauge below the producing depth is outside the tubing model: left out rather than read at the bottom.
+  const rows = tests.filter((test) => test.gaugeMdFt !== null && test.gaugePressure !== null && test.gaugeMdFt <= model.tubing.depthFt).map((test) => {
     const at = testRun(model, test, flow, test.gaugeMdFt!).bottomPressure;
     return { test, model: at, residual: at === null ? null : at - test.gaugePressure! };
   });
@@ -479,23 +535,64 @@ export const rankCorrelations = (model: WellModel, tests: readonly WellTest[]) =
  * golden-section in each, holdup 0.5–1.6, friction 0.3–3): the "VLP match" step of PROSPER and
  * Pipesim. Multipliers far from 1 say the correlation, or the data, is wrong for this well.
  */
-export function tuneFlow(model: WellModel, tests: readonly WellTest[], correlation: Correlation): FlowTuning & { readonly mae: number; readonly bias: number } {
-  let hf = 1, ff = 1;
-  const cost = (h: number, f: number) => gaugeFit(model, tests, { correlation, holdupFactor: h, frictionFactor: f }).mae;
+export function tuneFlow(model: WellModel, tests: readonly WellTest[], correlation: Correlation): FlowTuning & { readonly mae: number; readonly bias: number; readonly resolved: { readonly holdup: boolean; readonly friction: boolean }; readonly gauges: number } {
+  const fitAt = (h: number, f: number) => gaugeFit(model, tests, { correlation, holdupFactor: h, frictionFactor: f });
+  const n = fitAt(1, 1).rows.filter((row) => row.residual !== null).length;
+  // No gauge readings: nothing to tune against, so the correlation stays as published.
+  if (!n) return { correlation, holdupFactor: 1, frictionFactor: 1, mae: NaN, bias: NaN, resolved: { holdup: false, friction: false }, gauges: 0 };
+  const H = [0.5, 1.6] as const, F = [0.3, 3] as const;
+  const clamp = (v: number, [lo, hi]: readonly [number, number]) => Math.min(hi, Math.max(lo, v));
+  const sse = (h: number, f: number) => { const rows = fitAt(clamp(h, H), clamp(f, F)).rows; return rows.reduce((sum, row) => sum + (row.residual === null ? 1e8 : row.residual ** 2), 0); };
+  // Both factors together (Nelder–Mead on the squared residuals, in log space): holdup and friction
+  // trade off along a narrow valley that one-at-a-time searches stop short in.
+  const nelder = (start: readonly [number, number]) => {
+    const f = (x: readonly number[]) => sse(Math.exp(x[0]!), Math.exp(x[1]!));
+    let simplex = [[Math.log(start[0]), Math.log(start[1])], [Math.log(start[0]) + 0.08, Math.log(start[1])], [Math.log(start[0]), Math.log(start[1]) + 0.15]].map((x) => ({ x, v: f(x) }));
+    for (let it = 0; it < 80; it++) {
+      simplex.sort((a, b) => a.v - b.v);
+      const [best, mid, worst] = simplex as [typeof simplex[0], typeof simplex[0], typeof simplex[0]];
+      if (Math.abs(worst.v - best.v) <= 1e-6 * (1 + best.v) && Math.hypot(worst.x[0]! - best.x[0]!, worst.x[1]! - best.x[1]!) < 1e-4) break;
+      const c = [(best.x[0]! + mid.x[0]!) / 2, (best.x[1]! + mid.x[1]!) / 2];
+      const at = (t: number) => { const x = [c[0]! + t * (worst.x[0]! - c[0]!), c[1]! + t * (worst.x[1]! - c[1]!)]; return { x, v: f(x) }; };
+      const r = at(-1);
+      if (r.v < best.v) { const e = at(-2); simplex = [best, mid, e.v < r.v ? e : r]; }
+      else if (r.v < mid.v) simplex = [best, mid, r];
+      else { const k = at(r.v < worst.v ? -0.5 : 0.5); if (k.v < Math.min(r.v, worst.v)) simplex = [best, mid, k]; else simplex = [best, ...[mid, worst].map((p) => { const x = [best.x[0]! + (p.x[0]! - best.x[0]!) / 2, best.x[1]! + (p.x[1]! - best.x[1]!) / 2]; return { x, v: f(x) }; })]; }
+    }
+    simplex.sort((a, b) => a.v - b.v);
+    return { h: clamp(Math.exp(simplex[0]!.x[0]!), H), f: clamp(Math.exp(simplex[0]!.x[1]!), F), v: simplex[0]!.v };
+  };
+  // Started from the best of a coarse grid, so a second valley is not missed.
+  let start: [number, number] = [1, 1], startV = Infinity;
+  for (const h of [0.7, 0.9, 1.1, 1.3]) for (const f of [0.6, 1, 1.5, 2.2]) { const v = sse(h, f); if (v < startV) { startV = v; start = [h, f]; } }
+  const both = nelder(start);
   const golden = (lo: number, hi: number, at: (x: number) => number) => {
     const g = (Math.sqrt(5) - 1) / 2;
     let a = lo, b = hi, c = b - g * (b - a), d = a + g * (b - a), fc = at(c), fd = at(d);
-    for (let i = 0; i < 14; i++) {
-      if (fc < fd) { b = d; d = c; fd = fc; c = b - g * (b - a); fc = at(c); } else { a = c; c = d; fc = fd; d = a + g * (b - a); fd = at(d); }
-    }
+    for (let i = 0; i < 24; i++) { if (fc < fd) { b = d; d = c; fd = fc; c = b - g * (b - a); fc = at(c); } else { a = c; c = d; fc = fd; d = a + g * (b - a); fd = at(d); } }
     return (a + b) / 2;
   };
-  for (let round = 0; round < 3; round++) {
-    hf = golden(0.5, 1.6, (h) => cost(h, ff));
-    ff = golden(0.3, 3, (f) => cost(hf, f));
-  }
-  const fit = gaugeFit(model, tests, { correlation, holdupFactor: hf, frictionFactor: ff });
-  return { correlation, holdupFactor: hf, frictionFactor: ff, mae: fit.mae, bias: fit.bias };
+  // Is each factor resolved by these tests? The nested-model F-test at 95%: the second factor counts
+  // only if it cuts the squared residuals by more than chance would with this many gauges; else it is
+  // held at 1, not reported as if measured.
+  const holdupOnly = golden(H[0], H[1], (h) => sse(h, 1)), frictionOnly = golden(F[0], F[1], (f) => sse(1, f));
+  const sH = sse(holdupOnly, 1), sF = sse(1, frictionOnly);
+  const significant = (reduced: number) => n > 2 && both.v > 0 ? (reduced - both.v) / (both.v / (n - 2)) > fCritical95(n - 2) : n > 2 && reduced > both.v;
+  const resolved = { holdup: significant(sF), friction: significant(sH) };
+  let hf = both.h, ff = both.f;
+  if (!resolved.friction && !resolved.holdup) { if (sH <= sF) { hf = holdupOnly; ff = 1; } else { hf = 1; ff = frictionOnly; } }
+  else if (!resolved.friction) { hf = holdupOnly; ff = 1; }
+  else if (!resolved.holdup) { hf = 1; ff = frictionOnly; }
+  const fit = fitAt(hf, ff);
+  return { correlation, holdupFactor: hf, frictionFactor: ff, mae: fit.mae, bias: fit.bias, resolved, gauges: n };
+}
+
+/** The F distribution's 95th percentile with 1 and df degrees of freedom. */
+function fCritical95(df: number): number {
+  const table: readonly [number, number][] = [[1, 161.4], [2, 18.51], [3, 10.13], [4, 7.71], [5, 6.61], [6, 5.99], [7, 5.59], [8, 5.32], [9, 5.12], [10, 4.96], [12, 4.75], [15, 4.54], [20, 4.35], [30, 4.17], [60, 4.0], [120, 3.92]];
+  if (df >= 120) return 3.84;
+  for (let i = 1; i < table.length; i++) if (df <= table[i]![0]) { const [d0, f0] = table[i - 1]!, [d1, f1] = table[i]!; return f0 + (f1 - f0) * (df - d0) / (d1 - d0); }
+  return 3.84;
 }
 
 /**
@@ -509,19 +606,32 @@ export function calibrateFlow(model: WellModel, tests: readonly WellTest[]) {
     return { ...c, untunedMae: plain.mae, untunedBias: plain.bias, ...tuneFlow(model, tests, c.id) };
   });
   const distance = (t: { holdupFactor: number; frictionFactor: number }) => Math.abs(Math.log(t.holdupFactor)) + Math.abs(Math.log(t.frictionFactor));
-  const best = [...all].sort((a, b) => Math.abs(a.mae - b.mae) <= 2 ? distance(a) - distance(b) : a.mae - b.mae)[0]!;
-  return { all, best };
+  const ranked = [...all].sort((a, b) => Math.abs(a.mae - b.mae) <= 2 || !Number.isFinite(a.mae - b.mae) ? distance(a) - distance(b) : a.mae - b.mae);
+  const best = ranked[0]!, next = ranked[1];
+  // Whether the gauges really prefer it: its tuned error clearly (a fifth, and 2 psi) under the next one's.
+  const clear = !!next && Number.isFinite(best.mae) && next.mae > best.mae + Math.max(2, 0.2 * best.mae);
+  return { all, best, clear };
 }
 
 /** Reservoir pressure at a date: the build-ups' readings, straight between them; before the first, the initial pressure; after the last, the trend of the last two carried on. */
 export function pressureAtDate(model: WellModel, tests: readonly WellTest[], date: string): { readonly pressure: number; readonly measured: boolean } {
-  const t = Date.parse(date), points = tests.filter((test) => test.reservoirPressure !== null).map((test) => ({ t: Date.parse(test.date), p: test.reservoirPressure! })).sort((a, b) => a.t - b.t);
+  const t = Date.parse(date);
+  if (!Number.isFinite(t)) return { pressure: model.initialPressure, measured: false };
+  // Build-ups by date, two on one day averaged.
+  const byDay = new Map<number, number[]>();
+  for (const test of tests) { const d = Date.parse(test.date); if (test.reservoirPressure !== null && Number.isFinite(d)) byDay.set(d, [...(byDay.get(d) ?? []), test.reservoirPressure]); }
+  const points = [...byDay].map(([d, ps]) => ({ t: d, p: ps.reduce((a, b) => a + b, 0) / ps.length })).sort((a, b) => a.t - b.t);
   const exact = points.find((point) => point.t === t);
   if (exact) return { pressure: exact.p, measured: true };
-  const all = [{ t: Math.min(t, ...points.map((point) => point.t)) - 1, p: model.initialPressure }, ...points];
-  for (let i = 1; i < all.length; i++) if (t <= all[i]!.t) { const a = all[i - 1]!, b = all[i]!; return { pressure: a.p + (b.p - a.p) * (t - a.t) / (b.t - a.t || 1), measured: false }; }
+  // Production starts at the first test: the initial pressure there, unless a build-up was taken that day.
+  const firstTest = Math.min(...tests.map((test) => Date.parse(test.date)).filter(Number.isFinite));
+  const all = Number.isFinite(firstTest) && (!points.length || firstTest < points[0]!.t) ? [{ t: firstTest, p: model.initialPressure }, ...points] : points;
+  if (!all.length || t <= all[0]!.t) return { pressure: all[0]?.p ?? model.initialPressure, measured: false };
+  for (let i = 1; i < all.length; i++) if (t <= all[i]!.t) { const a = all[i - 1]!, b = all[i]!; return { pressure: a.p + (b.p - a.p) * (t - a.t) / (b.t - a.t), measured: false }; }
+  // After the last: the last two points' trend, or the last value held when there is only one.
+  if (all.length < 2) return { pressure: all[0]!.p, measured: false };
   const a = all.at(-2)!, b = all.at(-1)!;
-  return { pressure: b.p + (b.p - a.p) * (t - b.t) / (b.t - a.t || 1), measured: false };
+  return { pressure: Math.max(14.7, b.p + (b.p - a.p) * (t - b.t) / (b.t - a.t)), measured: false };
 }
 
 /**
@@ -542,9 +652,8 @@ export function inflowByTest(model: WellModel, tests: readonly WellTest[], flow:
     const pb = Math.min(pressure, bubblePoint(fluid, model.reservoirTempF));
     let pi: number | null = null;
     if (pwf !== null && pwf < pressure) {
-      // Invert the composite IPR: q = J(Pr − pb) + J pb/1.8 (1 − 0.2x − 0.8x²) below pb, q = J(Pr − pwf) above.
-      const shape = pwf >= pb ? pressure - pwf : (pressure - pb) + pb / 1.8 * (1 - 0.2 * (pwf / pb) - 0.8 * (pwf / pb) ** 2);
-      pi = test.liquidRate / shape;
+      // Invert the composite IPR, which is linear in J at a given pwf.
+      pi = test.liquidRate / compositeShape(pressure, pb, pwf, test.waterCut);
     }
     return { test, pwf, reservoirPressure: pressure, pressureMeasured: measured, pi };
   });
@@ -580,9 +689,9 @@ export function syntheticWellTests(truth: {
   const random = seeded(truth.seed ?? 7);
   return truth.plan.flatMap((plan) => {
     const reservoir = truth.reservoirAt(plan.date), fluid: BlackOil = { ...truth.model.fluid, gor: plan.gor };
-    const ipr = inflow(reservoir, fluid);
+    const ipr = inflow(reservoir, fluid, undefined, plan.waterCut);
     const run = (q: number, toMdFt?: number) => traverse({ whp: plan.whp, fluid, liquidRate: q, waterCut: plan.waterCut, tubing: { ...truth.model.tubing, liftGasScfD: plan.liftGasScfD }, path: truth.model.path, tempAt: truth.model.tempAt, stepFt: 150, correlation: truth.flow.correlation, holdupFactor: truth.flow.holdupFactor, frictionFactor: truth.flow.frictionFactor, toMdFt });
-    const point = operatingPoint(ipr, outflowCurve(rateGrid(ipr.aof, 48), (q) => run(q).bottomPressure));
+    const point = operatingPoint(ipr, outflowCurve(rateGrid(ipr.aof, 48), (q) => run(q).bottomPressure), (q) => run(q).bottomPressure);
     if (!point) return [];
     const gauge = run(point.rate, truth.gaugeMdFt).bottomPressure;
     return [{
@@ -643,7 +752,7 @@ export function liftedPoint(input: GasLiftInput, injectionMdFt: number, gasScfD:
   const fluid: BlackOil = { ...input.model.fluid, gor: input.gor };
   const tubing = { ...input.model.tubing, liftDepthFt: injectionMdFt, liftGasScfD: gasScfD };
   const run = (q: number, toMdFt?: number) => traverse({ whp: input.whp, fluid, liquidRate: q, waterCut: input.waterCut, tubing, path: input.model.path, tempAt: input.model.tempAt, stepFt: 200, toMdFt, ...input.flow });
-  const point = operatingPoint(input.ipr, outflowCurve(rates ?? rateGrid(input.ipr.aof, 24), (q) => run(q).bottomPressure));
+  const point = operatingPoint(input.ipr, outflowCurve(rates ?? rateGrid(input.ipr.aof, 24), (q) => run(q).bottomPressure), (q) => run(q).bottomPressure);
   const tubingAt = point ? run(point.rate, injectionMdFt).bottomPressure : null;
   return { point, tubingAt, run };
 }
@@ -692,37 +801,57 @@ export function gasLiftDesign(input: GasLiftInput) {
   const top = input.whp + 0.2 * (input.operatingPsia - input.whp), opTvd = tvdOf(operating.mdFt);
   const designTubing = (md: number) => top + (operating!.tubingAt - top) * Math.min(1, tvdOf(md) / opTvd);
 
-  // 2. Unloading valves.
-  const balance = (fromMd: number, fromPsia: number, surfaceCasing: number) => {
-    // Deepest depth where the load column from `fromPsia` at `fromMd` still sits under the casing pressure (less the differential).
+  // 2. Unloading valves (Takacs; API RP 11V6). Settings step down the string so the casing pressure
+  // closes them from the top: the operating valve opens at the operating pressure, each valve above
+  // it one drop higher. Each valve's depth comes from the pressure it is set to: the load fluid from
+  // the design tubing pressure at the valve above, down to where it meets the casing pressure at this
+  // valve's opening pressure, D(n+1) = D(n) + (Pc(n+1) − Pt(n))/Gs. The top valve is spaced on the
+  // kickoff pressure from the unloading wellhead pressure. The design is the fewest valves whose
+  // deepest one can uncover the operating valve.
+  const reach = (fromMd: number, fromPsia: number, surfacePsia: number) => {
+    const ok = (md: number) => fromPsia + gs * (tvdOf(md) - tvdOf(fromMd)) <= casing(surfacePsia, md);
     let lo = fromMd, hi = operating!.mdFt;
-    const ok = (md: number) => fromPsia + gs * (tvdOf(md) - tvdOf(fromMd)) <= casing(surfaceCasing, md) - (fromMd === 0 ? 0 : dv / 2);
     if (ok(hi)) return hi;
     for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (ok(mid)) lo = mid; else hi = mid; }
     return lo;
   };
-  // Depths first, with the surface pressure falling a step per valve from the operating pressure (the conservative side:
-  // the valves end up a little shallower than the pressures they are later set to would allow).
-  const depths: number[] = [];
-  let md = balance(0, input.unloadingWhp, input.kickoffPsia);
-  while (md < operating.mdFt - minSpacing && depths.length < 20) {
-    depths.push(md);
-    const next = balance(md, designTubing(md), input.operatingPsia - drop * depths.length);
-    if (next - md < minSpacing) break;
-    md = next;
+  const opening = (k: number, count: number) => input.operatingPsia + drop * (count + 1 - k); // valve k of count unloading valves, psia
+  let depths: number[] | null = null, why: string | null = null;
+  for (let count = 0; count <= 20 && !depths; count++) {
+    if (count > 0 && opening(1, count) > input.kickoffPsia + 1e-6) { why = `The kickoff pressure leaves room for ${count - 1} unloading valve${count === 2 ? "" : "s"} at ${drop} psi apart, and more are needed: raise the kickoff pressure or lower the drop per valve.`; break; }
+    const first = reach(0, input.unloadingWhp, input.kickoffPsia);
+    if (count === 0) { if (first >= operating.mdFt) depths = []; continue; }
+    const ds = [first];
+    for (let k = 1; k < count && ds.at(-1)! < operating.mdFt; k++) ds.push(reach(ds.at(-1)!, designTubing(ds.at(-1)!), opening(k + 1, count)));
+    if (ds.length < count || ds.at(-1)! >= operating.mdFt) continue;
+    if (reach(ds.at(-1)!, designTubing(ds.at(-1)!), input.operatingPsia) < operating.mdFt) continue;
+    const tight = ds.findIndex((d, i) => (i ? d - ds[i - 1]! : Infinity) < minSpacing || operating!.mdFt - d < minSpacing / 2);
+    if (tight >= 0) { why = `Unloading needs valves closer than the ${Math.round(minSpacing / FT_PER_M_CORE)} m allowed near ${Math.round(ds[tight]! / FT_PER_M_CORE)} m: more kickoff pressure, a lighter load fluid or a lower unloading wellhead pressure.`; break; }
+    depths = ds;
   }
-  // Then the settings: the operating valve opens at the operating pressure, each unloading valve above it a step higher
-  // (never above the kickoff pressure), so as the casing pressure falls they close from the top down.
+  if (!depths) return { operating, valves: [] as LiftValve[], reason: why ?? "No set of up to 20 unloading valves uncovers the operating valve." };
   const valves: LiftValve[] = depths.map((at, i) => {
-    const surface = Math.min(input.kickoffPsia, input.operatingPsia + drop * (depths.length - i));
+    const surface = opening(i + 1, depths!.length);
     const tvd = tvdOf(at), t = tempAt(tvd), pc = casing(surface, at), pt = designTubing(at);
-    // Nitrogen-charged bellows: dome pressure at valve temperature, then corrected to 60 °F for the test rack.
-    const dome = pc * (1 - R) + pt * R, ct = 1 / (1 + 0.00215 * (t - 60));
-    return { role: "unloading", mdFt: at, tvdFt: tvd, tempF: t, casingPsia: pc, tubingPsia: pt, surfaceOpeningPsig: surface - 14.7, ptroPsig: dome * ct / (1 - R) - 14.7 };
+    // Nitrogen-charged bellows: dome pressure at the valve's temperature, carried to 60 °F at constant
+    // volume with nitrogen's own Z (not the low-pressure rule of thumb), then the test-rack opening.
+    const dome = pc * (1 - R) + pt * R, dome60 = nitrogenAt60(dome, t);
+    return { role: "unloading", mdFt: at, tvdFt: tvd, tempF: t, casingPsia: pc, tubingPsia: pt, surfaceOpeningPsig: surface - 14.7, ptroPsig: (dome60 - 14.7) / (1 - R) };
   });
   const opT = tempAt(opTvd);
   valves.push({ role: "operating", mdFt: operating.mdFt, tvdFt: opTvd, tempF: opT, casingPsia: operating.casingAt, tubingPsia: operating.tubingAt, surfaceOpeningPsig: input.operatingPsia - 14.7, ptroPsig: null });
   return { operating, valves, reason: null };
+}
+
+const FT_PER_M_CORE = 3.28084;
+
+/** A nitrogen dome's pressure at 60 °F, psia, from its pressure at a valve temperature (constant volume, p/ZT fixed; N2: 227.2 °R, 492.8 psia). */
+export function nitrogenAt60(psia: number, tempF: number): number {
+  const z = (p: number, t: number) => zReduced(p / 492.8, rankine(t) / 227.16);
+  const k = psia / (z(psia, tempF) * rankine(tempF)) * rankine(60);
+  let p60 = psia * rankine(60) / rankine(tempF);
+  for (let i = 0; i < 30; i++) p60 = k * z(p60, 60);
+  return p60;
 }
 
 /**
@@ -742,20 +871,35 @@ export function liftPerformance(input: GasLiftInput, injectionMdFt: number, gasR
  * Where to run the lift gas: the technical maximum (most oil), and the economic optimum, the rate
  * at which one more Mscf of gas brings in oil worth no more than it costs (slope = gas cost / oil
  * netback), capped by the gas available. Prices in any one currency: per bbl of oil, per Mscf of gas.
+ * The curve's points only bracket them: given the model (`oilAt`), each is found by golden section
+ * between the grid points either side of the best one, so neither lands on a grid point by
+ * construction. Without the model, the best grid points are returned as they are.
  */
-export function liftOptimum(curve: readonly { readonly gasScfD: number; readonly oil: number }[], oilNetback: number, gasCostPerMscf: number, availableScfD: number) {
+export function liftOptimum(curve: readonly { readonly gasScfD: number; readonly oil: number }[], oilNetback: number, gasCostPerMscf: number, availableScfD: number, oilAt?: (gasScfD: number) => number) {
   const pts = [...curve].sort((a, b) => a.gasScfD - b.gasScfD);
-  const max = pts.reduce((best, p) => p.oil > best.oil ? p : best, pts[0]!);
   const value = (p: { gasScfD: number; oil: number }) => p.oil * oilNetback - p.gasScfD / 1000 * gasCostPerMscf;
-  // On the curve read between its points, the best daily margin within the gas available.
-  let best = pts[0]!, bestValue = value(best);
-  for (let i = 1; i < pts.length; i++) for (let k = 0; k <= 20; k++) {
-    const a = pts[i - 1]!, b = pts[i]!, f = k / 20, p = { gasScfD: a.gasScfD + (b.gasScfD - a.gasScfD) * f, oil: a.oil + (b.oil - a.oil) * f };
-    if (p.gasScfD > availableScfD) continue;
-    const v = value(p);
-    if (v > bestValue) { bestValue = v; best = p; }
-  }
-  return { maximum: max, economic: best, marginPerDay: bestValue, breakEvenSlope: gasCostPerMscf / oilNetback };
+  const argBest = (score: (p: { gasScfD: number; oil: number }) => number, cap: number) => {
+    let i = -1;
+    pts.forEach((p, k) => { if (p.gasScfD <= cap && (i < 0 || score(p) > score(pts[i]!))) i = k; });
+    return Math.max(0, i);
+  };
+  const refine = (i: number, score: (p: { gasScfD: number; oil: number }) => number, cap: number) => {
+    const node = pts[i]!;
+    if (!oilAt) return node;
+    let a = pts[Math.max(0, i - 1)]!.gasScfD, b = Math.min(cap, pts[Math.min(pts.length - 1, i + 1)]!.gasScfD);
+    if (b <= a) return node;
+    const at = (g: number) => ({ gasScfD: g, oil: oilAt(g) });
+    const r = (Math.sqrt(5) - 1) / 2;
+    let c = at(b - r * (b - a)), d = at(a + r * (b - a));
+    for (let k = 0; k < 14; k++) {
+      if (score(c) >= score(d)) { b = d.gasScfD; d = c; c = at(b - r * (b - a)); } else { a = c.gasScfD; c = d; d = at(a + r * (b - a)); }
+    }
+    const found = score(c) >= score(d) ? c : d;
+    return score(found) >= score(node) ? found : node;
+  };
+  const maximum = refine(argBest((p) => p.oil, Infinity), (p) => p.oil, Infinity);
+  const economic = refine(argBest(value, availableScfD), value, availableScfD);
+  return { maximum, economic, marginPerDay: value(economic), breakEvenSlope: gasCostPerMscf / oilNetback, refined: !!oilAt };
 }
 
 // ── Material balance and forecast (a tank, as MBAL runs it, fed by the well's lift curves) ────────
@@ -814,30 +958,34 @@ export function tankPressure(tank: Tank, s: Omit<TankState, "p">): number {
 }
 
 /** Producing GOR at a pressure and cumulative oil: solution gas, plus free gas once its saturation passes the critical. */
-export function tankGor(tank: Tank, p: number, np: number): number {
+export function tankGor(tank: Tank, p: number, np: number, wp = 0): number {
   const k = tankTerms(tank, p), kr = tank.relPerm ?? defaultRelPerm;
   if (p >= bubblePoint(tank.fluid, tank.tempF)) return k.rs;
-  const so = Math.max(0, (1 - tank.swi) * (1 - np / tank.stoiip) * k.bo / k.boi), sg = 1 - tank.swi - so;
+  // Saturations in the pore volume as it now is: the pores shrunk by their compressibility, the water
+  // grown by its own expansion and the aquifer's influx, less what was produced; the rest oil and gas.
+  const pv = tank.stoiip * k.boi / (1 - tank.swi), dp = tank.initialPressure - p, pvNow = pv * (1 - tank.cf * dp);
+  const water = pv * tank.swi * (1 + tank.cw * dp) + tank.stoiip * k.we - wp * BW;
+  const so = Math.max(0, (tank.stoiip - np) * k.bo / pvNow), sw = Math.min(1, Math.max(0, water / pvNow)), sg = Math.max(0, 1 - so - sw);
   if (sg <= kr.sgc) return k.rs;
-  const span = 1 - tank.swi - kr.sgc - kr.sorg;
-  const krg = kr.krgMax * Math.min(1, (sg - kr.sgc) / span) ** kr.ng, kro = Math.max(1e-6, Math.max(0, (so - kr.sorg) / (1 - tank.swi - kr.sorg)) ** kr.no);
+  const span = 1 - sw - kr.sgc - kr.sorg;
+  const krg = kr.krgMax * Math.min(1, (sg - kr.sgc) / Math.max(1e-6, span)) ** kr.ng, kro = Math.max(1e-6, Math.max(0, (so - kr.sorg) / Math.max(1e-6, 1 - sw - kr.sorg)) ** kr.no);
   const muo = oilViscosity(tank.fluid, p, tank.tempF), mug = gasViscosity(tank.fluid.gasSg, Math.max(14.7, p), tank.tempF);
   return k.rs + krg / kro * muo * k.bo / (mug * k.bg);
 }
 
 /** One production step (Tarner): the new pressure, with the gas produced at the step's average GOR. */
 export function tankStep(tank: Tank, state: TankState, dNp: number, dWp: number): TankState & { readonly gor: number } {
-  const np = state.np + dNp, wp = state.wp + dWp, g0 = tankGor(tank, state.p, state.np);
-  const gpAt = (p: number) => state.gp + (g0 + tankGor(tank, p, np)) / 2 * dNp;
+  const np = state.np + dNp, wp = state.wp + dWp, g0 = tankGor(tank, state.p, state.np, state.wp);
+  const gpAt = (p: number) => state.gp + (g0 + tankGor(tank, p, np, wp)) / 2 * dNp;
   const r = (p: number) => residual(tank, p, { np, wp, gp: gpAt(p) });
   let hi = state.p;
-  if (r(hi) <= 0) return { p: hi, np, wp, gp: gpAt(hi), gor: tankGor(tank, hi, np) };
+  if (r(hi) <= 0) return { p: hi, np, wp, gp: gpAt(hi), gor: tankGor(tank, hi, np, wp) };
   // The root nearest the last pressure: at much lower trial pressures the free gas term can turn the balance back over.
   let lo = hi;
   for (let k = 1; k <= 400; k++) { lo = Math.max(14.7, state.p - k * 10 * (1 + k / 20)); if (r(lo) <= 0 || lo === 14.7) break; hi = lo; }
   for (let i = 0; i < 50 && hi - lo > 0.05; i++) { const mid = (lo + hi) / 2; if (r(mid) > 0) hi = mid; else lo = mid; }
   const p = (lo + hi) / 2;
-  return { p, np, wp, gp: gpAt(p), gor: tankGor(tank, p, np) };
+  return { p, np, wp, gp: gpAt(p), gor: tankGor(tank, p, np, wp) };
 }
 
 /** Cumulative oil, water and gas at each test, the rates read as straight lines between tests from the first. */
@@ -877,35 +1025,44 @@ export function pressurePoints(tests: readonly WellTest[], history: readonly Pro
 }
 
 /**
- * The tank matched to the measured reservoir pressures: STOIIP by golden section for each aquifer
- * size, the best of them, and the range the pressures cannot tell apart (within the build-up noise).
+ * The tank matched to the measured reservoir pressures by least squares: STOIIP by golden section
+ * for each aquifer size, the best aquifer refined between them, and the range the pressures cannot
+ * tell apart (the 95% profile-likelihood interval at the build-ups' stated accuracy). `mae` is the RMS miss.
  * With the Havlena–Odeh points (F against Et): a straight line through the origin, slope N, means no aquifer.
  */
 export function matchTank(base: Omit<Tank, "stoiip" | "aquifer">, points: readonly { readonly date: string; readonly pressure: number; readonly np: number; readonly wp: number; readonly gp: number }[], noisePsi = 15) {
   const history = points.filter((row) => row.np > 0);
-  const fit = (aquifer: number) => {
-    const err = (logN: number) => {
-      const tank = { ...base, stoiip: 10 ** logN, aquifer };
-      return history.reduce((sum, row) => sum + Math.abs(tankPressure(tank, row) - row.pressure), 0) / Math.max(1, history.length);
-    };
-    let a = 5, b = 10;
+  const n = history.length;
+  // Least squares on the pressures: for one aquifer size, the STOIIP by golden section in log space.
+  const sseOf = (stoiip: number, aquifer: number) => history.reduce((sum, row) => sum + (tankPressure({ ...base, stoiip, aquifer }, row) - row.pressure) ** 2, 0);
+  const golden = (lo: number, hi: number, at: (x: number) => number, iterations: number) => {
     const g = (Math.sqrt(5) - 1) / 2;
-    let c = b - g * (b - a), d = a + g * (b - a), fc = err(c), fd = err(d);
-    for (let i = 0; i < 60; i++) { if (fc < fd) { b = d; d = c; fd = fc; c = b - g * (b - a); fc = err(c); } else { a = c; c = d; fc = fd; d = a + g * (b - a); fd = err(d); } }
-    const logN = (a + b) / 2;
-    return { aquifer, stoiip: 10 ** logN, mae: err(logN) };
+    let a = lo, b = hi, c = b - g * (b - a), d = a + g * (b - a), fc = at(c), fd = at(d);
+    for (let i = 0; i < iterations; i++) { if (fc < fd) { b = d; d = c; fd = fc; c = b - g * (b - a); fc = at(c); } else { a = c; c = d; fc = fd; d = a + g * (b - a); fd = at(d); } }
+    return (a + b) / 2;
+  };
+  const fit = (aquifer: number) => {
+    const logN = golden(5, 10, (x) => sseOf(10 ** x, aquifer), 50);
+    const sse = sseOf(10 ** logN, aquifer);
+    return { aquifer, stoiip: 10 ** logN, sse, mae: Math.sqrt(sse / Math.max(1, n)) };
   };
   const all = [0, 0.25, 0.5, 1, 1.5, 2, 3, 4, 6, 8, 12].map(fit);
-  const chosen = all.reduce((best, f) => f.mae < best.mae ? f : best, all[0]!);
-  // Every aquifer whose best fit sits within the build-up noise of the best: the pressures cannot tell these apart.
-  const alike = all.filter((f) => f.mae <= chosen.mae + noisePsi / 2);
+  // The best fit, its aquifer refined between the grid sizes either side (not snapped to the grid).
+  const i = all.reduce((best, f, k) => f.sse < all[best]!.sse ? k : best, 0);
+  const lo = all[Math.max(0, i - 1)]!.aquifer, hi = all[Math.min(all.length - 1, i + 1)]!.aquifer;
+  const chosen = hi > lo ? [fit(golden(lo, hi, (x) => fit(x).sse, 16)), all[i]!].reduce((a, b) => a.sse <= b.sse ? a : b) : all[i]!;
+  // The tanks the pressures cannot tell apart: the 95% profile-likelihood interval over the aquifer
+  // (Δχ² ≤ 3.84), with the stated build-up accuracy as σ, raised to the fit's own scatter if that is worse.
+  const sigma2 = Math.max(noisePsi ** 2, n > 2 ? chosen.sse / (n - 2) : 0);
+  const alike = [...all, chosen].filter((f) => (f.sse - chosen.sse) / sigma2 <= 3.84);
   const range = { stoiip: [Math.min(...alike.map((f) => f.stoiip)), Math.max(...alike.map((f) => f.stoiip))] as const, aquifer: [Math.min(...alike.map((f) => f.aquifer)), Math.max(...alike.map((f) => f.aquifer))] as const };
   const tank: Tank = { ...base, stoiip: chosen.stoiip, aquifer: chosen.aquifer };
   const plotted = history.map((row) => {
     const k = tankTerms(tank, row.pressure);
     return { date: row.date, np: row.np, wp: row.wp, gp: row.gp, measured: row.pressure, model: tankPressure(tank, row), f: withdrawal(k, row), et: k.et, we: k.we };
   });
-  return { tank, mae: chosen.mae, all, range, points: plotted };
+  const within = (f: { sse: number }) => (f.sse - chosen.sse) / sigma2 <= 3.84;
+  return { tank, mae: chosen.mae, all: all.map((f) => ({ ...f, within: within(f) })), best: chosen, range, sigma: Math.sqrt(sigma2), points: plotted };
 }
 
 /**
@@ -927,17 +1084,26 @@ export function worTrend(rows: readonly { readonly np: number; readonly waterCut
  * hands MBAL so the forecast need not run a traverse each step.
  */
 export function liftTable(run: (rate: number, waterCut: number, gor: number) => number | null, maxRate: number, rsi: number) {
-  const rates = Array.from({ length: 14 }, (_, i) => Math.max(20, maxRate * (i / 13) ** 1.4));
+  // Rates geometric from 50 STB/d, dense where the curve turns at low rate; GOR from solution to 25 times it.
+  const rates = Array.from({ length: 22 }, (_, i) => 50 * (maxRate / 50) ** (i / 21));
   const cuts = [0, 0.2, 0.4, 0.6, 0.75, 0.85, 0.92, 0.97];
-  const gors = [rsi, rsi * 1.6, rsi * 3, rsi * 6];
-  const table = gors.map((g) => cuts.map((wc) => rates.map((q) => run(q, wc, g) ?? NaN)));
-  const bracket = (xs: readonly number[], v: number) => { let i = 0; while (i < xs.length - 2 && v > xs[i + 1]!) i++; return { i, f: Math.max(0, Math.min(1, (v - xs[i]!) / (xs[i + 1]! - xs[i]!))) }; };
+  const gors = [rsi, rsi * 1.6, rsi * 3, rsi * 6, rsi * 12, rsi * 25];
+  // Each cell traversed only when first read: a forecast that stays above the bubble point reads one GOR.
+  const cells = new Map<number, number>();
+  const cell = (ia: number, ib: number, ic: number) => {
+    const key = (ia * cuts.length + ib) * rates.length + ic;
+    let v = cells.get(key);
+    if (v === undefined) { v = run(rates[ic]!, cuts[ib]!, gors[ia]!) ?? NaN; cells.set(key, v); }
+    return v;
+  };
+  const bracket = (xs: readonly number[], v: number, extrapolate = false) => { let i = 0; while (i < xs.length - 2 && v > xs[i + 1]!) i++; const f = (v - xs[i]!) / (xs[i + 1]! - xs[i]!); return { i, f: Math.max(0, extrapolate ? f : Math.min(1, f)) }; };
   const bhp = (q: number, wc: number, gor: number) => {
-    const a = bracket(gors, gor), b = bracket(cuts, wc), c = bracket(rates, q);
+    // Rate carried on straight past the last node (friction keeps climbing); water cut and GOR held at their ends.
+    const a = bracket(gors, gor), b = bracket(cuts, wc), c = bracket(rates, q, true);
     let out = 0;
     for (const [ia, wa] of [[a.i, 1 - a.f], [a.i + 1, a.f]] as const) for (const [ib, wb] of [[b.i, 1 - b.f], [b.i + 1, b.f]] as const) for (const [ic, wc2] of [[c.i, 1 - c.f], [c.i + 1, c.f]] as const) {
       const w = wa * wb * wc2;
-      if (w > 0) out += w * table[ia]![ib]![ic]!;
+      if (w !== 0) out += w * cell(ia, ib, ic);
     }
     return out;
   };
@@ -963,11 +1129,14 @@ export function forecastWell(input: {
   const date = new Date(input.startDate);
   for (let m = 0; m < input.months; m++) {
     const wc = Math.min(0.99, Math.max(input.minWaterCut, input.waterCutAt(state.np)));
-    const gor = tankGor(input.tank, state.p, state.np);
+    const gor = tankGor(input.tank, state.p, state.np, state.wp);
     const reservoir: Reservoir = { pressure: state.p, tempF: input.tank.tempF, permeabilityMd: 1, netPayFt: 1, skin: 0, drainageRadiusFt: 1000, wellboreRadiusFt: 0.35 };
-    const ipr = inflow(reservoir, input.tank.fluid, input.pi);
+    const ipr = inflow(reservoir, input.tank.fluid, input.pi, wc);
     const grid = rateGrid(Math.min(ipr.aof, input.maxRate), 28);
-    const point = operatingPoint(ipr, outflowCurve(grid, (q) => { const v = input.bhp(q, wc, gor); return Number.isFinite(v) ? v : null; }));
+    const vlp = (q: number) => { const v = input.bhp(q, wc, gor); return Number.isFinite(v) ? v : null; };
+    let point = operatingPoint(ipr, outflowCurve(grid, vlp), vlp);
+    // The well could make more than the facilities take: choked back to their limit, not dead.
+    if (!point && ipr.aof > input.maxRate) { const atCap = ipr.pwf(input.maxRate), need = vlp(input.maxRate); if (atCap !== null && need !== null && atCap >= need) point = { rate: input.maxRate, pwf: atCap }; }
     if (!point) { end = "dead"; break; }
     const oil = point.rate * (1 - wc);
     if (oil < input.economicLimit) { end = "economic"; break; }

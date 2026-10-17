@@ -39,11 +39,11 @@ export function MatchView({ tests, lab, synthetic, result, onTests, onLab, onMat
       {result ? <table className="nodal-table">
         <thead><tr><th>Correlation</th><th>Untuned</th><th>Tuned</th><th>Holdup ×</th><th>Friction ×</th><th /></tr></thead>
         <tbody>{result.flow.all.map((c) => <tr key={c.id} data-chosen={c.id === result.flow.best.correlation || undefined}>
-          <td>{c.name}</td><td>±{fmt(Math.round(c.untunedMae))} psi</td><td>±{fmt(Math.round(c.mae))} psi</td><td>{c.holdupFactor.toFixed(2)}</td><td>{c.frictionFactor.toFixed(2)}</td>
+          <td>{c.name}</td><td>±{fmt(Math.round(c.untunedMae))} psi</td><td>±{fmt(Math.round(c.mae))} psi</td><td>{c.resolved.holdup ? c.holdupFactor.toFixed(2) : <span className="nodal-unresolved" title="Not resolved by these tests: the other factor alone fits as well (F-test, 95%). Held at 1.">1 ·  n/r</span>}</td><td>{c.resolved.friction ? c.frictionFactor.toFixed(2) : <span className="nodal-unresolved" title="Not resolved by these tests: the other factor alone fits as well (F-test, 95%). Held at 1.">1 · n/r</span>}</td>
           <td>{c.id === result.flow.best.correlation ? "chosen" : ""}</td>
         </tr>)}</tbody>
       </table> : <p className="nodal-hint">Press Match to compare them.</p>}
-      {result && <p className="nodal-hint">Chosen by tuned error; within 2 psi, the one whose factors stay nearest 1. Factors far from 1 mean the correlation, or the data, does not suit this well.</p>}
+      {result && <p className={`nodal-hint${result.flow.clear ? "" : " is-warn"}`}>{result.flow.clear ? "Chosen by tuned error, clearly under the other's." : "Chosen by tuned error, but not clearly: the other correlation fits nearly as well, so the choice is weak."} A factor marked n/r is not resolved: the tests (at similar rates) cannot tell it from the other, so it stays at 1; a multi-rate test resolves it. Factors far from 1 mean the correlation, or the data, does not suit this well.</p>}
     </section>
     <section className="nodal-card nodal-fit">
       <header><b>Gauge: measured against model</b><small>each test with a gauge reading</small>

@@ -1654,3 +1654,14 @@ body::before { content: ""; position: fixed; inset: 0; pointer-events: none; z-i
 .nodal-design dd.is-gain { color: #fbbf24; }
 @container tile (max-width: 1100px) { .nodal-forecast { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-auto-rows: minmax(380px, auto); overflow: auto; } .nodal-forecast .nodal-inputs { grid-column: 1 / -1; overflow: visible; } }
 @container tile (max-width: 700px) { .nodal-forecast { grid-template-columns: minmax(0, 1fr); } .nodal-forecast-left { overflow: visible; } }
+.nodal-fc-band { stroke: none; opacity: 0.18; }
+.nodal-fc-band.is-natural { fill: #94a3b8; } .nodal-fc-band.is-lift { fill: #f59e0b; }
+.nodal-patterns i.is-band { background: #f59e0b; opacity: 0.35; }
+.nodal-tank-row[data-out] td { opacity: 0.45; }
+.nodal-design dd.is-warn { color: #fbbf24; }
+.nodal-fc-band { stroke: none; opacity: 0.18; }
+.nodal-fc-band.is-natural { fill: #94a3b8; } .nodal-fc-band.is-lift { fill: #f59e0b; }
+.nodal-patterns i.is-band { background: #f59e0b; opacity: 0.35; }
+.nodal-tank-row[data-out] td { opacity: 0.45; }
+.nodal-design dd.is-warn { color: #fbbf24; }
+.nodal-unresolved { color: var(--ink-3); font-style: italic; }
