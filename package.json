@@ -20,13 +20,18 @@
     "typecheck": "pnpm --filter @ikhmalputra/subsurface-core build && pnpm --filter @ikhmalputra/subsurface-react build && pnpm --filter deck typecheck",
     "test:budget": "node tools/perf-budget.mjs",
     "bench:deck": "node tools/bench-deck.mjs",
-    "test:overlaps": "node tools/audit-overlaps.mjs"
+    "test:overlaps": "node tools/audit-overlaps.mjs",
+    "ci": "node tools/ci/run.mjs --tier t0",
+    "ci:nightly": "node tools/ci/run.mjs --tier t1",
+    "ci:release": "node tools/ci/run.mjs --tier t2",
+    "notices": "node tools/release/notices.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@gltf-transform/core": "4.5.1",
     "@gltf-transform/extensions": "4.5.1",
     "@gltf-transform/functions": "4.5.1",
+    "@playwright/test": "1.63.0",
     "@types/d3-brush": "3.0.6",
     "@types/d3-scale": "4.0.9",
     "@types/d3-selection": "3.0.12",

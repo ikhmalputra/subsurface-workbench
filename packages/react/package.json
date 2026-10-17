@@ -2,7 +2,7 @@
   "name": "@ikhmalputra/subsurface-react",
   "version": "0.0.1",
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "SEE LICENSE IN LICENSE",
   "author": "Ikhmal Putra Manan",
   "sideEffects": [
     "**/*.css"
@@ -91,6 +91,7 @@
     "build": "tsc -p tsconfig.json && cp src/styles.css dist/styles.css && cp node_modules/maplibre-gl/dist/maplibre-gl.css dist/gis.css && cp ../../LICENSE LICENSE"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "restricted",
+    "registry": "https://npm.pkg.github.com/"
   }
 }
