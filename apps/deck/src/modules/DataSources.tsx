@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
-import { RotateCw } from "lucide-react";
+import { LogIn, RotateCw } from "lucide-react";
 import type { CataloguedWell } from "@ikhmalputra/subsurface-core/data-contract";
 import { refreshCatalogue } from "../data/catalogue.ts";
+import { signIn, signOut, useAuth } from "../auth/oidc.ts";
 import { catalogueFields, useCatalogue, useCatalogueVersion } from "../data/catalogue-state.ts";
 import { actions, useDeck } from "../deck/store.ts";
 import { fmt } from "../format.ts";
@@ -25,6 +26,7 @@ type Row = { readonly kind: "field"; readonly key: string; readonly name: string
 
 export function DataSources() {
   const { config, configNote, configProblems, sources, problems, fields, loading, wellCount } = useCatalogue();
+  const auth = useAuth();
   const version = useCatalogueVersion();
   const siteId = useDeck((deck) => deck.siteId);
   // Records a source served and the checks refused; sources the config named but this build cannot read are listed apart.
@@ -49,9 +51,19 @@ export function DataSources() {
     </>}
     canvas={<WellList rows={rows} siteId={siteId} fields={fields} />}
     inspector={<Inspector id="sources" initial="config" sections={[
-      { id: "config", title: "Sources", summary: `${config.sources.length}`, body: <dl className="mf-facts">
-        {sources.map((source) => <div key={source.id}><dt>{source.label}<br /><small>{source.standard}</small></dt><dd>{source.error ? "could not be read" : `${fmt(source.wells)}${source.total !== undefined && source.total !== source.wells ? ` of ${fmt(source.total)}` : ""} wells${source.reading ? " · reading" : ""}${source.truncated ? " · cut short" : ""}`}</dd></div>)}
-      </dl> },
+      { id: "config", title: "Sources", summary: `${config.sources.length}`, body: <>
+        <dl className="mf-facts">
+          {sources.map((source) => <div key={source.id}><dt>{source.label}<br /><small>{source.standard}</small></dt><dd>{source.error ? "could not be read" : `${fmt(source.wells)}${source.total !== undefined && source.total !== source.wells ? ` of ${fmt(source.total)}` : ""} wells${source.reading ? " · reading" : ""}${source.truncated ? " · cut short" : ""}`}</dd></div>)}
+        </dl>
+        {Object.keys(config.auth ?? {}).length > 0 && <div className="ds-auth">
+          {Object.entries(auth.profiles).map(([name, profile]) => <div key={name} className="ds-auth-row">
+            <span><b>{config.auth?.[name]?.issuer.replace(/^https:\/\//, "").split("/")[0]}</b><small>{profile.status === "signed-in" ? `signed in as ${profile.name ?? profile.sub}` : profile.status === "signing-in" ? "signing in…" : profile.status === "needs-sign-in" ? "sign-in needed" : profile.status === "error" ? profile.error : "not signed in"}</small></span>
+            {profile.status === "signed-in"
+              ? <button type="button" className="ds-refresh" onClick={() => void signOut(name)}>Sign out</button>
+              : <button type="button" className="ds-refresh" disabled={profile.status === "signing-in"} onClick={() => void signIn(name)}><LogIn size={13} aria-hidden="true" />Sign in</button>}
+          </div>)}
+        </div>}
+      </>, same: false },
       (unavailable.length > 0 || configProblems.length > 0) && { id: "config-problems", title: "Not read", summary: `${unavailable.length + configProblems.length}`, body: <ul className="ds-problems">
         {[...configProblems, ...unavailable.map((problem) => problem.message)].map((message, i) => <li key={i}>{message}</li>)}
       </ul> },

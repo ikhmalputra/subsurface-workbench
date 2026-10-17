@@ -116,7 +116,7 @@ the fixture is not a verified real-well survey or an engineering certification.
 
 ## Software shipped in the deck and the SDK
 
-Every runtime dependency of `@ikhmalputra/subsurface-core`, `@ikhmalputra/subsurface-react` and the deck, including transitive ones: 95 packages. Licence families: MIT (54), ISC (26), BSD-3-Clause (4), OFL-1.1 (2), BSD-2-Clause (2), Apache-2.0 (2), (MIT OR Apache-2.0) (1), (MIT AND Zlib) (1), 0BSD (1), CC0-1.0 (1), MIT AND BSD-3-Clause (1). Each package's own licence text is kept in the installed package and in the delivered bundles; retain them when redistributing.
+Every runtime dependency of `@ikhmalputra/subsurface-core`, `@ikhmalputra/subsurface-react` and the deck, including transitive ones: 96 packages. Licence families: MIT (55), ISC (26), BSD-3-Clause (4), OFL-1.1 (2), BSD-2-Clause (2), Apache-2.0 (2), (MIT OR Apache-2.0) (1), (MIT AND Zlib) (1), 0BSD (1), CC0-1.0 (1), MIT AND BSD-3-Clause (1). Each package's own licence text is kept in the installed package and in the delivered bundles; retain them when redistributing.
 
 | Package | Version | Licence | Author |
 |---|---|---|---|
@@ -188,6 +188,7 @@ Every runtime dependency of `@ikhmalputra/subsurface-core`, `@ikhmalputra/subsur
 | [motion-dom](https://github.com/motiondivision/motion#readme) | 13.5.1 | MIT | Matt Perry |
 | [motion-utils](https://github.com/motiondivision/motion#readme) | 13.5.0 | MIT | Matt Perry |
 | [murmurhash-js](https://github.com/mikolalysenko/murmurhash-js#readme) | 1.0.0 | MIT | Gary Court |
+| [oauth4webapi](https://github.com/panva/oauth4webapi) | 3.8.8 | MIT | Filip Skokan |
 | [pako](https://github.com/nodeca/pako#readme) | 2.2.0 | (MIT AND Zlib) |  |
 | [parse-headers](https://github.com/kesla/parse-headers) | 2.0.6 | MIT | David Björklund |
 | [pbf](https://github.com/mapbox/pbf) | 4.0.2, 5.1.2 | BSD-3-Clause | Konstantin Kaefer |
