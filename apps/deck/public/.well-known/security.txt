@@ -1,0 +1,5 @@
+# Security contact for the Subsurface deck (RFC 9116). Report privately; see SECURITY.md.
+Contact: https://github.com/ikhmalputra/subsurface-workbench/security/advisories/new
+Expires: 2027-10-17T00:00:00.000Z
+Preferred-Languages: en
+Policy: https://github.com/ikhmalputra/subsurface-workbench/blob/master/SECURITY.md

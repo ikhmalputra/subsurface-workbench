@@ -219,7 +219,7 @@ Every runtime dependency of `@ikhmalputra/subsurface-core`, `@ikhmalputra/subsur
 
 ## Development tooling
 
-Not shipped to clients: 184 packages. Licence families: MIT (142), Apache-2.0 (19), ISC (10), BSD-2-Clause (7), BSD-3-Clause (2), MPL-2.0 (2), LGPL-3.0-or-later (1), BlueOak-1.0.0 (1).
+Not shipped to clients: 185 packages. Licence families: MIT (142), Apache-2.0 (19), ISC (10), BSD-2-Clause (7), MPL-2.0 (3), BSD-3-Clause (2), LGPL-3.0-or-later (1), BlueOak-1.0.0 (1).
 
 | Package | Version | Licence | Author |
 |---|---|---|---|
@@ -300,6 +300,7 @@ Not shipped to clients: 184 packages. Licence families: MIT (142), Apache-2.0 (1
 | [acorn](https://github.com/acornjs/acorn) | 8.18.0 | MIT |  |
 | [acorn-jsx](https://github.com/acornjs/acorn-jsx) | 5.3.2 | MIT |  |
 | [ajv](https://github.com/ajv-validator/ajv) | 6.15.0 | MIT | Evgeny Poberezkin |
+| [axe-core](https://www.deque.com/axe/) | 4.14.0 | MPL-2.0 |  |
 | [balanced-match](https://github.com/juliangruber/balanced-match#readme) | 4.0.4 | MIT |  |
 | [brace-expansion](https://github.com/juliangruber/brace-expansion#readme) | 5.0.12 | MIT |  |
 | [cac](https://github.com/cacjs/cac#readme) | 7.1.0 | MIT | egoist |

@@ -770,7 +770,8 @@ export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, i
             const reach = (member: AssemblyItem) => slot(member) === "cement" ? CX + r(member.odIn * 1.28) : CX + r(member.odIn) + (getCatalogEntry(member.catalogId).slot === "tubing-tool" ? 10 : 6);
             const selected = members.some((member) => member.item.id === selectedId);
             const next = () => onSelect?.(selected ? many && position < members.length - 1 ? members[position + 1]!.item.id : null : item.id);
-            return <g key={members[0]!.item.id} role="button" tabIndex={0} aria-pressed={selected} aria-label={title} className={`sw-asm-label${selected ? " is-selected" : ""}${members.some((member) => preview?.focusId === member.item.id) ? " is-preview" : ""}`} data-state={state} data-group-size={members.length} onPointerDown={(event) => { event.stopPropagation(); next(); }} onKeyDown={(event) => {
+            // The accessible name is the text on screen (WCAG 2.5.3): the <title> below carries the fuller description.
+            return <g key={members[0]!.item.id} role="button" tabIndex={0} aria-pressed={selected} aria-label={[...titleLines, ...detailLines].join(" ") || title} className={`sw-asm-label${selected ? " is-selected" : ""}${members.some((member) => preview?.focusId === member.item.id) ? " is-preview" : ""}`} data-state={state} data-group-size={members.length} onPointerDown={(event) => { event.stopPropagation(); next(); }} onKeyDown={(event) => {
               if (event.key === "Enter" || event.key === " ") { event.preventDefault(); next(); }
             }}>
               <title>{members.map((member) => `${member.item.label} — ${itemSummary(member.item)}`).join("\n") + (many ? "\nClick to step through, then clear selection." : "\nClick again to clear selection.")}</title>
@@ -779,9 +780,10 @@ export function AssemblySchematic({ assembly, assetBaseUrl, selectedId = null, i
               {members.map((member) => <path key={member.item.id} d={`M${reach(member.item)} ${member.anchor} H${LABEL_X - 26} L${LABEL_X - 8} ${at - 4} H${LABEL_X - 2}`} className={`sw-asm-leader${member === chosen && selected ? " is-active" : ""}`} />)}
               {selected && <circle cx={reach(item)} cy={chosen.anchor} r={3.6} className="sw-asm-leader-dot" />}
               <rect x={LABEL_X} y={at - 14} width={6} height={24} rx={1.5} fill={spec.color} />
-              <text x={textX} y={at - 20} className="sw-asm-label-title">{titleLines.map((line, index) => <tspan key={index} x={textX} dy={index ? 13 : 0}>{line}</tspan>)}</text>
+              {/* Each line ends in a space so the text on screen reads as the words in the accessible name, not run together. */}
+              <text x={textX} y={at - 20} className="sw-asm-label-title">{titleLines.map((line, index) => <tspan key={index} x={textX} dy={index ? 13 : 0}>{`${line} `}</tspan>)}</text>
               {detailLines.length > 0 && <text x={textX} y={at - 20 + titleLines.length * LINE} className="sw-asm-label-detail">
-                {detailLines.map((line, index) => <tspan key={index} x={textX} dy={index ? LINE : 0}>{line}</tspan>)}
+                {detailLines.map((line, index) => <tspan key={index} x={textX} dy={index ? LINE : 0}>{`${line} `}</tspan>)}
               </text>}
             </g>;
           })}

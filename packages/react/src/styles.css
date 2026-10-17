@@ -894,3 +894,6 @@
 .sw-curved-departure text { fill: var(--sw-muted); font: 10.5px "IBM Plex Mono", monospace; }
 .sw-asm-highlight rect { fill: color-mix(in srgb, var(--sw-select) 16%, transparent); stroke: var(--sw-select); stroke-width: 1; stroke-dasharray: 4 3; }
 .sw-asm-highlight text { fill: var(--sw-select); font: 600 10.5px "IBM Plex Sans", sans-serif; paint-order: stroke; stroke: var(--sw-text-halo); stroke-width: 3px; }
+
+/* A marker on the back of the globe or behind terrain is not a target: out of the layout, not merely faded. */
+.maplibregl-marker-covered { display: none; }

@@ -1,11 +1,14 @@
 import { useMemo, useState } from "react";
-import { LogIn, RotateCw } from "lucide-react";
+import { ClipboardCopy, LogIn, RotateCw } from "lucide-react";
 import type { CataloguedWell } from "@ikhmalputra/subsurface-core/data-contract";
 import { refreshCatalogue } from "../data/catalogue.ts";
 import { signIn, signOut, useAuth } from "../auth/oidc.ts";
 import { catalogueFields, useCatalogue, useCatalogueVersion } from "../data/catalogue-state.ts";
 import { actions, useDeck } from "../deck/store.ts";
 import { fmt } from "../format.ts";
+import { BASE } from "../base.ts";
+import { browserFacts, diagnosticsBundle, formatDiagnostics, recentErrors, storageFacts } from "../deck/diagnostics.ts";
+import { runningVersion } from "../deck/version.ts";
 import { Frame, Inspector, Status } from "./frame/Frame.tsx";
 import { useSize } from "./useSize.ts";
 
@@ -29,6 +32,13 @@ export function DataSources() {
   const auth = useAuth();
   const version = useCatalogueVersion();
   const siteId = useDeck((deck) => deck.siteId);
+  const [copied, setCopied] = useState<"idle" | "copied" | "failed">("idle");
+  // Everything a support ticket needs and nothing it must not have: counts and statuses, no token, no well, no person.
+  const copyDiagnostics = async () => {
+    const text = formatDiagnostics(diagnosticsBundle({ now: new Date(), version: runningVersion(), origin: window.location.origin, base: BASE, browser: browserFacts(), config, configProblems, sources, fields, wellCount, loading, problems, auth, storage: await storageFacts(), errors: recentErrors() }));
+    try { await navigator.clipboard.writeText(text); setCopied("copied"); } catch { setCopied("failed"); }
+    window.setTimeout(() => setCopied("idle"), 4000);
+  };
   // Records a source served and the checks refused; sources the config named but this build cannot read are listed apart.
   const served = problems.filter((problem) => problem.sourceId !== "config");
   const unavailable = problems.filter((problem) => problem.sourceId === "config");
@@ -70,6 +80,11 @@ export function DataSources() {
       { id: "problems", title: "Left out or flagged", summary: `${fmt(errors.length)} left out · ${fmt(served.length - errors.length)} flagged`, body: served.length
         ? <ul className="ds-problems">{served.slice(0, 300).map((problem, i) => <li key={i} className={problem.severity === "error" ? "is-error" : undefined}><b>{problem.object} {problem.id}</b> {problem.message}</li>)}{served.length > 300 && <li>…and {fmt(served.length - 300)} more.</li>}</ul>
         : <p className="mf-prose">Every record passed its checks.</p> },
+      { id: "diagnostics", title: "Diagnostics", body: <div className="mf-prose ds-connect">
+        <p>For a support ticket: the build, the browser, each source and how far it was read, sign-in status, storage use and the last errors. Counts and statuses only: no well, no token, no person and no URL beyond its origin.</p>
+        <button type="button" className="ds-refresh" onClick={() => void copyDiagnostics()}><ClipboardCopy size={13} aria-hidden="true" />{copied === "copied" ? "Copied" : copied === "failed" ? "Could not copy: select and copy by hand" : "Copy diagnostics"}</button>
+        {copied === "failed" && <pre>{formatDiagnostics(diagnosticsBundle({ now: new Date(), version: runningVersion(), origin: window.location.origin, base: BASE, browser: browserFacts(), config, configProblems, sources, fields, wellCount, loading, problems, auth, storage: { usedMiB: null, quotaMiB: null, deckKeys: 0, deckBytes: 0 }, errors: recentErrors() }))}</pre>}
+      </div> },
       { id: "connect", title: "Connect your backend", body: <div className="mf-prose ds-connect">
         <p>The deck reads <code>config.json</code> beside it when it starts. Name your sources there; nothing in it is a secret, and sign-in goes through your identity provider.</p>
         <pre>{`{
@@ -96,25 +111,25 @@ function WellList({ rows, siteId, fields }: { readonly rows: readonly Row[]; rea
   const [top, setTop] = useState(0);
   const first = Math.max(0, Math.floor(top / ROW) - 8), last = Math.min(rows.length, Math.ceil((top + Math.max(size.height, 600)) / ROW) + 8);
   return <div className="ds-list" ref={box} onScroll={(event) => setTop(event.currentTarget.scrollTop)} role="table" aria-label="Wells by field" aria-rowcount={rows.length}>
-    <div className="ds-row ds-head" role="row"><span>Well</span><span>Location</span><span>Datum</span><span>Path</span><span>Tops</span><span>Source</span></div>
+    <div className="ds-row ds-head" role="row">{["Well", "Location", "Datum", "Path", "Tops", "Source"].map((head) => <span key={head} role="columnheader">{head}</span>)}</div>
     <div style={{ height: rows.length * ROW, position: "relative" }}>
       {rows.slice(first, last).map((row, i) => {
         const y = (first + i) * ROW;
         if (row.kind === "field") {
           const status = fields.get(row.key);
           return <div key={`f-${row.key}`} className={`ds-row ds-field${row.key === siteId ? " is-here" : ""}`} role="row" style={{ top: y }}>
-            <button type="button" className="ds-open" onClick={() => actions.selectSite(row.key, null)}>{row.name}</button>
-            <span>{fmt(row.count)} well{row.count === 1 ? "" : "s"} · {row.source}{status?.reading ? ` · reading ${fmt(status.read)} of ${fmt(status.total)}` : status?.error ? ` · ${status.error}` : ""}</span>
+            <span role="cell"><button type="button" className="ds-open" onClick={() => actions.selectSite(row.key, null)}>{row.name}</button></span>
+            <span role="cell">{fmt(row.count)} well{row.count === 1 ? "" : "s"} · {row.source}{status?.reading ? ` · reading ${fmt(status.read)} of ${fmt(status.total)}` : status?.error ? ` · ${status.error}` : ""}</span>
           </div>;
         }
         const { entry } = row, bore = entry.wellbores[0], path = bore?.path ?? [];
         return <div key={entry.well.id} className={`ds-row${row.key === siteId ? " is-here" : ""}`} role="row" style={{ top: y }}>
-          <button type="button" className="ds-open" title={`Open ${entry.well.name}'s field`} onClick={() => actions.selectSite(row.key, bore?.wellbore.id ?? entry.well.id)}>{entry.well.name}</button>
-          <span>{entry.well.location ? `${entry.well.location.latitude.toFixed(4)}°, ${entry.well.location.longitude.toFixed(4)}°` : <em>not given</em>}</span>
-          <span>{bore ? `${bore.wellbore.datum.reference}${bore.wellbore.datum.elevationM !== null ? ` ${fmt(bore.wellbore.datum.elevationM, 1)} m` : ""}` : <em>—</em>}</span>
-          <span>{path.length >= 2 ? `${fmt(path.at(-1)!.mdM)} m MD · ${bore!.trajectory!.kind}${bore!.trajectory!.azimuthReference === "unknown" ? " · north not stated" : ` · ${bore!.trajectory!.azimuthReference} north`}` : <em>{bore ? "no path" : "read when its field opens"}</em>}</span>
-          <span>{bore?.markers.length ?? "—"}</span>
-          <span>{PROVENANCE[entry.well.provenance.kind] ?? entry.well.provenance.kind}</span>
+          <span role="cell"><button type="button" className="ds-open" title={`Open ${entry.well.name}'s field`} onClick={() => actions.selectSite(row.key, bore?.wellbore.id ?? entry.well.id)}>{entry.well.name}</button></span>
+          <span role="cell">{entry.well.location ? `${entry.well.location.latitude.toFixed(4)}°, ${entry.well.location.longitude.toFixed(4)}°` : <em>not given</em>}</span>
+          <span role="cell">{bore ? `${bore.wellbore.datum.reference}${bore.wellbore.datum.elevationM !== null ? ` ${fmt(bore.wellbore.datum.elevationM, 1)} m` : ""}` : <em>—</em>}</span>
+          <span role="cell">{path.length >= 2 ? `${fmt(path.at(-1)!.mdM)} m MD · ${bore!.trajectory!.kind}${bore!.trajectory!.azimuthReference === "unknown" ? " · north not stated" : ` · ${bore!.trajectory!.azimuthReference} north`}` : <em>{bore ? "no path" : "read when its field opens"}</em>}</span>
+          <span role="cell">{bore?.markers.length ?? "—"}</span>
+          <span role="cell">{PROVENANCE[entry.well.provenance.kind] ?? entry.well.provenance.kind}</span>
         </div>;
       })}
     </div>
