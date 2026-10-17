@@ -4,11 +4,11 @@ import { scaleLinear } from "d3-scale";
 import type { FlowPattern } from "@ikhmalputra/subsurface-core/production";
 import { useDesign } from "../data/design.ts";
 import { useDeck } from "../deck/store.ts";
-import { COMPARE_VALUES, FT_PER_M, SM3_PER_STB, chosenTank, defaultForecast, defaultLift, defaultNodal, forecastCases, liftDesign, runMatch, solve, tankMatch, wellCase, withValue } from "../data/nodal-model.ts";
+import { COMPARE_VALUES, FT_PER_M, SM3_PER_STB, chosenTank, defaultForecast, defaultLift, defaultNodal, forecastBand, injectionCheck, liftDesign, runMatch, solve, tankMatch, wellCase, withValue } from "../data/nodal-model.ts";
 import type { Calibration, Compare, ForecastInputs, LiftInputs, NodalInputs, Solved, WellCase } from "../data/nodal-model.ts";
 import type { LabPvt, ProductionMonth, WellTest } from "@ikhmalputra/subsurface-core/production";
 import { CORRELATIONS } from "@ikhmalputra/subsurface-core/production";
-import { kestrelSynthetic } from "../data/kestrel-tests.ts";
+import { KESTREL_INJECTION_MD_M, kestrelSynthetic } from "../data/kestrel-tests.ts";
 import { HistoryView, MatchView } from "./NodalMatch.tsx";
 import { LiftView } from "./NodalLift.tsx";
 import { ForecastView } from "./NodalForecast.tsx";
@@ -38,7 +38,7 @@ type Kept = {
   /** Which synthetic sample this is: an older one is replaced. */
   readonly sampleVersion?: number;
 };
-const SAMPLE_VERSION = 2;
+const SAMPLE_VERSION = 3;
 function readKept(): Record<string, Kept> { try { const v = JSON.parse(localStorage.getItem(KEY) ?? "{}") as Record<string, Kept>; return v && typeof v === "object" && !Array.isArray(v) ? v : {}; } catch { return {}; } }
 const okKept = (k: Kept | undefined): k is Kept => !!k && !!k.inputs && typeof k.inputs === "object" && Object.keys(defaultNodal).every((key) => key in k.inputs) && ["tubing", "lift", "waterCut", "whp"].includes(k.compare);
 
@@ -56,7 +56,7 @@ export function Nodal() {
   const [kept, setKeptState] = useState<Kept>(() => {
     const k = readKept()[siteId];
     // Kestrel A-7 comes with a synthetic test history and lab report, so the match can be seen at work.
-    const sample = () => { const synthetic = siteId === "kestrel" ? kestrelSynthetic(brief) : null; return { tests: synthetic?.tests ?? [], lab: synthetic?.lab ?? null, production: synthetic?.production ?? [], synthetic: !!synthetic, sampleVersion: SAMPLE_VERSION }; };
+    const sample = () => { const synthetic = siteId === "kestrel" ? kestrelSynthetic(brief) : null; return { tests: synthetic?.tests ?? [], lab: synthetic?.lab ?? null, production: synthetic?.production ?? [], synthetic: !!synthetic, sampleVersion: SAMPLE_VERSION, ...(synthetic ? { injectionMdM: KESTREL_INJECTION_MD_M } : {}) }; };
     if (okKept(k)) return k.tests === undefined || (k.synthetic && k.sampleVersion !== SAMPLE_VERSION) ? { ...k, ...sample(), view: "match" as const, calibration: null, tankAquifer: null } : k;
     return { inputs: defaultNodal, compare: "lift", view: "match", ...sample(), calibration: null };
   });
@@ -102,13 +102,17 @@ export function Nodal() {
   const later = useDeferredValue({ forecastInputs, inputs, tankAquifer });
   const cases = useMemo(() => {
     if (typeof well === "string" || !tankFit || !calibration) return null;
-    return { tank: chosenTank(tankFit, later.tankAquifer), run: forecastCases(well, later.inputs, calibration, tests, production, chosenTank(tankFit, later.tankAquifer), later.forecastInputs) };
+    const tank = chosenTank(tankFit, later.tankAquifer), band = forecastBand(well, later.inputs, calibration, tests, production, tankFit, tank, later.forecastInputs);
+    return { tank, run: band.main, band };
   }, [well, tankFit, calibration, tests, production, later]);
 
   if (typeof well === "string") return <p className="hz-empty nodal-empty">{well}</p>;
   if (!solved) return null;
   const point = solved.point, oilRate = point ? point.rate * (1 - inputs.waterCut) : 0;
+  // Lift gas only counts if the casing pressure can get it in at that depth.
+  const entry = inputs.liftMscfD > 0 ? injectionCheck(well, solved.traverse, lift) : null;
   const status = !point ? { text: "Dead: the tubing cannot lift what the reservoir delivers", tone: "is-dead" }
+    : entry && !entry.ok ? { text: `Lift gas cannot enter at ${fmt(Math.round(well.liftDepthMdM ?? 0))} m: casing ${fmt(Math.round(entry.casing - 14.7))} psig against tubing ${fmt(Math.round(entry.tubing - 14.7))}. Design the depth in Gas lift`, tone: "is-dead" }
     : well.lift === "gas-lift" && inputs.liftMscfD > 0 && !solve(well, { ...inputs, liftMscfD: 0 }, solved.vlp.rates, calibration).point ? { text: "Flowing on gas lift: dead without it", tone: "is-lift" }
     : { text: inputs.liftMscfD > 0 && well.lift === "gas-lift" ? "Flowing, with lift gas" : "Flowing naturally", tone: "is-flowing" };
 
@@ -119,7 +123,7 @@ export function Nodal() {
         {(["match", "predict", "lift", "forecast", "history"] as const).filter((v) => v !== "lift" || well.lift === "gas-lift").map((v) => <button key={v} type="button" aria-pressed={view === v} onClick={() => setKept((k) => ({ ...k, view: v }))}>{VIEW_NAME[v]}</button>)}
       </span>
       <span className={`nodal-calibrated${calibration && !stale ? " is-on" : stale ? " is-stale" : ""}`} title={calibration ? `Matched ${calibration.at} on ${calibration.tests} tests` : "Prediction uses assumed inputs until the model is matched to the well's tests"}>
-        {calibration ? <>{stale ? "Out of date: tests changed since the match" : "Calibrated"}<small>{calibration.tests} tests · ±{fmt(Math.round(calibration.flow.mae))} psi · {CORRELATIONS.find((c) => c.id === calibration.flow.correlation)?.name}</small></> : <>Uncalibrated<small>assumed inputs: match it to tests</small></>}
+        {calibration ? <>{stale ? "Out of date: tests changed since the match" : kept.synthetic ? "Calibrated to synthetic tests" : "Calibrated"}<small>{calibration.tests} tests · ±{fmt(Math.round(calibration.flow.mae))} psi · {CORRELATIONS.find((c) => c.id === calibration.flow.correlation)?.name}</small></> : <>Uncalibrated<small>assumed inputs: match it to tests</small></>}
       </span>
       {view === "predict" && <span className={`nodal-status ${status.tone}`}>{status.text}</span>}
       {view === "predict" && point && <span className="vol-p nodal-p">
@@ -138,7 +142,7 @@ export function Nodal() {
       onUse={() => { const op = designed.design.operating, best = designed.optimum; if (!op || !best) return; setKept((k) => ({ ...k, view: "predict", injectionMdM: Math.round(op.mdFt / FT_PER_M), inputs: { ...k.inputs, liftMscfD: Math.round(best.economic.gasScfD / 1000) } })); }} />}
     {view === "lift" && !designed && <p className="hz-empty nodal-empty">The completion has no gas lift: choose it in the Well designer&apos;s Completion stage.</p>}
     {view === "forecast" && tankFit && cases && <ForecastView matched={tankFit} tank={cases.tank} aquifer={tankAquifer} onAquifer={(a) => setKept((k) => ({ ...k, tankAquifer: a }))}
-      cases={cases.run} f={forecastInputs} onForecast={(patch) => setKept((k) => ({ ...k, forecast: { ...defaultForecast, ...k.forecast, ...patch } }))}
+      cases={cases.run} band={cases.band} entry={entry} f={forecastInputs} onForecast={(patch) => setKept((k) => ({ ...k, forecast: { ...defaultForecast, ...k.forecast, ...patch } }))}
       inputs={inputs} onInputs={set} well={well} tests={tests} production={production} synthetic={!!kept.synthetic} />}
     {view === "forecast" && !usable && <p className="hz-empty nodal-empty">{stale ? "The tests changed since the match: match again, then forecast." : "Match the well to its tests first: the forecast runs on the matched model, and its tank is matched to the build-up pressures."}</p>}
     {view === "history" && <HistoryView result={result} well={well} inputs={inputs} />}
@@ -157,7 +161,7 @@ export function Nodal() {
           <h3>From the match <small>{calibration.tests} tests, last {calibration.lastTest.date}</small></h3>
           <dl className="nodal-design">
             <div><dt>Productivity index</dt><dd>{calibration.pi.toFixed(2)} STB/d/psi<small>the last test's</small></dd></div>
-            <div><dt>Tubing</dt><dd>{CORRELATIONS.find((c) => c.id === calibration.flow.correlation)?.name}<small>holdup × {calibration.flow.holdupFactor.toFixed(2)} · friction × {calibration.flow.frictionFactor.toFixed(2)}</small></dd></div>
+            <div><dt>Tubing</dt><dd>{CORRELATIONS.find((c) => c.id === calibration.flow.correlation)?.name}<small>holdup × {calibration.flow.resolved?.holdup === false ? "1, not resolved" : calibration.flow.holdupFactor.toFixed(2)} · friction × {calibration.flow.resolved?.friction === false ? "1, not resolved by these tests" : calibration.flow.frictionFactor.toFixed(2)}</small></dd></div>
             <div><dt>Fluid</dt><dd>{calibration.fluid.api} °API · {calibration.fluid.gasSg}<small>{calibration.pvt ? `PVT factors ${calibration.pvt.pbFactor.toFixed(2)} / ${calibration.pvt.boFactor.toFixed(2)} / ${calibration.pvt.muFactor.toFixed(2)}` : "no lab report: unmatched"}</small></dd></div>
             <div><dt>Gauge error</dt><dd>±{fmt(Math.round(calibration.flow.mae))} psi<small>bias {calibration.flow.bias >= 0 ? "+" : ""}{fmt(Math.round(calibration.flow.bias))} psi</small></dd></div>
           </dl>

@@ -1,8 +1,8 @@
 import { scaleLinear, scaleTime } from "d3-scale";
 import { cumulativeOn, tankPressure } from "@ikhmalputra/subsurface-core/production";
 import type { ProductionMonth, Tank, WellTest } from "@ikhmalputra/subsurface-core/production";
-import { TANK_ASSUMED } from "../data/nodal-model.ts";
-import type { ForecastInputs, NodalInputs, WellCase, forecastCases, tankMatch } from "../data/nodal-model.ts";
+import { ROCK_RANGE, TANK_ASSUMED } from "../data/nodal-model.ts";
+import type { ForecastInputs, NodalInputs, WellCase, forecastBand, forecastCases, injectionCheck, tankMatch } from "../data/nodal-model.ts";
 import { fmt } from "../format.ts";
 import { useSize } from "./useSize.ts";
 import { Slider } from "./Nodal.tsx";
@@ -16,34 +16,41 @@ import { Slider } from "./Nodal.tsx";
 
 type Matched = ReturnType<typeof tankMatch>;
 type Cases = ReturnType<typeof forecastCases>;
+type Band = ReturnType<typeof forecastBand>;
 type Run = Cases["natural"];
 const MM = 1e6;
 const cumOil = (run: Run | null) => run ? run.steps.reduce((sum, s, i) => sum + s.oil * daysIn(s.date, run.steps[i + 1]?.date ?? run.endDate), 0) : 0;
 const daysIn = (a: string, b: string) => (Date.parse(b) - Date.parse(a)) / 86400000;
 const year = (date: string) => date.slice(0, 7);
 
-export function ForecastView({ matched, tank, aquifer, onAquifer, cases, f, onForecast, inputs, onInputs, well, tests, production, synthetic }: {
+export function ForecastView({ matched, tank, aquifer, onAquifer, cases, band, entry, f, onForecast, inputs, onInputs, well, tests, production, synthetic }: {
   readonly matched: Matched; readonly tank: Tank; readonly aquifer: number | null; readonly onAquifer: (aquifer: number | null) => void;
-  readonly cases: Cases; readonly f: ForecastInputs; readonly onForecast: (patch: Partial<ForecastInputs>) => void;
+  readonly cases: Cases; readonly band: Band; readonly entry: ReturnType<typeof injectionCheck>; readonly f: ForecastInputs; readonly onForecast: (patch: Partial<ForecastInputs>) => void;
   readonly inputs: NodalInputs; readonly onInputs: (patch: Partial<NodalInputs>) => void; readonly well: WellCase;
   readonly tests: readonly WellTest[]; readonly production: readonly ProductionMonth[]; readonly synthetic: boolean;
 }) {
   const natural = cumOil(cases.natural), lifted = cases.lifted ? cumOil(cases.lifted) : null;
   const np0 = cases.start.np;
+  // Across the tanks the pressures cannot tell apart.
+  const span = (pick: (c: Cases) => Run | null) => { const v = [band.low, band.high, cases].map((c) => cumOil(pick(c))); return [Math.min(...v), Math.max(...v)] as const; };
+  const natSpan = span((c) => c.natural), liftSpan = cases.lifted ? span((c) => c.lifted) : null;
+  const k = (v: number) => fmt(Math.round(v / 1e3));
+  const rf = (c: Cases, stoiip: number) => (np0 + Math.max(cumOil(c.natural), c.lifted ? cumOil(c.lifted) : 0)) / stoiip * 100;
+  const rfs = [rf(band.low, band.tanks.low.stoiip), rf(band.high, band.tanks.high.stoiip), rf(cases, tank.stoiip)];
   const ends = (run: Run) => run.end === "horizon" ? `flows past ${year(run.endDate)}` : run.end === "dead" ? `dies ${year(run.endDate)}` : `below ${fmt(f.economicLimit)} STB/d ${year(run.endDate)}`;
   return <div className="nodal-forecast">
     <div className="nodal-forecast-left">
-      <TankCard matched={matched} tank={tank} aquifer={aquifer} onAquifer={onAquifer} production={production} tests={tests} synthetic={synthetic} />
+      <TankCard matched={matched} tank={tank} aquifer={aquifer} onAquifer={onAquifer} production={production} synthetic={synthetic} />
       <WorCard cases={cases} />
     </div>
-    <ForecastChart cases={cases} production={production} tests={tests} />
+    <ForecastChart cases={cases} band={band} production={production} tests={tests} />
     <aside className="nodal-inputs">
       <h3>Outlook <small>from {cases.natural.steps[0]?.date ?? "the last test"}</small></h3>
       <dl className="nodal-design">
-        <div><dt>Natural flow</dt><dd>{fmt(Math.round(natural / 1e3))} kSTB<small>{ends(cases.natural)}</small></dd></div>
-        {cases.lifted && lifted !== null && <div><dt>On gas lift</dt><dd>{fmt(Math.round(lifted / 1e3))} kSTB<small>{fmt(inputs.liftMscfD)} Mscf/d at {fmt(Math.round(well.liftDepthMdM ?? 0))} m · {ends(cases.lifted)}</small></dd></div>}
-        {lifted !== null && <div><dt>Gas lift adds</dt><dd className="is-gain">+{fmt(Math.round((lifted - natural) / 1e3))} kSTB<small>over {f.years} years</small></dd></div>}
-        <div><dt>Recovery</dt><dd>{((np0 + Math.max(natural, lifted ?? 0)) / tank.stoiip * 100).toFixed(1)}%<small>of {fmt(Math.round(tank.stoiip / MM))} MMSTB, {(np0 / tank.stoiip * 100).toFixed(1)}% so far</small></dd></div>
+        <div><dt>Natural flow</dt><dd>{k(natural)} kSTB<small>{k(natSpan[0])}–{k(natSpan[1])} across the tanks · {ends(cases.natural)}</small></dd></div>
+        {cases.lifted && lifted !== null && liftSpan && <div><dt>On gas lift</dt><dd className={entry && !entry.ok ? "is-warn" : ""}>{k(lifted)} kSTB<small>{entry && !entry.ok ? `gas cannot enter at ${fmt(Math.round(well.liftDepthMdM ?? 0))} m: not a real case` : `${k(liftSpan[0])}–${k(liftSpan[1])} · ${fmt(inputs.liftMscfD)} Mscf/d at ${fmt(Math.round(well.liftDepthMdM ?? 0))} m · ${ends(cases.lifted)}`}</small></dd></div>}
+        {lifted !== null && (!entry || entry.ok) && <div><dt>Gas lift adds</dt><dd className="is-gain">+{k(lifted - natural)} kSTB<small>over {f.years} years</small></dd></div>}
+        <div><dt>Recovery</dt><dd>{Math.min(...rfs).toFixed(0)}–{Math.max(...rfs).toFixed(0)}%<small>of {fmt(Math.round(band.tanks.low.stoiip / MM))}–{fmt(Math.round(band.tanks.high.stoiip / MM))} MMSTB: as uncertain as the oil in place</small></dd></div>
       </dl>
       <h3>Forecast</h3>
       <Slider label="Horizon" value={f.years} min={2} max={25} step={1} show={(v) => `${v} years`} onChange={(years) => onForecast({ years })} />
@@ -60,7 +67,7 @@ export function ForecastView({ matched, tank, aquifer, onAquifer, cases, f, onFo
 }
 
 /** Reservoir pressure against cumulative oil, measured and by the tank; and the candidate tanks. */
-function TankCard({ matched, tank, aquifer, onAquifer, production, tests, synthetic }: { readonly matched: Matched; readonly tank: Tank; readonly aquifer: number | null; readonly onAquifer: (a: number | null) => void; readonly production: readonly ProductionMonth[]; readonly tests: readonly WellTest[]; readonly synthetic: boolean }) {
+function TankCard({ matched, tank, aquifer, onAquifer, production, synthetic }: { readonly matched: Matched; readonly tank: Tank; readonly aquifer: number | null; readonly onAquifer: (a: number | null) => void; readonly production: readonly ProductionMonth[]; readonly synthetic: boolean }) {
   const [box, size] = useSize<HTMLDivElement>();
   const W = Math.max(260, size.width - 20), H = 150, m = { l: 44, r: 10, t: 10, b: 28 };
   // The tank's pressure along the production as it happened: the allocated volumes month by month.
@@ -71,10 +78,9 @@ function TankCard({ matched, tank, aquifer, onAquifer, production, tests, synthe
   const ps = [...line.map((l) => l.p), ...pts.map((p) => p.measured)];
   const x = scaleLinear().domain([0, npMax / MM]).range([m.l, W - m.r]).nice();
   const y = scaleLinear().domain([Math.min(...ps) - 100, Math.max(...ps) + 50]).range([H - m.b, m.t]).nice();
-  const best = matched.all.reduce((a, b) => b.mae < a.mae ? b : a);
-  const err = pts.reduce((sum, p) => sum + Math.abs(tankPressure(tank, p) - p.measured), 0) / Math.max(1, pts.length);
+  const err = Math.sqrt(pts.reduce((sum, p) => sum + (tankPressure(tank, p) - p.measured) ** 2, 0) / Math.max(1, pts.length));
   return <section className="nodal-card" ref={box}>
-    <header><b>Tank match</b>{synthetic && <span className="nodal-synthetic">synthetic</span>}<small>{production.length ? `${production.length} months allocated` : "volumes from the tests"} · ±{Math.round(err)} psi</small></header>
+    <header><b>Tank match</b>{synthetic && <span className="nodal-synthetic">synthetic</span>}<small>{production.length ? `${production.length} months allocated` : "volumes from the tests"} · {pts.length} build-ups · RMS {Math.round(err)} psi</small></header>
     <svg width={W} height={H}>
       {y.ticks(4).map((t) => <g key={t}><line x1={m.l} x2={W - m.r} y1={y(t)} y2={y(t)} className="nodal-grid" /><text x={m.l - 5} y={y(t) + 3} textAnchor="end" className="vol-tick">{fmt(t)}</text></g>)}
       {x.ticks(5).map((t) => <text key={t} x={x(t)} y={H - m.b + 13} textAnchor="middle" className="vol-tick">{t}</text>)}
@@ -84,18 +90,22 @@ function TankCard({ matched, tank, aquifer, onAquifer, production, tests, synthe
       {pts.map((p) => <circle key={p.date} cx={x(p.np / MM)} cy={y(p.measured)} r={4} className="nodal-fc-meas"><title>{p.date}: {fmt(p.measured)} psia measured, {fmt(Math.round(tankPressure(tank, p)))} by the tank</title></circle>)}
     </svg>
     <table className="nodal-table nodal-tanks">
-      <thead><tr><th>Aquifer<small>× oil pore volume</small></th><th>STOIIP<small>MMSTB</small></th><th>Fit<small>± psi</small></th><th /></tr></thead>
-      <tbody>{matched.all.filter((a) => a.mae <= best.mae + 15 || a.aquifer === tank.aquifer).map((a) => {
-        const picked = a.aquifer === tank.aquifer, alike = a.mae <= best.mae + 7.5;
-        return <tr key={a.aquifer} data-chosen={picked || undefined} onClick={() => onAquifer(a === best ? null : a.aquifer)} className="nodal-tank-row">
-          <td>{a.aquifer === 0 ? "none" : `${a.aquifer}×`}</td><td>{fmt(Math.round(a.stoiip / MM))}</td><td>±{a.mae.toFixed(0)}</td>
-          <td>{a === best ? "best fit" : alike ? "as good" : ""}{picked && aquifer !== null ? " · picked" : ""}</td>
+      <thead><tr><th>Aquifer<small>× oil pore volume</small></th><th>STOIIP<small>MMSTB</small></th><th>Fit<small>RMS psi</small></th><th /></tr></thead>
+      <tbody>{[{ ...matched.best, within: true }, ...matched.all.filter((a) => Math.abs(a.aquifer - matched.best.aquifer) > 1e-6)].sort((a, b) => a.aquifer - b.aquifer).map((a) => {
+        const isBest = Math.abs(a.aquifer - matched.best.aquifer) < 1e-9, picked = Math.abs(a.aquifer - tank.aquifer) < 1e-6;
+        return <tr key={a.aquifer} data-chosen={picked || undefined} data-out={!a.within || undefined} onClick={() => onAquifer(isBest ? null : a.aquifer)} className="nodal-tank-row">
+          <td>{a.aquifer === 0 ? "none" : `${Number(a.aquifer.toFixed(2))}×`}</td><td>{fmt(Math.round(a.stoiip / MM))}</td><td>{a.mae.toFixed(0)}</td>
+          <td>{isBest ? "best fit" : a.within ? "within 95%" : "ruled out"}{picked && aquifer !== null ? " · picked" : ""}</td>
         </tr>;
       })}</tbody>
     </table>
-    <p className="nodal-hint">{matched.range.stoiip[1] / matched.range.stoiip[0] > 1.15
-      ? `The pressures fit ${fmt(Math.round(matched.range.stoiip[0] / MM))}–${fmt(Math.round(matched.range.stoiip[1] / MM))} MMSTB equally well, trading oil in place against aquifer: more pressure history, a volumetric STOIIP or the aquifer's geology decides. Pick a row to forecast on it.`
-      : "The pressures pin the oil in place: the other tanks fit clearly worse."}{tests.some((t) => t.reservoirPressure !== null) ? "" : " No build-up pressures yet."}</p>
+    <p className="nodal-hint">
+      {matched.range.stoiip[1] / matched.range.stoiip[0] > 1.15
+        ? `Within the build-ups' accuracy (±${Math.round(matched.sigma)} psi) the pressures fit ${fmt(Math.round(matched.range.stoiip[0] / MM))}–${fmt(Math.round(matched.range.stoiip[1] / MM))} MMSTB, oil in place traded against aquifer: the forecast is drawn across that range. More pressure history, a volumetric STOIIP or the aquifer's geology narrows it.`
+        : "The pressures pin the oil in place: the other tanks fit clearly worse."}
+      {" "}The rock is assumed: across pore compressibility {ROCK_RANGE[0] * 1e6}–{ROCK_RANGE[1] * 1e6}×10⁻⁶ /psi the best fit moves {fmt(Math.round(Math.min(...matched.rock.map((r) => r.stoiip)) / MM))}–{fmt(Math.round(Math.max(...matched.rock.map((r) => r.stoiip)) / MM))} MMSTB.
+      {" "}Initial pressure {fmt(Math.round(matched.initialPressure))} psia, {matched.initialMeasured ? "the first build-up" : "from the design's pore pressure (no initial build-up)"}.
+    </p>
   </section>;
 }
 
@@ -124,9 +134,9 @@ function WorCard({ cases }: { readonly cases: Cases }) {
 }
 
 /** Oil rate through time: the allocated history, the tests, and both forecasts; reservoir pressure and water cut beneath. */
-function ForecastChart({ cases, production, tests }: { readonly cases: Cases; readonly production: readonly ProductionMonth[]; readonly tests: readonly WellTest[] }) {
+function ForecastChart({ cases, band, production, tests }: { readonly cases: Cases; readonly band: Band; readonly production: readonly ProductionMonth[]; readonly tests: readonly WellTest[] }) {
   const [box, size] = useSize<HTMLDivElement>();
-  const W = Math.max(320, size.width), total = Math.max(320, size.height - 46), H1 = Math.round(total * 0.62), H2 = total - H1, m = { l: 52, r: 44, t: 12, b: 26 };
+  const W = Math.max(320, size.width), total = Math.max(320, size.height - 64), H1 = Math.round(total * 0.62), H2 = total - H1, m = { l: 52, r: 44, t: 12, b: 26 };
   const runs = [cases.natural, cases.lifted].filter((r): r is Run => !!r);
   const first = production[0] ? `${production[0].month}-01` : tests[0]?.date ?? cases.natural.steps[0]?.date ?? "2024-01-01";
   const last = runs.reduce((d, r) => r.endDate > d ? r.endDate : d, cases.natural.steps.at(-1)?.date ?? first);
@@ -150,6 +160,14 @@ function ForecastChart({ cases, production, tests }: { readonly cases: Cases; re
       <line x1={x(new Date(now))} x2={x(new Date(now))} y1={m.t} y2={H1 - m.b} className="vol-mark" /><text x={x(new Date(now)) + 4} y={m.t + 10} className="vol-tick">last test</text>
       {history.length > 0 && <path d={history.map((h, i) => `${i ? "L" : "M"}${x(h.mid).toFixed(1)},${y(h.oil).toFixed(1)}`).join("")} className="nodal-fc-history" />}
       {tests.map((t) => <circle key={t.date} cx={x(new Date(t.date))} cy={y(t.liquidRate * (1 - t.waterCut))} r={3.5} className="nodal-fc-test"><title>Test {t.date}: {fmt(Math.round(t.liquidRate * (1 - t.waterCut)))} STB/d oil</title></circle>)}
+      {/* The band: the same case on the smallest and largest tank the pressures allow. */}
+      {([["natural", band.low.natural, band.high.natural], ["lift", band.low.lifted, band.high.lifted]] as const).map(([name, a, b]) => {
+        if (!a || !b) return null;
+        const upper = a.steps.length >= b.steps.length ? a : b, lower = upper === a ? b : a;
+        const top = upper.steps.map((s, i) => `${i ? "L" : "M"}${x(new Date(s.date)).toFixed(1)},${y(Math.max(s.oil, lower.steps[i]?.oil ?? 0)).toFixed(1)}`).join("");
+        const under = upper.steps.map((s, i) => `L${x(new Date(s.date)).toFixed(1)},${y(Math.min(s.oil, lower.steps[i]?.oil ?? 0)).toFixed(1)}`).reverse().join("");
+        return <path key={name} d={`${top}${under}Z`} className={`nodal-fc-band is-${name}`} />;
+      })}
       {runs.map((r) => <path key={cls(r)} d={pathOf(r, (s) => s.oil, y)} className={`nodal-fc-run ${cls(r)}`} />)}
       {runs.filter((r) => r.end !== "horizon").map((r) => <g key={cls(r)} transform={`translate(${x(new Date(r.endDate))},${y(r.steps.at(-1)?.oil ?? 0)})`} className={`nodal-fc-end ${cls(r)}`}><circle r={4} /><text x={-6} y={-8} textAnchor="end">{r.end === "dead" ? "dies" : "economic limit"} {year(r.endDate)}</text></g>)}
     </svg>
@@ -166,7 +184,7 @@ function ForecastChart({ cases, production, tests }: { readonly cases: Cases; re
     </svg>
     <ul className="nodal-patterns">
       <li><i className="is-history" />allocated history</li><li><i className="is-test" />tests</li><li><i className="is-natural" />natural flow</li>{cases.lifted && <li><i className="is-flowing" />gas lift</li>}
-      <li><i className="is-meas" />build-up Pr</li><li><i className="is-water" />water cut (right axis)</li>
+      <li><i className="is-band" />range across the tanks</li><li><i className="is-meas" />build-up Pr</li><li><i className="is-water" />water cut (right axis)</li>
     </ul>
   </figure>;
 }

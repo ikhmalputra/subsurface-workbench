@@ -41,7 +41,7 @@ export function LiftView({ result, lift, onLift, inputs, well, brief, calibrated
         </table> : <p className="nodal-hint is-warn">{design.reason}</p>}
         {design.operating && <p className={`nodal-hint${fits ? "" : " is-warn"}`}>
           {fits ? "Every valve sits within 30 m of one of the completion's mandrels; the spare mandrels take dummy valves." : `The completion's ${installed.length} mandrels sit at ${installed.map((md) => fmt(Math.round(md))).join(", ")} m MD, spaced evenly as placeholders: run them at the depths above instead.`}
-          {" "}Each unloading valve opens {lift.perValveDropPsi} psi below the one above it at the surface, so the casing pressure closes them from the top down as the well unloads; the operating valve is an orifice.
+          {" "}Each unloading valve opens {lift.perValveDropPsi} psi below the one above it at the surface, so the casing pressure closes them from the top down as the well unloads; the operating valve is an orifice. Test-rack pressures use nitrogen&apos;s real-gas Z and the static geothermal temperature at each valve: a flowing well runs warmer, which a temperature survey would set (about 3 psi per °F at the top valve).
         </p>}
       </section>
       <Performance result={result} lift={lift} current={inputs.liftMscfD} waterCut={inputs.waterCut} />
@@ -158,8 +158,8 @@ function Performance({ result, lift, current, waterCut }: { readonly result: Lif
       {/* The break-even line touches the curve where its slope equals gas cost over oil netback. */}
       <line x1={x(Math.max(0, e.gasScfD / 1000 - span))} y1={y(e.oil - slope * Math.min(span, e.gasScfD / 1000))} x2={x(e.gasScfD / 1000 + span)} y2={y(e.oil + slope * span)} className="nodal-lift-tangent" />
       <line x1={x(Math.min(current, x.domain()[1]!))} x2={x(Math.min(current, x.domain()[1]!))} y1={mg.t} y2={H - mg.b} className="vol-mark" />
-      <g transform={`translate(${x(mx.gasScfD / 1000)},${y(mx.oil)})`} className="nodal-lift-max"><circle r={4} /><text x={6} y={-8}>technical maximum · {fmt(Math.round(mx.gasScfD / 1000))}</text></g>
-      <g transform={`translate(${x(e.gasScfD / 1000)},${y(e.oil)})`} className="nodal-lift-econ"><circle r={5} /><text x={-8} y={18} textAnchor={x(e.gasScfD / 1000) > W / 2 ? "end" : "start"}>economic optimum · {fmt(Math.round(e.gasScfD / 1000))}</text></g>
+      <g transform={`translate(${x(mx.gasScfD / 1000)},${y(mx.oil)})`} className="nodal-lift-max"><circle r={4} /><text x={6} y={-8}>{result.maximumFound ? `technical maximum · ${fmt(Math.round(mx.gasScfD / 1000))}` : "still rising: no maximum in range"}</text></g>
+      <g transform={`translate(${x(e.gasScfD / 1000)},${y(e.oil)})`} className="nodal-lift-econ"><circle r={5} /><text x={-8} y={18} textAnchor={x(e.gasScfD / 1000) > W / 2 ? "end" : "start"}>{result.gasLimited ? "all the gas available" : "economic optimum"} · {fmt(Math.round(e.gasScfD / 1000))}</text></g>
     </svg>
   </section>;
 }

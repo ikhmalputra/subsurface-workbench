@@ -1,6 +1,6 @@
 import { PSI_PER_M_PER_SG, findPipe, pressureAt, tubingTable, tvdAtMd } from "@ikhmalputra/subsurface-core";
 import type { WellDesignBrief } from "@ikhmalputra/subsurface-core";
-import { bubblePoint, calibrateFlow, cumulativeAtTests, cumulativeOn, forecastWell, gasLiftDesign, gaugeFit, inflow, inflowByTest, liftOptimum, liftPerformance, liftTable, matchPvt, matchTank, operatingPoint, outflowCurve, pressureAtDate, pressurePoints, rateGrid, solutionGor, tankPressure, traverse, worTrend } from "@ikhmalputra/subsurface-core/production";
+import { bubblePoint, calibrateFlow, casingPressureAt, cumulativeAtTests, cumulativeOn, forecastWell, gasLiftDesign, gaugeFit, inflow, inflowByTest, liftOptimum, liftPerformance, liftTable, matchPvt, matchTank, operatingPoint, outflowCurve, pressureAtDate, pressurePoints, rateGrid, solutionGor, tankPressure, traverse, worTrend } from "@ikhmalputra/subsurface-core/production";
 import type { BlackOil, Correlation, FlowTuning, GasLiftInput, Inflow, LabPvt, NodalCurve, ProductionMonth, Tank, OperatingPoint, PvtTuning, Reservoir, Traverse, WellModel, WellPath, WellTest } from "@ikhmalputra/subsurface-core/production";
 
 /**
@@ -109,7 +109,7 @@ export interface Calibration {
   readonly pvt: PvtTuning | null;
   /** The fluid the match settled on: the lab's gravities where it gave them, and the PVT factors. */
   readonly fluid: BlackOil;
-  readonly flow: FlowTuning & { readonly mae: number; readonly bias: number };
+  readonly flow: FlowTuning & { readonly mae: number; readonly bias: number; readonly resolved?: { readonly holdup: boolean; readonly friction: boolean }; readonly clear?: boolean };
   readonly lastTest: WellTest;
   /** The last test's flowing pressure at the perforations, psia: where the test sits on the nodal plot. */
   readonly lastPwf: number;
@@ -138,7 +138,7 @@ export function runMatch(well: WellCase, tests: readonly WellTest[], lab: LabPvt
   const last = sorted.at(-1);
   const calibration: Calibration | null = last ? {
     at: new Date().toISOString().slice(0, 10), tests: tests.length, pvt: pvt?.tuning ?? null, fluid: model.fluid,
-    flow: { correlation: best.correlation, holdupFactor: best.holdupFactor, frictionFactor: best.frictionFactor, mae: best.mae, bias: best.bias },
+    flow: { correlation: best.correlation, holdupFactor: best.holdupFactor, frictionFactor: best.frictionFactor, mae: best.mae, bias: best.bias, resolved: best.resolved, clear: flow.clear },
     lastTest: last.test, lastPwf: last.pwf ?? NaN, pi: last.pi!, reservoirPressure: last.reservoirPressure,
   } : null;
   return { pvt, flow, before, after, byTest, calibration, model };
@@ -152,7 +152,7 @@ function basis(well: WellCase, inputs: NodalInputs, calibration: Calibration | n
   const fluid: BlackOil = calibration ? { ...calibration.fluid, gor: calibration.lastTest.gor } : well.fluid;
   const reservoir = calibration ? { ...well.reservoir, pressure: calibration.reservoirPressure * (1 - inputs.depletion) } : well.reservoir;
   // Calibrated, the inflow is the latest test's productivity index (skin and permeability cannot be told apart from rate).
-  const ipr = calibration ? inflow(reservoir, fluid, calibration.pi) : inflow(reservoir, fluid);
+  const ipr = calibration ? inflow(reservoir, fluid, calibration.pi, inputs.waterCut) : inflow(reservoir, fluid, undefined, inputs.waterCut);
   const flow: FlowTuning | null = calibration ? { correlation: calibration.flow.correlation as Correlation, holdupFactor: calibration.flow.holdupFactor, frictionFactor: calibration.flow.frictionFactor } : null;
   return { fluid, reservoir, ipr, flow };
 }
@@ -205,14 +205,17 @@ export function liftDesign(brief: WellDesignBrief, well: WellCase, inputs: Nodal
   // To twice the gas available: past the supply only to show where the curve turns over.
   const gas = [0, 0.08, 0.16, 0.25, 0.35, 0.5, 0.65, 0.8, 1, 1.2, 1.45, 1.7, 2].map((f) => Math.round(f * Math.max(lift.availableMscfD, 500)) * 1000);
   const curve = injection === null ? [] : liftPerformance(input, injection, gas);
-  const optimum = curve.length ? liftOptimum(curve, lift.oilNetback, lift.gasCost, input.availableScfD) : null;
+  // Still rising at the last point: carry the curve on until it turns over, so the "most oil" is a maximum and not the grid's edge.
+  for (let k = 0; k < 4 && injection !== null && curve.length > 1 && curve.at(-1)!.oil >= Math.max(...curve.map((p) => p.oil)); k++) curve.push(...liftPerformance(input, injection, [Math.round(curve.at(-1)!.gasScfD * 1.5)]));
+  const maximumFound = curve.length > 1 && curve.at(-1)!.oil < Math.max(...curve.map((p) => p.oil));
+  const optimum = curve.length && injection !== null ? liftOptimum(curve, lift.oilNetback, lift.gasCost, input.availableScfD, (g) => liftPerformance(input, injection, [g])[0]!.oil) : null;
   // The well's own flowing tubing pressure at the optimum: the line the design chart draws.
   const tubingLine = injection !== null && optimum ? (() => {
     const fluidAt: BlackOil = { ...fluid };
     const q = optimum.economic.oil / Math.max(1e-6, 1 - inputs.waterCut);
     return traverse({ whp: input.whp, fluid: fluidAt, liquidRate: q, waterCut: inputs.waterCut, tubing: { ...model.tubing, liftDepthFt: injection, liftGasScfD: optimum.economic.gasScfD }, path: well.path, tempAt: well.tempAt, stepFt: 150, ...flow });
   })() : null;
-  return { input, design, curve, optimum, tubingLine, packerMdM: packer };
+  return { input, design, curve, optimum, maximumFound, gasLimited: !!optimum && optimum.economic.gasScfD >= input.availableScfD - 1, tubingLine, packerMdM: packer };
 }
 
 /** The same well with one input changed: what the comparison curves are drawn from. */
@@ -240,7 +243,28 @@ export function chosenTank(matched: ReturnType<typeof tankMatch>, aquifer: numbe
 
 /** The tank matched to the well's build-up pressures, on the matched fluid. */
 export function tankMatch(well: WellCase, tests: readonly WellTest[], production: readonly ProductionMonth[], calibration: Calibration) {
-  return matchTank({ initialPressure: well.reservoir.pressure, tempF: well.reservoir.tempF, fluid: calibration.fluid, ...TANK_ASSUMED }, pressurePoints(tests, production));
+  // The initial pressure is the first build-up when one was taken as production started (the design's pore pressure otherwise).
+  const first = [...tests].sort((a, b) => Date.parse(a.date) - Date.parse(b.date))[0];
+  const initialPressure = first?.reservoirPressure ?? well.reservoir.pressure;
+  const points = pressurePoints(tests, production);
+  const base = { initialPressure, tempF: well.reservoir.tempF, fluid: calibration.fluid, ...TANK_ASSUMED };
+  const matched = matchTank(base, points);
+  // The rock is assumed: how far the best STOIIP moves across a plausible pore compressibility.
+  const rock = ROCK_RANGE.map((cf) => ({ cf, stoiip: matchTank({ ...base, cf }, points).tank.stoiip }));
+  return { ...matched, rock, initialPressure, initialMeasured: first?.reservoirPressure != null };
+}
+/** Pore compressibility across which the match is repeated, 1/psi: consolidated sandstone's usual span. */
+export const ROCK_RANGE = [3e-6, 1e-5] as const;
+
+/**
+ * Whether the lift gas can get in at the injection depth: the casing pressure there (the operating
+ * pressure plus the gas column) must clear the flowing tubing pressure by the valve differential.
+ */
+export function injectionCheck(well: WellCase, traverse: Traverse | null, lift: LiftInputs, differentialPsi = 100) {
+  if (well.liftDepthMdM === null || !traverse) return null;
+  const md = well.liftDepthMdM * FT_PER_M, at = traverse.points.reduce((best, p) => Math.abs(p.mdFt - md) < Math.abs(best.mdFt - md) ? p : best, traverse.points[0]!);
+  const casing = casingPressureAt(lift.operatingPsig + 14.7, lift.liftGasSg, at.tvdFt, well.tempAt);
+  return { casing, tubing: at.p, margin: casing - at.p - differentialPsi, ok: casing - at.p >= differentialPsi };
 }
 
 /**
@@ -263,4 +287,16 @@ export function forecastCases(well: WellCase, inputs: NodalInputs, calibration: 
   const natural = run(0);
   const lifted = well.liftDepthMdM !== null && inputs.liftMscfD > 0 ? run(inputs.liftMscfD) : null;
   return { start, wor, cum, natural, lifted };
+}
+
+/**
+ * The forecast across the tanks the pressures cannot tell apart: the chosen one, and the smallest and
+ * largest STOIIP within the match's 95% interval. A band, because one line would claim more than
+ * the build-ups know.
+ */
+export function forecastBand(well: WellCase, inputs: NodalInputs, calibration: Calibration, tests: readonly WellTest[], production: readonly ProductionMonth[], matched: ReturnType<typeof tankMatch>, tank: Tank, f: ForecastInputs) {
+  const alike = [...matched.all.filter((fit) => fit.within), matched.best];
+  const lo = alike.reduce((a, b) => b.stoiip < a.stoiip ? b : a), hi = alike.reduce((a, b) => b.stoiip > a.stoiip ? b : a);
+  const run = (fit: { stoiip: number; aquifer: number }) => forecastCases(well, inputs, calibration, tests, production, { ...matched.tank, stoiip: fit.stoiip, aquifer: fit.aquifer }, f);
+  return { main: forecastCases(well, inputs, calibration, tests, production, tank, f), low: run(lo), high: run(hi), tanks: { low: lo, high: hi } };
 }

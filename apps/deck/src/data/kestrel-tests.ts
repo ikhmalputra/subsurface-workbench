@@ -14,22 +14,30 @@ import { FT_PER_M, defaultNodal, modelOf, wellCase } from "./nodal-model.ts";
  */
 export const SYNTHETIC_NOTE = "Synthetic: generated from a hidden well model with measurement noise, to show the match. Replace with the well's own tests.";
 
-/** The hidden tank's size and aquifer: what the forecast's pressure match should find. */
-export const TRUE_STOIIP = 120e6, TRUE_AQUIFER = 1;
+/**
+ * The hidden tank: what the forecast's pressure match should find. Its rock and water are not the
+ * ones the match assumes (Swi 0.24 and cf 7×10⁻⁶ against 0.20 and 5×10⁻⁶), and its aquifer is off the
+ * match's grid, so the match is tested on a well it does not share assumptions with.
+ */
+export const TRUE_STOIIP = 120e6, TRUE_AQUIFER = 1.3;
+const TRUE_ROCK = { swi: 0.24, cw: 3.5e-6, cf: 7e-6 };
+/** The operating valve the well's records give (m MD): where the lift gas has gone in since mid-2025. */
+export const KESTREL_INJECTION_MD_M = 1850;
 
 export function kestrelSynthetic(brief: WellDesignBrief): { readonly tests: WellTest[]; readonly lab: LabPvt; readonly production: ProductionMonth[] } | null {
   const truthInputs = { ...defaultNodal, api: 33, gasSg: 0.78, gor: 480, permeabilityMd: 42, skin: 1.5 };
   const well = wellCase(brief, truthInputs);
   if (typeof well === "string") return null;
   const tuning = { pbFactor: 1.06, boFactor: 1.015, muFactor: 1.2 };
-  const model = modelOf(well, tuning);
+  const base = modelOf(well, tuning);
+  const model = { ...base, tubing: { ...base.tubing, liftDepthFt: KESTREL_INJECTION_MD_M * FT_PER_M } };
   const start = Date.parse("2024-03-01");
   const days = (date: string) => (Date.parse(date) - start) / 86400000;
   const dates = ["2024-03-01", "2024-07-01", "2024-11-01", "2025-03-01", "2025-07-01", "2025-11-01", "2026-03-01", "2026-07-01", "2026-09-15"];
   const plan = dates.map((date, i) => ({ date, whp: 330 - 10 * i, waterCut: Math.min(0.55, 0.05 + 0.055 * i), gor: 480, liftGasScfD: date >= "2025-07-01" ? 1_000_000 : 0, buildUp: i % 2 === 0 }));
   const skinAt = (date: string) => 1.5 + 3.5 * days(date) / 900;
   // The hidden tank, produced month by month by the true well (the plan's conditions held between tests, water cut and wellhead pressure eased between them).
-  const tank: Tank = { stoiip: TRUE_STOIIP, initialPressure: well.reservoir.pressure, tempF: well.reservoir.tempF, fluid: { ...model.fluid, gor: 480 }, swi: 0.2, cw: 3e-6, cf: 5e-6, aquifer: TRUE_AQUIFER };
+  const tank: Tank = { stoiip: TRUE_STOIIP, initialPressure: well.reservoir.pressure, tempF: well.reservoir.tempF, fluid: { ...model.fluid, gor: 480 }, ...TRUE_ROCK, aquifer: TRUE_AQUIFER };
   const flow = { correlation: "hagedorn-brown" as const, holdupFactor: 1.08, frictionFactor: 1.25 };
   const conditions = (date: string) => {
     const i = Math.max(0, plan.findLastIndex((p) => p.date <= date)), a = plan[i]!, b = plan[Math.min(plan.length - 1, i + 1)]!;
@@ -41,7 +49,7 @@ export function kestrelSynthetic(brief: WellDesignBrief): { readonly tests: Well
   for (let t = start; t <= Date.parse(dates.at(-1)!) + 86400000 * 31;) {
     const date = new Date(t).toISOString().slice(0, 10), c = conditions(date);
     track.push({ t, p: state.p });
-    const ipr = inflow({ ...well.reservoir, pressure: state.p, skin: skinAt(date) }, tank.fluid);
+    const ipr = inflow({ ...well.reservoir, pressure: state.p, skin: skinAt(date) }, tank.fluid, undefined, c.waterCut);
     const point = operatingPoint(ipr, outflowCurve(rateGrid(ipr.aof, 16), (q) => traverse({ whp: c.whp + 14.7, fluid: tank.fluid, liquidRate: q, waterCut: c.waterCut, tubing: { ...model.tubing, liftGasScfD: c.liftGasScfD }, path: model.path, tempAt: model.tempAt, stepFt: 300, ...flow }).bottomPressure));
     const next = new Date(t); next.setUTCMonth(next.getUTCMonth() + 1);
     const d = (next.getTime() - t) / 86400000, q = point?.rate ?? 0;
