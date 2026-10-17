@@ -43,6 +43,7 @@ const STEPS = [
   { name: "typecheck", tier: "t0", cmd: ["pnpm", "typecheck"] },
   { name: "test-deck", tier: "t0", cmd: ["pnpm", "test:deck"] },
   { name: "notices", tier: "t0", cmd: ["node", "tools/release/notices.mjs", "--check"], script: "tools/release/notices.mjs" },
+  { name: "crs-defs", tier: "t0", cmd: ["node", "tools/build-crs-defs.mjs", "--check"], script: "tools/build-crs-defs.mjs" },
   { name: "mock-osdu", tier: "t0", cmd: ["node", "--test", "tools/mock-osdu/mock.test.mjs"], script: "tools/mock-osdu/mock.test.mjs" },
   { name: "render-config", tier: "t0", cmd: ["node", "--test", "deploy/render.test.mjs"], script: "deploy/render.test.mjs" },
   { name: "fuzz", tier: "t0", cmd: ["node", "tools/fuzz/run.mjs", "--runs", "500"], script: "tools/fuzz/run.mjs" },

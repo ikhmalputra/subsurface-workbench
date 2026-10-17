@@ -1500,8 +1500,20 @@
   "entry": "@ikhmalputra/subsurface-core/gis",
   "exports": [
    {
+    "name": "crsFromReference",
+    "kind": "function"
+   },
+   {
+    "name": "datumShiftOf",
+    "kind": "function"
+   },
+   {
     "name": "emptyGisWorkspace",
     "kind": "value"
+   },
+   {
+    "name": "ensureCrs",
+    "kind": "function"
    },
    {
     "name": "gisAreaM2",
@@ -1509,6 +1521,10 @@
    },
    {
     "name": "gisDistanceM",
+    "kind": "function"
+   },
+   {
+    "name": "gridConvergenceAtDeg",
     "kind": "function"
    },
    {
@@ -1520,7 +1536,15 @@
     "kind": "function"
    },
    {
+    "name": "knownCrs",
+    "kind": "function"
+   },
+   {
     "name": "prepareGisDocument",
+    "kind": "function"
+   },
+   {
+    "name": "registerCrs",
     "kind": "function"
    },
    {

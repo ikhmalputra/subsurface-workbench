@@ -47,7 +47,8 @@
     "share": { "type": "object", "additionalProperties": false, "required": ["mode"], "properties": { "mode": { "enum": ["reference", "carry", "off"], "description": "reference: links carry ids and view state only (a client's default). carry: the sender's own wells travel in the link (the public demo). off: no sharing." } } },
     "csp": { "type": "object", "additionalProperties": false, "properties": { "connectSrc": { "type": "array", "items": { "$ref": "#/$defs/https" }, "description": "Extra https origins the browser may connect to, beyond the sources and providers above. No wildcards." } } },
     "instance": { "type": "object", "additionalProperties": false, "properties": { "id": { "type": "string" }, "name": { "type": "string" } } },
-    "telemetry": { "type": "object", "additionalProperties": false, "properties": { "endpoint": { "$ref": "#/$defs/https", "description": "The tenant's own OpenTelemetry collector. Off when absent; nothing is ever sent anywhere else." } } }
+    "telemetry": { "type": "object", "additionalProperties": false, "properties": { "endpoint": { "$ref": "#/$defs/https", "description": "The tenant's own OpenTelemetry collector. Off when absent; nothing is ever sent anywhere else." } } },
+    "crs": { "type": "object", "additionalProperties": false, "required": ["definitions"], "properties": { "definitions": { "type": "object", "description": "The tenant's own coordinate reference systems (a local grid, an engineering CRS), by code, as proj4 strings. EPSG codes come with the SDK.", "propertyNames": { "pattern": "^[A-Z][A-Z0-9_-]*:[A-Za-z0-9._-]+$" }, "additionalProperties": { "type": "string", "pattern": "\\+proj=[a-z]+" } } } }
   },
   "$defs": {
     "https": { "type": "string", "pattern": "^https://[^\\s/?#]+" },

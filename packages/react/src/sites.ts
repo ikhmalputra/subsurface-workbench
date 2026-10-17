@@ -5,7 +5,8 @@ import type { GeographicXY } from "@ikhmalputra/subsurface-core/gis";
 import { createMockTrajectory } from "@ikhmalputra/subsurface-core/sandbox";
 import { syntheticReservoirLogs } from "@ikhmalputra/subsurface-core/contracts";
 import type { SyntheticLogs } from "@ikhmalputra/subsurface-core/contracts";
-import { catalogueWell, gridConvergenceDeg, trueToGrid } from "@ikhmalputra/subsurface-core/data-contract";
+import { catalogueWell, trueToGrid } from "@ikhmalputra/subsurface-core/data-contract";
+import { gridConvergenceAtDeg } from "@ikhmalputra/subsurface-core/gis";
 import type { CanonicalMarker, CataloguedWell, CataloguedWellbore, Provenance, TrajectoryStation, WellBundle } from "@ikhmalputra/subsurface-core/data-contract";
 import type { WellsMapSite } from "./wells-map.js";
 import type { SiteSceneSurface, SiteSceneWell } from "./site-scene.js";
@@ -125,7 +126,6 @@ export function siteOfWells(wells: readonly CataloguedWell[], options: WellsSite
   const centre: GeographicXY = [placed.reduce((sum, item) => sum + item.location.longitude, 0) / placed.length, placed.reduce((sum, item) => sum + item.location.latitude, 0) / placed.length];
   const crs = options.frame?.crs ?? utmZoneOf(centre[0], centre[1]);
   const utm = /^EPSG:(?:326|327|269)(\d{2})$/.exec(crs);
-  const meridian = utm ? -183 + 6 * Number(utm[1]) : null;
   const heads = placed.map((item) => {
     const own = item.location.projected;
     return own && own.crs === crs ? [own.easting, own.northing] as const : reprojectGisXY([item.location.longitude, item.location.latitude], "EPSG:4326", crs);
@@ -145,7 +145,8 @@ export function siteOfWells(wells: readonly CataloguedWell[], options: WellsSite
     const head = heads[index]!, path = item.bore.path;
     // A station's depth in the frame: how far below the reference elevation it lies.
     const datum = depth === "datum" ? reference : item.bore.wellbore.datum.elevationM ?? 0;
-    const turn = item.bore.trajectory?.azimuthReference === "true" && meridian !== null ? gridConvergenceDeg(item.location.longitude, item.location.latitude, meridian) : 0;
+    // A survey to true north is turned onto the grid by the convergence at its wellhead, for whatever projection the frame uses.
+    const turn = item.bore.trajectory?.azimuthReference === "true" ? gridConvergenceAtDeg(crs, item.location.longitude, item.location.latitude) : 0;
     const frame = (point: { readonly tvdM: number; readonly northingM: number; readonly eastingM: number }): [number, number, number] => {
       const grid = turn ? trueToGrid(point.northingM, point.eastingM, turn) : { northM: point.northingM, eastM: point.eastingM };
       return [head[0] - ox + grid.eastM, head[1] - oy + grid.northM, reference - datum + point.tvdM];

@@ -199,6 +199,8 @@ They are ranked by how many tools each one unlocks. One adapter here means one c
 
 **At scale.** Sources are read header-first and per field on demand, as `docs/STRESS_TEST.md` sets out. That design was stress-tested at 200,000 synthetic wells: the globe was ready in 1 s, the heap stayed under 350 MB, and the worst freeze was about 0.3 s. The old design froze for 5 s at 5,000 wells, and could not parse a tenant above about 17,000.
 
+**CRS.** `@ikhmalputra/subsurface-core/gis` reprojects between 2,372 coordinate reference systems on the datums oil-and-gas records use (a table generated from the EPSG dataset by `tools/build-crs-defs.mjs`, loaded on demand with `ensureCrs`), plus any local CRS a tenant defines in `config.json` `crs.definitions`. Datum shifts are Helmert transformations and `datumShiftOf` says how good each is; grid convergence is found by projection, for any grid. Checked against IOGP Guidance Note 7-2 worked examples and against FORCE's published positions.
+
 **Next:**
 - the OSDU adapter: Search plus Wellbore DDMS for wells, wellbores, trajectories and marker sets;
 - the logs object (C6), which lets Logs, Petrophysics and Correlation read a tenant's wells;

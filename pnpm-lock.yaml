@@ -208,6 +208,9 @@ importers:
       '@types/three':
         specifier: 0.186.0
         version: 0.186.0
+      epsg-index:
+        specifier: 2.0.0
+        version: 2.0.0
       eslint:
         specifier: 10.0.1
         version: 10.0.1
@@ -1166,6 +1169,10 @@ packages:
   entities@8.1.0:
     resolution: {integrity: sha512-kxL7msIffSuh9aaFAMD7rxAIuTRMAHMeBtgHW2yUdWw732ZNh4MehkF2gdjvtdmikkaIP9bFDDJOPlsvm7avrA==}
     engines: {node: '>=20.19.0'}
+
+  epsg-index@2.0.0:
+    resolution: {integrity: sha512-JFRqtXMmxEO/BWbXZuLNJuWS44vbwDPQkfycnISnfm/I8/OLlAqwbYRImgAV9ulr63p/hyW2YIFT9jizHeDzvQ==}
+    engines: {node: '>=18'}
 
   escape-string-regexp@4.0.0:
     resolution: {integrity: sha512-TtpcNJ3XAzx3Gq8sWRzJaVajRs0uVxA2YAkdb1jm2YkPz4G6egUFAyA3n5vtEIZefPk5Wa4UXbKuS5fKkJWdgA==}
@@ -2538,6 +2545,8 @@ snapshots:
   earcut@3.2.4: {}
 
   entities@8.1.0: {}
+
+  epsg-index@2.0.0: {}
 
   escape-string-regexp@4.0.0: {}
 
