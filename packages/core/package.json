@@ -95,6 +95,10 @@
       "types": "./dist/integrity.d.ts",
       "import": "./dist/integrity.js"
     },
+    "./data-contract": {
+      "types": "./dist/data-contract.d.ts",
+      "import": "./dist/data-contract.js"
+    },
     "./quakeml": {
       "types": "./dist/quakeml.d.ts",
       "import": "./dist/quakeml.js"

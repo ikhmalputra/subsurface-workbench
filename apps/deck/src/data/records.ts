@@ -3,8 +3,9 @@ import { computeMinimumCurvature, mdAtSurveyTvd, tvdAtSurveyMd, wellComponentsTo
 import type { DepthReference, FormationLayer, SurveyPoint, WellComponent, WellDesign, WellEnvironment } from "@ikhmalputra/subsurface-core";
 import { createEditHistory } from "@ikhmalputra/subsurface-core/state";
 import type { EditHistory, EditState } from "@ikhmalputra/subsurface-core/state";
-import { reprojectGisXY } from "@ikhmalputra/subsurface-core/gis";
-import { utmZoneOf } from "@ikhmalputra/subsurface-react";
+import { siteOfWells } from "@ikhmalputra/subsurface-react";
+import { catalogueWell } from "@ikhmalputra/subsurface-core/data-contract";
+import { recordBundle } from "./sources/convert.ts";
 import type { WorldSite } from "@ikhmalputra/subsurface-react";
 import type { EnteredStation } from "./entry.ts";
 
@@ -183,40 +184,26 @@ export function designOfRecord(wellId: string, value: WellRecordValue): WellDesi
 }
 export const assemblyOfRecord = (wellId: string, value: WellRecordValue) => wellComponentsToAssembly({ id: wellId, name: value.identity.name || "Unnamed well", totalDepthM: value.totalDepthM, components: value.components });
 
-/** A recorded well's site: its head and path on the globe, the well in 3D, the ground or sea. */
+/**
+ * A recorded well's site, built through the data contract as a tenant's well would be: its head and
+ * path on the globe, the well in 3D with its tops and casing shoes, and the ground or sea.
+ */
 const siteCache = new WeakMap<WellRecordValue, WorldSite>();
 export function siteOfRecord(entry: RecordEntry, value: WellRecordValue): WorldSite | null {
   const cached = siteCache.get(value);
   if (cached) return cached;
-  const { latitude, longitude } = value.location;
-  if (latitude === null || longitude === null) return null;
-  const crs = utmZoneOf(longitude, latitude);
-  const head = reprojectGisXY([longitude, latitude], "EPSG:4326", crs);
-  const survey = surveyOf(value.stations, value.totalDepthM);
+  const catalogued = catalogueWell(recordBundle(entry, value), "browser").entry;
+  if (!catalogued) return null;
   const name = value.identity.name || "Unnamed well";
-  const rkb = value.datum.elevationMslM ?? 0;
-  const offshore = value.location.environment !== "onshore";
-  const ground = value.location.groundElevationM;
   const shoes = value.components.filter((component) => component.kind === "Casing").map((component) => ({ mdM: component.bottomDepthM, label: `${component.name.split(" / ")[0]} shoe` }));
-  const site: WorldSite = {
-    map: {
-      id: entry.siteId, label: `${name} (entered)`, provenance: "user-authored",
-      summary: `1 drilled well · ${value.stations.length} stations · ${value.components.filter((component) => component.kind === "Casing").length} strings · entered on the deck`,
-      wells: [{ id: entry.wellId, label: name, head: [longitude, latitude], path: survey.map((point) => reprojectGisXY([head[0] + point.eastingM, head[1] + point.northingM], crs, "EPSG:4326")) }],
-    },
-    projectWellId: null,
-    depthLabel: `m TVD below ${value.datum.reference}${value.datum.elevationMslM !== null ? ` (${value.datum.elevationMslM} m above MSL)` : ""}`,
-    originLabel: `wellhead · ${crs}`,
-    wells: [{ id: entry.wellId, label: name, provenance: "user-authored", xyz: Float64Array.from(survey.flatMap((point) => [point.eastingM, point.northingM, point.tvdM])), mdM: Float64Array.from(survey.map((point) => point.mdM)), markers: shoes }],
-    surfaces: offshore
-      ? [{ id: "sea", label: "Sea surface", provenance: "user-authored", role: "reference", color: "#3f8fc0", note: `Mean sea level, ${rkb} m below the ${value.datum.reference}.`, geometry: { kind: "plane", depthM: rkb } },
-        ...(value.location.waterDepthM !== null ? [{ id: "seabed", label: "Seabed", provenance: "user-authored" as const, role: "reference" as const, color: "#6b7f6a", note: `Flat at the entered ${value.location.waterDepthM} m water depth. Not bathymetry.`, geometry: { kind: "plane" as const, depthM: rkb + value.location.waterDepthM } }] : [])]
-      : ground !== null && value.datum.elevationMslM !== null ? [{ id: "ground", label: "Ground", provenance: "user-authored", role: "reference", color: "#8a7a5c", note: `Flat at the entered ${ground} m ground elevation.`, geometry: { kind: "plane", depthM: rkb - ground } }] : [],
-    hasSeismic: false,
+  const site = siteOfWells([catalogued], {
+    id: entry.siteId, label: `${name} (entered)`, provenance: "user-authored",
+    summary: `1 drilled well · ${value.stations.length} stations · ${shoes.length} strings · entered on the deck`,
+    busId: () => entry.wellId, extraMarkers: () => shoes,
     seismicNote: "No seismic: none has been entered for this well.",
     caveat: `Entered on the deck. ${name}'s survey, tops and construction are what was typed, pasted or imported here, with the sources noted beside them; nothing was taken from elsewhere.`,
-  };
-  siteCache.set(value, site);
+  });
+  if (site) siteCache.set(value, site);
   return site;
 }
 

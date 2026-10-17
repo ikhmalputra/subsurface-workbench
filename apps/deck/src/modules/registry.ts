@@ -1,11 +1,12 @@
 import type { LucideIcon } from "lucide-react";
-import { Activity, AlignHorizontalSpaceAround, AudioLines, AudioWaveform, Layers, Map as MapIcon, Drill, FilePen, GitCompareArrows, PencilRuler, Mountain, TrendingDown, Fuel, Anchor, ShieldCheck, Radar, Slice, Box, CalendarDays, Columns3, Compass, Cylinder, Droplets, Gauge, Layers2, ScatterChart, ShieldAlert, Waves, Globe2, Layers3, ListTree, Rotate3d } from "lucide-react";
+import { Activity, Database, AlignHorizontalSpaceAround, AudioLines, AudioWaveform, Layers, Map as MapIcon, Drill, FilePen, GitCompareArrows, PencilRuler, Mountain, TrendingDown, Fuel, Anchor, ShieldCheck, Radar, Slice, Box, CalendarDays, Columns3, Compass, Cylinder, Droplets, Gauge, Layers2, ScatterChart, ShieldAlert, Waves, Globe2, Layers3, ListTree, Rotate3d } from "lucide-react";
 import type { WellDesignBrief } from "@ikhmalputra/subsurface-core";
 import type { MinSize, Rect } from "../deck/layout.ts";
 import { designForSite, isDesignSite } from "../data/design.ts";
 import { activeEditWell, editedValue, isRecordedSite, recordedForSite } from "../data/records.ts";
 import type { WellRecordValue } from "../data/records.ts";
 import { importedLogs } from "../data/logs.ts";
+import { isTenantSite } from "../data/catalogue-state.ts";
 
 /** The six signals. Each has one colour, used for nothing else. */
 export type Signal = "place" | "object" | "depth" | "time" | "view" | "whatif";
@@ -22,10 +23,11 @@ export type ModuleId =
   | "drilling" | "rig" | "torquedrag"
   | "petro"
   | "strings" | "window" | "kick" | "cement" | "hydraulics" | "geomech" | "stimulation" | "barriers"
-  | "decline" | "nodal";
+  | "decline" | "nodal"
+  | "sources";
 
 /** What kind of place a site is: FORGE's records, the Equator field, a FORCE 2020 area, a planned well (Kestrel A-7 or the user's), or a drilled well entered on the deck. */
-export type SiteKind = "forge" | "equator" | "force" | "design" | "recorded";
+export type SiteKind = "forge" | "equator" | "force" | "design" | "recorded" | "tenant";
 /** The subsurface disciplines the dock is grouped by, the same as the landing page's. */
 export type ModuleGroup = "Geophysics & geology" | "Petrophysics" | "Geomechanics & pressure" | "Drilling" | "Well engineering & completions" | "Production" | "Your data";
 
@@ -85,6 +87,7 @@ export const modules: readonly ModuleSpec[] = [
   { id: "nodal", title: "Nodal analysis", icon: Fuel, group: "Production", blurb: "What the reservoir delivers against what the tubing lifts: the operating point, the flow up the tubing, and how lift gas, tubing, water and wellhead pressure move it; and each annulus's pressure against its MAASP as the well warms up", listens: ["place"], emits: [], min: { w: 4, h: 5 }, size: { w: 8, h: 8 }, depthIndexed: false, opensFocused: true },
   { id: "editor", title: "Well editor", icon: FilePen, group: "Your data", blurb: "A drilled well's records: survey, formation tops, casing, hole and cement, and LAS logs; enter them, paste or import them, or edit an existing well's", listens: ["place", "object"], emits: ["object"], min: { w: 4, h: 6 }, size: { w: 5, h: 8 }, depthIndexed: false },
   { id: "compare", title: "Compare wells", icon: GitCompareArrows, group: "Your data", blurb: "Several wells' construction side by side, on one depth scale and one diameter scale, string by string", listens: ["place", "depth", "whatif"], emits: ["depth"], min: { w: 4, h: 5 }, size: { w: 7, h: 8 }, depthIndexed: false },
+  { id: "sources", title: "Data sources", icon: Database, group: "Your data", blurb: "Where the wells come from: each source the host configured, what it served, and what was left out and why", listens: ["place"], emits: ["place"], min: { w: 4, h: 5 }, size: { w: 7, h: 8 }, depthIndexed: false },
 ];
 /**
  * Fusing: a tile dropped on the middle of another hands it its data, and the target draws it in its
@@ -145,24 +148,33 @@ const forceWhy: Readonly<Partial<Record<ModuleId, string>>> = {
 };
 
 /** The kinds of place a module works at, for the dock's card: null where it works anywhere. */
-export const SITE_KIND_LABEL: Readonly<Record<SiteKind, string>> = { forge: "Utah FORGE", equator: "Equator", force: "FORCE 2020", design: "Planned wells", recorded: "Your wells" };
+export const SITE_KIND_LABEL: Readonly<Record<SiteKind, string>> = { forge: "Utah FORGE", equator: "Equator", force: "FORCE 2020", design: "Planned wells", recorded: "Your wells", tenant: "Your backend's wells" };
 export function worksAt(id: ModuleId): readonly SiteKind[] | null {
-  if (id === "globe" || id === "decline" || id === "compare") return null;
+  if (id === "globe" || id === "decline" || id === "compare" || id === "sources") return null;
   if (id === "designer") return ["design"];
   if (id === "editor") return ["forge", "equator", "force", "recorded"];
-  return availability[id]?.sites ?? ["forge", "equator", "force", "design", "recorded"];
+  const sites = availability[id]?.sites ?? ["forge", "equator", "force", "design", "recorded"];
+  return TENANT_TOOLS.includes(id) ? [...sites, "tenant"] : sites;
 }
+
+/**
+ * The tools that already read a tenant's wells through the data layer: they need only wells, paths
+ * and tops. The rest say so until their objects (logs, construction, pressures…) are in the contract.
+ */
+const TENANT_TOOLS: readonly ModuleId[] = ["site3d", "plan", "profile"];
+const TENANT_WHY = "This tool does not read your backend's wells yet: the data layer serves wells, trajectories and tops so far. Site in 3D, Plan view and Vertical section draw them now.";
 /** The kind of place a site is, as the registry reads it. */
-export const siteKindOf = (siteId: string | null): SiteKind | null => !siteId ? null : siteId === "forge" || siteId === "equator" ? siteId : siteId.startsWith("force-q") ? "force" : isDesignSite(siteId) ? "design" : isRecordedSite(siteId) ? "recorded" : null;
+export const siteKindOf = (siteId: string | null): SiteKind | null => !siteId ? null : siteId === "forge" || siteId === "equator" ? siteId : siteId.startsWith("force-q") ? "force" : isDesignSite(siteId) ? "design" : isRecordedSite(siteId) ? "recorded" : isTenantSite(siteId) ? "tenant" : null;
 
 /** What a module needs that the place does not have; null when it can show something. */
 export function missing(id: ModuleId, siteId: string | null): string | null {
   // The globe chooses places; decline curves run on the Norwegian fields' own production, and a
   // comparison holds its own wells, from any site, wherever the deck is.
-  if (id === "globe" || id === "decline" || id === "compare") return null;
+  if (id === "globe" || id === "decline" || id === "compare" || id === "sources") return null;
   if (id === "designer") return isDesignSite(siteId) ? null : "The designer plans wells. Press + New well to start one, or fly to Kestrel A-7, the example design.";
   if (!siteId) return "Choose a site on the globe or press ⌘K.";
-  const kind: SiteKind | null = siteId === "forge" || siteId === "equator" ? siteId : siteId.startsWith("force-q") ? "force" : isDesignSite(siteId) ? "design" : isRecordedSite(siteId) ? "recorded" : null;
+  const kind = siteKindOf(siteId);
+  if (kind === "tenant") return TENANT_TOOLS.includes(id) ? null : TENANT_WHY;
   if (id === "editor") return kind === "design" ? "A planned well is edited in the Well designer." : null;
   // An imported log is drawn wherever it was imported.
   if (id === "logs" && importedLogs(activeEditWell()).length) return null;

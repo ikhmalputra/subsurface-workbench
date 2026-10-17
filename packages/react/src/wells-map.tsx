@@ -122,7 +122,8 @@ export function WellsMap({ sites, workerUrl, basemapUrl, basemapAttribution, ima
           graticule: { type: "geojson", data: graticule() },
           footprints: { type: "geojson", data: empty },
           paths: { type: "geojson", data: empty },
-          heads: { type: "geojson", data: empty },
+          // Clustered until zoom 10: a tenant's many wells read as counted groups, not a solid blot.
+          heads: { type: "geojson", data: empty, cluster: true, clusterRadius: 36, clusterMaxZoom: 10 },
           section: { type: "geojson", data: empty },
         },
         layers: [{ id: "water", type: "background", paint: { "background-color": "#dce7ef" } }],
@@ -148,7 +149,11 @@ export function WellsMap({ sites, workerUrl, basemapUrl, basemapAttribution, ima
         { id: "paths", type: "line", source: "paths", minzoom: 9, layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": ["case", ["get", "selected"], "#c2410c", "#1f6fb2"], "line-width": ["case", ["get", "selected"], 4, 2.6] } },
         { id: "section-line", type: "line", source: "section", layout: { "line-cap": "round" }, paint: { "line-color": "#f59e0b", "line-width": 3, "line-dasharray": ["case", ["get", "draft"], ["literal", [2, 1.5]], ["literal", [1, 0]]] } },
         { id: "section-ends", type: "circle", source: "section", filter: ["==", ["geometry-type"], "Point"], paint: { "circle-radius": 5, "circle-color": "#f59e0b", "circle-stroke-color": "#ffffff", "circle-stroke-width": 1.5 } },
-        { id: "heads", type: "circle", source: "heads", paint: {
+        { id: "head-clusters", type: "circle", source: "heads", filter: ["has", "point_count"], paint: {
+          "circle-radius": ["step", ["get", "point_count"], 7, 10, 10, 100, 14, 1000, 19, 10000, 25],
+          "circle-color": "#b45309", "circle-opacity": 0.82, "circle-stroke-color": "#ffffff", "circle-stroke-width": 1.4,
+        } },
+        { id: "heads", type: "circle", source: "heads", filter: ["!", ["has", "point_count"]], paint: {
           "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 4, 10, ["case", ["get", "selected"], 8, 6]],
           "circle-color": ["match", ["get", "provenance"], "documented", "#0f766e", "user-authored", "#1f6fb2", "#b45309"],
           "circle-stroke-color": ["case", ["get", "selected"], "#c2410c", "#ffffff"], "circle-stroke-width": ["case", ["get", "selected"], 3, 1.6],
@@ -170,8 +175,18 @@ export function WellsMap({ sites, workerUrl, basemapUrl, basemapAttribution, ima
         const feature = event.features?.[0];
         if (feature) choose(String(feature.properties.siteId), String(feature.properties.wellId));
       });
-      instance.on("mouseenter", "heads", () => { instance!.getCanvas().style.cursor = "pointer"; });
-      instance.on("mouseleave", "heads", () => { instance!.getCanvas().style.cursor = ""; });
+      // A cluster opens by zooming in until it splits.
+      instance.on("click", "head-clusters", (event) => {
+        const feature = event.features?.[0];
+        const source = instance!.getSource("heads") as GeoJSONSource;
+        if (!feature || feature.geometry.type !== "Point") return;
+        const at = feature.geometry.coordinates as [number, number];
+        void source.getClusterExpansionZoom(Number(feature.properties.cluster_id)).then((zoom) => instance!.easeTo({ center: at, zoom: zoom + 0.5 }));
+      });
+      for (const layer of ["heads", "head-clusters"]) {
+        instance.on("mouseenter", layer, () => { instance!.getCanvas().style.cursor = "pointer"; });
+        instance.on("mouseleave", layer, () => { instance!.getCanvas().style.cursor = ""; });
+      }
       instance.on("load", () => {
         if (cancelled) return;
         setReady(true);
@@ -202,14 +217,24 @@ export function WellsMap({ sites, workerUrl, basemapUrl, basemapAttribution, ima
     }))) });
   }, [ready, sites, selectedSiteId, selectedWellId]);
 
+  // Labels as page elements, but only the ones in view. A tenant may list a thousand fields and
+  // hundreds of thousands of wells; their heads are drawn on the GPU by the "heads" layer, and a
+  // label is made only for a site or well on screen. Sites come first, up to 150. Wells' names show
+  // from zoom 8, the nearest the centre first, up to 200. They are rebuilt when the map stops moving.
   useEffect(() => {
     const instance = map.current;
     if (!ready || !instance) return;
-    let cancelled = false;
-    void import("maplibre-gl").then((library) => {
-      if (cancelled) return;
+    let cancelled = false, library: typeof import("maplibre-gl") | null = null;
+    const anchors = sites.map((site) => { const [[w], [e, n]] = siteBounds(site); return { site, at: [(w + e) / 2, n] as [number, number] }; });
+    const build = () => {
+      if (cancelled || !library) return;
       for (const marker of markers.current) marker.remove();
-      markers.current = sites.map((site) => {
+      const bounds = instance.getBounds(), centre = instance.getCenter(), zoom = instance.getZoom();
+      const inView = (at: readonly [number, number]) => bounds.contains(at as [number, number]);
+      const near = (at: readonly [number, number]) => (at[0] - centre.lng) ** 2 + (at[1] - centre.lat) ** 2;
+      const shownSites = anchors.filter((anchor) => anchor.site.id === selectedSiteId || inView(anchor.at))
+        .sort((a, b) => Number(b.site.id === selectedSiteId) - Number(a.site.id === selectedSiteId) || near(a.at) - near(b.at)).slice(0, 150);
+      markers.current = shownSites.map(({ site, at }) => {
         const button = document.createElement("button");
         button.type = "button";
         button.className = `sw-wells-map-site is-${site.provenance}${site.id === selectedSiteId ? " is-selected" : ""}`;
@@ -218,19 +243,36 @@ export function WellsMap({ sites, workerUrl, basemapUrl, basemapAttribution, ima
         const detail = document.createElement("span"); detail.textContent = `${site.provenance} · ${site.summary}`;
         button.append(name, detail);
         button.addEventListener("click", (event) => { event.stopPropagation(); choose(site.id, null); });
-        const [[w], [e, n]] = siteBounds(site);
-        return new library.Marker({ element: button, anchor: "bottom", offset: [0, -10] }).setLngLat([(w + e) / 2, n]).addTo(instance);
+        return new library!.Marker({ element: button, anchor: "bottom", offset: [0, -10] }).setLngLat(at).addTo(instance);
       });
-      // Each well's name beside its surface location, shown once the map is close enough to separate them.
-      for (const site of sites) for (const well of site.wells) {
-        const tag = document.createElement("button");
-        tag.type = "button";
-        tag.className = `sw-wells-map-well${site.id === selectedSiteId && well.id === selectedWellId ? " is-selected" : ""}`;
-        tag.textContent = well.label;
-        tag.addEventListener("click", (event) => { event.stopPropagation(); choose(site.id, well.id); });
-        markers.current.push(new library.Marker({ element: tag, anchor: "left", offset: [10, 0] }).setLngLat([...well.head]).addTo(instance));
+      // The count on each cluster in view: the style carries no glyphs, so counts are page labels too, at most 80.
+      const counted = new Set<number>();
+      for (const feature of instance.querySourceFeatures("heads", { filter: ["has", "point_count"] })) {
+        const id = Number(feature.properties.cluster_id);
+        if (counted.has(id) || counted.size >= 80 || feature.geometry.type !== "Point") continue;
+        const at = feature.geometry.coordinates as [number, number];
+        if (!inView(at)) continue;
+        counted.add(id);
+        const count = document.createElement("span");
+        count.className = "sw-wells-map-count";
+        count.textContent = Number(feature.properties.point_count).toLocaleString("en-US");
+        markers.current.push(new library!.Marker({ element: count, anchor: "center" }).setLngLat(at).addTo(instance));
       }
-    });
+      // Each well's name beside its surface location, once the map is close enough to separate them.
+      if (zoom >= 8) {
+        const wells = sites.flatMap((site) => site.wells.filter((well) => inView(well.head)).map((well) => ({ site, well })))
+          .sort((a, b) => Number(b.site.id === selectedSiteId && b.well.id === selectedWellId) - Number(a.site.id === selectedSiteId && a.well.id === selectedWellId) || near(a.well.head) - near(b.well.head)).slice(0, 200);
+        for (const { site, well } of wells) {
+          const tag = document.createElement("button");
+          tag.type = "button";
+          tag.className = `sw-wells-map-well${site.id === selectedSiteId && well.id === selectedWellId ? " is-selected" : ""}`;
+          tag.textContent = well.label;
+          tag.addEventListener("click", (event) => { event.stopPropagation(); choose(site.id, well.id); });
+          markers.current.push(new library!.Marker({ element: tag, anchor: "left", offset: [10, 0] }).setLngLat([...well.head]).addTo(instance));
+        }
+      }
+      declutter();
+    };
     // Labels never sit on one another: after each redraw, a site or well label that would land on one
     // already placed (the selected site first, then sites before wells) is hidden until the map zooms in.
     let frame = 0;
@@ -238,7 +280,7 @@ export function WellsMap({ sites, workerUrl, basemapUrl, basemapAttribution, ima
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         const placed: DOMRect[] = [];
-        const order = [...markers.current].map((marker) => marker.getElement()).sort((a, b) => Number(b.classList.contains("is-selected")) - Number(a.classList.contains("is-selected")) || Number(b.classList.contains("sw-wells-map-site")) - Number(a.classList.contains("sw-wells-map-site")));
+        const order = [...markers.current].map((marker) => marker.getElement()).sort((a, b) => Number(b.classList.contains("is-selected")) - Number(a.classList.contains("is-selected")) || Number(b.classList.contains("sw-wells-map-count")) - Number(a.classList.contains("sw-wells-map-count")) || Number(b.classList.contains("sw-wells-map-site")) - Number(a.classList.contains("sw-wells-map-site")));
         for (const element of order) {
           element.style.visibility = "";
           const box = element.getBoundingClientRect();
@@ -248,8 +290,13 @@ export function WellsMap({ sites, workerUrl, basemapUrl, basemapAttribution, ima
         }
       });
     };
-    instance.on("render", declutter);
-    return () => { cancelled = true; instance.off("render", declutter); cancelAnimationFrame(frame); };
+    void import("maplibre-gl").then((loaded) => { library = loaded; build(); });
+    // Clusters are made off the main thread after new data: their counts are labelled once they are in.
+    const onData = (event: { sourceId?: string; isSourceLoaded?: boolean }) => { if (event.sourceId === "heads" && event.isSourceLoaded) build(); };
+    instance.on("moveend", build);
+    instance.on("move", declutter);
+    instance.on("sourcedata", onData);
+    return () => { cancelled = true; instance.off("moveend", build); instance.off("move", declutter); instance.off("sourcedata", onData); cancelAnimationFrame(frame); for (const marker of markers.current) marker.remove(); markers.current = []; };
   }, [ready, sites, selectedSiteId, selectedWellId]);
 
   // The host's cursor point: one marker, moved rather than rebuilt, so it can follow a pointer.

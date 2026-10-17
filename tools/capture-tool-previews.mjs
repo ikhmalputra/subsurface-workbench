@@ -27,7 +27,7 @@ const SHOTS = [
   ["drilling", "forge"], ["rig", "kestrel", 6000], ["torquedrag", "forge"], ["hydraulics", "kestrel"], ["kick", "kestrel"], ["anticollision", "forge"], ["plan", "forge"], ["profile", "forge"],
   ["designer", "kestrel"], ["construction", "forge"], ["section", "forge"], ["well3d", "forge", 6000], ["cutaway", "forge", 5000], ["strings", "kestrel"], ["cement", "kestrel"], ["barriers", "kestrel"],
   ["decline", null, 5000], ["nodal", "kestrel", 5000],
-  ["editor", "forge"], ["compare", "forge", 5000],
+  ["editor", "forge"], ["compare", "forge", 5000], ["sources", null, 4000],
 ];
 
 const browser = await playwright.chromium.launch({ args: ["--use-angle=metal", "--enable-gpu-rasterization", "--ignore-gpu-blocklist", "--enable-unsafe-webgpu"] });

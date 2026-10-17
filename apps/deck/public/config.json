@@ -1,0 +1,7 @@
+{
+  "about": "Where the deck's wells come from, read when it starts. Each source is one of: samples (the bundled public and synthetic wells), browser (wells entered, imported or designed on the deck), contract-json (a file of wells in the data contract, with a url beside the deck or https). osdu, witsml-etp and ppdm-api are recognised but have no adapter in this build yet. No keys or secrets belong here. See docs/TENANT_DATA_MAP.md.",
+  "sources": [
+    { "type": "samples" },
+    { "type": "browser" }
+  ]
+}

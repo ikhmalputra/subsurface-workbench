@@ -5,6 +5,8 @@ import type { LasFile, WellOperations } from "@ikhmalputra/subsurface-core/recor
 import type { SyntheticLogs } from "@ikhmalputra/subsurface-core/contracts";
 import { equatorField, equatorPetrophysics } from "@ikhmalputra/subsurface-react";
 import { useDeck } from "../deck/store.ts";
+import { fullWell, tenantWells, useCatalogueVersion } from "./catalogue-state.ts";
+import type { CataloguedWell } from "@ikhmalputra/subsurface-core/data-contract";
 import { analyse, designForSite, useDesign } from "./design.ts";
 import { assemblyOfRecord, baseRecord, designOfRecord, editedValue, layersOf, recordedForSite, same, surveyOf, useRecordsVersion } from "./records.ts";
 import type { WellRecordValue } from "./records.ts";
@@ -22,7 +24,7 @@ import type { ForceLogs, ForceWell } from "./force.ts";
 export interface Place {
   readonly siteId: string;
   /** What kind of place: FORGE's records, an Equator well, a planned well (Kestrel A-7 or one of the user's), or a drilled well the user entered. */
-  readonly kind: "forge" | "equator" | "design" | "recorded" | "force";
+  readonly kind: "forge" | "equator" | "design" | "recorded" | "force" | "tenant";
   /** Changes the user made over the well's records; 0 for a well as recorded. */
   readonly edits: number;
   /** The id the signal bus knows the well by. */
@@ -98,7 +100,38 @@ export function wellIdFor(siteId: string | null, wellId: string | null): string 
     const chosen = wells.find((well) => busId(well) === wellId) ?? wells[0];
     return chosen ? busId(chosen) : null;
   }
+  if (siteId?.includes(":")) {
+    // A well listed by its header alone is known by its own id until its wellbores are read.
+    const bores = tenantWells(siteId).flatMap((entry) => entry.wellbores.length ? entry.wellbores.map((bore) => bore.wellbore.id) : [entry.well.id]);
+    return bores.find((id) => id === wellId) ?? bores[0] ?? null;
+  }
   return null;
+}
+
+/**
+ * A tenant's well as a place, from the data layer: its path and its tops, nothing more. That is
+ * what the contract carries so far. Tools that need more say so instead of drawing.
+ */
+const tenantPlaces = new WeakMap<CataloguedWell, Map<string, Place>>();
+function tenantPlace(siteId: string, wellId: string | null): Place | null {
+  const id = wellIdFor(siteId, wellId);
+  // The well's full path when it has been read; until then the field's simplified one.
+  const listed = tenantWells(siteId).find((candidate) => candidate.well.id === id || candidate.wellbores.some((bore) => bore.wellbore.id === id));
+  const entry = (listed && fullWell(listed.well.id)) ?? listed;
+  const bore = entry?.wellbores.find((candidate) => candidate.wellbore.id === id) ?? entry?.wellbores[0];
+  if (!entry || !bore) return null;
+  const kept = tenantPlaces.get(entry)?.get(bore.wellbore.id);
+  if (kept) return kept;
+  const stations = bore.path, totalDepthM = bore.wellbore.totalDepthMdM ?? stations.at(-1)?.mdM ?? 0;
+  const tops = bore.markers.filter((marker) => marker.kind === "formation" || marker.kind === "group").map((marker) => ({ id: marker.id, name: marker.name, topMdM: marker.mdM, lithology: marker.lithology ?? "", source: entry.well.provenance.source }));
+  const place: Place = {
+    siteId, kind: "tenant", edits: 0, wellId: bore.wellbore.id, label: entry.well.name,
+    provenance: entry.well.provenance.kind === "synthetic" ? "synthetic" : entry.well.provenance.kind === "user-authored" ? "user-authored" : "documented",
+    design: null, components: [], assembly: null, stations, survey: surveyFrom(stations),
+    formations: layersOf(tops, stations, totalDepthM), totalDepthM, operations: null, petro: null, petroLas: null,
+  };
+  tenantPlaces.set(entry, new Map([...(tenantPlaces.get(entry) ?? new Map<string, Place>()), [bore.wellbore.id, place]]));
+  return place;
 }
 
 /** A FORCE well as a place: built once, and again when its logs arrive. */
@@ -161,6 +194,7 @@ export function usePlace(): Place | null {
   const { brief } = useDesign();
   const records = useRecordsVersion();
   const force = useForceVersion();
+  const catalogue = useCatalogueVersion();
   return useMemo(() => {
     const base = basePlace(siteId, wellId);
     if (base) { const value = editedValue(base.wellId); return value ? edited(base, value) : base; }
@@ -175,6 +209,7 @@ export function usePlace(): Place | null {
         formations: design.formations ?? [], totalDepthM: value.totalDepthM, operations: null, petro: null, petroLas: null,
       } satisfies Place;
     }
+    if (siteId?.includes(":")) return tenantPlace(siteId, wellId);
     const record = designForSite(siteId);
     if (record) {
       const analysis = analyse(brief);
@@ -187,7 +222,7 @@ export function usePlace(): Place | null {
       } satisfies Place;
     }
     return null;
-  }, [siteId, wellId, brief, records, force]);
+  }, [siteId, wellId, brief, records, force, catalogue]);
 }
 
 /** TVD at an MD on a place's path; null outside its stations. */
