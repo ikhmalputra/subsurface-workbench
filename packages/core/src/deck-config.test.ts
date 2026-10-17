@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import test from "node:test";
-import { CONFIG_SCHEMA_VERSION, DEFAULT_CONFIG, connectOrigins, parseDeckConfig, secretKeys } from "./deck-config.ts";
+import { CONFIG_SCHEMA_VERSION, DEFAULT_CONFIG, connectOrigins, originOf, parseDeckConfig, secretKeys } from "./deck-config.ts";
 
 const errors = (problems: readonly string[]) => problems.filter((problem) => !problem.startsWith("Note:"));
 
@@ -95,4 +95,16 @@ test("every frozen config from an earlier release still parses without errors", 
     assert.deepEqual(errors(read.problems), [], `${name}: ${read.problems.join(" | ")}`);
     assert.ok(read.config.sources.length > 0, name);
   }
+});
+
+test("plain http is accepted for a platform or provider on this machine only (mocks), never elsewhere", () => {
+  const local = parseDeckConfig({ version: 1, sources: [{ type: "osdu", url: "http://127.0.0.1:4100", dataPartition: "p", auth: "mock" }], auth: { mock: { issuer: "http://localhost:4102", clientId: "deck", scopes: ["openid"] } } });
+  assert.equal(local.config.sources.length, 1);
+  assert.ok(local.config.auth?.mock);
+  assert.deepEqual(connectOrigins(local.config), ["http://127.0.0.1:4100", "http://localhost:4102"]);
+  const remote = parseDeckConfig({ version: 1, sources: [{ type: "osdu", url: "http://osdu.example.com", dataPartition: "p" }], auth: { corp: { issuer: "http://login.example.com", clientId: "deck", scopes: ["openid"] } } });
+  assert.equal(remote.config.sources.length, 0);
+  assert.equal(remote.config.auth, undefined);
+  assert.equal(remote.problems.filter((p) => /https/.test(p)).length, 2);
+  assert.equal(originOf("http://127.0.0.1.evil.example/x"), null, "a host that merely starts with a loopback name is not loopback");
 });

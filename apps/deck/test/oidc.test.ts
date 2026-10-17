@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { DeckConfig } from "@ikhmalputra/subsurface-core/deck-config";
-import { accessToken, authState, completeSignInIfCallback, configureAuth, guardAuthFor, holdsTokens, resetAuth, signIn, signOut } from "../src/auth/oidc.ts";
+import { accessToken, authState, completeSignInIfCallback, configureAuth, guardAuthFor, holdsTokens, resetAuth, resumeSessions, signIn, signOut } from "../src/auth/oidc.ts";
 import type { Browser, TokenSet, Transport } from "../src/auth/oidc.ts";
 
 const CONFIG: DeckConfig = { version: 1, sources: [], auth: { corp: { issuer: "https://login.example.com/t", clientId: "deck", scopes: ["openid", "offline_access"], extraParams: { audience: "osdu" } } } };
@@ -21,13 +21,14 @@ function fakeBrowser(href = "https://deck.example.com/x/deck/#deck=abc") {
   return { browser, goto: (url: string) => { href = url; } };
 }
 /** A provider in memory: counts its calls, hands out numbered tokens, can be told to refuse a refresh. */
-function fakeTransport(options: { nonceMismatch?: boolean; refuseRefresh?: boolean } = {}) {
+function fakeTransport(options: { nonceMismatch?: boolean; refuseRefresh?: boolean; expiresIn?: number } = {}) {
+  const life = options.expiresIn ?? 100;
   let n = 0;
   const transport: Transport & { exchanges: { state: string; verifier: string; nonce: string; redirectUri: string }[]; refreshes: string[] } = {
     exchanges: [], refreshes: [],
     discover: async () => META,
-    exchange: async (_meta, _profile, _callback, redirectUri, state, verifier, nonce) => { transport.exchanges.push({ state, verifier, nonce, redirectUri }); n++; return { accessToken: `AT${n}`, refreshToken: `RT${n}`, expiresIn: 100, idToken: `ID${n}`, claims: { sub: "u1", name: "Ada", nonce: options.nonceMismatch ? "other" : nonce } } satisfies TokenSet; },
-    refresh: async (_meta, _profile, refreshToken) => { transport.refreshes.push(refreshToken); if (options.refuseRefresh) throw new Error("invalid_grant"); n++; await new Promise((resolve) => setTimeout(resolve, 5)); return { accessToken: `AT${n}`, refreshToken: `RT${n}`, expiresIn: 100, idToken: null, claims: { sub: "u1" } }; },
+    exchange: async (_meta, _profile, _callback, redirectUri, state, verifier, nonce) => { transport.exchanges.push({ state, verifier, nonce, redirectUri }); n++; return { accessToken: `AT${n}`, refreshToken: `RT${n}`, expiresIn: life, idToken: `ID${n}`, claims: { sub: "u1", name: "Ada", nonce: options.nonceMismatch ? "other" : nonce } } satisfies TokenSet; },
+    refresh: async (_meta, _profile, refreshToken) => { transport.refreshes.push(refreshToken); if (options.refuseRefresh) throw new Error("invalid_grant"); n++; await new Promise((resolve) => setTimeout(resolve, 5)); return { accessToken: `AT${n}`, refreshToken: `RT${n}`, expiresIn: life, idToken: null, claims: { sub: "u1" } }; },
   };
   return transport;
 }
@@ -75,7 +76,7 @@ test("the callback exchanges the code once, keeps the tokens in memory only, cle
   assert.deepEqual([shown.status, shown.sub, shown.name], ["signed-in", "u1", "Ada"]);
   assert.ok(holdsTokens("corp"));
   assert.doesNotMatch(stored(browser), /AT1|RT1|ID1/, "no token in sessionStorage");
-  assert.equal(browser.store.size, 0, "the pending request is gone");
+  assert.deepEqual([...browser.store.entries()], [["deck-auth:resume:corp", "1"]], "the pending request is gone; only the resume flag, naming the profile, is kept");
   assert.equal(await completeSignInIfCallback(), false, "an ordinary load is not a callback");
 });
 
@@ -114,8 +115,8 @@ test("refresh is single-flight, happens on demand near expiry and on a 401, and 
   await signIn("corp");
   goto(`https://deck.example.com/x/deck/?code=C1&state=${new URL(browser.assigned[0]!).searchParams.get("state")}`);
   await completeSignInIfCallback();
-  // Four callers at once with a token near its end: one refresh, all four get the new token.
-  browser.time += 50_000;
+  // Four callers at once with a token in its last fifth: one refresh, all four get the new token.
+  browser.time += 85_000;
   const tokens = await Promise.all([accessToken("corp"), accessToken("corp"), accessToken("corp"), accessToken("corp")]);
   assert.deepEqual(tokens, ["AT2", "AT2", "AT2", "AT2"]);
   assert.deepEqual(transport.refreshes, ["RT1"]);
@@ -125,6 +126,24 @@ test("refresh is single-flight, happens on demand near expiry and on a 401, and 
   await guard.onUnauthorized!();
   assert.equal(await guard.token(), "AT3");
   assert.deepEqual(transport.refreshes, ["RT1", "RT2"]);
+});
+
+test("a short-lived token is used until its last fifth, not refreshed on every request (found by tools/e2e/auth.mjs)", async () => {
+  resetAuth();
+  const { browser, goto } = fakeBrowser();
+  const transport = fakeTransport({ expiresIn: 6 });
+  configureAuth(CONFIG, "/x/", { browser, transport });
+  await signIn("corp");
+  goto(`https://deck.example.com/x/deck/?code=C1&state=${new URL(browser.assigned[0]!).searchParams.get("state")}`);
+  await completeSignInIfCallback();
+  // Request after request in the first 4 s of a 6 s token: the same token, no refresh.
+  for (let i = 0; i < 8; i++) { browser.time += 500; assert.equal(await accessToken("corp"), "AT1"); }
+  assert.deepEqual(transport.refreshes, []);
+  // In its last fifth: one refresh, then the new token is fresh again.
+  browser.time += 1_000;
+  assert.equal(await accessToken("corp"), "AT2");
+  assert.equal(await accessToken("corp"), "AT2");
+  assert.deepEqual(transport.refreshes, ["RT1"]);
 });
 
 test("a revoked refresh token sends the deck silently through the provider's session; the third time in five minutes it asks instead", async () => {
@@ -182,4 +201,60 @@ test("sign-out clears the tokens, tells the other tabs, and ends the provider's 
   assert.ok(holdsTokens("corp"));
   browser.broadcast({ kind: "signed-out", profile: "corp" });
   assert.ok(!holdsTokens("corp"));
+});
+
+test("a reload goes back through the provider's session silently, once signed in here; not after login_required or sign-out (found by tools/e2e/auth.mjs)", async () => {
+  resetAuth();
+  const { browser, goto } = fakeBrowser();
+  configureAuth(CONFIG, "/x/", { browser, transport: fakeTransport() });
+  assert.equal(await resumeSessions(), false, "never signed in here: nothing to resume");
+  assert.equal(browser.assigned.length, 0);
+  await signIn("corp");
+  goto(`https://deck.example.com/x/deck/?code=C1&state=${new URL(browser.assigned[0]!).searchParams.get("state")}`);
+  await completeSignInIfCallback();
+  assert.doesNotMatch(stored(browser), /AT1|RT1|ID1/, "the resume flag holds no token");
+  // The reload: memory gone, the tab's sessionStorage kept.
+  resetAuth();
+  configureAuth(CONFIG, "/x/", { browser, transport: fakeTransport() });
+  goto("https://deck.example.com/x/deck/");
+  assert.equal(await resumeSessions(), true);
+  assert.equal(new URL(browser.assigned.at(-1)!).searchParams.get("prompt"), "none");
+  // The provider says its session is gone: asked, and not tried again on the next load.
+  goto(`https://deck.example.com/x/deck/?error=login_required&state=${new URL(browser.assigned.at(-1)!).searchParams.get("state")}`);
+  await completeSignInIfCallback();
+  assert.equal(authState().profiles.corp!.status, "needs-sign-in");
+  resetAuth();
+  configureAuth(CONFIG, "/x/", { browser, transport: fakeTransport() });
+  const before = browser.assigned.length;
+  assert.equal(await resumeSessions(), false);
+  assert.equal(browser.assigned.length, before);
+  // Signing out clears it too.
+  await signIn("corp");
+  goto(`https://deck.example.com/x/deck/?code=C2&state=${new URL(browser.assigned.at(-1)!).searchParams.get("state")}`);
+  await completeSignInIfCallback();
+  await signOut("corp");
+  resetAuth();
+  configureAuth(CONFIG, "/x/", { browser, transport: fakeTransport() });
+  assert.equal(await resumeSessions(), false);
+});
+
+test("a 401 for a token already replaced is retried with the new one, not refreshed again; a 401 for the current one refreshes (found by tools/stress/faults.mjs)", async () => {
+  resetAuth();
+  const { browser, goto } = fakeBrowser();
+  const transport = fakeTransport();
+  configureAuth(CONFIG, "/x/", { browser, transport });
+  await signIn("corp");
+  goto(`https://deck.example.com/x/deck/?code=C1&state=${new URL(browser.assigned[0]!).searchParams.get("state")}`);
+  await completeSignInIfCallback();
+  const guard = guardAuthFor("corp");
+  await guard.onUnauthorized!("AT1");
+  assert.deepEqual(transport.refreshes, ["RT1"], "the current token refused: one refresh");
+  // Twenty requests that were sent with AT1 come back 401 after the refresh: no more refreshes.
+  await Promise.all(Array.from({ length: 20 }, () => guard.onUnauthorized!("AT1")));
+  assert.deepEqual(transport.refreshes, ["RT1"]);
+  assert.equal(await guard.token(), "AT2");
+  // Twenty at once for the current token: one refresh shared by all.
+  await Promise.all(Array.from({ length: 20 }, () => guard.onUnauthorized!("AT2")));
+  assert.deepEqual(transport.refreshes, ["RT1", "RT2"]);
+  resetAuth();
 });

@@ -78,7 +78,8 @@ export function DataSources() {
         {[...configProblems, ...unavailable.map((problem) => problem.message)].map((message, i) => <li key={i}>{message}</li>)}
       </ul> },
       { id: "problems", title: "Left out or flagged", summary: `${fmt(errors.length)} left out · ${fmt(served.length - errors.length)} flagged`, body: served.length
-        ? <ul className="ds-problems">{served.slice(0, 300).map((problem, i) => <li key={i} className={problem.severity === "error" ? "is-error" : undefined}><b>{problem.object} {problem.id}</b> {problem.message}</li>)}{served.length > 300 && <li>…and {fmt(served.length - 300)} more.</li>}</ul>
+        // Newest first: what went wrong in the field just opened is on top, not under hundreds of older lines (found by tools/stress/faults.mjs).
+        ? <ul className="ds-problems">{served.slice(-300).reverse().map((problem, i) => <li key={i} className={problem.severity === "error" ? "is-error" : undefined}><b>{problem.object} {problem.id}</b> {problem.message}</li>)}{served.length > 300 && <li>…and {fmt(served.length - 300)} earlier.</li>}</ul>
         : <p className="mf-prose">Every record passed its checks.</p> },
       { id: "diagnostics", title: "Diagnostics", body: <div className="mf-prose ds-connect">
         <p>For a support ticket: the build, the browser, each source and how far it was read, sign-in status, storage use and the last errors. Counts and statuses only: no well, no token, no person and no URL beyond its origin.</p>

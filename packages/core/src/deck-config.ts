@@ -76,9 +76,11 @@ export const SOURCE_TYPES = Object.freeze({
 } as const);
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
-const isHttps = (value: unknown): value is string => typeof value === "string" && /^https:\/\/[^\s/?#]+/.test(value);
-/** A same-origin path, or https: a config must not send the deck to a plain-http or script URL. */
-const safeUrl = (value: unknown): value is string => typeof value === "string" && value.length > 0 && (isHttps(value) || !/^[a-z][a-z0-9+.-]*:/i.test(value));
+/** https anywhere, or plain http on this machine only (a mock platform or provider while developing and testing). */
+const LOOPBACK = /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(?=[/?#]|$)/i;
+const isSecure = (value: unknown): value is string => typeof value === "string" && (/^https:\/\/[^\s/?#]+/.test(value) || LOOPBACK.test(value));
+/** A same-origin path, https, or loopback http: a config must not send the deck to a plain-http host elsewhere or a script URL. */
+const safeUrl = (value: unknown): value is string => typeof value === "string" && value.length > 0 && (isSecure(value) || !/^[a-z][a-z0-9+.-]*:/i.test(value));
 /** A key that could only ever hold a credential. */
 const SECRET_KEY = /^(client[_-]?secret|api[_-]?key|password|passwd|secret|access[_-]?token|refresh[_-]?token|id[_-]?token|bearer|private[_-]?key)$/i;
 
@@ -89,8 +91,8 @@ export function secretKeys(value: unknown, path = ""): readonly string[] {
   return Object.entries(value).flatMap(([key, entry]) => [...(SECRET_KEY.test(key) ? [`${path ? `${path}.` : ""}${key}`] : []), ...secretKeys(entry, `${path ? `${path}.` : ""}${key}`)]);
 }
 
-/** An https origin from a URL or an origin, else null. */
-export const originOf = (url: string): string | null => { try { const parsed = new URL(url); return parsed.protocol === "https:" ? parsed.origin : null; } catch { return null; } };
+/** An https origin (or a loopback http one) from a URL or an origin, else null. */
+export const originOf = (url: string): string | null => { try { const parsed = new URL(url); return parsed.protocol === "https:" || LOOPBACK.test(url) ? parsed.origin : null; } catch { return null; } };
 
 export interface ParsedConfig { readonly config: DeckConfig; readonly problems: readonly string[] }
 
@@ -120,7 +122,7 @@ export function parseDeckConfig(json: unknown, options: { readonly strict?: bool
       const at = `auth.${name}`;
       if (!isObject(entry)) { problems.push(`${at} must be an object.`); continue; }
       if (secretKeys(entry).length) { problems.push(`${at} holds a credential and is ignored.`); continue; }
-      if (!isHttps(entry.issuer)) { problems.push(`${at}: "issuer" must be an https URL.`); continue; }
+      if (!isSecure(entry.issuer)) { problems.push(`${at}: "issuer" must be an https URL.`); continue; }
       if (typeof entry.clientId !== "string" || !entry.clientId) { problems.push(`${at}: "clientId" is required.`); continue; }
       const scopes = Array.isArray(entry.scopes) && entry.scopes.every((scope) => typeof scope === "string") ? entry.scopes as string[] : null;
       if (entry.scopes !== undefined && !scopes) { problems.push(`${at}: "scopes" must be a list of strings.`); continue; }
@@ -132,7 +134,7 @@ export function parseDeckConfig(json: unknown, options: { readonly strict?: bool
         if (!isObject(meta)) problems.push(`${at}: "metadata" must be an object (ignored).`);
         else {
           const endpoints: Record<string, string> = {};
-          for (const key of ["authorizationEndpoint", "tokenEndpoint", "jwksUri", "endSessionEndpoint"]) if (meta[key] !== undefined) { if (isHttps(meta[key])) endpoints[key] = meta[key] as string; else problems.push(`${at}.metadata.${key} must be an https URL (ignored).`); }
+          for (const key of ["authorizationEndpoint", "tokenEndpoint", "jwksUri", "endSessionEndpoint"]) if (meta[key] !== undefined) { if (isSecure(meta[key])) endpoints[key] = meta[key] as string; else problems.push(`${at}.metadata.${key} must be an https URL (ignored).`); }
           (profile as { metadata?: AuthProfile["metadata"] }).metadata = endpoints;
         }
       }
@@ -201,7 +203,7 @@ export function parseDeckConfig(json: unknown, options: { readonly strict?: bool
   if (json.telemetry !== undefined) {
     const endpoint = isObject(json.telemetry) ? json.telemetry.endpoint : undefined;
     if (endpoint === undefined) config.telemetry = {};
-    else if (isHttps(endpoint)) config.telemetry = { endpoint };
+    else if (isSecure(endpoint)) config.telemetry = { endpoint };
     else problems.push('"telemetry.endpoint" must be an https URL (ignored).');
   }
   if (json.crs !== undefined) {

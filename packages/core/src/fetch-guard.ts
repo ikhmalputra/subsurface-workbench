@@ -1,6 +1,9 @@
 /**
  * Reading from a tenant's backend without trusting it to be small, quick or well:
- * - Every request has a time limit.
+ * - Every request has two time limits: nothing arriving for `timeoutMs` (no answer, or a body that
+ *   stops), and the whole response taking longer than `totalTimeoutMs`. A slow link that keeps
+ *   delivering is waited for; a dead one is not (found by tools/stress/throttle.mjs: a 1.7 MB page of
+ *   well headers on a 400 kbit/s link was cut off at 30 s, then fetched again twice).
  * - A server error, a 429 or a 503 is retried, waiting as long as `Retry-After` asks (capped) or
  *   longer each time; a 401 is retried once after the caller has refreshed its sign-in; other
  *   client errors are not retried.
@@ -13,15 +16,21 @@
 export interface GuardAuth {
   /** The bearer token for this request, or null for none. */
   token(): Promise<string | null>;
-  /** Called once on a 401; the request is then retried with a fresh token. */
-  onUnauthorized?(): Promise<void>;
+  /**
+   * Called once on a 401, with the token that was refused; the request is then retried with
+   * `token()` again. A provider may skip the refresh when that token has already been replaced.
+   */
+  onUnauthorized?(rejected: string | null): Promise<void>;
 }
 
 export interface GuardOptions {
   readonly method?: "GET" | "POST" | "PUT" | "DELETE";
   readonly headers?: Readonly<Record<string, string>>;
   readonly body?: string | Uint8Array;
+  /** The longest wait with nothing arriving: for the answer, then between pieces of the body. 30 s. */
   readonly timeoutMs?: number;
+  /** The longest a whole response may take, however steadily it arrives. 10 minutes. */
+  readonly totalTimeoutMs?: number;
   readonly maxBytes?: number;
   readonly retries?: number;
   /** The longest `Retry-After` honoured, in ms; a server asking for more is treated as failed. */
@@ -65,26 +74,32 @@ export function retryAfterMs(headers: Headers): number | null {
 }
 
 export async function fetchGuarded(url: string, options: GuardOptions = {}): Promise<GuardedResponse> {
-  const { method = "GET", headers = {}, body, timeoutMs = 30_000, maxBytes = 64 * 1048576, retries = 2, maxRetryAfterMs = 30_000, signal, auth, fetcher = fetch } = options;
+  const { method = "GET", headers = {}, body, timeoutMs = 30_000, totalTimeoutMs = 600_000, maxBytes = 64 * 1048576, retries = 2, maxRetryAfterMs = 30_000, signal, auth, fetcher = fetch } = options;
   let refreshed = false;
   for (let attempt = 0; ; attempt++) {
     signal?.throwIfAborted();
     const controller = new AbortController();
     const stop = () => controller.abort(signal?.reason);
     signal?.addEventListener("abort", stop, { once: true });
-    const timer = setTimeout(() => controller.abort(new Error(`no answer in ${Math.round(timeoutMs / 1000)} s`)), timeoutMs);
+    let timer = setTimeout(() => controller.abort(new Error(`no answer in ${Math.round(timeoutMs / 1000)} s`)), timeoutMs);
+    /** Bytes arrived: the idle limit starts again. */
+    const alive = () => { clearTimeout(timer); timer = setTimeout(() => controller.abort(new Error(`no data for ${Math.round(timeoutMs / 1000)} s`)), timeoutMs); };
+    const deadline = setTimeout(() => controller.abort(new Error(`not finished in ${totalTimeoutMs >= 60_000 ? `${Math.round(totalTimeoutMs / 60_000)} min` : `${Math.round(totalTimeoutMs / 1000)} s`}`)), totalTimeoutMs);
     try {
       const token = await auth?.token();
       // Cancelled while the token was being fetched: nothing is sent.
       if (controller.signal.aborted) throw controller.signal.reason;
       const sent: Record<string, string> = { ...headers, ...(token ? { authorization: `Bearer ${token}` } : {}) };
       const response = await fetcher(url, { method, headers: sent, body: body as BodyInit | undefined, signal: controller.signal });
-      if (response.status === 401 && auth?.onUnauthorized && !refreshed) { refreshed = true; await auth.onUnauthorized(); continue; }
+      alive();
+      if (response.status === 401 && auth?.onUnauthorized && !refreshed) { refreshed = true; await auth.onUnauthorized(token ?? null); continue; }
       if (response.status === 429 || response.status === 503 || (response.status >= 500 && response.status !== 503)) {
         if (attempt < retries) {
           const asked = retryAfterMs(response.headers);
           if (asked !== null && asked > maxRetryAfterMs) throw new HttpError(response.status, `asked to wait ${Math.round(asked / 1000)} s`, url);
-          await sleep(asked ?? 500 * 2 ** attempt, signal);
+          // A 429 whose Retry-After the browser hides (a platform that does not expose it to CORS) is
+          // waited out from a second, the least a rate limiter usually asks; other failures from half that.
+          await sleep(asked ?? (response.status === 429 ? 1000 : 500) * 2 ** attempt, signal);
           continue;
         }
         throw new HttpError(response.status, await response.text().catch(() => ""), url);
@@ -100,6 +115,7 @@ export async function fetchGuarded(url: string, options: GuardOptions = {}): Pro
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
+        alive();
         total += value.byteLength;
         if (total > maxBytes) { controller.abort(); throw new TooLarge(`over ${(maxBytes / 1048576).toFixed(0)} MB, the most a single response may be`); }
         chunks.push(value);
@@ -110,11 +126,15 @@ export async function fetchGuarded(url: string, options: GuardOptions = {}): Pro
       return { status: response.status, headers: response.headers, bytes };
     } catch (cause) {
       if (signal?.aborted || cause instanceof TooLarge || cause instanceof HttpError) throw cause;
-      const retryable = cause instanceof TypeError || (cause instanceof Error && /no answer/.test(cause.message));
+      // A server that never answered, or stopped mid-body, may answer another time; one that was
+      // still sending at the overall limit would only be cut off again.
+      const reason = controller.signal.aborted ? controller.signal.reason : cause;
+      const retryable = cause instanceof TypeError || (reason instanceof Error && /no answer|no data/.test(reason.message));
       if (retryable && attempt < retries) { await sleep(500 * 2 ** attempt, signal); continue; }
       throw cause instanceof Error && controller.signal.aborted && controller.signal.reason instanceof Error ? controller.signal.reason : cause;
     } finally {
       clearTimeout(timer);
+      clearTimeout(deadline);
       signal?.removeEventListener("abort", stop);
     }
   }

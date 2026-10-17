@@ -85,10 +85,18 @@ describe("mock OSDU and identity provider (clean profile, 2,500 wells)", () => {
     const rotated = await fetch(`${s.issuer}/token`, form({ grant_type: "refresh_token", refresh_token: tokens.refresh_token, client_id: CLIENT })).then((r) => r.json());
     assert.ok(rotated.refresh_token && rotated.refresh_token !== tokens.refresh_token);
     assert.ok(rotated.access_token !== tokens.access_token);
+    // A rotated token is born unused: a client refreshing on schedule rotates again and again (a token
+    // issued already "used" made the second refresh look like a replay; found by tools/e2e/auth.mjs).
+    let latest = rotated;
+    for (let i = 0; i < 3; i++) {
+      const next = await fetch(`${s.issuer}/token`, form({ grant_type: "refresh_token", refresh_token: latest.refresh_token, client_id: CLIENT }));
+      assert.equal(next.status, 200, `rotation ${i + 2}`);
+      latest = await next.json();
+    }
     const reused = await fetch(`${s.issuer}/token`, form({ grant_type: "refresh_token", refresh_token: tokens.refresh_token, client_id: CLIENT }));
     assert.equal(reused.status, 400);
     assert.match((await reused.json()).error_description, /reuse/);
-    const family = await fetch(`${s.issuer}/token`, form({ grant_type: "refresh_token", refresh_token: rotated.refresh_token, client_id: CLIENT }));
+    const family = await fetch(`${s.issuer}/token`, form({ grant_type: "refresh_token", refresh_token: latest.refresh_token, client_id: CLIENT }));
     assert.equal((await family.json()).error, "invalid_grant");
 
     // prompt=none: login_required without the session cookie, a code with it.

@@ -17,7 +17,8 @@ export const provideTokens = (provider: TokenProvider) => { tokens = provider; }
 export function osduAdapter(id: string, config: Extract<SourceConfig, { type: "osdu" }>, base: string): WellDataSource {
   const auth = config.auth ? tokens(config.auth) : null;
   return osduSource({
-    id, ...(config.label ? { label: config.label } : {}), baseUrl: /^https:\/\//.test(config.url) ? config.url : `${base}${config.url.replace(/^\.?\//, "")}`,
+    id, ...(config.label ? { label: config.label } : {}), // Absolute when it names a scheme: the config parser admits only https, or http on this machine (a mock).
+    baseUrl: /^[a-z][a-z0-9+.-]*:/i.test(config.url) ? config.url : `${base}${config.url.replace(/^\.?\//, "")}`,
     dataPartition: config.dataPartition, ...(auth ? { auth } : {}), ...(config.paths ? { paths: config.paths } : {}), ...(config.kinds ? { kinds: config.kinds } : {}), ...(config.query ? { query: config.query } : {}),
   });
 }

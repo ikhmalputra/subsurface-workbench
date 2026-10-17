@@ -3,7 +3,7 @@ import test from "node:test";
 import { readDetail, readHeaders } from "./data-contract.ts";
 import type { DataProblem } from "./data-contract.ts";
 import { ensureCrs } from "./gis.ts";
-import { cellField, datumFromVerticalMeasurements, describeOsduError, lengthToMetres, markerSetFromOsdu, osduSource, refToId, tableRows, trajectoryFromOsdu, wellFromOsdu } from "./osdu.ts";
+import { cellField, datumFromVerticalMeasurements, describeOsduError, lengthToMetres, markerSetFromOsdu, osduSource, refToId, tableRows, trajectoryFromOsdu, wellboreFromOsdu, wellFromOsdu } from "./osdu.ts";
 import type { OsduRecord } from "./osdu.ts";
 import { HttpError } from "./fetch-guard.ts";
 
@@ -193,4 +193,28 @@ test("OSDU units and tables: a unit named like an Object.prototype key is unknow
   const problems: never[] = [];
   const set = markerSetFromOsdu({ id: "m", kind: "k", data: {} }, [null, { MarkerMeasuredDepth: 1200, MarkerName: "Top" }] as never, P, problems);
   assert.equal(set.markers.length, 1);
+});
+
+test("detail searches ask only for the fields the mappers read: whole and trimmed records map the same (mock clean and quirky tenants)", async () => {
+  const { recordsForField } = await import("../../../tools/mock-osdu/records.mjs");
+  const { pickFields, pandasJson } = await import("../../../tools/mock-osdu/server.mjs");
+  const { DETAIL_FIELDS } = await import("./osdu.ts");
+  for (const profile of ["clean", "quirky"]) {
+    const field = recordsForField(0, { wells: 12, perField: 12, stations: 40, profile });
+    const map = (trim: boolean) => {
+      const problems: never[] = [];
+      const cut = (record: object, fields: readonly string[]) => trim ? pickFields(record, fields) : record;
+      return {
+        wellbores: field.wellbore.map((record: never) => wellboreFromOsdu(cut(record, DETAIL_FIELDS.wellbore) as never, P, problems)),
+        trajectories: field.trajectory.map((record: { id: string }) => trajectoryFromOsdu(cut(record, DETAIL_FIELDS.trajectory) as never, JSON.parse(pandasJson(field.bulk.get(record.id))) as never, P, problems, { definitive: true })),
+        markers: field.markerSet.map((record: { id: string; data: { Markers?: unknown[] } }) => markerSetFromOsdu(cut(record, DETAIL_FIELDS.markerSet) as never, record.data.Markers ? null : JSON.parse(pandasJson(field.bulk.get(record.id))) as never, P, problems)),
+        definitive: field.wellbore.map((record: { data: Record<string, unknown> }) => (cut(record, DETAIL_FIELDS.wellbore) as { data: Record<string, unknown> }).data.DefinitiveTrajectoryID ?? null),
+        problems,
+      };
+    };
+    assert.deepEqual(map(true), map(false), `${profile}: trimmed records map differently`);
+    const trimmed = map(true);
+    assert.ok(trimmed.trajectories.every((t) => t && t.stations.length === 40), `${profile}: every path whole (${trimmed.trajectories.map((t) => t?.stations.length).join(",")})`);
+    assert.ok(trimmed.markers.every((m) => m.markers.length > 0) && trimmed.wellbores.every((b) => b.datum.elevationM !== null && b.totalDepthMdM !== null), `${profile}: markers, datums and depths read`);
+  }
 });

@@ -1812,6 +1812,10 @@
     "kind": "function"
    },
    {
+    "name": "DETAIL_FIELDS",
+    "kind": "value"
+   },
+   {
     "name": "endOfRef",
     "kind": "function"
    },

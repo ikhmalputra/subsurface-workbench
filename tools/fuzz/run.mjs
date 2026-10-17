@@ -227,7 +227,8 @@ const PROPERTIES = {
     // Whatever came out is a config the deck can act on without a secret in it, and its origins are https.
     if (secretKeys(config).length) return false;
     const origins = connectOrigins(config);
-    if (!origins.every((origin) => /^https:\/\/[^/]+$/.test(origin))) return false;
+    // https anywhere, or http on this machine only.
+    if (!origins.every((origin) => /^https:\/\/[^/]+$/.test(origin) || /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin))) return false;
     // A secret anywhere in the input is named in the problems, and never carried.
     const secrets = secretKeys(json);
     return (secrets.length === 0 || problems.some((p) => /credential/.test(p))) && unpolluted();
@@ -243,7 +244,7 @@ const PROPERTIES = {
     if (!Array.isArray(problems) || secretKeys(config).length) return false;
     // Every source kept is of a known type with an https url when it has one; nothing else survives.
     return config.sources.every((source) => ["samples", "browser", "contract-json", "osdu", "witsml-etp", "ppdm-api"].includes(source.type) && (source.url === undefined || typeof source.url === "string"))
-      && connectOrigins(config).every((origin) => origin.startsWith("https://")) && unpolluted();
+      && connectOrigins(config).every((origin) => origin.startsWith("https://") || /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin)) && unpolluted();
   }),
 
   "share/round-trip": fc.asyncProperty(fc.record({

@@ -181,7 +181,13 @@ type Slices = SiteSlices;
 
 const WELL_COLOURS = ["#1f6fb2", "#c2410c", "#0f766e", "#7c3aed", "#b45309", "#be185d"];
 
-/** Plan triangulation (Bowyer–Watson) of a few points: the TIN a host gets when it supplies only picks. */
+/**
+ * Plan triangulation (Bowyer–Watson): the TIN a host gets when it supplies only picks. Each
+ * triangle's circumcircle is computed once, when it is made, and the cavity's boundary is found by
+ * counting edges, so a 200-well horizon costs milliseconds; recomputing circles for every point and
+ * comparing the cavity's triangles pairwise cost a quarter-second per field on a slow machine (found
+ * by tools/stress/throttle.mjs).
+ */
 export function triangulatePlan(points: readonly (readonly [number, number])[]): number[] {
   if (points.length < 3) return [];
   const xs = points.map((p) => p[0]), ys = points.map((p) => p[1]);
@@ -189,26 +195,28 @@ export function triangulatePlan(points: readonly (readonly [number, number])[]):
   const span = Math.max(maxX - minX, maxY - minY) || 1, mx = (minX + maxX) / 2, my = (minY + maxY) / 2;
   const all: [number, number][] = [...points.map((p) => [p[0], p[1]] as [number, number]), [mx - 20 * span, my - span], [mx, my + 20 * span], [mx + 20 * span, my - span]];
   const n = points.length;
-  let triangles: [number, number, number][] = [[n, n + 1, n + 2]];
-  const circumcircle = ([a, b, c]: [number, number, number]) => {
+  interface Triangle { readonly a: number; readonly b: number; readonly c: number; readonly x: number; readonly y: number; readonly r2: number }
+  const make = (a: number, b: number, c: number): Triangle => {
     const [ax, ay] = all[a]!, [bx, by] = all[b]!, [cx, cy] = all[c]!;
     const d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
-    const ux = ((ax * ax + ay * ay) * (by - cy) + (bx * bx + by * by) * (cy - ay) + (cx * cx + cy * cy) * (ay - by)) / d;
-    const uy = ((ax * ax + ay * ay) * (cx - bx) + (bx * bx + by * by) * (ax - cx) + (cx * cx + cy * cy) * (bx - ax)) / d;
-    return { x: ux, y: uy, r2: (ax - ux) ** 2 + (ay - uy) ** 2 };
+    const x = ((ax * ax + ay * ay) * (by - cy) + (bx * bx + by * by) * (cy - ay) + (cx * cx + cy * cy) * (ay - by)) / d;
+    const y = ((ax * ax + ay * ay) * (cx - bx) + (bx * bx + by * by) * (ax - cx) + (cx * cx + cy * cy) * (bx - ax)) / d;
+    return { a, b, c, x, y, r2: (ax - x) ** 2 + (ay - y) ** 2 };
   };
+  let triangles: Triangle[] = [make(n, n + 1, n + 2)];
   for (let i = 0; i < n; i++) {
     const [px, py] = all[i]!;
-    const bad = triangles.filter((t) => { const c = circumcircle(t); return (px - c.x) ** 2 + (py - c.y) ** 2 < c.r2; });
-    const edges: [number, number][] = [];
-    for (const t of bad) for (const [a, b] of [[t[0], t[1]], [t[1], t[2]], [t[2], t[0]]] as [number, number][]) {
-      const shared = bad.some((other) => other !== t && [[other[0], other[1]], [other[1], other[2]], [other[2], other[0]]].some(([c, d]) => (c === a && d === b) || (c === b && d === a)));
-      if (!shared) edges.push([a, b]);
+    const keep: Triangle[] = [];
+    // The cavity's boundary: edges of the removed triangles that only one of them has.
+    const edges = new Map<number, [number, number]>();
+    const edge = (u: number, v: number) => { const key = u < v ? u * (n + 3) + v : v * (n + 3) + u; if (edges.has(key)) edges.delete(key); else edges.set(key, [u, v]); };
+    for (const t of triangles) {
+      if ((px - t.x) ** 2 + (py - t.y) ** 2 < t.r2) { edge(t.a, t.b); edge(t.b, t.c); edge(t.c, t.a); } else keep.push(t);
     }
-    triangles = triangles.filter((t) => !bad.includes(t));
-    for (const [a, b] of edges) triangles.push([a, b, i]);
+    for (const [u, v] of edges.values()) keep.push(make(u, v, i));
+    triangles = keep;
   }
-  return triangles.filter((t) => t.every((index) => index < n)).flat();
+  return triangles.filter((t) => t.a < n && t.b < n && t.c < n).flatMap((t) => [t.a, t.b, t.c]);
 }
 
 /**
@@ -405,6 +413,14 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
     for (const group of Object.values(groups)) scene.add(group);
     const pickables: THREE.Object3D[] = [];
     const surfaceParts = new Map<string, { readonly material: THREE.MeshStandardMaterial; readonly opacity: number; readonly quiet: boolean; readonly extras: THREE.Object3D[]; readonly text: ReturnType<typeof label> }>();
+    /** A surface's triangles: the host's own, else triangulated once, for its mesh and its contours alike. */
+    const triangulated = new WeakMap<object, readonly number[]>();
+    const trianglesOf = (geometry: { readonly points: readonly (readonly [number, number, number])[]; readonly triangles?: readonly number[] }): readonly number[] => {
+      if (geometry.triangles) return geometry.triangles;
+      let found = triangulated.get(geometry);
+      if (!found) { found = triangulatePlan(geometry.points.map((p) => [p[0], p[1]] as const)); triangulated.set(geometry, found); }
+      return found;
+    };
     for (const surface of surfaces) {
       const group = surface.role === "horizon" ? groups.horizons : groups.reference;
       const geometry = new THREE.BufferGeometry();
@@ -419,7 +435,7 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
         anchor = at(e0 + (e1 - e0) * 0.04, n1, d);
       } else {
         const { points } = surface.geometry;
-        const triangles = surface.geometry.triangles ?? triangulatePlan(points.map((p) => [p[0], p[1]] as const));
+        const triangles = trianglesOf(surface.geometry);
         if (triangles.length === 0) continue;
         geometry.setFromPoints(points.map((p) => at(p[0], p[1], p[2])));
         geometry.setIndex([...triangles]);
@@ -452,7 +468,7 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
       const extras: THREE.Object3D[] = [edge];
       // Contours draped on an interpreted surface, at a round interval giving about a dozen lines: its relief at a glance.
       if (!reference && surface.geometry.kind === "tin" && surface.geometry.points.length >= 12) {
-        const lines = contourLines(surface.geometry.points, [...(surface.geometry.triangles ?? triangulatePlan(surface.geometry.points.map((p) => [p[0], p[1]] as const)))]);
+        const lines = contourLines(surface.geometry.points, trianglesOf(surface.geometry));
         if (lines.length) {
           const contours = new THREE.LineSegments(keep(new THREE.BufferGeometry().setFromPoints(lines.map((p) => at(p[0], p[1], p[2])))), keep(new THREE.LineBasicMaterial({ color: "#0b0f1a", transparent: true, opacity: 0.45, depthWrite: false })));
           contours.renderOrder = 4;
@@ -502,6 +518,12 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
     // ── Wells ────────────────────────────────────────────────────────────────────────────────
     const wellMaterials = new Map<string, THREE.MeshStandardMaterial>();
     const wellTubes: THREE.Mesh[] = [];
+    // One geometry and material for every marker, one geometry for every wellhead cap: a 200-well field
+    // with 20 tops each built 4,000 of each, every one a GPU upload and pipeline on the first draw (a
+    // 1 s freeze on a slow machine; found by tools/stress/throttle.mjs). Markers are only shown or hidden.
+    const markerGeometry = keep(new THREE.SphereGeometry(radius * 2.1, 14, 10));
+    const markerMaterial = keep(new THREE.MeshStandardMaterial({ color: "#1d232b", roughness: 0.5 }));
+    const capGeometry = keep(new THREE.CylinderGeometry(radius * 2.6, radius * 2.6, radius * 2.2, 20));
     /** Everything drawn along a well, with the MD it spans, so a reach can cut it. */
     const alongWells: { readonly wellId: string; readonly object: THREE.Object3D; readonly start: number; readonly end: number; readonly segments?: number; readonly marker?: string }[] = [];
     wells.forEach((well, index) => {
@@ -520,7 +542,7 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
       wellTubes.push(tube);
       pickables.push(tube);
       const head = points[0]!;
-      const cap = new THREE.Mesh(keep(new THREE.CylinderGeometry(radius * 2.6, radius * 2.6, radius * 2.2, 20)), material);
+      const cap = new THREE.Mesh(capGeometry, material);
       cap.position.copy(head);
       cap.userData.well = well;
       groups.wells.add(cap);
@@ -541,7 +563,7 @@ export function SiteScene({ title, depthLabel, originLabel, wells, surfaces = []
         const p = pointAtMd(well, marker.mdM);
         if (!p) continue;
         const position = at(...p);
-        const ring = new THREE.Mesh(keep(new THREE.SphereGeometry(radius * 2.1, 14, 10)), keep(new THREE.MeshStandardMaterial({ color: "#1d232b", roughness: 0.5 })));
+        const ring = new THREE.Mesh(markerGeometry, markerMaterial);
         ring.position.copy(position);
         groups.wells.add(ring);
         const pick = label(marker.label, position.clone().add(new THREE.Vector3(radius * 5, 0, 0)), "pick", 1, { wellId: well.id, layer: "wells" });

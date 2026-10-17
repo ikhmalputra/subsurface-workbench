@@ -15,8 +15,9 @@ export type SceneLabelKind = "tick" | "axis" | "name" | "pick";
 export class SceneLabel extends THREE.Object3D {
   readonly element: HTMLSpanElement;
   shown = true;
-  /** Its size on the page, measured while shown: a hidden label (display none) measures nothing. */
+  /** Its size on the page, and the text it was measured with: re-measured only when the text changes. */
   size: { readonly w: number; readonly h: number } | null = null;
+  measuredText: string | null = null;
   constructor(text: string, readonly kind: SceneLabelKind, readonly priority: number, readonly options: { readonly className?: string; readonly colour?: string; readonly layer?: string; readonly owner?: string } = {}) {
     super();
     this.element = document.createElement("span");
@@ -47,33 +48,48 @@ export class LabelLayer {
     return label;
   }
 
-  /** Project every label for this camera; `filter` hides labels a host's own layers have turned off. */
+  /**
+   * Project every label for this camera; `filter` hides labels a host's own layers have turned off.
+   *
+   * Reads, then computes, then writes: sizes are measured in one batch (only labels never measured or
+   * whose text changed), placement is pure arithmetic, and every transform and visibility is written
+   * at the end. Reading a size between writes forced a layout per label: thousands per frame in a
+   * 200-well field, a 1.2 s freeze on a slow machine (found by tools/stress/throttle.mjs).
+   */
   place(camera: THREE.Camera, filter?: (label: SceneLabel) => boolean, obstacles: readonly Element[] = []) {
     const width = this.root.clientWidth, height = this.root.clientHeight;
     // The host's own panels over the view (toolbar, readout, view cube) are taken before any label: none is drawn under them.
     const origin = this.root.getBoundingClientRect();
     const taken: { x0: number; y0: number; x1: number; y1: number }[] = obstacles.map((element) => element.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0)
       .map((r) => ({ x0: r.left - origin.left - 4, y0: r.top - origin.top - 4, x1: r.right - origin.left + 4, y1: r.bottom - origin.top + 4 }));
+    // 1. Where each candidate lands on screen (no DOM).
     const order = [...this.labels].sort((a, b) => b.priority - a.priority);
+    const candidates: { label: SceneLabel; x: number; y: number }[] = [];
     for (const label of order) {
-      let visible = (filter?.(label) ?? true) && this.inScene(label);
-      if (visible) {
-        label.getWorldPosition(this.point).project(camera);
-        const x = (this.point.x + 1) / 2 * width, y = (1 - this.point.y) / 2 * height;
-        visible = this.point.z < 1 && this.point.z > -1 && x > -60 && x < width + 60 && y > -30 && y < height + 30;
-        if (visible) {
-          const { w, h } = this.measure(label);
-          const floating = label.kind === "name" || label.kind === "pick";
-          const left = floating ? x + Math.min(0, width - 8 - (x + w)) : x;
-          const box = floating ? { x0: left - 2, y0: y - h, x1: left + w + 2, y1: y + 2 } : label.kind === "tick" ? tickBox(label, x, y, w, h) : { x0: x - w / 2, y0: y - h / 2, x1: x + w / 2, y1: y + h / 2 };
-          // Every label, ticks too, gives way to one already placed (placed by priority): nothing is drawn over anything.
-          if (taken.some((r) => box.x0 < r.x1 && box.x1 > r.x0 && box.y0 < r.y1 && box.y1 > r.y0)) visible = false;
-          else {
-            taken.push(box);
-            label.element.style.transform = `translate(${left.toFixed(1)}px, ${y.toFixed(1)}px) ${anchor(label)}`;
-          }
-        }
-      }
+      if (!((filter?.(label) ?? true) && this.inScene(label))) continue;
+      label.getWorldPosition(this.point).project(camera);
+      const x = (this.point.x + 1) / 2 * width, y = (1 - this.point.y) / 2 * height;
+      if (this.point.z < 1 && this.point.z > -1 && x > -60 && x < width + 60 && y > -30 && y < height + 30) candidates.push({ label, x, y });
+    }
+    // 2. Sizes, in one batch: one layout for all of them.
+    this.measure(candidates.map((candidate) => candidate.label));
+    // 3. Placement by priority, as arithmetic.
+    const placed = new Map<SceneLabel, string>();
+    for (const { label, x, y } of candidates) {
+      const { w, h } = label.size ?? { w: 40, h: 14 };
+      const floating = label.kind === "name" || label.kind === "pick";
+      const left = floating ? x + Math.min(0, width - 8 - (x + w)) : x;
+      const box = floating ? { x0: left - 2, y0: y - h, x1: left + w + 2, y1: y + 2 } : label.kind === "tick" ? tickBox(label, x, y, w, h) : { x0: x - w / 2, y0: y - h / 2, x1: x + w / 2, y1: y + h / 2 };
+      // Every label, ticks too, gives way to one already placed (placed by priority): nothing is drawn over anything.
+      if (taken.some((r) => box.x0 < r.x1 && box.x1 > r.x0 && box.y0 < r.y1 && box.y1 > r.y0)) continue;
+      taken.push(box);
+      placed.set(label, `translate(${left.toFixed(1)}px, ${y.toFixed(1)}px) ${anchor(label)}`);
+    }
+    // 4. Writes only.
+    for (const label of this.labels) {
+      const transform = placed.get(label);
+      if (transform !== undefined && label.element.style.transform !== transform) label.element.style.transform = transform;
+      const visible = transform !== undefined;
       if (visible !== label.shown) { label.shown = visible; label.element.hidden = !visible; }
     }
   }
@@ -95,16 +111,18 @@ export class LabelLayer {
     this.root.remove();
   }
 
-  /** A label's true size, so one hidden last time is judged at its real width, not a guess that lets it overlap. */
-  private measure(label: SceneLabel) {
-    const element = label.element;
-    if (!element.hidden || !label.size) {
-      const hidden = element.hidden;
-      if (hidden) element.hidden = false;
-      if (element.offsetWidth > 0) label.size = { w: element.offsetWidth, h: element.offsetHeight };
-      if (hidden) element.hidden = true;
-    }
-    return label.size ?? { w: 40, h: 14 };
+  /**
+   * True sizes for labels never measured, or measured with other text: hidden ones are shown for the
+   * batch, all are read together (one layout), and the hidden ones hidden again.
+   */
+  private measure(labels: readonly SceneLabel[]) {
+    const stale = labels.filter((label) => !label.size || label.measuredText !== label.element.textContent);
+    if (!stale.length) return;
+    const unhidden = stale.filter((label) => label.element.hidden);
+    for (const label of unhidden) label.element.hidden = false;
+    const sizes = stale.map((label) => ({ w: label.element.offsetWidth, h: label.element.offsetHeight }));
+    for (const label of unhidden) label.element.hidden = true;
+    stale.forEach((label, i) => { const size = sizes[i]!; if (size.w > 0) { label.size = size; label.measuredText = label.element.textContent; } });
   }
 
   /** A label shows only while it and every ancestor are visible, as a mesh would. */

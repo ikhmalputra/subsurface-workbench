@@ -49,7 +49,8 @@ export interface AuthView { readonly profiles: Readonly<Record<string, ProfileVi
 interface Pending { readonly profile: string; readonly state: string; readonly nonce: string; readonly verifier: string; readonly returnTo: string; readonly createdAt: number }
 interface Live { tokens: TokenSet | null; metadata: ProviderMetadata | null; refreshing: Promise<TokenSet | null> | null; timer: ReturnType<typeof setTimeout> | null; receivedAt: number; status: AuthStatus; error: string | null }
 
-const PENDING = "deck-auth:pending:", SILENT = "deck-auth:silent", PENDING_TTL_MS = 10 * 60_000, SILENT_WINDOW_MS = 5 * 60_000, SILENT_MAX = 2;
+/** RESUME holds a profile's name, never a token: this tab signed in to it, so a reload may go back through the provider's session. */
+const PENDING = "deck-auth:pending:", SILENT = "deck-auth:silent", RESUME = "deck-auth:resume:", PENDING_TTL_MS = 10 * 60_000, SILENT_WINDOW_MS = 5 * 60_000, SILENT_MAX = 2;
 
 /** The page as the module sees it in a browser. */
 const realBrowser = (): Browser => {
@@ -64,6 +65,10 @@ const realBrowser = (): Browser => {
   };
 };
 
+/** Plain http is allowed to a provider on this machine only (a mock while developing and testing); everywhere else it is https. */
+const insecure = (issuer: string) => /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(?=[/?#]|$)/i.test(issuer) ? { [oauth.allowInsecureRequests]: true } : {};
+/** Token lifetimes are checked with five minutes of tolerance: a client's clock a few minutes off still signs in. */
+const CLOCK_TOLERANCE_S = 300;
 /** The provider through oauth4webapi: discovery, PKCE, the code exchange with nonce and issuer checks, refresh. */
 const realTransport: Transport = {
   async discover(profile) {
@@ -71,21 +76,21 @@ const realTransport: Transport = {
     const meta = profile.metadata ?? {};
     const as = meta.authorizationEndpoint && meta.tokenEndpoint
       ? { issuer: issuer.href, authorization_endpoint: meta.authorizationEndpoint, token_endpoint: meta.tokenEndpoint, ...(meta.jwksUri ? { jwks_uri: meta.jwksUri } : {}), ...(meta.endSessionEndpoint ? { end_session_endpoint: meta.endSessionEndpoint } : {}) }
-      : await oauth.processDiscoveryResponse(issuer, await oauth.discoveryRequest(issuer, { algorithm: "oidc" }));
+      : await oauth.processDiscoveryResponse(issuer, await oauth.discoveryRequest(issuer, { algorithm: "oidc", ...insecure(profile.issuer) }));
     servers.set(profile.issuer, as);
     if (!as.authorization_endpoint || !as.token_endpoint) throw new Error("The provider's discovery document names no authorization or token endpoint.");
     return { issuer: as.issuer, authorizationEndpoint: as.authorization_endpoint, tokenEndpoint: meta.tokenEndpoint ?? as.token_endpoint, endSessionEndpoint: meta.endSessionEndpoint ?? as.end_session_endpoint ?? null };
   },
   async exchange(metadata, profile, callback, redirectUri, state, verifier, nonce) {
-    const as = servers.get(profile.issuer)!, client: oauth.Client = { client_id: profile.clientId };
+    const as = servers.get(profile.issuer)!, client: oauth.Client = { client_id: profile.clientId, [oauth.clockTolerance]: CLOCK_TOLERANCE_S };
     const params = oauth.validateAuthResponse(as, client, callback, state);
-    const response = await oauth.authorizationCodeGrantRequest(as, client, oauth.None(), params, redirectUri, verifier);
+    const response = await oauth.authorizationCodeGrantRequest(as, client, oauth.None(), params, redirectUri, verifier, insecure(profile.issuer));
     const result = await oauth.processAuthorizationCodeResponse(as, client, response, { expectedNonce: nonce, requireIdToken: true });
     return tokensOf(result);
   },
   async refresh(metadata, profile, refreshToken) {
-    const as = servers.get(profile.issuer)!, client: oauth.Client = { client_id: profile.clientId };
-    const response = await oauth.refreshTokenGrantRequest(as, client, oauth.None(), refreshToken);
+    const as = servers.get(profile.issuer)!, client: oauth.Client = { client_id: profile.clientId, [oauth.clockTolerance]: CLOCK_TOLERANCE_S };
+    const response = await oauth.refreshTokenGrantRequest(as, client, oauth.None(), refreshToken, insecure(profile.issuer));
     return tokensOf(await oauth.processRefreshTokenResponse(as, client, response));
   },
 };
@@ -180,7 +185,8 @@ export async function completeSignInIfCallback(): Promise<boolean> {
   if (url.searchParams.has("error")) {
     const error = url.searchParams.get("error")!;
     clean(pending.returnTo);
-    if (error === "login_required" || error === "interaction_required" || error === "consent_required") set(name, { status: "needs-sign-in", error: null });
+    // The provider's session is gone: no more silent attempts from this tab until the person signs in.
+    if (error === "login_required" || error === "interaction_required" || error === "consent_required") { page().session.removeItem(`${RESUME}${name}`); set(name, { status: "needs-sign-in", error: null }); }
     else set(name, { status: "error", error: `The provider refused the sign-in: ${error}${url.searchParams.get("error_description") ? ` (${url.searchParams.get("error_description")})` : ""}.` });
     return true;
   }
@@ -200,6 +206,7 @@ function receive(name: string, tokens: TokenSet) {
   const state = entry(name);
   clearTimeout(state.timer ?? undefined);
   state.tokens = tokens; state.receivedAt = page().now(); state.status = "signed-in"; state.error = null;
+  page().session.setItem(`${RESUME}${name}`, "1");
   // Renewed at 80 % of its life, before anything notices.
   state.timer = setTimeout(() => { void refresh(name); }, Math.max(1000, tokens.expiresIn * 800));
   publish();
@@ -208,6 +215,7 @@ function forget(name: string, status: AuthStatus) {
   const state = entry(name);
   clearTimeout(state.timer ?? undefined);
   state.tokens = null; state.timer = null; state.status = status; state.refreshing = null;
+  if (status === "signed-out") page().session.removeItem(`${RESUME}${name}`);
   publish();
 }
 
@@ -233,18 +241,37 @@ async function refresh(name: string): Promise<TokenSet | null> {
   return state.refreshing;
 }
 
-/** The access token for a profile, renewed when within a minute of expiry; null when not signed in. */
+/**
+ * The access token for a profile, renewed in its last fifth of life (at most the last minute); null
+ * when not signed in. The margin scales with the token: a fixed minute would make a token that lives
+ * a minute or less never fresh, and every request would rotate the refresh token (found by
+ * tools/e2e/auth.mjs with 6 s tokens).
+ */
 export async function accessToken(name: string, options: { readonly force?: boolean } = {}): Promise<string | null> {
   const state = entry(name);
   if (!profiles[name]) return null;
-  const fresh = state.tokens && !options.force && page().now() < state.receivedAt + (state.tokens.expiresIn - 60) * 1000;
+  const marginS = state.tokens ? Math.min(60, state.tokens.expiresIn * 0.2) : 0;
+  const fresh = state.tokens && !options.force && page().now() < state.receivedAt + (state.tokens.expiresIn - marginS) * 1000;
   if (fresh) return state.tokens!.accessToken;
   if (!state.tokens) return null;
   return (await refresh(name))?.accessToken ?? null;
 }
 
-/** The fetch guard's hook for a profile: its token, and a refresh when the backend says 401. */
-export const guardAuthFor = (name: string): GuardAuth => ({ token: () => accessToken(name), onUnauthorized: async () => { await accessToken(name, { force: true }); } });
+/**
+ * The fetch guard's hook for a profile: its token, and a refresh when the backend says 401 to the
+ * current one. A 401 for a token another request has already replaced is simply retried with the
+ * new one: a burst of 401s (a key rotation) costs one refresh, not one each (found by
+ * tools/stress/faults.mjs).
+ */
+export const guardAuthFor = (name: string): GuardAuth => ({
+  token: () => accessToken(name),
+  onUnauthorized: async (rejected) => {
+    const state = entry(name);
+    if (state.refreshing) { await state.refreshing; return; }
+    if (rejected && state.tokens && state.tokens.accessToken !== rejected) return;
+    await accessToken(name, { force: true });
+  },
+});
 
 /** Signs out of a profile here and in the other tabs, then ends the provider's session when it offers to. */
 export async function signOut(name: string): Promise<void> {
@@ -258,6 +285,22 @@ export async function signOut(name: string): Promise<void> {
     url.searchParams.set("post_logout_redirect_uri", `${page().origin()}${redirectBase}`);
     page().assign(url.href);
   }
+}
+
+/**
+ * Called once on an ordinary load, after `completeSignInIfCallback`: a reload loses the tokens (they
+ * live in memory only), so a profile this tab was signed in to goes back through the provider's
+ * session without a prompt, under the silent loop guard. True when the page is being sent to the
+ * provider, so the caller need not draw it.
+ */
+export async function resumeSessions(): Promise<boolean> {
+  for (const name of Object.keys(profiles)) {
+    const state = entry(name);
+    if (state.tokens || page().session.getItem(`${RESUME}${name}`) !== "1") continue;
+    await silentSignIn(name);
+    if (entry(name).status === "signing-in") return true;
+  }
+  return false;
 }
 
 /** For the tests: forgets every profile and token, as a fresh page would. */

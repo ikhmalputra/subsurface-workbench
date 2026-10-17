@@ -30,7 +30,12 @@ export interface WellsIndex {
   readonly next?: string;
 }
 
-const resolveUrl = (url: string, base: string) => /^https:\/\//.test(url) ? url : `${base}${url.replace(/^\.?\//, "")}`;
+/** A URL a file names: https, or http on this machine (a mock), as given; a path, beside the deck; any other scheme is refused in words. */
+const resolveUrl = (url: string, base: string) => {
+  if (/^https:\/\//i.test(url) || /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(?=[/?#]|$)/i.test(url)) return url;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(url)) throw new Error(`${url.slice(0, 80)} is not an https URL or a path beside the deck: not read.`);
+  return `${base}${url.replace(/^\.?\//, "")}`;
+};
 
 /**
  * Wells from a file, or a paged index of files, in the data contract's JSON, read through the fetch

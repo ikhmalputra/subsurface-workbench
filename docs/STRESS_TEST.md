@@ -130,6 +130,76 @@ The first runs (500, then 10,000 per property) found nine defects, each now a re
 Not fuzzed yet: the contract-json index reader and the OIDC callback (both need the mock server,
 P2b), and the deck's own stores (P6).
 
+## The deck on the mock platform: sign-in, faults, slow links, hostile data
+
+*2026-10-18.* Four suites run the built deck in Chromium at 1440 × 1000 against the mock OSDU platform
+and identity provider (`tools/mock-osdu`), served with a CSP whose `connect-src` admits exactly those
+two origins (`tools/stress/harness.mjs`). They are t1 steps in `tools/ci/run.mjs`; budgets are the
+`faults` and `network` blocks of `tools/budgets.mjs`.
+
+| Suite | What it does | Result |
+|---|---|---|
+| `tools/e2e/auth.mjs` | code flow with PKCE; storage, URL, cookie and history checked for tokens; 45 s of 6 s tokens; a reload; a forged callback; the provider's session ending; clocks ±4 minutes off | 16 of 16 |
+| `tools/stress/faults.mjs` | 50 ms latency; 30 % 5xx; 429 with Retry-After; expired cursors; trickled bodies then leaving the field; a 30 % 401 storm; truncated JSON with dropped connections | 19 of 19 |
+| `tools/stress/throttle.mjs` | CPU 4×; a VPN (5 Mbit/s, 80 ms); a poor link (400 kbit/s, 400 ms), with the platform compressing and without | 21 of 22 (below) |
+| `tools/e2e/xss.mjs` | the `hostile` tenant: HTML and SVG handlers in every name, `__proto__` ids, a 100,000-character name, numbers that are not JSON; list, fields, 3D, search, share | 14 of 14 |
+
+Measured (200-well field, 120 stations a well, 20 tops):
+
+| | Field ready | Worst main-thread stall | Heap |
+|---|---|---|---|
+| 50 ms latency | 2.8–3.4 s (budget 8 s), 216 requests (budget 406), 6 in flight (budget 6) | | 211–280 MB |
+| CPU 4× | 2.4–3.2 s (budget 15 s); globe 1.1 s (budget 4 s) | **460 ms (budget 400)** | 86–125 MB |
+| VPN, compressed | 4.1 s (budget 15 s) | 134 ms | 83 MB |
+| Poor link, compressed | 25 s (budget 45 s), progress shown while reading | 126 ms | 92 MB |
+| Poor link, uncompressed | 76 s (measured, not budgeted: 2.8 MB at 400 kbit/s) | 137 ms | 75 MB |
+
+What the suites found, each fixed with a test that fails without the fix:
+
+1. **A token that lives a minute or less was never "fresh".** The deck renewed any token in its last
+   minute, so a 6 s token was renewed on every request, rotating the refresh token each time.
+   Renewal is now in the last fifth of a token's life, at most a minute (`oidc.test.ts`).
+2. **The mock identity provider issued rotated refresh tokens already marked used**, so the second
+   refresh looked like a replay and revoked the session. Its own test rotated only once; it now
+   rotates three times (`mock.test.mjs`).
+3. **A reload did not go back through the provider's session**, as `IDP_GUIDE.md` said it would.
+   A tab that signed in now keeps the profile's name (never a token) in `sessionStorage`, and a
+   reload tries `prompt=none` under the loop guard; `login_required` or signing out ends it.
+4. **Each 401 forced a refresh**, even for a token another request had already replaced: 18
+   refreshes for 40 × 401. The guard now passes the refused token; a stale one is retried with the
+   current token (12 refreshes for 40 × 401, never two at once).
+5. **Retry-After was invisible to the deck**: it is not a CORS-safelisted header. The mock now
+   exposes it, `IDP_GUIDE.md` asks platforms to, and a 429 without a readable one waits from 1 s.
+6. **A site scene closed before its renderer started left an unhandled rejection** (a tenant field
+   with nothing to draw yet).
+7. **"Left out or flagged" showed the oldest 300 lines**: the failures of the field just opened were
+   hidden under older ones. Newest first now.
+8. **The fetch guard's 30 s limit covered the whole response**: a 1.7 MB page of headers on a slow
+   link was cut off while arriving, then fetched again twice. 30 s now means nothing arriving for
+   30 s; a whole response may take 10 minutes.
+9. **Scene labels forced a layout per label per frame** (read a size, write a transform, read the
+   next): 1,000 layouts for 1,000 labels. Read, compute, then write: at most 3 (`scene-labels.test.mjs`).
+10. **Every well marker had its own sphere geometry and material**, 4,000 GPU uploads and pipelines
+    on a field's first draw; every wellhead cap its own cylinder. Shared now.
+11. **Horizons were triangulated twice each**, by a Bowyer–Watson that recomputed every circumcircle
+    per point: once per surface now, circles computed once (same triangles as before, tested
+    against the old algorithm).
+12. **OSDU detail searches fetched whole records.** They ask for the fields the mappers read
+    (`DETAIL_FIELDS`), proven equivalent on the mock's clean and quirky records: 3.08 → 2.81 MB a
+    field.
+
+At CPU 4× the worst stall went from 1,172 ms to about 460 ms, the field from 6.2 s to 2.4–3.2 s
+and the heap from 143 MB to under 130 MB. The stall budget (400 ms) is still broken and the check
+stays red: what remains is the site scene built in one task when a field's paths arrive. Spreading
+that build across frames is the next step.
+
+Also seen, not changed here:
+- A first load is 4.2 MB, 2.5 MB of it the globe's imagery (`gis/world-imagery.jpg`): the globe
+  takes 8 s on the VPN and 84 s on the poor link before any tenant data.
+- `data/force2020/wells.json` loads even when the config lists no samples (P6: samples only when
+  listed).
+- A field's detail re-fetches the well records the header pages already delivered (347 kB of 2.8 MB).
+
 ## Not done yet
 
 - Parsing an index page (about 5.7 MB) still happens on the main thread: about 0.24 s once per page.

@@ -25,7 +25,8 @@ export function createIdp({ port = 4102, host = "127.0.0.1", issuer, tokenTtlS =
 
   const accessToken = (sub, scope, clientId) => signJwt({ iss: base, sub, aud: [audience, clientId], iat: nowS(), nbf: nowS() - 5, exp: nowS() + tokenTtlS, scope, jti: randomUUID(), name: "Mock User", email: `${sub}@example.invalid` }, privateKey, kid);
   const idToken = (sub, clientId, nonce, authTime) => signJwt({ iss: base, sub, aud: clientId, iat: nowS(), exp: nowS() + tokenTtlS, auth_time: authTime, nonce, name: "Mock User", preferred_username: sub, email: `${sub}@example.invalid` }, privateKey, kid);
-  const issueRefresh = (family, grant) => { const token = randomToken(); refreshTokens.set(token, { family, used: false, ...grant }); return token; };
+  // The grant first, then the new token's own state: a rotated token is born unused (on a refresh the grant is the old entry, used: true).
+  const issueRefresh = (family, grant) => { const token = randomToken(); refreshTokens.set(token, { ...grant, family, used: false }); return token; };
   const tokenResponse = (grant, family) => ({ access_token: accessToken(grant.sub, grant.scope, grant.clientId), token_type: "Bearer", expires_in: tokenTtlS, scope: grant.scope, id_token: idToken(grant.sub, grant.clientId, grant.nonce, grant.authTime), refresh_token: issueRefresh(family, grant) });
 
   const json = (response, status, body, headers = {}) => { response.writeHead(status, { "content-type": "application/json", "cache-control": "no-store", pragma: "no-cache", ...headers }); response.end(JSON.stringify(body)); };

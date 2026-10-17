@@ -36,6 +36,9 @@ export function createSceneRenderer({ antialias = true, alpha = true, pixelRatio
     renderer.domElement.dataset.backend = backend;
     return backend as SceneBackend;
   });
+  // A scene disposed before anything listened (a site with nothing to draw yet) must not leave an
+  // unhandled rejection: callers that subscribe still receive it (found by tools/stress/faults.mjs).
+  ready.catch(() => undefined);
   return {
     renderer,
     ready,

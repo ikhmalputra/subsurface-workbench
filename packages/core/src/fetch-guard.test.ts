@@ -80,3 +80,46 @@ test("limit runs at most N tasks at once and keeps the order of completion hones
   await assert.rejects(run(async () => { throw new Error("boom"); }), /boom/);
   assert.equal(active, 0, "a failed task releases its slot");
 });
+
+test("a 429 whose Retry-After is hidden (not exposed to CORS) is waited out from a second, not half of one", async () => {
+  const { fetcher, calls } = scripted([new Response("busy", { status: 429 }), json({ ok: true })]);
+  const t0 = Date.now();
+  await fetchGuarded("https://x.example/a", { fetcher });
+  assert.equal(calls.length, 2);
+  assert.ok(Date.now() - t0 >= 990, `waited ${Date.now() - t0} ms`);
+});
+
+test("a 401 tells the auth hook which token was refused, then retries once with token() again", async () => {
+  const { fetcher } = scripted([new Response("no", { status: 401 }), json({ ok: true })]);
+  const refused: (string | null)[] = [];
+  let token = "old";
+  await fetchGuarded("https://x.example/a", { fetcher, auth: { token: async () => token, onUnauthorized: async (rejected) => { refused.push(rejected); token = "new"; } } });
+  assert.deepEqual(refused, ["old"]);
+});
+
+/** A body that arrives in pieces, `gapMs` apart; `stallAfter` pieces in, it stops for `stallMs`. */
+const trickle = (pieces: number, gapMs: number, stall?: { after: number; ms: number }) => (async (_url: string | URL | Request, init?: RequestInit) => {
+  const signal = init?.signal;
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      for (let i = 0; i < pieces; i++) {
+        const wait = stall && i === stall.after ? stall.ms : gapMs;
+        const aborted = await new Promise<boolean>((resolve) => { const t = setTimeout(() => resolve(false), wait); signal?.addEventListener("abort", () => { clearTimeout(t); resolve(true); }, { once: true }); });
+        if (aborted) { controller.error(signal?.reason); return; }
+        controller.enqueue(new TextEncoder().encode(i === 0 ? "[" : i === pieces - 1 ? "0]" : "0,"));
+      }
+      controller.close();
+    },
+  });
+  return new Response(stream, { status: 200 });
+}) as typeof fetch;
+
+test("a slow body that keeps arriving is waited for past the idle limit; one that stops is cut off and said so", async () => {
+  // Twelve pieces 60 ms apart: 720 ms in all, never 200 ms without data.
+  const slow = await fetchJsonGuarded("https://x.example/a", { fetcher: trickle(12, 60), timeoutMs: 200, retries: 0 });
+  assert.equal((slow as number[]).length, 11);
+  // A body that stops for 600 ms half-way: no data for the idle limit.
+  await assert.rejects(fetchGuarded("https://x.example/a", { fetcher: trickle(12, 20, { after: 6, ms: 600 }), timeoutMs: 200, retries: 0 }), /no data for/);
+  // However steadily it arrives, the overall limit holds.
+  await assert.rejects(fetchGuarded("https://x.example/a", { fetcher: trickle(40, 50), timeoutMs: 200, totalTimeoutMs: 500, retries: 0 }), /not finished in/);
+});
