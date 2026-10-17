@@ -1,0 +1,50 @@
+/* Five-zone frame: pressure window, kick tolerance, cement, hydraulics, strings. */
+
+/* Strings, kick tolerance and cement: their rows are the canvas, one list that scrolls on its own. */
+.mf:is([data-frame="strings"], [data-frame="kick"], [data-frame="cement"]) > .mf-canvas > .eng-rows { padding: 0 6px 4px 0; gap: 8px; }
+.mf:is([data-frame="strings"], [data-frame="kick"], [data-frame="cement"]) .eng-row { padding: 11px 12px; }
+.mf:is([data-frame="strings"], [data-frame="kick"], [data-frame="cement"]) .eng-title b { font-size: var(--t-14); }
+.mf:is([data-frame="kick"], [data-frame="cement"]) .eng-row { grid-template-columns: minmax(0, 1fr); }
+.mf[data-frame="kick"] .kick-bar { height: 10px; }
+.mf-tools > .inline-slider { flex: 0 1 380px; min-width: 260px; white-space: nowrap; }
+
+/* Selects in the toolbar and the inspector, styled like the rows' own. */
+.mf:is([data-frame="hydraulics"], [data-frame="strings"]) :is(.mf-tools, .mf-inspector) select { height: 26px; padding: 0 6px; border-radius: 7px; border: 1px solid var(--glass-edge-strong); background: var(--glass-strong); color: var(--ink); font: inherit; font-size: var(--t-12); max-width: 260px; }
+.mf-tools .hyd-inputs, .string-pick { display: flex; align-items: center; gap: 6px; font-size: var(--t-12); color: var(--ink-2); white-space: nowrap; }
+
+/* Hydraulics: the results on the canvas, the bit beside the annulus. */
+.hyd-board { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-content: start; overflow: auto; scrollbar-width: thin; }
+.hyd-board section { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.hyd-board h4 { margin: 2px 2px 0; font: 600 var(--t-11) var(--font-ui); text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); }
+.hyd-board dl { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.hyd-board dl > div { padding: 12px 14px; border-radius: 12px; border: 1px solid var(--glass-edge); background: var(--glass); min-width: 0; }
+.hyd-board dt { color: var(--ink-3); font-size: var(--t-12); }
+.hyd-board dd { margin: 4px 0 0; font: 500 18px var(--font-mono); color: var(--ink); overflow-wrap: anywhere; }
+.hyd-board .is-absent dd { font: 400 var(--t-12) var(--font-ui); color: var(--ink-3); }
+@container tile (max-width: 560px) { .hyd-board { grid-template-columns: minmax(0, 1fr); } }
+.hyd-form { display: flex; flex-direction: column; gap: 10px; font-size: var(--t-12); }
+.hyd-form .inline-slider { min-width: 0; }
+.hyd-form .inline-slider b { font: 500 var(--t-12) var(--font-mono); white-space: nowrap; }
+.hyd-form > label { justify-content: space-between; }
+.hyd-form .nozzles { gap: 6px; }
+.hyd-form .hyd-label { flex-basis: 100%; }
+
+/* Pressure window: the holes' rows read as the plot's mud lines do. */
+.mf[data-frame="window"] .mf-facts > .is-failing dd { color: var(--danger); }
+[data-whatif] .mf[data-frame="window"] .mf-facts > .is-failing dd { color: var(--signal-whatif); }
+.mf[data-frame="window"] .mf-facts > .is-selected dt { color: var(--signal-object); }
+
+/* A drilled well's string: the ratings first and large, the record's facts under them. */
+.mf[data-frame="strings"] > .mf-canvas > .string-card { padding: 2px 4px 4px 0; gap: 10px; }
+.mf[data-frame="strings"] .ratings div { padding: 14px 16px; }
+.mf[data-frame="strings"] .ratings b { font-size: var(--t-20); margin: 4px 0; }
+.mf[data-frame="strings"] .string-card .facts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@container tile (max-width: 640px) { .mf[data-frame="strings"] .string-card .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* A small tile: the tile's head already names the well, so kick and hydraulics give their toolbar to the control. */
+@container tile (max-width: 640px) {
+  .mf:is([data-frame="kick"], [data-frame="hydraulics"]) .mf-title { display: none; }
+  .mf-tools > .inline-slider { min-width: 0; flex: 1 1 auto; }
+  .mf-tools > .inline-slider small { display: none; }
+  .mf[data-frame="hydraulics"] .mf-tools { justify-content: flex-start; }
+}

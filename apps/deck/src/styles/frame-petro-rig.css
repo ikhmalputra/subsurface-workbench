@@ -1,0 +1,62 @@
+/* Five-zone frame: petrophysics, live drilling. */
+
+/* ---- Petrophysics: FORGE's crystalline view and the Equator's clastic view (the FORCE view is .pf) ---- */
+/* .petro is kept on the frame for the crossplot rules (.petro .sw-petro-analysis …); undo its old scroll-page box. */
+.mf.petro.pc { align-content: stretch; scrollbar-width: auto; }
+.mf.pc { --mf-inspector: 340px; }
+.pc-plots { gap: 4px; }
+/* Side by side: each crossplot is near square, so two rows would leave half the canvas empty. */
+.pc-grid { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.pc-grid.is-one { grid-template-columns: minmax(0, 1fr); }
+@container tile (max-width: 640px) { .pc-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: repeat(2, minmax(0, 1fr)); } }
+.pc-grid > .sw-petro-analysis { min-height: 0; min-width: 0; display: flex; flex-direction: column; gap: 2px; margin: 0; }
+.pc-grid > .sw-petro-analysis > h2 { flex: none; margin: 0; padding-left: 2px; }
+.pc-grid > .sw-petro-analysis > svg { flex: 1 1 0; min-height: 0; width: 100%; height: 100%; }
+.mf.pc .mf-tools .badge { flex: none; }
+.pc-params { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; font-size: var(--t-11); color: var(--ink-3); }
+.pc-cuts { display: flex; flex-direction: column; gap: 8px; font-size: var(--t-11); color: var(--ink-3); }
+.pc-cuts .petro-cut { min-width: 0; display: grid; grid-template-columns: 48px minmax(0, 1fr) 36px; }
+.mf-section-body .petro-plugs td, .mf-section-body .petro-plugs th { padding: 4px 4px; }
+
+/* ---- Live drilling: the rig in the canvas, the driller's controls in the inspector, the rig-floor charts in the strip ---- */
+.mf.rig-frame:fullscreen { background: var(--deck-bg, #060912); padding: 16px 20px; }
+.mf.rig-frame .mf-tools > * { flex: none; }
+.mf-numbers .rig-status { flex-direction: row; margin-left: 0; white-space: nowrap; }
+.rig-canvas { display: flex; flex-direction: column; gap: 8px; }
+.rig-canvas .rig-alarm { flex: none; }
+.rig-canvas .rig-stage { flex: 1 1 0; min-height: 0; }
+.mf .rig-controls { display: flex; flex-direction: column; gap: 9px; min-width: 0; }
+.mf .rig-controls .mf-facts dd { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mf-strip .rig-charts { height: 150px; display: grid; grid-template-columns: auto repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 4px 6px; }
+.mf-strip .rig-window { grid-row: 1 / span 2; align-self: start; display: flex; flex-direction: column; }
+.mf-strip .rig-track { min-height: 0; }
+.mf-strip .rig-track-head { overflow: hidden; }
+.mf-strip .rig-track svg { min-height: 0; }
+.mf-section-body .rig-sheet, .mf-section-body .rig-debrief { padding: 0; border: 0; background: transparent; }
+.mf-section-body .rig-sheet > b:first-child, .mf-section-body .rig-debrief > b:first-child { display: none; }
+.mf-section-body .rig-sheet > p:first-of-type { margin-top: 0; }
+.mf-section-body .rig-debrief ul { margin: 0; padding-left: 16px; }
+.mf-section-body .rig-log { max-height: none; border: 0; background: transparent; padding: 0; }
+.mf-section-body .rig-disasters p { margin: 0 0 4px; }
+
+/* The 3D view: the camera bar above it and the key below it, in flow; the renderer fills the view. */
+.rig3d { display: flex; flex-direction: column; gap: 6px; }
+.rig3d .rig3d-hud, .rig3d .rig3d-key { position: static; flex: none; }
+.rig3d .rig3d-hud { padding: 6px 10px 0; }
+.rig3d .rig3d-key { padding: 0 10px 6px; }
+.rig3d-view { position: relative; flex: 1 1 0; min-height: 0; overflow: hidden; }
+
+/* The rig's toolbar: everything on one row; the section picker and the zoom shrink first. */
+.mf.rig-frame .mf-tools { justify-content: flex-start; gap: 6px; }
+.mf.rig-frame .rig-section select { max-width: 190px; }
+@container tile (max-width: 1300px) { .mf.rig-frame .rig-tool-text, .mf.rig-frame .mf-numbers > .rig-bit { display: none; } }
+.mf-section-body .rig-sheet dl { grid-template-columns: minmax(0, 1fr); gap: 0; }
+.mf-section-body .rig-sheet dl > div { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 4px 0; border-top: 1px solid var(--glass-edge); }
+.mf-section-body .rig-sheet dl > div:first-child { border-top: 0; }
+.mf-section-body .rig-sheet dd { text-align: right; }
+/* A short tile: lower rig-floor charts, so the rig keeps its height. */
+@container tile (max-height: 760px) { .mf-strip .rig-charts { height: 112px; } }
+/* The crossplot legend reads as one line of text that wraps, swatches inline. */
+.pc-plots .xp-legend { display: block; line-height: 1.6; }
+.pc-plots .xp-legend i { margin: 0 5px 0 10px; vertical-align: -1px; }
+.pc-plots .xp-legend i:first-child { margin-left: 0; }

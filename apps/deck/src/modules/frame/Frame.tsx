@@ -56,11 +56,13 @@ export interface Section { readonly id: string; readonly title: string; readonly
  * time, the open one remembered per module and lens; then links to the module's pages. A new
  * feature adds a section here, never another card stacked under the last.
  */
-export function Inspector({ id, head, sections, links, initial }: {
+export function Inspector({ id, head, sections, links, initial, reveal }: {
   readonly id: string; readonly head?: ReactNode; readonly sections: readonly (Section | null | false)[];
   readonly links?: readonly ({ readonly label: string; readonly onOpen: () => void } | null | false)[];
   /** The section open the first time. */
   readonly initial?: string;
+  /** Open this section now (a Next button, a click on the canvas); `at` changes each time it is asked. */
+  readonly reveal?: { readonly section: string; readonly at: number } | null;
 }) {
   const shown = sections.filter((s): s is Section => !!s);
   const key = `deck-inspector-${id}`;
@@ -70,6 +72,8 @@ export function Inspector({ id, head, sections, links, initial }: {
   const open = id in openById ? openById[id]! : stored() ?? initial ?? shown[0]?.id ?? null;
   const choose = (next: string | null) => { setOpenById((m) => ({ ...m, [id]: next })); try { localStorage.setItem(key, next ?? ""); } catch { /* not kept */ } };
   const current = shown.some((s) => s.id === open) ? open : null;
+  // Only a new request opens a section: re-running on every render would undo the reader's own choice.
+  useEffect(() => { if (reveal) choose(reveal.section); }, [reveal?.at]);
   return <div className="mf-inspector-body">
     {head && <div className="mf-head">{head}</div>}
     {shown.map((s) => {

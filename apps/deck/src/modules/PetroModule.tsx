@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { calculateArchieWaterSaturation, densityPorosity, gammaRayLines, netPaySummary, neutronDensityPorosity, shaleVolumeFromGamma } from "@ikhmalputra/subsurface-core/contracts";
 import type { PetrophysicsLogCurve, ShaleVolumeMethod } from "@ikhmalputra/subsurface-core/contracts";
 import { PetrophysicsCrossplot } from "@ikhmalputra/subsurface-react/2d";
+import { Frame, Inspector, Status } from "./frame/Frame.tsx";
 import { useWire } from "./wire.ts";
 import { CrystallinePetrophysics } from "./PetroCrystalline.tsx";
 import { ForcePetrophysics } from "./PetroForce.tsx";
@@ -72,21 +73,26 @@ function ClasticPetrophysics() {
   });
   const set = (change: Partial<Parameters>) => setParams((current) => ({ ...current, ...change }));
   const number = (label: string, key: "a" | "m" | "n" | "rw", stepValue: number) => <label className="petro-param">{label}<input type="number" step={stepValue} min={stepValue} value={params[key]} onChange={(event) => { const value = Number(event.target.value); if (value > 0) set({ [key]: value }); }} /></label>;
-  return <div className="petro">
-    <header className="petro-head">
-      <div><b>{place.label}</b> <span className="badge is-synthetic">synthetic logs</span></div>
-      <div className="petro-interval">{fmt(interval[0])}–{fmt(interval[1])} m MD · {wire.brush ? "brushed" : "Sand R1 (Shift-drag on the logs to brush)"}
-        {wire.brush ? <button type="button" onClick={() => wire.setBrush(null)}>Whole sand</button> : <button type="button" onClick={() => wire.setBrush([sand.topMdM, sand.baseMdM])}>Brush the sand</button>}</div>
-    </header>
-    <div className="petro-params">
-      {number("a", "a", 0.05)}{number("m", "m", 0.05)}{number("n", "n", 0.05)}{number("Rw Ω·m", "rw", 0.005)}
-      <label className="petro-param">Vsh<select value={params.vshMethod} onChange={(event) => set({ vshMethod: event.target.value as ShaleVolumeMethod })}><option value="linear">linear</option><option value="larionov-tertiary">Larionov, Tertiary</option><option value="larionov-older">Larionov, older</option></select></label>
-      <label className="petro-param">φ from<select value={params.method} onChange={(event) => set({ method: event.target.value as Parameters["method"] })}><option value="density-neutron">density–neutron</option><option value="density">density</option></select></label>
-      <label className="petro-cut">Vsh ≤ <input type="range" min={0.1} max={0.7} step={0.05} value={params.vshCut} onChange={(event) => set({ vshCut: Number(event.target.value) })} /><b>{params.vshCut.toFixed(2)}</b></label>
-      <label className="petro-cut">φ ≥ <input type="range" min={0.02} max={0.25} step={0.01} value={params.phiCut} onChange={(event) => set({ phiCut: Number(event.target.value) })} /><b>{params.phiCut.toFixed(2)}</b></label>
-      <label className="petro-cut">Sw ≤ <input type="range" min={0.2} max={0.9} step={0.05} value={params.swCut} onChange={(event) => set({ swCut: Number(event.target.value) })} /><b>{params.swCut.toFixed(2)}</b></label>
-    </div>
-    <dl className="petro-summary">
+  return <Frame name="petro" className="petro pc" title={place.label} subtitle={`Petrophysics · ${fmt(interval[0])}–${fmt(interval[1])} m MD · ${wire.brush ? "brushed" : "Sand R1 (Shift-drag on the logs to brush)"}`}
+    tools={<>
+      <span className="badge is-synthetic">synthetic logs</span>
+      {wire.brush ? <button type="button" className="tie-button" onClick={() => wire.setBrush(null)}>Whole sand</button> : <button type="button" className="tie-button" onClick={() => wire.setBrush([sand.topMdM, sand.baseMdM])}>Brush the sand</button>}
+    </>}
+    numbers={<>
+      <span><small>Net pay</small><b>{fmt(result.summary.payM, 1)} m</b></span>
+      <span><small>φ, net</small><b>{pct(result.summary.porosityNet)}</b></span>
+      <span><small>Sw, pay</small><b>{pct(result.summary.swPay)}</b></span>
+    </>}
+    canvas={<div className="mf-plot pc-plots">
+      <div className="pc-grid is-one">
+        <PetrophysicsCrossplot xCurve={curve("NPHI")} yCurve={curve("RHOB")} depthRangeMdM={interval} onlyInRange maxPoints={900}
+          xDomain={[-0.05, 0.45]} yDomain={[2.95, 1.9]} title="Density–neutron, coloured by Sw" onSelectMd={wire.pin} onBrushChange={(range) => { if (range) wire.setBrush(range); }}
+          pointColor={(md) => swColour(result.swByMd.get(md) ?? null)} overlay={lithologyLines} />
+      </div>
+      <p className="xp-legend"><i style={{ background: "#f59e0b" }} />low Sw<i style={{ background: "#60a5fa" }} />high Sw · gas plots up and left of the sandstone line · drag a box over points to brush their depths</p>
+    </div>}
+    inspector={<Inspector id="petro-clastic" initial="params" head={<dl className="mf-facts">
+      <div className="mf-facts-title"><dt>{fmt(interval[0])}–{fmt(interval[1])} m MD</dt><dd>{wire.brush ? "brushed" : "Sand R1"}</dd></div>
       <div><dt>Gross</dt><dd>{fmt(result.summary.grossM, 1)} m</dd></div>
       <div><dt>Net sand</dt><dd>{fmt(result.summary.netM, 1)} m</dd></div>
       <div><dt>Net pay</dt><dd>{fmt(result.summary.payM, 1)} m</dd></div>
@@ -95,21 +101,28 @@ function ClasticPetrophysics() {
       <div><dt>Sw, pay</dt><dd>{pct(result.summary.swPay)}</dd></div>
       <div><dt>φ·(1−Sw)·h</dt><dd>{fmt(result.summary.hydrocarbonColumnM, 2)} m</dd></div>
       <div><dt>Bad hole</dt><dd>{result.summary.unusableSamples} of {result.count} samples</dd></div>
-    </dl>
-    <p className="petro-note">Vsh ({params.vshMethod.replace("-", " ")}) from GR between {fmt(result.lines.clean)} and {fmt(result.lines.shale)} gAPI (the well's 5th and 95th percentile). {contacts.length ? `Contacts: ${contacts.map((top) => `${top.name} ${fmt(top.mdM)} m`).join(", ")}.` : "No contact in this well."}</p>
-    <PetrophysicsCrossplot xCurve={curve("NPHI")} yCurve={curve("RHOB")} depthRangeMdM={interval} onlyInRange maxPoints={900}
-      xDomain={[-0.05, 0.45]} yDomain={[2.95, 1.9]} title="Density–neutron, coloured by Sw" onSelectMd={wire.pin} onBrushChange={(range) => { if (range) wire.setBrush(range); }}
-      pointColor={(md) => swColour(result.swByMd.get(md) ?? null)} overlay={lithologyLines} />
-    <p className="xp-legend"><i style={{ background: "#f59e0b" }} />low Sw<i style={{ background: "#60a5fa" }} />high Sw · gas plots up and left of the sandstone line · drag a box over points to brush their depths</p>
-    <table className="petro-plugs">
-      <thead><tr><th>Core plug</th><th>MD, m</th><th>Core φ</th><th>Log φ</th><th>k, mD</th></tr></thead>
-      <tbody>{plugs.map(({ plug, core, perm, inside, nearest }) => <tr key={plug.id} className={inside ? "" : "is-outside"}>
-        <td>{plug.label}</td><td>{fmt(plug.mdM, 1)}</td><td>{core === null ? "not reported" : pct(core)}</td>
-        <td>{inside && nearest ? pct(nearest.porosity) : "outside the interval"}</td>
-        <td>{perm === null ? "not reported" : fmt(perm, 1)}</td>
-      </tr>)}</tbody>
-    </table>
-  </div>;
+    </dl>} sections={[
+      { id: "params", title: "Archie and methods", summary: `m ${params.m} · n ${params.n}`, body: <div className="pc-params">
+        {number("a", "a", 0.05)}{number("m", "m", 0.05)}{number("n", "n", 0.05)}{number("Rw Ω·m", "rw", 0.005)}
+        <label className="petro-param">Vsh<select value={params.vshMethod} onChange={(event) => set({ vshMethod: event.target.value as ShaleVolumeMethod })}><option value="linear">linear</option><option value="larionov-tertiary">Larionov, Tertiary</option><option value="larionov-older">Larionov, older</option></select></label>
+        <label className="petro-param">φ from<select value={params.method} onChange={(event) => set({ method: event.target.value as Parameters["method"] })}><option value="density-neutron">density–neutron</option><option value="density">density</option></select></label>
+      </div> },
+      { id: "cutoffs", title: "Cutoffs", summary: `Vsh ${params.vshCut.toFixed(2)} · φ ${params.phiCut.toFixed(2)} · Sw ${params.swCut.toFixed(2)}`, body: <div className="pc-cuts">
+        <label className="petro-cut">Vsh ≤ <input type="range" min={0.1} max={0.7} step={0.05} value={params.vshCut} onChange={(event) => set({ vshCut: Number(event.target.value) })} /><b>{params.vshCut.toFixed(2)}</b></label>
+        <label className="petro-cut">φ ≥ <input type="range" min={0.02} max={0.25} step={0.01} value={params.phiCut} onChange={(event) => set({ phiCut: Number(event.target.value) })} /><b>{params.phiCut.toFixed(2)}</b></label>
+        <label className="petro-cut">Sw ≤ <input type="range" min={0.2} max={0.9} step={0.05} value={params.swCut} onChange={(event) => set({ swCut: Number(event.target.value) })} /><b>{params.swCut.toFixed(2)}</b></label>
+      </div> },
+      { id: "plugs", title: "Core plugs", summary: `${plugs.length}`, body: <table className="petro-plugs">
+        <thead><tr><th>Core plug</th><th>MD, m</th><th>Core φ</th><th>Log φ</th><th>k, mD</th></tr></thead>
+        <tbody>{plugs.map(({ plug, core, perm, inside, nearest }) => <tr key={plug.id} className={inside ? "" : "is-outside"}>
+          <td>{plug.label}</td><td>{fmt(plug.mdM, 1)}</td><td>{core === null ? "not reported" : pct(core)}</td>
+          <td>{inside && nearest ? pct(nearest.porosity) : "outside the interval"}</td>
+          <td>{perm === null ? "not reported" : fmt(perm, 1)}</td>
+        </tr>)}</tbody>
+      </table> },
+      { id: "method", title: "Method", body: <p className="mf-prose">Vsh ({params.vshMethod.replace("-", " ")}) from GR between {fmt(result.lines.clean)} and {fmt(result.lines.shale)} gAPI (the well&apos;s 5th and 95th percentile). {contacts.length ? `Contacts: ${contacts.map((top) => `${top.name} ${fmt(top.mdM)} m`).join(", ")}.` : "No contact in this well."}</p> },
+    ]} />}
+    status={<Status items={["Drag a box over points to brush their depths · click one to pin it", "Synthetic logs"]} />} />;
 }
 
 const swColour = (sw: number | null) => sw === null ? "var(--ink-3)" : `color-mix(in oklab, #60a5fa ${Math.round(Math.min(1, sw) * 100)}%, #f59e0b)`;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { scaleLinear, scaleLog } from "d3-scale";
 import { useDepthZoom } from "./depth-zoom.js";
@@ -134,13 +134,25 @@ export interface DaysVsDepthChartProps {
   readonly onSelectMd?: (mdM: number) => void;
 }
 
-const sectionFill = ["#eef4f0", "#e6eef6", "#f6efe4", "#efe9f5"];
+// Tints rather than fixed light greys, so the bands read on a light page and a dark one alike.
+const sectionFill = ["#2e9e5b", "#3b82f6", "#d97706", "#8b5cf6"].map((colour) => `color-mix(in srgb, ${colour} 9%, transparent)`);
 
 /** Classic drilling days-versus-depth curve with hole sections, milestones and a selectable day cursor. */
 export function DaysVsDepthChart({ operations, focusDate = null, onSelectDay, title = "Days vs depth", cursorMdM = null, onSelectMd }: DaysVsDepthChartProps) {
   const svgRef = useRef<SVGSVGElement>(null);
+  const plotRef = useRef<HTMLDivElement>(null);
+  // Drawn at the size it is shown, so its text stays 11 px however large the panel: a fixed
+  // viewBox stretched to a wide panel would blow the type up with it.
+  const [size, setSize] = useState<{ readonly w: number; readonly h: number } | null>(null);
+  useEffect(() => {
+    const element = plotRef.current;
+    if (!element || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => { const box = entry?.contentRect; if (box && box.width > 0 && box.height > 0) setSize({ w: Math.round(box.width), h: Math.round(box.height) }); });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
   const points = daysVsDepth(operations);
-  const width = 560, height = 340, margin = { top: 16, right: 18, bottom: 34, left: 58 };
+  const width = size?.w ?? 560, height = size?.h ?? 340, margin = { top: 16, right: 18, bottom: 34, left: 58 };
   const maxDay = Math.max(1, ...points.map((point) => point.day));
   const maxMd = Math.max(1, ...points.map((point) => point.mdFt), ...operations.sections.map((section) => section.baseFt));
   const x = scaleLinear().domain([0, maxDay]).range([margin.left, width - margin.right]);
@@ -173,9 +185,9 @@ export function DaysVsDepthChart({ operations, focusDate = null, onSelectDay, ti
 
   return <figure className="sw-rec sw-dvd" data-testid="days-vs-depth">
     <figcaption className="sw-rec-head"><h3>{title}</h3><span>{maxDay} days spud → last report · TD {feet(maxMd)}</span></figcaption>
-    <svg ref={svgRef} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${title}: ${points.length} daily depths from spud to ${feet(points.at(-1)?.mdFt)}. ${placedRuns.length} of ${troubleRuns.length} runs that ended with a problem or failure are marked at their reported depths. Click to select a day and a depth.`} onPointerDown={pick}>
+    <div ref={plotRef} className="sw-dvd-plot"><svg ref={svgRef} width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${title}: ${points.length} daily depths from spud to ${feet(points.at(-1)?.mdFt)}. ${placedRuns.length} of ${troubleRuns.length} runs that ended with a problem or failure are marked at their reported depths. Click to select a day and a depth.`} onPointerDown={pick}>
       {operations.sections.map((section, index) => <g key={section.id}>
-        <rect x={margin.left} y={y(section.topFt)} width={width - margin.left - margin.right} height={Math.max(0, y(section.baseFt) - y(section.topFt))} fill={sectionFill[index % sectionFill.length]} />
+        <rect x={margin.left} y={y(section.topFt)} width={width - margin.left - margin.right} height={Math.max(0, y(section.baseFt) - y(section.topFt))} style={{ fill: sectionFill[index % sectionFill.length] }} />
         <text x={width - margin.right - 6} y={y(section.topFt) + 13} textAnchor="end" className="sw-dvd-band">{section.name} · {bitSize(section.bitSizeIn)}</text>
       </g>)}
       {y.ticks(6).map((tick) => <g key={tick}><line x1={margin.left} x2={width - margin.right} y1={y(tick)} y2={y(tick)} className="sw-dvd-grid" /><text x={margin.left - 6} y={y(tick) + 3} textAnchor="end" className="sw-dvd-tick">{int(tick)}</text></g>)}
@@ -205,7 +217,7 @@ export function DaysVsDepthChart({ operations, focusDate = null, onSelectDay, ti
         <line x1={x(focus.dayFromSpud)} x2={x(focus.dayFromSpud)} y1={margin.top} y2={height - margin.bottom} />
         {focus.mdFt !== null && <circle cx={x(focus.dayFromSpud)} cy={y(focus.mdFt)} r={6} />}
       </g>}
-    </svg>
+    </svg></div>
     {troubleRuns.length > 0 && <p className="sw-dvd-legend"><span><i aria-hidden="true" />{troubleRuns.length} of {operations.runs.length} runs ended with a problem or failure. {placedRuns.length} report a depth and are marked{placedRuns.length !== troubleRuns.length ? `; ${troubleRuns.length - placedRuns.length} report none` : ""}. {placedRuns.filter((run) => run.topFt === null).length} report a base and no top, drawn as a line rather than an interval. The records carry no dates, so none is placed on the day axis.</span></p>}
     <ul className="sw-dvd-events" aria-label="Milestones">
       {operations.milestones.map((event) => {

@@ -8,6 +8,7 @@ import { DrillingSimulator, defaultFlowGpm } from "@ikhmalputra/subsurface-core/
 import type { DrillCommand, DrillEvent, DrillMode, DrillReading, Hazard } from "@ikhmalputra/subsurface-core/simulation";
 import { useDesign } from "../data/design.ts";
 import { fmt } from "../format.ts";
+import { Frame, Inspector, Status } from "./frame/Frame.tsx";
 import { useWire } from "./wire.ts";
 
 /**
@@ -42,8 +43,10 @@ export function LiveDrilling() {
   const [view, setView] = useState<"2d" | "3d">("2d");
   const [full, setFull] = useState(false);
   const root = useRef<HTMLDivElement>(null);
-  useEffect(() => { const change = () => setFull(document.fullscreenElement === root.current); document.addEventListener("fullscreenchange", change); return () => document.removeEventListener("fullscreenchange", change); }, []);
-  const toggleFull = () => { if (document.fullscreenElement) void document.exitFullscreen(); else void root.current?.requestFullscreen?.(); };
+  // Full screen takes the whole frame (toolbar, canvas, inspector and charts), found from the canvas.
+  const frameOf = () => root.current?.closest<HTMLElement>(".mf") ?? null;
+  useEffect(() => { const change = () => setFull(!!document.fullscreenElement && document.fullscreenElement === frameOf()); document.addEventListener("fullscreenchange", change); return () => document.removeEventListener("fullscreenchange", change); }, []);
+  const toggleFull = () => { if (document.fullscreenElement) void document.exitFullscreen(); else void frameOf()?.requestFullscreen?.(); };
   const [, setVersion] = useState(0);
   const repaint = () => setVersion((v) => v + 1);
 
@@ -100,82 +103,84 @@ export function LiveDrilling() {
   // The banner shows what is happening now: the latest warning of the last 15 simulated minutes, or a disaster.
   const alarms = sim.events.filter((e) => e.level === "disaster" || (e.level !== "info" && r.timeS - e.timeS <= 900)).slice(-1);
 
-  return <div className={`rig is-${r.mode}`} ref={root}>
-    <header className="rig-head">
-      <label className="dca-field">Section <select value={sectionIndex} onChange={(event) => { setSectionIndex(Number(event.target.value)); setPaused(true); }}>
+  const shutIn = r.mode === "shut-in" || r.mode === "killing";
+  const ended = r.mode === "blowout" || r.mode === "killed" || r.mode === "section-td";
+  const killSheet = sheet ?? sim.lastKillSheet;
+  const track = { points: shown, span: windowS, end: r.timeS };
+  return <Frame name="rig" className={`rig-frame is-${r.mode}`} title={brief.identity.name} subtitle="Live drilling · simulated"
+    tools={<>
+      <label className="dca-field rig-section"><select aria-label="Hole section" value={sectionIndex} onChange={(event) => { setSectionIndex(Number(event.target.value)); setPaused(true); }}>
         {sections.map((s, i) => <option key={s.id} value={i}>{`${s.holeSizeIn}″ hole to ${Math.round(s.shoeMdM)} m · ${s.label}`}</option>)}
       </select></label>
-      <span className="rig-clock">{clock(r.timeS)}</span>
       <span className="log-sets rig-speed" role="group" aria-label="Simulation speed">
         <button type="button" aria-pressed={paused} onClick={() => setPaused(!paused)} disabled={over}>{paused ? "▶ Run" : "❚❚ Pause"}</button>
         {SPEEDS.map((value) => <button key={value} type="button" aria-pressed={speed === value} onClick={() => setSpeed(value)}>{value}×</button>)}
       </span>
       <label className="rig-check"><input type="checkbox" checked={pauseOnAlarm} onChange={(event) => setPauseOnAlarm(event.target.checked)} /> pause on alarms</label>
-      <button type="button" className="dsg-tool" onClick={() => { sims.delete(key); setSeed(seed + 1); setPaused(true); }} title="Restart this section on a new seed: the same plan, different rock">New rock</button>
       <span className="log-sets rig-speed" role="group" aria-label="View"><button type="button" aria-pressed={view === "2d"} onClick={() => setView("2d")}>2D</button><button type="button" aria-pressed={view === "3d"} onClick={() => setView("3d")}>3D path</button></span>
-      {view === "2d" && <button type="button" className="dsg-tool" aria-pressed={zoomed} onClick={() => setZoomed(!zoomed)} title={zoomed ? "Show the whole well" : "Follow the bit: the last 170 m"}>{zoomed ? <ZoomOut size={14} /> : <ZoomIn size={14} />}{zoomed ? "Whole well" : "Near the bit"}</button>}
+      {view === "2d" && <button type="button" className="dsg-tool" aria-pressed={zoomed} onClick={() => setZoomed(!zoomed)} title={zoomed ? "Show the whole well" : "Follow the bit: the last 170 m"}>{zoomed ? <ZoomOut size={14} /> : <ZoomIn size={14} />}<span className="rig-tool-text">{zoomed ? "Whole well" : "Near the bit"}</span></button>}
       <button type="button" className="dsg-tool" onClick={toggleFull} aria-label={full ? "Leave full screen" : "Full screen"}>{full ? <Minimize size={14} /> : <Maximize size={14} />}</button>
+    </>}
+    numbers={<>
+      <span><small>{clock(r.timeS).split(" · ")[0]}</small><b>{clock(r.timeS).split(" · ")[1]}</b></span>
+      <span className="rig-bit"><small>Bit MD</small><b>{fmt(r.bitMdM, 1)} m</b></span>
       <span className={`rig-status is-${r.mode}`} role="status">{MODE[r.mode]}</span>
-    </header>
-
-    {alarms.length > 0 && <p className={`rig-alarm is-${alarms[0]!.level}`} role="alert">{alarms[0]!.text}</p>}
-
-    <div className="rig-body">
-      <section className="rig-controls" aria-label="Driller's controls">
-        <dl className="rig-depth">
-          <div><dt>Bit</dt><dd>{fmt(r.bitMdM, 1)} m</dd></div><div><dt>TVD</dt><dd>{fmt(r.bitTvdM, 0)} m</dd></div>
-          <div><dt>Formation</dt><dd>{r.formation}</dd></div><div><dt>ROP</dt><dd>{fmt(r.ropMh, 1)} m/h</dd></div>
-        </dl>
-        <Knob label="WOB" unit="klbf" min={0} max={60} step={1} initial={Math.min(55, Math.round(2.6 * sim.holeIn))} onChange={(wobKlbf) => act({ kind: "rig", wobKlbf })} k={key} />
-        <Knob label="RPM" unit="rpm" min={0} max={220} step={5} initial={120} onChange={(rpm) => act({ kind: "rig", rpm })} k={key} />
-        <Knob label="Flow" unit="gpm" min={0} max={1400} step={10} initial={defaultFlowGpm(sim.holeIn)} onChange={(flowGpm) => act({ kind: "rig", flowGpm })} k={key} />
-        <form className="rig-mud" onSubmit={(event) => { event.preventDefault(); const sg = Number(mudText); if (sg > 0) act({ kind: "mud", sg }); setMudText(""); }}>
-          <label>Mud <input type="number" step="0.01" min="0.9" max="2.4" value={mudText} placeholder={r.mudSg.toFixed(2)} onChange={(event) => setMudText(event.target.value)} aria-label="New mud weight, SG" /> SG</label>
-          <button type="submit" className="dsg-tool" disabled={over || !mudText}>Change</button>
-        </form>
-        <div className="rig-buttons">
-          <button type="button" onClick={() => act({ kind: "drill" })} disabled={over || ["shut-in", "killing", "tripping"].includes(r.mode) || r.mode === "drilling"}>Drill</button>
-          <button type="button" onClick={() => act({ kind: "circulate" })} disabled={over || ["shut-in", "killing", "tripping"].includes(r.mode) || r.mode === "circulating"}>Circulate</button>
-          <button type="button" onClick={() => act({ kind: "flow-check" })} disabled={over || ["shut-in", "killing", "tripping", "flow-check"].includes(r.mode)}>Flow check</button>
-          <button type="button" className="is-danger" onClick={() => act({ kind: "shut-in" })} disabled={over || r.mode === "shut-in" || r.mode === "killing"}>Shut in</button>
-          <button type="button" onClick={() => act({ kind: "kill" })} disabled={!sheet || r.mode !== "shut-in"} title={r.mode === "shut-in" && !sheet ? "Let the pressures settle (two minutes, no more flow)" : undefined}>Kill well</button>
-          <button type="button" onClick={() => act({ kind: "open" })} disabled={!(r.mode === "killed" || (r.mode === "shut-in" && r.casingPsi < 1))}>Open well</button>
-          <button type="button" onClick={() => act({ kind: "lcm" })} disabled={over}>LCM pill</button>
-          <button type="button" onClick={() => act({ kind: "trip" })} disabled={over || ["shut-in", "killing", "tripping"].includes(r.mode)}>Trip for bit</button>
-        </div>
-        {(r.mode === "shut-in" || r.mode === "killing") && <KillSheetCard sheet={sheet ?? sim.lastKillSheet} reading={r} />}
-        <details className="rig-disasters">
-          <summary>Disasters</summary>
-          <p>Put something the plan does not know about just ahead of the bit. What happens next is up to the physics and to you.</p>
-          {disasters.map((d) => <button key={d.label} type="button" className="dsg-tool" disabled={over} onClick={() => act({ kind: "hazard", hazard: d.hazard() })}>{d.label}</button>)}
-        </details>
-      </section>
-
+    </>}
+    canvas={<div className="rig-canvas" ref={root}>
+      {alarms.length > 0 && <p className={`rig-alarm is-${alarms[0]!.level}`} role="alert">{alarms[0]!.text}</p>}
       <section className="rig-stage" aria-label="The rig and the hole">
         {view === "2d"
           ? <RigView simRef={simRef} running={!paused} zoomed={zoomed} rate={speed} />
           : <Suspense fallback={<p className="eng-note">Loading the 3D view…</p>}><RigView3D simRef={simRef} running={!paused} rate={speed} /></Suspense>}
       </section>
-
-      <section className="rig-charts" aria-label="Rig floor charts">
-        <span className="log-sets rig-window" role="group" aria-label="Time window">{WINDOWS.map(([value, text]) => <button key={value} type="button" aria-pressed={windowS === value} onClick={() => setWindowS(value)}>{text}</button>)}</span>
-        <Track points={shown} span={windowS} end={r.timeS} lines={[{ value: (p) => p.ropMh, colour: "#34d399", label: "ROP", unit: "m/h", digits: 1 }]} />
-        <Track points={shown} span={windowS} end={r.timeS} lines={[{ value: (p) => p.wobKlbf, colour: "#818cf8", label: "WOB", unit: "klbf", digits: 0 }, { value: (p) => p.rpm, colour: "#94a3b8", label: "RPM", unit: "", digits: 0 }]} />
-        <Track points={shown} span={windowS} end={r.timeS} lines={[{ value: (p) => p.torqueKftLbf, colour: "#fbbf24", label: "Torque", unit: "kft·lbf", digits: 1 }, { value: (p) => p.hookloadKlb, colour: "#a8a29e", label: "Hookload", unit: "klb", digits: 0 }]} />
-        <Track points={shown} span={windowS} end={r.timeS} lines={[{ value: (p) => p.sppPsi, colour: "#60a5fa", label: "SPP", unit: "psi", digits: 0 }, { value: (p) => p.casingPsi, colour: "#ef4444", label: "Casing", unit: "psi", digits: 0 }]} />
-        <Track points={shown} span={windowS} end={r.timeS} lines={[{ value: (p) => p.flowInGpm, colour: "#94a3b8", label: "Flow in", unit: "gpm", digits: 0 }, { value: (p) => p.flowOutGpm, colour: "#ef4444", label: "Flow out", unit: "gpm", digits: 0 }]} />
-        <Track points={shown} span={windowS} end={r.timeS} lines={[{ value: (p) => p.pitGainBbl, colour: "#f59e0b", label: "Pit gain", unit: "bbl", digits: 1 }]} zero />
-        <Track points={shown} span={windowS} end={r.timeS} lines={[{ value: (p) => p.ecdBitSg, colour: "#e2e8f0", label: "ECD at bit", unit: "SG", digits: 3 }, { value: (p) => p.planPoreSg, colour: "#60a5fa", label: "plan pore", unit: "SG", digits: 2, dashed: true }, { value: (p) => p.planFractureSg, colour: "#f59e0b", label: "plan frac", unit: "SG", digits: 2, dashed: true }]} />
-        <Track points={shown} span={windowS} end={r.timeS} lines={[{ value: (p) => p.gasUnits, colour: "#a3a3a3", label: "Gas", unit: "units", digits: 0 }, { value: (p) => p.gammaApi, colour: "#4ade80", label: "MWD GR", unit: "gAPI", digits: 0 }]} />
-      </section>
-
-      <aside className="rig-side">
-        <ol className="rig-log" aria-label="Events">{sim.events.slice(-9).reverse().map((e, i) => <li key={sim.events.length - i} className={`is-${e.level}`}><time>{clock(e.timeS).replace("Day ", "D")}</time>{e.text}</li>)}</ol>
-      </aside>
-    </div>
-    {(r.mode === "blowout" || r.mode === "killed" || r.mode === "section-td") && <Debrief sim={sim} />}
-    <p className="eng-note">Simulated. The rock is the plan&apos;s formations and pore and fracture pressures, varied by the seed by about ±0.02 SG, with the plan&apos;s named hazards made real and any you add. Bingham-plastic hydraulics (PV {sim.mud.pvCp} cP, YP {sim.mud.ypLbf100ft2} lbf/100 ft²), soft-string torque and drag, influx and losses in proportion to the under- or overbalance, Boyle&apos;s-law gas expansion, wait-and-weight kill. A planning and teaching simulator, not a certified well-control simulator.</p>
-  </div>;
+    </div>}
+    strip={<section className="rig-charts" aria-label="Rig floor charts">
+      <span className="log-sets rig-window" role="group" aria-label="Time window">{WINDOWS.map(([value, text]) => <button key={value} type="button" aria-pressed={windowS === value} onClick={() => setWindowS(value)}>{text}</button>)}</span>
+      <Track {...track} lines={[{ value: (p) => p.ropMh, colour: "#34d399", label: "ROP", unit: "m/h", digits: 1 }]} />
+      <Track {...track} lines={[{ value: (p) => p.wobKlbf, colour: "#818cf8", label: "WOB", unit: "klbf", digits: 0 }, { value: (p) => p.rpm, colour: "#94a3b8", label: "RPM", unit: "", digits: 0 }]} />
+      <Track {...track} lines={[{ value: (p) => p.torqueKftLbf, colour: "#fbbf24", label: "Torque", unit: "kft·lbf", digits: 1 }, { value: (p) => p.hookloadKlb, colour: "#a8a29e", label: "Hookload", unit: "klb", digits: 0 }]} />
+      <Track {...track} lines={[{ value: (p) => p.sppPsi, colour: "#60a5fa", label: "SPP", unit: "psi", digits: 0 }, { value: (p) => p.casingPsi, colour: "#ef4444", label: "Casing", unit: "psi", digits: 0 }]} />
+      <Track {...track} lines={[{ value: (p) => p.flowInGpm, colour: "#94a3b8", label: "Flow in", unit: "gpm", digits: 0 }, { value: (p) => p.flowOutGpm, colour: "#ef4444", label: "Flow out", unit: "gpm", digits: 0 }]} />
+      <Track {...track} lines={[{ value: (p) => p.pitGainBbl, colour: "#f59e0b", label: "Pit gain", unit: "bbl", digits: 1 }]} zero />
+      <Track {...track} lines={[{ value: (p) => p.ecdBitSg, colour: "#e2e8f0", label: "ECD at bit", unit: "SG", digits: 3 }, { value: (p) => p.planPoreSg, colour: "#60a5fa", label: "plan pore", unit: "SG", digits: 2, dashed: true }, { value: (p) => p.planFractureSg, colour: "#f59e0b", label: "plan frac", unit: "SG", digits: 2, dashed: true }]} />
+      <Track {...track} lines={[{ value: (p) => p.gasUnits, colour: "#a3a3a3", label: "Gas", unit: "units", digits: 0 }, { value: (p) => p.gammaApi, colour: "#4ade80", label: "MWD GR", unit: "gAPI", digits: 0 }]} />
+    </section>}
+    inspector={<Inspector id={ended ? "rig-debrief" : shutIn ? "rig-shut-in" : "rig"} initial={ended ? "debrief" : shutIn ? "kill" : "events"} head={<div className="rig-controls" aria-label="Driller's controls">
+      <dl className="mf-facts">
+        <div><dt>Bit</dt><dd>{fmt(r.bitMdM, 1)} m MD · {fmt(r.bitTvdM, 0)} m TVD</dd></div>
+        <div><dt>Formation</dt><dd>{r.formation}</dd></div>
+        <div><dt>ROP</dt><dd>{fmt(r.ropMh, 1)} m/h</dd></div>
+      </dl>
+      <Knob label="WOB" unit="klbf" min={0} max={60} step={1} initial={Math.min(55, Math.round(2.6 * sim.holeIn))} onChange={(wobKlbf) => act({ kind: "rig", wobKlbf })} k={key} />
+      <Knob label="RPM" unit="rpm" min={0} max={220} step={5} initial={120} onChange={(rpm) => act({ kind: "rig", rpm })} k={key} />
+      <Knob label="Flow" unit="gpm" min={0} max={1400} step={10} initial={defaultFlowGpm(sim.holeIn)} onChange={(flowGpm) => act({ kind: "rig", flowGpm })} k={key} />
+      <form className="rig-mud" onSubmit={(event) => { event.preventDefault(); const sg = Number(mudText); if (sg > 0) act({ kind: "mud", sg }); setMudText(""); }}>
+        <label>Mud <input type="number" step="0.01" min="0.9" max="2.4" value={mudText} placeholder={r.mudSg.toFixed(2)} onChange={(event) => setMudText(event.target.value)} aria-label="New mud weight, SG" /> SG</label>
+        <button type="submit" className="dsg-tool" disabled={over || !mudText}>Change</button>
+      </form>
+      <div className="rig-buttons">
+        <button type="button" onClick={() => act({ kind: "drill" })} disabled={over || ["shut-in", "killing", "tripping"].includes(r.mode) || r.mode === "drilling"}>Drill</button>
+        <button type="button" onClick={() => act({ kind: "circulate" })} disabled={over || ["shut-in", "killing", "tripping"].includes(r.mode) || r.mode === "circulating"}>Circulate</button>
+        <button type="button" onClick={() => act({ kind: "flow-check" })} disabled={over || ["shut-in", "killing", "tripping", "flow-check"].includes(r.mode)}>Flow check</button>
+        <button type="button" className="is-danger" onClick={() => act({ kind: "shut-in" })} disabled={over || r.mode === "shut-in" || r.mode === "killing"}>Shut in</button>
+        <button type="button" onClick={() => act({ kind: "kill" })} disabled={!sheet || r.mode !== "shut-in"} title={r.mode === "shut-in" && !sheet ? "Let the pressures settle (two minutes, no more flow)" : undefined}>Kill well</button>
+        <button type="button" onClick={() => act({ kind: "open" })} disabled={!(r.mode === "killed" || (r.mode === "shut-in" && r.casingPsi < 1))}>Open well</button>
+        <button type="button" onClick={() => act({ kind: "lcm" })} disabled={over}>LCM pill</button>
+        <button type="button" onClick={() => act({ kind: "trip" })} disabled={over || ["shut-in", "killing", "tripping"].includes(r.mode)}>Trip for bit</button>
+      </div>
+    </div>} sections={[
+      shutIn && { id: "kill", title: killSheet ? "Kill sheet" : "Shut in", summary: killSheet ? `kill mud ${killSheet.killMudSg.toFixed(2)} SG` : "pressures settling", body: <KillSheetCard sheet={killSheet} reading={r} /> },
+      ended && { id: "debrief", title: "Debrief: what the rock was", body: <Debrief sim={sim} /> },
+      { id: "events", title: "Events", summary: `${sim.events.length}`, body: <ol className="rig-log" aria-label="Events">{sim.events.slice(-9).reverse().map((e, i) => <li key={sim.events.length - i} className={`is-${e.level}`}><time>{clock(e.timeS).replace("Day ", "D")}</time>{e.text}</li>)}</ol> },
+      { id: "disasters", title: "Rock and disasters", summary: `seed ${seed}`, body: <div className="rig-disasters">
+        <p>New rock restarts this section on a new seed: the same plan, different rock.</p>
+        <button type="button" className="dsg-tool" onClick={() => { sims.delete(key); setSeed(seed + 1); setPaused(true); }} title="Restart this section on a new seed: the same plan, different rock">New rock</button>
+        <p>Disasters: put something the plan does not know about just ahead of the bit. What happens next is up to the physics and to you.</p>
+        {disasters.map((d) => <button key={d.label} type="button" className="dsg-tool" disabled={over} onClick={() => act({ kind: "hazard", hazard: d.hazard() })}>{d.label}</button>)}
+      </div> },
+      { id: "model", title: "The simulator", summary: "simulated", body: <p className="mf-prose">Simulated. The rock is the plan&apos;s formations and pore and fracture pressures, varied by the seed by about ±0.02 SG, with the plan&apos;s named hazards made real and any you add. Bingham-plastic hydraulics (PV {sim.mud.pvCp} cP, YP {sim.mud.ypLbf100ft2} lbf/100 ft²), soft-string torque and drag, influx and losses in proportion to the under- or overbalance, Boyle&apos;s-law gas expansion, wait-and-weight kill. A planning and teaching simulator, not a certified well-control simulator.</p> },
+    ]} />}
+    status={<Status items={[paused && !over ? "Press Run, then work WOB, RPM and flow; shut in when the pit gains" : "Watch flow out and pit gain: shut in first, kill second", "Simulated: a planning and teaching simulator, not a certified well-control simulator"]} />} />;
 }
 
 function Knob({ label, unit, min, max, step, initial, onChange, k }: { readonly label: string; readonly unit: string; readonly min: number; readonly max: number; readonly step: number; readonly initial: number; readonly onChange: (value: number) => void; readonly k: string }) {
