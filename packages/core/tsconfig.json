@@ -29,6 +29,7 @@
     "src/quakeml.ts",
     "src/data-contract.ts",
     "src/deck-config.ts",
-    "src/fetch-guard.ts"
+    "src/fetch-guard.ts",
+    "src/osdu.ts"
   ]
 }

@@ -1789,6 +1789,76 @@
  },
  {
   "package": "@ikhmalputra/subsurface-core",
+  "entry": "@ikhmalputra/subsurface-core/osdu",
+  "exports": [
+   {
+    "name": "angleToDegrees",
+    "kind": "function"
+   },
+   {
+    "name": "cellField",
+    "kind": "function"
+   },
+   {
+    "name": "datumFromVerticalMeasurements",
+    "kind": "function"
+   },
+   {
+    "name": "describeOsduError",
+    "kind": "function"
+   },
+   {
+    "name": "endOfRef",
+    "kind": "function"
+   },
+   {
+    "name": "lengthToMetres",
+    "kind": "function"
+   },
+   {
+    "name": "locationFromOsdu",
+    "kind": "function"
+   },
+   {
+    "name": "markerSetFromOsdu",
+    "kind": "function"
+   },
+   {
+    "name": "OSDU_DEFAULTS",
+    "kind": "value"
+   },
+   {
+    "name": "osduSource",
+    "kind": "function"
+   },
+   {
+    "name": "refToId",
+    "kind": "function"
+   },
+   {
+    "name": "tableRows",
+    "kind": "function"
+   },
+   {
+    "name": "totalDepthFromOsdu",
+    "kind": "function"
+   },
+   {
+    "name": "trajectoryFromOsdu",
+    "kind": "function"
+   },
+   {
+    "name": "wellboreFromOsdu",
+    "kind": "function"
+   },
+   {
+    "name": "wellFromOsdu",
+    "kind": "function"
+   }
+  ]
+ },
+ {
+  "package": "@ikhmalputra/subsurface-core",
   "entry": "@ikhmalputra/subsurface-core/petro-clastic",
   "exports": [
    {

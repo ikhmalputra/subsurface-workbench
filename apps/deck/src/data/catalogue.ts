@@ -3,6 +3,7 @@ import type { CataloguedWell, DataProblem, WellBundle, WellDataSource } from "@i
 import { BASE } from "../base.ts";
 import { registerCrs } from "@ikhmalputra/subsurface-core/gis";
 import { SOURCE_TYPES, contractJsonSource, parseDeckConfig } from "./sources/config.ts";
+import { osduAdapter } from "./sources/osdu.ts";
 import type { SourceConfig } from "./sources/config.ts";
 import { addDetail, addFullWell, addWells, catalogueField, catalogueState, dropSource, fieldHasDetail, fullWell, setCatalogueState, setFieldStatus, sourceEnabled, touchField } from "./catalogue-state.ts";
 import type { SourceStatus } from "./catalogue-state.ts";
@@ -75,11 +76,12 @@ async function readSource(source: SourceConfig, index: number) {
     return;
   }
   const label = source.label ?? SOURCE_TYPES[source.type].label;
-  if (source.type !== "contract-json") {
+  // One adapter per source type this build has; the rest are reported, not guessed at.
+  const adapter = source.type === "contract-json" ? contractJsonSource(`file-${index}`, source, BASE) : source.type === "osdu" ? osduAdapter(`osdu-${index}`, source, BASE) : null;
+  if (!adapter) {
     report("config", [{ object: "source", id: `${source.type}-${index}`, severity: "error", message: `${label} (${SOURCE_TYPES[source.type].standard}): this build has no ${SOURCE_TYPES[source.type].label} adapter yet, so nothing is read from ${source.url}.` }]);
     return;
   }
-  const adapter = contractJsonSource(`file-${index}`, source, BASE);
   adapters.set(adapter.id, adapter);
   reads.get(adapter.id)?.abort();
   const controller = new AbortController();

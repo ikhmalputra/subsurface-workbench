@@ -264,7 +264,7 @@ const RAD = Math.PI / 180, DEG = 180 / Math.PI;
  *   derived from the chord arriving at it (the first station from the chord leaving it).
  * - **Angles only:** positions are computed by minimum curvature from the first station. That
  *   station is taken at TVD equal to its MD, below the datum on a vertical hole, unless it gives
- *   its own position.
+ *   its own position. A TVD given with the angles is kept as the operator's, over the computed one.
  * Station i's north and east become the deck's `northingM` and `eastingM`: offsets from the
  * wellhead, not map coordinates.
  */
@@ -287,8 +287,9 @@ export function resolveTrajectory(trajectory: CanonicalTrajectory): readonly Sur
   }
   const first = stations[0]!;
   const tieIn = { tvdM: first.tvdM ?? first.mdM, northingM: first.northM ?? 0, eastingM: first.eastM ?? 0 };
+  // A TVD the source gave with its angles is the operator's: kept, with the positions computed beside it.
   return computeMinimumCurvature(stations.map((station) => ({ mdM: station.mdM, inclinationDeg: station.inclinationDeg ?? 0, azimuthDeg: station.azimuthDeg ?? 0 })), { tieIn })
-    .map((point) => ({ mdM: point.mdM, tvdM: point.tvdM, northingM: point.northingM, eastingM: point.eastingM, inclinationDeg: point.inclinationDeg, azimuthDeg: point.azimuthDeg }));
+    .map((point, i) => ({ mdM: point.mdM, tvdM: stations[i]!.tvdM ?? point.tvdM, northingM: point.northingM, eastingM: point.eastingM, inclinationDeg: point.inclinationDeg, azimuthDeg: point.azimuthDeg }));
 }
 
 /** A marker's TVD: the source's own if it gave one, else read off the path; null off the path. */
