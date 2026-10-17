@@ -20,21 +20,21 @@ import type { DrillingSimulator, DrillReading } from "@ikhmalputra/subsurface-co
 
 const GPM_TO_M3S = 6.309e-5, IN = 0.0254;
 const CUTTING_SLIP_MS = 0.12, GAS_SLIP_MS = 0.3;
-const steelGradient = (ctx: CanvasRenderingContext2D, x0: number, x1: number, light = 1) => {
+export const steelGradient = (ctx: CanvasRenderingContext2D, x0: number, x1: number, light = 1) => {
   const g = ctx.createLinearGradient(x0, 0, x1, 0);
   g.addColorStop(0, `rgb(${70 * light}, ${78 * light}, ${92 * light})`); g.addColorStop(0.3, `rgb(${205 * light}, ${213 * light}, ${226 * light})`);
   g.addColorStop(0.55, `rgb(${150 * light}, ${160 * light}, ${176 * light})`); g.addColorStop(1, `rgb(${55 * light}, ${62 * light}, ${76 * light})`);
   return g;
 };
 /** Seeded value noise on the line, smooth between integer knots. */
-const hash = (n: number) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
-const noise = (x: number) => { const i = Math.floor(x), f = x - i, u = f * f * (3 - 2 * f); return hash(i) * (1 - u) + hash(i + 1) * u; };
+export const hash = (n: number) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+export const noise = (x: number) => { const i = Math.floor(x), f = x - i, u = f * f * (3 - 2 * f); return hash(i) * (1 - u) + hash(i + 1) * u; };
 
-type Lithology = "sand" | "shale" | "clay" | "lime" | "granite" | "other";
-const lithologyOf = (words: string): Lithology => /granite|basement|igneous|metamorph/i.test(words) ? "granite" : /lime|carbonate|dolom|chalk/i.test(words) ? "lime" : /sand/i.test(words) ? "sand" : /clay|unconsolidated/i.test(words) ? "clay" : /shale|mud/i.test(words) ? "shale" : "other";
-const LITHOLOGY_BASE: Readonly<Record<Lithology, string>> = { sand: "#6e5a36", shale: "#3c4656", clay: "#5a4535", lime: "#4c6676", granite: "#5e5560", other: "#454b57" };
+export type Lithology = "sand" | "shale" | "clay" | "lime" | "granite" | "other";
+export const lithologyOf = (words: string): Lithology => /granite|basement|igneous|metamorph/i.test(words) ? "granite" : /lime|carbonate|dolom|chalk/i.test(words) ? "lime" : /sand/i.test(words) ? "sand" : /clay|unconsolidated/i.test(words) ? "clay" : /shale|mud/i.test(words) ? "shale" : "other";
+export const LITHOLOGY_BASE: Readonly<Record<Lithology, string>> = { sand: "#6e5a36", shale: "#3c4656", clay: "#5a4535", lime: "#4c6676", granite: "#5e5560", other: "#454b57" };
 /** A geological fill pattern: dots for sand, dashes for shale, lines for clay, bricks for limestone, crosses for granite. */
-function lithologyPattern(ctx: CanvasRenderingContext2D, kind: Lithology): CanvasPattern | null {
+export function lithologyPattern(ctx: CanvasRenderingContext2D, kind: Lithology): CanvasPattern | null {
   const size = 36, tile = document.createElement("canvas"); tile.width = tile.height = size;
   const t = tile.getContext("2d"); if (!t) return null;
   t.fillStyle = LITHOLOGY_BASE[kind]; t.fillRect(0, 0, size, size);
