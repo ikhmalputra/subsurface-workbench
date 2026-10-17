@@ -9,6 +9,7 @@ import type { DcaInputs, Product, ProductionRecord, SavedAnalysis } from "../dat
 import { addAnalyses, deleteAnalysis, saveAnalysis, updateAnalysis, useSavedAnalyses } from "../data/analyses.ts";
 import { fmt } from "../format.ts";
 import { Loading } from "./Empty.tsx";
+import { Frame, Inspector, Status } from "./frame/Frame.tsx";
 import { useSize } from "./useSize.ts";
 import { BASE } from "../base.ts";
 
@@ -62,9 +63,13 @@ export function Decline() {
   };
 
   const productButtons = (reset: boolean) => <span className="log-sets" role="group" aria-label="Product">
-    {(["oil", "gas", "oe"] as const).map((key) => <button key={key} type="button" aria-pressed={product === key} onClick={() => { setProduct(key); if (reset) { setLimitText(""); setWindow(null); } }}>{NAME[key]}</button>)}
+    {(["oil", "gas", "oe"] as const).map((key) => <button key={key} type="button" aria-pressed={product === key} title={NAME[key]} onClick={() => { setProduct(key); if (reset) { setLimitText(""); setWindow(null); } }}>{key === "oe" ? "Oil eq." : NAME[key]}</button>)}
   </span>;
-  if (record && analysis?.kind === "no-product") return <div className="dca"><p className="curtain-head">{analysis.field.name} reports no {NAME[product].toLowerCase()} in Sodir&apos;s table.</p>{productButtons(false)}</div>;
+  const fieldSelect = record ? <label className="dca-field" title="Field">Field <select aria-label="Field" value={fieldName} onChange={(event) => { setFieldName(event.target.value); setWindow(null); setLimitText(""); }}>{record.fields.map((entry) => <option key={entry.name} value={entry.name}>{entry.name}</option>)}</select></label> : null;
+  if (record && analysis?.kind === "no-product") return <Frame name="decline" title={analysis.field.name} subtitle="Arps decline · Sodir monthly production"
+    tools={<>{fieldSelect}{productButtons(false)}</>}
+    canvas={<div className="dca-none"><p className="curtain-head">{analysis.field.name} reports no {NAME[product].toLowerCase()} in Sodir&apos;s table.</p></div>}
+    status={<Status items={["Choose another product or field", `${record.source.publisher}, retrieved ${record.source.retrieved}`]} />} />;
   if (!record || !analysis || analysis.kind !== "ok") return <Loading>{error ? `The production table could not be read (${error}).` : "Reading Sodir's monthly production…"}</Loading>;
   const { field, series, span, chosen, fit, unit, last, limit, toLimit, producing } = analysis;
   const results = resultsOf(analysis);
@@ -88,31 +93,12 @@ export function Decline() {
     const name = entry?.name ?? (open && !changedSinceSaved ? open.name : defaultName);
     download(forecastCsv(target, record, name), fileName(name, "csv"), "text/csv");
   };
+  const eur = (analysis.produced + analysis.remaining) / unit.volumePer;
+  const fitWindow = `fit window ${label(chosen[0])} to ${label(chosen[1])} (${fit?.samples ?? 0} months)`;
 
-  return <div className="dca" ref={box}>
-    <header className="acx-head">
-      <label className="dca-field">Field <select value={fieldName} onChange={(event) => { setFieldName(event.target.value); setWindow(null); setLimitText(""); }}>{record.fields.map((entry) => <option key={entry.name} value={entry.name}>{entry.name}</option>)}</select></label>
-      {productButtons(true)}
-      <label className="dca-field">b ≤ <select value={bMax} onChange={(event) => setBMax(Number(event.target.value))} aria-label="Largest Arps exponent">{[[1, "1 (harmonic)"], [0.5, "0.5"], [0, "0 (exponential)"]].map(([option, text]) => <option key={option} value={option}>{text}</option>)}</select></label>
-      <label className="dca-field">Economic limit <input type="number" min={0} step="any" value={limitText} placeholder={limit === null ? "" : fmt(limit / unit.per, unit.per > 1 ? 3 : 0)} onChange={(event) => setLimitText(event.target.value)} aria-label={`Economic limit, ${unit.rate}`} /> {unit.rate}</label>
-      <span className="dca-actions">
-        <button type="button" className="dsg-tool" onClick={startSave} disabled={!results} aria-expanded={panel === "save"} title={results ? "Keep this analysis: the field, window, b and limit, and what they give" : "Nothing to save: not enough months to fit"}><Save size={14} />Save</button>
-        <button type="button" className="dsg-tool" onClick={() => { setPanel(panel === "list" ? "none" : "list"); setMessage(null); }} aria-expanded={panel === "list"}><FolderOpen size={14} />Saved{saved.length ? ` · ${saved.length}` : ""}</button>
-        <button type="button" className="dsg-tool" onClick={() => csv(null)} disabled={!results} title="The history and the forecast, month by month, as a spreadsheet"><Download size={14} />CSV</button>
-      </span>
-    </header>
-
-    {open && <p className={`dca-open${changedSinceSaved ? " is-changed" : ""}`}>
-      <b>{open.name}</b>
-      <span>saved {when(open.savedAt)}{changedSinceSaved ? " · changed since it was saved" : " · as saved"}</span>
-      {open.note && <em>{open.note}</em>}
-      {dataChanged && <span className="dca-warn">Saved on Sodir data retrieved {open.source.retrieved}; this is the table retrieved {record.source.retrieved}.</span>}
-      {drift && <span className="dca-warn">Saved EUR {fmt(open.results.eur, 2)} {open.results.volumeUnit}; the same choices give {fmt(results!.eur, 2)} now.</span>}
-      {changedSinceSaved && <button type="button" className="dsg-tool" onClick={startSave}>Update or save as new…</button>}
-      <button type="button" className="dca-close" aria-label="Close the saved analysis (keeps it saved)" title="Close (it stays saved)" onClick={() => setOpenId(null)}><X size={13} /></button>
-    </p>}
-
-    {panel === "save" && <form className="dca-panel dca-save" onSubmit={(event) => { event.preventDefault(); if (open) commitUpdate(); else commitNew(); }}>
+  const savePage = {
+    title: open ? `Save “${open.name}”` : "Save this analysis", context: "kept in this browser; export it from Saved to keep it elsewhere", onBack: () => setPanel("none"),
+    body: <form className="dca-save" onSubmit={(event) => { event.preventDefault(); if (open) commitUpdate(); else commitNew(); }}>
       <label className="dca-field is-wide">Name <input value={nameText} onChange={(event) => setNameText(event.target.value)} placeholder={defaultName} autoFocus /></label>
       <label className="dca-field is-wide">Note <input value={noteText} onChange={(event) => setNoteText(event.target.value)} placeholder="optional, e.g. post-2016 decline, excludes the late-life gas blowdown" /></label>
       <p className="dca-summary">{field.name} · {NAME[product]} · fit {label(chosen[0])} to {label(chosen[1])} · b ≤ {bMax} · limit {results ? `${fmt(results.limit, unit.per > 1 ? 3 : 0)} ${unit.rate}${results.limitIsDefault ? " (default)" : ""}` : "—"}{results ? ` · EUR ${fmt(results.eur, 2)} ${unit.volume}` : ""}</p>
@@ -120,9 +106,11 @@ export function Decline() {
         {open ? <><button type="submit" className="is-primary">Update “{open.name}”</button><button type="button" onClick={commitNew}>Save as new</button></> : <button type="submit" className="is-primary">Save</button>}
         <button type="button" onClick={() => setPanel("none")}>Cancel</button>
       </span>
-    </form>}
-
-    {panel === "list" && <div className="dca-panel dca-list">
+    </form>,
+  };
+  const listPage = {
+    title: "Saved analyses", context: `${saved.length} kept in this browser`, onBack: () => setPanel("none"),
+    body: <div className="dca-list">
       {saved.length === 0 && <p className="dca-empty">No saved analyses yet. Choose a field and a window, then Save. They are kept in this browser; export them to keep them elsewhere.</p>}
       {saved.map((entry) => <article key={entry.id} className={entry.id === openId ? "is-open" : undefined}>
         <div>
@@ -142,21 +130,58 @@ export function Decline() {
         <button type="button" className="dsg-tool" onClick={() => file.current?.click()}><FileUp size={14} />Import…</button>
         <input ref={file} type="file" accept=".json,application/json" hidden onChange={(event) => { void importFile(event.target.files?.[0]); event.target.value = ""; }} />
       </footer>
-    </div>}
-    {message && <p className="dca-message" role="status">{message}</p>}
+    </div>,
+  };
 
-    <p className="curtain-head">{field.name} · {label(span[0])} to {label(span[1])} · {producing ? `producing ${NAME[product].toLowerCase()}` : `${NAME[product].toLowerCase()} last reported ${label(last.month)}`} · fit window {label(chosen[0])} to {label(chosen[1])} ({fit?.samples ?? 0} months) · drag across the plot to choose it</p>
-    <dl className="petro-summary geo-summary">
-      <div><dt>Arps fit</dt><dd>{fit ? `b ${fmt(fit.b, 2)} · ${fit.b === 0 ? "exponential" : fit.b === 1 ? "harmonic" : "hyperbolic"}` : "not enough months"}</dd></div>
-      <div><dt>Initial decline (nominal · effective)</dt><dd>{results ? `${fmt(results.diNominalPct, 1)} · ${fmt(results.diEffectivePct, 1)} %/yr` : "—"}</dd></div>
-      <div><dt>qi at {label(chosen[0])} · R² (log)</dt><dd>{fit ? `${fmt(fit.qi / unit.per, unit.per > 1 ? 2 : 0)} ${unit.rate} · ${fmt(fit.r2Log, 3)}` : "—"}</dd></div>
-      <div><dt>Produced to {label(last.month)}</dt><dd>{fmt(analysis.produced / unit.volumePer, 2)} {unit.volume}</dd></div>
-      <div><dt>{producing ? "Remaining to the limit" : `Remaining on the trend (none reported since ${label(last.month)})`}</dt><dd>{fit && toLimit !== null ? `${fmt(analysis.remaining / unit.volumePer, 2)} ${unit.volume} · ${toLimit >= 50 ? "beyond 50 years" : `${fmt(Math.max(0, toLimit - analysis.tLast), 1)} years`}` : "—"}</dd></div>
-      <div><dt>EUR · water–oil ratio, last 12 months</dt><dd>{fmt((analysis.produced + analysis.remaining) / unit.volumePer, 2)} {unit.volume} · {analysis.waterOil !== null ? fmt(analysis.waterOil, 2) : "no oil"}</dd></div>
-    </dl>
-    <Plot series={series} chosen={chosen} fit={fit} limit={limit} toLimit={toLimit} unit={unit} onWindow={setWindow} />
-    <p className="petro-note">Source: {record.source.publisher}, table field_production_monthly, retrieved {record.source.retrieved}; {record.licence}. Net saleable volumes by calendar month, turned into rates by the days in each month. Arps (1945) fitted in log rate, b from 0 to {bMax === 0 ? "0 (exponential only)" : bMax}; months with no or zero production are left out of the fit. The forecast continues the fitted curve from the last reported month to the economic limit ({limitText ? "yours" : "5 % of the last reported rate until you set one"}), at most 50 years. Field-level decline mixes wells, workovers and new phases; read it as the field&apos;s trend, not a well&apos;s. Saved analyses stay in this browser.</p>
-  </div>;
+  return <Frame name="decline" title={field.name}
+    subtitle={`Arps decline · ${label(span[0])} to ${label(span[1])} · ${producing ? `producing ${NAME[product].toLowerCase()}` : `${NAME[product].toLowerCase()} last reported ${label(last.month)}`}`}
+    tools={<>
+      {fieldSelect}
+      {productButtons(true)}
+      <label className="dca-field">b ≤ <select value={bMax} onChange={(event) => setBMax(Number(event.target.value))} aria-label="Largest Arps exponent">{[[1, "1 (harmonic)"], [0.5, "0.5"], [0, "0 (exponential)"]].map(([option, text]) => <option key={option} value={option}>{text}</option>)}</select></label>
+      <label className="dca-field" title="Economic limit">Limit <input type="number" min={0} step="any" value={limitText} placeholder={limit === null ? "" : fmt(limit / unit.per, unit.per > 1 ? 3 : 0)} onChange={(event) => setLimitText(event.target.value)} aria-label={`Economic limit, ${unit.rate}`} /> {unit.rate}</label>
+      <span className="dca-actions">
+        <button type="button" className="dsg-tool" onClick={startSave} disabled={!results} aria-pressed={panel === "save"} title={results ? "Keep this analysis: the field, window, b and limit, and what they give" : "Nothing to save: not enough months to fit"}><Save size={14} />Save</button>
+        <button type="button" className="dsg-tool" onClick={() => { setPanel(panel === "list" ? "none" : "list"); setMessage(null); }} aria-pressed={panel === "list"}><FolderOpen size={14} />Saved{saved.length ? ` · ${saved.length}` : ""}</button>
+        <button type="button" className="dsg-tool" onClick={() => csv(null)} disabled={!results} title="The history and the forecast, month by month, as a spreadsheet"><Download size={14} />CSV</button>
+      </span>
+    </>}
+    numbers={<>
+      <span><small>EUR · {unit.volume}</small><b>{fmt(eur, 2)}</b></span>
+      <span><small>Remaining · {unit.volume}</small><b>{fit && toLimit !== null ? fmt(analysis.remaining / unit.volumePer, 2) : "—"}</b></span>
+    </>}
+    canvas={<div className="mf-plot" ref={box}><Plot series={series} chosen={chosen} fit={fit} limit={limit} toLimit={toLimit} unit={unit} onWindow={setWindow} /></div>}
+    inspector={<Inspector id="decline" initial="source" head={<>
+      {open && <div className={`dca-open${changedSinceSaved ? " is-changed" : ""}`}>
+        <b>{open.name}</b>
+        <span>saved {when(open.savedAt)}{changedSinceSaved ? " · changed since it was saved" : " · as saved"}</span>
+        {open.note && <em>{open.note}</em>}
+        {dataChanged && <span className="dca-warn">Saved on Sodir data retrieved {open.source.retrieved}; this is the table retrieved {record.source.retrieved}.</span>}
+        {drift && <span className="dca-warn">Saved EUR {fmt(open.results.eur, 2)} {open.results.volumeUnit}; the same choices give {fmt(results!.eur, 2)} now.</span>}
+        {changedSinceSaved && <button type="button" className="dsg-tool" onClick={startSave}>Update or save as new…</button>}
+        <button type="button" className="dca-close" aria-label="Close the saved analysis (keeps it saved)" title="Close (it stays saved)" onClick={() => setOpenId(null)}><X size={13} /></button>
+      </div>}
+      <dl className="mf-facts">
+        <div className="mf-facts-title"><dt>{field.name} · {NAME[product]}</dt><dd>fit {label(chosen[0])} to {label(chosen[1])}</dd></div>
+        <div><dt>Arps fit</dt><dd>{fit ? `b ${fmt(fit.b, 2)} · ${fit.b === 0 ? "exponential" : fit.b === 1 ? "harmonic" : "hyperbolic"}` : "not enough months"}</dd></div>
+        <div><dt>Initial decline (nominal · effective)</dt><dd>{results ? `${fmt(results.diNominalPct, 1)} · ${fmt(results.diEffectivePct, 1)} %/yr` : "—"}</dd></div>
+        <div><dt>qi at {label(chosen[0])} · R² (log)</dt><dd>{fit ? `${fmt(fit.qi / unit.per, unit.per > 1 ? 2 : 0)} ${unit.rate} · ${fmt(fit.r2Log, 3)}` : "—"}</dd></div>
+        <div><dt>Produced to {label(last.month)}</dt><dd>{fmt(analysis.produced / unit.volumePer, 2)} {unit.volume}</dd></div>
+        <div><dt>{producing ? "Remaining to the limit" : `Remaining on the trend (none reported since ${label(last.month)})`}</dt><dd>{fit && toLimit !== null ? `${fmt(analysis.remaining / unit.volumePer, 2)} ${unit.volume} · ${toLimit >= 50 ? "beyond 50 years" : `${fmt(Math.max(0, toLimit - analysis.tLast), 1)} years`}` : "—"}</dd></div>
+        <div><dt>EUR · water–oil ratio, last 12 months</dt><dd>{fmt(eur, 2)} {unit.volume} · {analysis.waterOil !== null ? fmt(analysis.waterOil, 2) : "no oil"}</dd></div>
+      </dl>
+    </>} sections={[
+      { id: "source", title: "Source & method", summary: `${record.source.publisher}, ${record.source.retrieved}`, body: <>
+        <p className="mf-prose">Source: {record.source.publisher}, table field_production_monthly, retrieved {record.source.retrieved}; {record.licence}. Net saleable volumes by calendar month, turned into rates by the days in each month.</p>
+        <p className="mf-prose">Arps (1945) fitted in log rate, b from 0 to {bMax === 0 ? "0 (exponential only)" : bMax}; months with no or zero production are left out of the fit. The forecast continues the fitted curve from the last reported month to the economic limit ({limitText ? "yours" : "5 % of the last reported rate until you set one"}), at most 50 years.</p>
+        <p className="mf-prose">Field-level decline mixes wells, workovers and new phases; read it as the field&apos;s trend, not a well&apos;s. Saved analyses stay in this browser.</p>
+      </> },
+    ]} />}
+    status={<Status items={[
+      message ? <span role="status">{message}</span> : `Drag across the plot to choose the months to fit · ${fitWindow}`,
+      message ? fitWindow : `${record.source.publisher} net saleable production, retrieved ${record.source.retrieved}`,
+    ]} />}
+    page={panel === "save" ? savePage : panel === "list" ? listPage : null} />;
 }
 
 function Plot({ series, chosen, fit, limit, toLimit, unit, onWindow }: {

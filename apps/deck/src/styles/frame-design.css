@@ -1,0 +1,46 @@
+/* Five-zone frame: well designer, well editor. */
+
+/* ---- Well designer and Well editor: the well drawn in the canvas, its stages as inspector sections ---- */
+.mf[data-frame="designer"] { --mf-inspector: 460px; }
+.mf[data-frame="editor"] { --mf-inspector: 440px; }
+.mf[data-frame="designer"] .mf-tools, .mf[data-frame="editor"] .mf-tools { justify-content: flex-end; }
+.mf[data-frame="designer"] .mf-tools > *, .mf[data-frame="editor"] .mf-tools > * { flex: none; }
+
+/* The canvas: the construction schematic of the live design or the edited record. */
+.mf-canvas > .dsg-canvas, .mf-canvas > .wed-canvas { display: flex; flex-direction: column; }
+.mf-canvas > .dsg-canvas > *, .mf-canvas > .wed-canvas > * { flex: 1 1 auto; min-height: 0; }
+
+/* Readiness in the toolbar's numbers. */
+.mf-numbers .dsg-ready { position: relative; }
+.mf-numbers .dsg-ready .dsg-meter { width: 56px; margin-top: 3px; }
+.mf-numbers .dsg-failing { font: 600 var(--t-11) var(--font-ui); color: var(--danger); max-width: none; }
+
+/* Section summaries: the stage's state, as the rail showed it. */
+.dsg-sum { display: inline-flex; align-items: center; gap: 4px; }
+.dsg-sum.is-complete { color: #34d399; }
+.dsg-sum.is-attention { color: #fbbf24; }
+.dsg-sum.is-missing { color: var(--ink-3); }
+[data-deck="day"] .dsg-sum.is-complete { color: #047857; }
+[data-deck="day"] .dsg-sum.is-attention { color: #b45309; }
+.wed-sum { display: inline-flex; align-items: center; gap: 6px; }
+
+/* A stage's form inside its section (was .dsg-stage). */
+.dsg-form { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.dsg-form > * { flex: none; }
+.dsg-form .dsg-purpose { margin: 0; }
+.dsg-form h5 { margin: 6px 0 -2px; font-size: var(--t-11); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+.dsg-form h5 small { margin-left: 6px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--ink-3); }
+.dsg-form .dsg-card { padding: 10px; }
+.dsg-form .dsg-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+.dsg-form .dsg-facts { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+.dsg-form .dsg-needs { padding: 8px 10px; }
+
+/* The survey station table as a page: the page scrolls, the table keeps its sticky head. */
+.mf[data-frame="editor"] .mf-page-body .wed-table-wrap { max-height: none; overflow: visible; }
+.mf[data-frame="editor"] .mf-page-body .wed-table th { top: -12px; }
+/* A record's row in the inspector: name, badge and remove on one line, its summary under them. */
+.dsg-form .wed-card > header b { flex: 1 1 auto; min-width: 0; }
+.dsg-form .wed-card > header .wed-summary { order: 5; flex: 1 0 100%; }
+.mf[data-frame="editor"] .mf-page-body .wed-table-wrap { max-width: 980px; width: 100%; }
+/* A smaller window: the forms narrow a little so the drawing keeps its room. */
+@container tile (max-width: 1260px) { .mf[data-frame="designer"], .mf[data-frame="editor"] { --mf-inspector: 400px; } }

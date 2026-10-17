@@ -2062,3 +2062,23 @@ body::before { content: ""; position: fixed; inset: 0; pointer-events: none; z-i
 .vol-mapcol { display: flex; flex-direction: column; gap: 8px; overflow: auto; scrollbar-width: thin; }
 .mf-section-body .vol-ranges input { width: 52px; }
 @container tile (max-width: 640px) { .vol-split { grid-template-columns: minmax(0, 1fr); } .vol-split > .vol-3d { display: none; } }
+/* The plain modules on the frame: their readings as a list in the inspector, their notes as prose. */
+.mf-facts { margin: 0; display: flex; flex-direction: column; border-radius: 12px; border: 1px solid var(--glass-edge); background: var(--glass); }
+.mf-facts > div { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 6px 10px; border-top: 1px solid var(--glass-edge); min-width: 0; }
+.mf-facts > div:first-child { border-top: 0; }
+.mf-facts dt { color: var(--ink-3); font-size: var(--t-11); flex: 0 1 auto; min-width: 0; }
+.mf-facts dd { margin: 0; font: 500 var(--t-12) var(--font-mono); color: var(--ink); text-align: right; flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.mf-facts > .mf-facts-title { color: var(--ink-2); font: 600 var(--t-11) var(--font-ui); text-transform: uppercase; letter-spacing: .06em; background: var(--hover); border-radius: 11px 11px 0 0; }
+.mf-section-body .mf-facts { border: 0; background: transparent; }
+.mf-section-body .mf-facts > div { padding: 5px 0; }
+.mf-prose { margin: 0; font-size: var(--t-12); line-height: 1.55; color: var(--ink-2); }
+.mf-prose b { color: var(--ink); }
+.mf-plot { display: flex; flex-direction: column; min-height: 0; }
+.mf-plot > .acx-plot { flex: 1 1 0; min-height: 0; }
+.mf-plot .xp-legend { flex: none; padding: 2px 4px 0; }
+.mf-tools .log-sets { padding: 0; }
+.mf-facts > .mf-facts-title dd { font: 600 var(--t-12) var(--font-ui); text-transform: none; letter-spacing: 0; }
+.mf[data-frame="geomech"] { --mf-inspector: 340px; }
+/* The days-vs-depth curve fills its panel, drawn at that size (its text stays small). */
+.tile-body .construction-body.plot-fill > figure.sw-dvd { height: 100%; }
+.construction-body > .sw-dvd .sw-dvd-plot { flex: 1 1 0; aspect-ratio: auto; min-height: 220px; }

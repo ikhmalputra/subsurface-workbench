@@ -407,7 +407,8 @@
 
 /* A column, not a grid: a grid sizes an auto-height SVG at 150 px and the rows below then overlap it. */
 .sw-rec.sw-dvd { display: flex; flex-direction: column; }
-.sw-dvd svg { display: block; width: 100%; height: auto; cursor: crosshair; touch-action: none; }
+.sw-dvd-plot { position: relative; aspect-ratio: 560 / 340; min-height: 0; }
+.sw-dvd-plot > svg { position: absolute; inset: 0; display: block; width: 100%; height: 100%; cursor: crosshair; touch-action: none; }
 .sw-dvd-grid { stroke: var(--sw-line); stroke-width: .7; }
 .sw-dvd-tick { font: 11px "IBM Plex Mono", monospace; fill: #52655a; }
 .sw-dvd-axis { font: 600 11px "IBM Plex Sans", sans-serif; fill: #33443b; }

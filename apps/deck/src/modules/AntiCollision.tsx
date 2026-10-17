@@ -3,6 +3,7 @@ import { scaleLinear, scaleLog } from "d3-scale";
 import { closestApproach, forge16aPlaced, forge16aWellheads, forgeNeighbours, forgeSurveyUncertainty, ISCWSA_RULE, separations } from "@ikhmalputra/subsurface-core";
 import type { PlacedWell, Separation } from "@ikhmalputra/subsurface-core";
 import { fmt } from "../format.ts";
+import { Frame, Inspector, Status } from "./frame/Frame.tsx";
 import { useSize } from "./useSize.ts";
 import { useWire } from "./wire.ts";
 
@@ -32,38 +33,34 @@ export function AntiCollision() {
     return { well, samples, closest: closestApproach(samples), least };
   }), [reference]);
   const at = (samples: readonly Separation[], md: number | null) => md === null || !samples.length ? null : samples[Math.max(0, Math.min(samples.length - 1, Math.round((md - samples[0]!.referenceMdM) / STEP_M)))]!;
-  const [box, size] = useSize<HTMLDivElement>();
-  const wide = size.width > 640;
   const models = (well: PlacedWell) => well.errorModel ?? "none";
   const offBy = (head: { readonly eastingM: number; readonly northingM: number }) => fmt(Math.hypot(head.eastingM - forge16aWellheads.asBuilt.eastingM, head.northingM - forge16aWellheads.asBuilt.northingM), 1);
-  return <div className="acx">
-    <header className="acx-head">
-      <span>Reference <b>16A(78)-32</b> · ISCWSA separation rule, k {ISCWSA_RULE.k}</span>
-      <span className="log-sets" role="group" aria-label="Ladder plots">
-        <button type="button" aria-pressed={measure === "sf"} onClick={() => setMeasure("sf")}>Separation factor</button>
-        <button type="button" aria-pressed={measure === "distance"} onClick={() => setMeasure("distance")}>Centre to centre</button>
-      </span>
-    </header>
-    <div className="acx-table-wrap"><table className="acx-table">
-      <thead><tr><th>Neighbour</th><th>Least SF · at 16A MD</th><th>Closest · 16A MD → its MD</th><th>Around 16A</th>{wire.cursor !== null && <th>At cursor</th>}</tr></thead>
-      <tbody>{runs.map(({ well, samples, closest, least }) => <tr key={well.id}>
-        <td><i style={{ background: COLOURS[well.id] }} />{well.label}</td>
-        <td>{least ? <><b className={`acx-sf ${band(least.separationFactor!)}`}>{sfText(least.separationFactor)}</b> · {fmt(least.referenceMdM)} m</> : "not computed"}</td>
-        <td>{closest ? `${fmt(closest.centreToCentreM, 1)} m · ${fmt(closest.referenceMdM)} → ${fmt(closest.offsetMdM)} m` : "—"}</td>
-        <td>{closest ? `${fmt(closest.bearingDeg)}° from ${closest.bearingFrom}` : "—"}</td>
-        {wire.cursor !== null && <td>{(() => { const sample = at(samples, wire.cursor); return sample ? `${fmt(sample.centreToCentreM, 1)} m · SF ${sfText(sample.separationFactor)}` : "beyond 16A's survey"; })()}</td>}
-      </tr>)}</tbody>
-    </table></div>
-    <div ref={box} className={`acx-plots${wide ? " is-wide" : ""}`}>
-      <Ladder runs={runs} measure={measure} totalMd={place.stations.at(-1)?.mdM ?? 0} cursor={wire.cursor} onHover={wire.hover} onPick={wire.pin} />
-      <Cylinder runs={runs} cursor={wire.cursor} at={at} />
-    </div>
-    <p className="petro-note">
-      <b>Wellheads:</b> licensed as-built surveys for 16A and 16B (Woolsey Land Surveying, 2023). 16A&apos;s agrees with its own survey workbook to 0.07 m and with the UGS GPS survey to {offBy(forge16aWellheads.gps)} m; the planned position the seismic section was cut through is {offBy(forge16aWellheads.plan)} m off. 58-32: {forgeNeighbours.find((well) => well.id === "58-32")?.datumNote.split(". Wellhead")[0]}.
-      {" "}<b>Uncertainty:</b> no survey publishes its tool&apos;s error model, but each names its tools, so each run carries the ISCWSA OWSG generic model for that tool type (welleng {forgeSurveyUncertainty.source.welleng}), tied on run to run — 16A: {models(reference)}; {forgeNeighbours.map((well) => `${well.label}: ${models(well)}`).join("; ")}. Gyro runs use the generic gyro multishot (CB_Film_GMS), which claims less accuracy than the gyros used. Field {fmt(forgeSurveyUncertainty.source.field.b_total, 1)} nT, dip {forgeSurveyUncertainty.source.field.dip}°, declination {forgeSurveyUncertainty.source.field.declination}° (16A&apos;s workbook).
-      {" "}<b>Rule:</b> SF = (D − Rr − Ro − {ISCWSA_RULE.surfaceMarginM} m) / ({ISCWSA_RULE.k} · √(σ² along the centre line + {ISCWSA_RULE.sigmaPaM}²)), checked against welleng&apos;s own result to within 3%. Hole radii are each well&apos;s reported hole sizes, section by section: 16A&apos;s from its records, 16B&apos;s and 58-32&apos;s from their end-of-well reports (GDR 1516, 1006) — a 0.1–0.5 m term against distances of 30 m and more.
-    </p>
-  </div>;
+  const short = (well: PlacedWell) => well.label.split(/[ (]/)[0];
+  return <Frame name="anticollision" title="16A(78)-32" subtitle={`Anti-collision against ${runs.length} neighbours · ISCWSA separation rule, k ${ISCWSA_RULE.k}`}
+    tools={<span className="log-sets" role="group" aria-label="Ladder plots">
+      <button type="button" aria-pressed={measure === "sf"} aria-label="Separation factor" onClick={() => setMeasure("sf")}><span className="ac-full">Separation factor</span><span className="ac-brief">SF</span></button>
+      <button type="button" aria-pressed={measure === "distance"} aria-label="Centre to centre" onClick={() => setMeasure("distance")}><span className="ac-full">Centre to centre</span><span className="ac-brief">Distance</span></button>
+    </span>}
+    numbers={<>{runs.map(({ well, least }) => <span key={well.id}><small>{short(well)} least SF</small><b className={least ? `acx-sf ${band(least.separationFactor!)}` : undefined}>{least ? sfText(least.separationFactor) : "–"}</b></span>)}</>}
+    canvas={<div className="ac-split">
+      <div className="mf-plot"><Ladder runs={runs} measure={measure} totalMd={place.stations.at(-1)?.mdM ?? 0} cursor={wire.cursor} onHover={wire.hover} onPick={wire.pin} /></div>
+      <div className="mf-plot"><Cylinder runs={runs} cursor={wire.cursor} at={at} /></div>
+    </div>}
+    inspector={<Inspector id="anticollision" initial="neighbours" head={<dl className="mf-facts">
+      <div className="mf-facts-title"><dt>{wire.cursor === null ? "No depth placed" : `At 16A ${fmt(wire.cursor)} m MD`}</dt><dd>{wire.cursor === null ? "hover the ladder" : "distance · SF"}</dd></div>
+      {runs.map(({ well, samples }) => { const sample = at(samples, wire.cursor); return <div key={well.id}><dt><i className="ac-swatch" style={{ background: COLOURS[well.id] }} />{well.label}</dt><dd>{wire.cursor === null ? "–" : sample ? <>{fmt(sample.centreToCentreM, 1)} m · SF <span className={sample.separationFactor === null ? undefined : `acx-sf ${band(sample.separationFactor)}`}>{sfText(sample.separationFactor)}</span></> : "beyond 16A's survey"}</dd></div>; })}
+    </dl>} sections={[
+      { id: "neighbours", title: "Neighbours", summary: `${runs.length} wells`, body: <>{runs.map(({ well, closest, least }) => <dl key={well.id} className="mf-facts">
+        <div className="mf-facts-title"><dt><i className="ac-swatch" style={{ background: COLOURS[well.id] }} />{well.label}</dt><dd /></div>
+        <div><dt>Least SF · at 16A MD</dt><dd>{least ? <><b className={`acx-sf ${band(least.separationFactor!)}`}>{sfText(least.separationFactor)}</b> · {fmt(least.referenceMdM)} m</> : "not computed"}</dd></div>
+        <div><dt>Closest · 16A MD → its MD</dt><dd>{closest ? `${fmt(closest.centreToCentreM, 1)} m · ${fmt(closest.referenceMdM)} → ${fmt(closest.offsetMdM)} m` : "—"}</dd></div>
+        <div><dt>Around 16A</dt><dd>{closest ? `${fmt(closest.bearingDeg)}° from ${closest.bearingFrom}` : "—"}</dd></div>
+      </dl>)}</> },
+      { id: "wellheads", title: "Wellheads", summary: "as-built, 2023", body: <p className="mf-prose">Licensed as-built surveys for 16A and 16B (Woolsey Land Surveying, 2023). 16A&apos;s agrees with its own survey workbook to 0.07 m and with the UGS GPS survey to {offBy(forge16aWellheads.gps)} m; the planned position the seismic section was cut through is {offBy(forge16aWellheads.plan)} m off. 58-32: {forgeNeighbours.find((well) => well.id === "58-32")?.datumNote.split(". Wellhead")[0]}.</p> },
+      { id: "uncertainty", title: "Uncertainty", summary: "OWSG generic models", body: <p className="mf-prose">No survey publishes its tool&apos;s error model, but each names its tools, so each run carries the ISCWSA OWSG generic model for that tool type (welleng {forgeSurveyUncertainty.source.welleng}), tied on run to run — 16A: {models(reference)}; {forgeNeighbours.map((well) => `${well.label}: ${models(well)}`).join("; ")}. Gyro runs use the generic gyro multishot (CB_Film_GMS), which claims less accuracy than the gyros used. Field {fmt(forgeSurveyUncertainty.source.field.b_total, 1)} nT, dip {forgeSurveyUncertainty.source.field.dip}°, declination {forgeSurveyUncertainty.source.field.declination}° (16A&apos;s workbook).</p> },
+      { id: "rule", title: "Rule", summary: `k ${ISCWSA_RULE.k}`, body: <p className="mf-prose">SF = (D − Rr − Ro − {ISCWSA_RULE.surfaceMarginM} m) / ({ISCWSA_RULE.k} · √(σ² along the centre line + {ISCWSA_RULE.sigmaPaM}²)), checked against welleng&apos;s own result to within 3%. Hole radii are each well&apos;s reported hole sizes, section by section: 16A&apos;s from its records, 16B&apos;s and 58-32&apos;s from their end-of-well reports (GDR 1516, 1006) — a 0.1–0.5 m term against distances of 30 m and more. Below 1 the ellipsoids overlap; 1 to 1.5 calls for care.</p> },
+    ]} />}
+    status={<Status items={["Hover the ladder to place 16A's depth · click to pin it", "Error models are the OWSG generic ones for each tool type"]} />} />;
 }
 
 interface Run { readonly well: PlacedWell; readonly samples: readonly Separation[]; readonly closest: Separation | null; readonly least: Separation | null }

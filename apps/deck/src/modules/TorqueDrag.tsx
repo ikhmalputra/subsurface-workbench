@@ -7,6 +7,7 @@ import type { Curve } from "../compute/torque.ts";
 import { Loading } from "./Empty.tsx";
 import { shoesOf } from "../data/place.ts";
 import { fmt } from "../format.ts";
+import { Frame, Inspector, Status } from "./frame/Frame.tsx";
 import { useSize } from "./useSize.ts";
 import { useWire } from "./wire.ts";
 
@@ -30,32 +31,53 @@ export function TorqueDrag() {
   const tdFt = metresToFeet(place.survey.at(-1)!.mdM);
   // The fit and every curve are worked out in the compute worker, off the main thread.
   const { value: model, error } = useComputed(`${place.wellId}|${survey.length}|${shoeFt}|${tdFt}`, "torqueAndDrag", () => [survey, shoeFt, tdFt]);
-  const [box, size] = useSize<HTMLDivElement>();
-  const wide = size.width > 700;
   if (!model) return <Loading>{error ? `Torque and drag could not be worked out (${error}).` : "Fitting torque and drag to the daily reports…"}</Loading>;
   const { fit, curves } = model;
   const used = new Set(model.usedDates);
   const excluded = reported.filter((day) => !used.has(day.date));
-  return <div className="acx td" ref={box}>
-    <header className="acx-head"><span><b>16A(78)-32</b> · soft-string torque and drag · calibrated on {fit.days} daily reports</span></header>
-    <dl className="petro-summary geo-summary">
-      <div><dt>Friction, cased · open hole</dt><dd>{fmt(fit.frictionCased, 2)} · {fmt(fit.frictionOpen, 2)}</dd></div>
-      <div><dt>Drill pipe (fitted · nominal)</dt><dd>{fmt(fit.pipeLbFt, 1)} · 19.5 lb/ft</dd></div>
-      <div><dt>Block and top drive (fitted)</dt><dd>{fmt(fit.blockLb / 1000, 1)} klb</dd></div>
-      <div><dt>Misfit (rms)</dt><dd>rotating {fmt(fit.rmsRotLb / 1000, 1)} · PU/SO {fmt(fit.rmsPuSoLb / 1000, 1)} klb</dd></div>
-      <div><dt>At TD, the model</dt><dd>PU {fmt(curves.fitted.pickup.at(-1)!.value / 1000)} · SO {fmt(curves.fitted.slackoff.at(-1)!.value / 1000)} · ROT {fmt(curves.fitted.rotating.at(-1)!.value / 1000)} klb</dd></div>
-      <div><dt>Reports used · left out</dt><dd>{fit.days} · {excluded.length}</dd></div>
-    </dl>
-    <div className={`acx-plots${wide ? " is-wide" : ""}`}>
-      <Broomstick curves={curves} reported={reported} used={used} tdFt={tdFt} cursorFt={wire.cursor === null ? null : metresToFeet(wire.cursor)} onHover={(ft) => wire.hover(ft === null ? null : feetToMetres(ft))} />
-      <TorquePlot points={model.torque} tdFt={tdFt} reported={reported} />
-    </div>
-    <p className="petro-note">
-      <b>Source:</b> 16A&apos;s daily drilling reports (GDR 1283): rotating, pick-up and slack-off weights and torque as read at each day&apos;s reported depth, mud weight, and the BHA&apos;s length and weight in air. <b>Model:</b> soft string on the observed survey, buoyed by the day&apos;s mud (steel 65.5 ppg); the BHA as one segment of its reported weight, 5 in drill pipe above. <b>Calibration:</b> rotating removes axial friction, so the rotating weights give the block weight and pipe weight by least squares; then the cased and open-hole friction by grid search on the pick-up and slack-off weights. The fitted pipe weight sits near the nominal 19.5 lb/ft; the cased friction is weakly constrained, since most of the drag builds in the open 65° tangent.
-      {" "}<b>Left out:</b> {excluded.length ? excluded.map((day) => `${day.date} (${day.mudWeightPpg === null ? "no mud weight" : day.bha.weightAirLb === null || day.bha.lengthFt === null ? "no BHA weight" : "BHA weight implausible for its length"})`).join(", ") : "none"}{forgeStringWeights.days.some((day) => day.flags.length) ? "; the two slack-off weights under 30 % of the rotating weight look like a dropped zero and are kept as reported, out of the fit" : ""}. The reported torque is mostly on-bottom drilling torque, which adds the bit&apos;s; the model gives off-bottom rotating torque, with the pipe OD as the contact radius (tool joints not reported).
-      {" "}<b>Not used:</b> the Pason 10 s log in GDR 1283 records the 2022 stimulation re-entry, not the drilling, and no record here describes that string.
-    </p>
-  </div>;
+  // The model at the cursor's bit depth, or at TD when no depth is placed.
+  const cursorFt = wire.cursor === null ? null : metresToFeet(wire.cursor);
+  const atFt = cursorFt !== null && cursorFt >= 0 && cursorFt <= tdFt ? cursorFt : null;
+  const near = (curve: Curve) => atFt === null ? curve.at(-1)! : curve.reduce((best, point) => Math.abs(point.md - atFt) < Math.abs(best.md - atFt) ? point : best, curve[0]!);
+  const here = near(curves.fitted.pickup);
+  return <Frame name="torquedrag" title="16A(78)-32" subtitle={`Soft-string torque and drag · calibrated on ${fit.days} daily reports`}
+    numbers={<>
+      <span><small>Friction cased · open</small><b>{fmt(fit.frictionCased, 2)} · {fmt(fit.frictionOpen, 2)}</b></span>
+      <span><small>Pipe, fitted</small><b>{fmt(fit.pipeLbFt, 1)} lb/ft</b></span>
+      <span><small>Misfit PU/SO</small><b>{fmt(fit.rmsPuSoLb / 1000, 1)} klb</b></span>
+    </>}
+    canvas={<div className="td-split">
+      <div className="mf-plot"><Broomstick curves={curves} reported={reported} used={used} tdFt={tdFt} cursorFt={cursorFt} onHover={(ft) => wire.hover(ft === null ? null : feetToMetres(ft))} /></div>
+      <div className="mf-plot"><TorquePlot points={model.torque} tdFt={tdFt} reported={reported} /></div>
+    </div>}
+    inspector={<Inspector id="torquedrag" initial="fit" head={<dl className="mf-facts">
+      <div className="mf-facts-title"><dt>{atFt === null ? "At TD" : "At bit depth"} · {fmt(here.md)} ft MD</dt><dd>the model</dd></div>
+      <div><dt>Pick-up · slack-off</dt><dd>{fmt(near(curves.fitted.pickup).value / 1000)} · {fmt(near(curves.fitted.slackoff).value / 1000)} klb</dd></div>
+      <div><dt>Rotating</dt><dd>{fmt(near(curves.fitted.rotating).value / 1000)} klb</dd></div>
+      {model.torque.length > 0 && <div><dt>Off-bottom torque</dt><dd>{fmt(near(model.torque).value / 1000, 1)} k ft-lbf</dd></div>}
+    </dl>} sections={[
+      { id: "fit", title: "Calibration", summary: `${fit.days} reports used`, body: <dl className="mf-facts">
+        <div><dt>Friction, cased · open hole</dt><dd>{fmt(fit.frictionCased, 2)} · {fmt(fit.frictionOpen, 2)}</dd></div>
+        <div><dt>Drill pipe (fitted · nominal)</dt><dd>{fmt(fit.pipeLbFt, 1)} · 19.5 lb/ft</dd></div>
+        <div><dt>Block and top drive (fitted)</dt><dd>{fmt(fit.blockLb / 1000, 1)} klb</dd></div>
+        <div><dt>Misfit (rms)</dt><dd>rotating {fmt(fit.rmsRotLb / 1000, 1)} · PU/SO {fmt(fit.rmsPuSoLb / 1000, 1)} klb</dd></div>
+        <div><dt>At TD, the model</dt><dd>PU {fmt(curves.fitted.pickup.at(-1)!.value / 1000)} · SO {fmt(curves.fitted.slackoff.at(-1)!.value / 1000)} · ROT {fmt(curves.fitted.rotating.at(-1)!.value / 1000)} klb</dd></div>
+        <div><dt>Reports used · left out</dt><dd>{fit.days} · {excluded.length}</dd></div>
+      </dl> },
+      { id: "source", title: "Source", summary: "GDR 1283", body: <>
+        <p className="mf-prose">16A&apos;s daily drilling reports (GDR 1283): rotating, pick-up and slack-off weights and torque as read at each day&apos;s reported depth, mud weight, and the BHA&apos;s length and weight in air.</p>
+        <p className="mf-prose"><b>Not used:</b> the Pason 10 s log in GDR 1283 records the 2022 stimulation re-entry, not the drilling, and no record here describes that string.</p>
+      </> },
+      { id: "method", title: "Method", summary: "Johancsik et al. 1984", body: <>
+        <p className="mf-prose"><b>Model:</b> soft string on the observed survey, buoyed by the day&apos;s mud (steel 65.5 ppg); the BHA as one segment of its reported weight, 5 in drill pipe above.</p>
+        <p className="mf-prose"><b>Calibration:</b> rotating removes axial friction, so the rotating weights give the block weight and pipe weight by least squares; then the cased and open-hole friction by grid search on the pick-up and slack-off weights. The fitted pipe weight sits near the nominal 19.5 lb/ft; the cased friction is weakly constrained, since most of the drag builds in the open 65° tangent.</p>
+      </> },
+      { id: "check", title: "Left out and caveats", summary: `${excluded.length} left out`, body: <>
+        <p className="mf-prose"><b>Left out:</b> {excluded.length ? excluded.map((day) => `${day.date} (${day.mudWeightPpg === null ? "no mud weight" : day.bha.weightAirLb === null || day.bha.lengthFt === null ? "no BHA weight" : "BHA weight implausible for its length"})`).join(", ") : "none"}{forgeStringWeights.days.some((day) => day.flags.length) ? "; the two slack-off weights under 30 % of the rotating weight look like a dropped zero and are kept as reported, out of the fit" : ""}.</p>
+        <p className="mf-prose"><b>Torque:</b> the reported torque is mostly on-bottom drilling torque, which adds the bit&apos;s; the model gives off-bottom rotating torque, with the pipe OD as the contact radius (tool joints not reported).</p>
+      </> },
+    ]} />}
+    status={<Status items={["Hover the broomstick to read any bit depth", "Reported torque is mostly on-bottom; the model's is off-bottom"]} />} />;
 }
 
 type Curves = { fitted: Record<Movement, Curve>; ghosts: { open: number; movement: Movement; points: Curve }[] };

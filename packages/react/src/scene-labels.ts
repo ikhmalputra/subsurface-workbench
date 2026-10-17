@@ -15,6 +15,8 @@ export type SceneLabelKind = "tick" | "axis" | "name" | "pick";
 export class SceneLabel extends THREE.Object3D {
   readonly element: HTMLSpanElement;
   shown = true;
+  /** Its size on the page, measured while shown: a hidden label (display none) measures nothing. */
+  size: { readonly w: number; readonly h: number } | null = null;
   constructor(text: string, readonly kind: SceneLabelKind, readonly priority: number, readonly options: { readonly className?: string; readonly colour?: string; readonly layer?: string; readonly owner?: string } = {}) {
     super();
     this.element = document.createElement("span");
@@ -60,7 +62,7 @@ export class LabelLayer {
         const x = (this.point.x + 1) / 2 * width, y = (1 - this.point.y) / 2 * height;
         visible = this.point.z < 1 && this.point.z > -1 && x > -60 && x < width + 60 && y > -30 && y < height + 30;
         if (visible) {
-          const w = label.element.offsetWidth || 40, h = label.element.offsetHeight || 14;
+          const { w, h } = this.measure(label);
           const floating = label.kind === "name" || label.kind === "pick";
           const left = floating ? x + Math.min(0, width - 8 - (x + w)) : x;
           const box = floating ? { x0: left - 2, y0: y - h, x1: left + w + 2, y1: y + 2 } : label.kind === "tick" ? tickBox(label, x, y, w, h) : { x0: x - w / 2, y0: y - h / 2, x1: x + w / 2, y1: y + h / 2 };
@@ -91,6 +93,18 @@ export class LabelLayer {
     for (const label of this.labels) label.removeFromParent();
     this.labels.length = 0;
     this.root.remove();
+  }
+
+  /** A label's true size, so one hidden last time is judged at its real width, not a guess that lets it overlap. */
+  private measure(label: SceneLabel) {
+    const element = label.element;
+    if (!element.hidden || !label.size) {
+      const hidden = element.hidden;
+      if (hidden) element.hidden = false;
+      if (element.offsetWidth > 0) label.size = { w: element.offsetWidth, h: element.offsetHeight };
+      if (hidden) element.hidden = true;
+    }
+    return label.size ?? { w: 40, h: 14 };
   }
 
   /** A label shows only while it and every ancestor are visible, as a mesh would. */

@@ -1,16 +1,22 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ClipboardPaste, Download, FileUp, Plus, Redo2, RotateCcw, Trash2, Undo2, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { ClipboardPaste, Download, FilePen, FileUp, Plus, Redo2, RotateCcw, Trash2, Undo2, X } from "lucide-react";
 import type { DepthReference, WellComponent, WellEnvironment, ComponentKind } from "@ikhmalputra/subsurface-core";
-import { formatInches } from "@ikhmalputra/subsurface-react/2d";
+import { AssemblySchematic, formatInches } from "@ikhmalputra/subsurface-react/2d";
 import { DEPTH_UNITS, readStations } from "../data/entry.ts";
 import type { DepthUnit, EnteredStation } from "../data/entry.ts";
 import { importLas, removeLog, useImportedLogs } from "../data/logs.ts";
-import { basePlace, baseOf } from "../data/place.ts";
+import { basePlace, baseOf, tvdOn } from "../data/place.ts";
 import { commitRecord, deleteRecordedWell, editOf, recordedForSite, same, surveyOf, useRecordState } from "../data/records.ts";
 import type { EnteredTop, RecordEntry, WellRecordValue } from "../data/records.ts";
 import { actions, useDeck } from "../deck/store.ts";
 import { fmt } from "../format.ts";
+import { BASE } from "../base.ts";
 import { CellNumber, NumberField, Segmented, SelectField, TextField } from "./fields.tsx";
+import { Frame, Inspector, Status } from "./frame/Frame.tsx";
+import { Empty } from "./Empty.tsx";
+import { useWire } from "./wire.ts";
+
+const ASSETS = `${BASE}well-components`;
 
 /**
  * The Well editor: a drilled well's records. For a well entered on the deck it is where everything is
@@ -39,9 +45,16 @@ export function WellEditor() {
     return base ? editOf(base.wellId, base.siteId, baseOf(base)) : null;
   }, [siteId, wellId]);
   const state = useRecordState(entry);
-  const [stage, setStage] = useState<Stage>(entry?.kind === "recorded" ? "survey" : "construction");
+  const wire = useWire("editor");
+  const place = wire.place;
   const [confirm, setConfirm] = useState<"delete" | "revert" | null>(null);
-  const root = useRef<HTMLDivElement>(null);
+  // The station table is a page of its own; the open construction row is the one picked here or in the drawing.
+  const [table, setTable] = useState(false);
+  const [editing, setEditing] = useState<number | null>(null);
+  const [openRow, setOpenRow] = useState<string | null>(null);
+  // Next, or a click on the drawing, opens a stage's section without resetting the inspector.
+  const [reveal, setReveal] = useState<{ readonly section: string; readonly at: number } | null>(null);
+  const openStage = (stage: Stage) => setReveal({ section: stage, at: Date.now() });
   // ⌘Z / ⇧⌘Z step this well's history while the editor is open (the designer's bar has its own).
   useEffect(() => {
     if (!entry) return;
@@ -58,7 +71,6 @@ export function WellEditor() {
   const edit = (label: string, change: (value: WellRecordValue) => WellRecordValue) => commitRecord(entry, label, change);
   const editCount = base ? countEdits(value, base) : 0;
   const lastUndo = state.undo.at(-1), lastRedo = state.redo.at(-1);
-  const current = STAGES.find((entry_) => entry_.id === stage)!;
   const download = () => {
     const blob = new Blob([JSON.stringify({ format: "subsurface-deck-well", version: 1, exportedAt: new Date().toISOString(), value }, null, 1)], { type: "application/json" });
     const link = document.createElement("a");
@@ -67,13 +79,26 @@ export function WellEditor() {
     link.click();
     setTimeout(() => URL.revokeObjectURL(link.href), 1000);
   };
+  // Picking a string or hole in the drawing opens its row.
+  const select = (id: string | null) => { wire.select(id); if (id && value.components.some((component) => component.id === id)) { setOpenRow(id); openStage("construction"); } };
+  const openTable = (row: number | null) => { setEditing(row); setTable(true); };
 
-  return <div className="dsg wed" ref={root}>
-    <header className="dsg-head">
-      <div className="dsg-title">
-        <b>{value.identity.name || "Unnamed well"}</b>
-        <small>{entry.kind === "recorded" ? "Drilled well · entered on the deck" : editCount ? `Documented record · ${editCount} edit${editCount === 1 ? "" : "s"} over it, kept in this browser` : "Documented record · as recorded"}</small>
-      </div>
+  const md = wire.cursor;
+  const tvd = md !== null && place ? tvdOn(place, md) : null;
+  const topHere = md !== null ? [...value.tops].filter((top) => top.topMdM <= md).sort((a, b) => b.topMdM - a.topMdM)[0] : undefined;
+  const stringHere = md !== null ? value.components.filter((component) => component.kind === "Casing" && component.topDepthM <= md && component.bottomDepthM >= md).sort((a, b) => (a.outerDiameterMm ?? 0) - (b.outerDiameterMm ?? 0))[0] : undefined;
+  const holeHere = md !== null ? value.components.filter((component) => component.kind === "Hole" && component.topDepthM <= md && component.bottomDepthM >= md).sort((a, b) => (a.outerDiameterMm ?? 0) - (b.outerDiameterMm ?? 0))[0] : undefined;
+  const forms: Readonly<Record<Stage, ReactNode>> = {
+    well: <WellStage value={value} base={base} edit={edit} />,
+    survey: <SurveyStage value={value} base={base} edit={edit} onTable={openTable} />,
+    tops: <TopsStage value={value} base={base} edit={edit} />,
+    construction: <ConstructionStage value={value} base={base} edit={edit} open={openRow} setOpen={setOpenRow} />,
+    logs: <LogsStage wellId={entry.wellId} name={value.identity.name} />,
+  };
+
+  return <Frame name="editor" className="wed" title={value.identity.name || "Unnamed well"}
+    subtitle={entry.kind === "recorded" ? "Drilled well · entered on the deck" : editCount ? `Documented record · ${editCount} edit${editCount === 1 ? "" : "s"} over it, kept in this browser` : "Documented record · as recorded"}
+    tools={<>
       <button type="button" className="dsg-tool" disabled={!lastUndo} title={lastUndo ? `Undo: ${lastUndo.label} (⌘Z)` : "Nothing to undo"} aria-label="Undo" onClick={() => entry.history.undo()}><Undo2 size={14} /></button>
       <button type="button" className="dsg-tool" disabled={!lastRedo} title={lastRedo ? `Redo: ${lastRedo.label} (⇧⌘Z)` : "Nothing to redo"} aria-label="Redo" onClick={() => entry.history.redo()}><Redo2 size={14} /></button>
       {entry.kind === "recorded" && <button type="button" className="dsg-tool" onClick={download} title="Download this well as a .json file (import it with + New well)"><Download size={14} />Export</button>}
@@ -82,29 +107,32 @@ export function WellEditor() {
       {entry.kind === "recorded" && (confirm === "delete"
         ? <span className="dsg-confirm">Delete it?<button type="button" className="is-danger" onClick={() => { deleteRecordedWell(entry.id); actions.selectSite(null); }}>Delete</button><button type="button" onClick={() => setConfirm(null)}>Keep</button></span>
         : <button type="button" className="dsg-tool" aria-label="Delete this well" onClick={() => setConfirm("delete")}><Trash2 size={14} /></button>)}
-    </header>
-    {lastUndo && <p className="wed-last">Last change: <b>{lastUndo.label}</b></p>}
-    <div className="dsg-body">
-      <nav className="dsg-rail" aria-label="Records">
-        {STAGES.map((entry_, position) => {
-          const count = stageCount(entry_.id, value);
-          const changed = base ? stageEdited(entry_.id, value, base) : false;
-          return <button key={entry_.id} type="button" className={`dsg-step${count ? " is-complete" : ""}`} aria-current={entry_.id === stage ? "step" : undefined} onClick={() => setStage(entry_.id)}>
-            <span className="dsg-step-n">{position + 1}</span><span className="dsg-step-label">{entry_.label}</span>{changed ? <i className="wed-dot" title="Edited over the record" /> : count ? <small className="wed-count">{count}</small> : null}
-          </button>;
-        })}
-      </nav>
-      <section className="dsg-stage">
-        <h3>{current.label}</h3>
-        <p className="dsg-purpose">{current.purpose}</p>
-        {stage === "well" && <WellStage value={value} base={base} edit={edit} />}
-        {stage === "survey" && <SurveyStage value={value} base={base} edit={edit} />}
-        {stage === "tops" && <TopsStage value={value} base={base} edit={edit} />}
-        {stage === "construction" && <ConstructionStage value={value} base={base} edit={edit} />}
-        {stage === "logs" && <LogsStage wellId={entry.wellId} name={value.identity.name} />}
-      </section>
-    </div>
-  </div>;
+    </>}
+    numbers={<>
+      <span><small>Total depth</small><b>{fmt(value.totalDepthM)} m</b></span>
+      <span><small>Stations</small><b>{value.stations.length}</b></span>
+      {base ? <span><small>Edits</small><b>{editCount}</b></span> : <span><small>Records</small><b>{value.components.length}</b></span>}
+    </>}
+    canvas={place?.assembly && value.components.length
+      ? <div className="construction-body wed-canvas"><AssemblySchematic assembly={place.assembly} survey={place.stations} formations={place.formations} formationColumn={place.formations} records={place.components} assetBaseUrl={ASSETS}
+        selectedId={wire.componentId} onSelect={select} depthWindow={wire.window} onDepthWindowChange={wire.setWindow}
+        cursorDepthM={wire.cursor} onCursorDepthChange={wire.hover} title={`${value.identity.name || "Well"} as ${base ? "recorded" : "entered"}`} /></div>
+      : <Empty icon={FilePen} title="No construction yet" action={{ label: "Open Casing & hole", run: () => openStage("construction") }}>The well is drawn here once its strings, hole sections and cement are entered in Casing &amp; hole.</Empty>}
+    inspector={<Inspector reveal={reveal} id="editor" initial={entry.kind === "recorded" ? "survey" : "construction"} head={<dl className="mf-facts">
+      <div className="mf-facts-title"><dt>{md === null ? "Hover the drawing" : `At ${fmt(md)} m MD${tvd !== null ? ` · ${fmt(tvd)} m TVD` : ""}`}</dt><dd>{lastUndo ? "edited" : base ? "as recorded" : "entered"}</dd></div>
+      <div><dt>Formation</dt><dd>{md === null ? "—" : topHere ? topHere.name : "above the first top"}</dd></div>
+      <div><dt>Innermost string · hole</dt><dd>{md === null ? "—" : `${stringHere ? stringHere.name : "no casing"} · ${holeHere?.outerDiameterMm ? formatInches(holeHere.outerDiameterMm / 25.4) : "—"}`}</dd></div>
+    </dl>} sections={STAGES.map((stage) => {
+      const count = stageCount(stage.id, value);
+      const changed = base ? stageEdited(stage.id, value, base) : false;
+      return { id: stage.id, title: stage.label, summary: <span className="wed-sum">{count ? <small className="wed-count">{count}</small> : null}{changed && <><i className="wed-dot" />edited</>}</span>, body: <div className="dsg-form">
+        <p className="dsg-purpose">{stage.purpose}</p>
+        {forms[stage.id]}
+      </div> };
+    })} links={[value.stations.length > 0 && { label: `Survey stations (${value.stations.length})`, onOpen: () => openTable(null) }]} />}
+    page={table ? { title: "Survey stations", context: `${value.identity.name || "Unnamed well"} · ${value.stations.length} station${value.stations.length === 1 ? "" : "s"}${value.surveySource ? ` · ${value.surveySource}` : ""}`, onBack: () => { setTable(false); setEditing(null); },
+      body: <SurveyTable value={value} edit={edit} editing={editing} setEditing={setEditing} /> } : null}
+    status={<Status items={[lastUndo ? <>Last change: <b>{lastUndo.label}</b></> : "Every change is one named step (⌘Z)", base ? "Edits are kept in this browser; the record itself is unchanged" : "Kept in this browser; export it to keep a copy"]} />} />;
 }
 
 type Edit = (label: string, change: (value: WellRecordValue) => WellRecordValue) => void;
@@ -165,20 +193,18 @@ function WellStage({ value, base, edit }: { readonly value: WellRecordValue; rea
   </>;
 }
 
-function SurveyStage({ value, base, edit }: { readonly value: WellRecordValue; readonly base: WellRecordValue | null; readonly edit: Edit }) {
+function SurveyStage({ value, base, edit, onTable }: { readonly value: WellRecordValue; readonly base: WellRecordValue | null; readonly edit: Edit; readonly onTable: (row: number | null) => void }) {
   const survey = useMemo(() => surveyOf(value.stations), [value.stations]);
   const lastStation = value.stations.at(-1);
   const projected = lastStation && value.totalDepthM > lastStation.mdM + 0.5;
-  const [editing, setEditing] = useState<number | null>(null);
   const [pasting, setPasting] = useState(value.stations.length === 0);
-  const setStation = (index: number, label: string, change: Partial<EnteredStation>) => edit(label, (v) => ({ ...v, stations: v.stations.map((station, position) => position === index ? { ...station, ...change } : station) }));
   const deepest = survey.at(-1);
   const maxInc = survey.reduce((best, point) => Math.max(best, point.inclinationDeg), 0);
   const changed = base ? !same(value.stations, base.stations) : false;
   return <>
     <div className="dsg-actions">
       <button type="button" className="dsg-primary" onClick={() => setPasting((open) => !open)}><ClipboardPaste size={14} />{value.stations.length ? "Replace or add from a paste or file" : "Paste or import stations"}</button>
-      <button type="button" className="dsg-secondary" onClick={() => { const last = value.stations.at(-1); edit("Add a station", (v) => ({ ...v, stations: [...v.stations, last ? { ...last, mdM: last.mdM + 30 } : { mdM: 0, inclinationDeg: 0, azimuthDeg: 0 }] })); setEditing(value.stations.length); }}><Plus size={14} />Add a station</button>
+      <button type="button" className="dsg-secondary" onClick={() => { const last = value.stations.at(-1); edit("Add a station", (v) => ({ ...v, stations: [...v.stations, last ? { ...last, mdM: last.mdM + 30 } : { mdM: 0, inclinationDeg: 0, azimuthDeg: 0 }] })); onTable(value.stations.length); }}><Plus size={14} />Add a station</button>
       {changed && <button type="button" className="dsg-secondary" onClick={() => edit("Survey back to the record", (v) => ({ ...v, stations: base!.stations, surveySource: base!.surveySource }))}><RotateCcw size={14} />Survey back to the record</button>}
     </div>
     {pasting && <PastePanel count={value.stations.length} onDone={(stations, mode, note) => { edit(`${mode === "replace" ? "Survey replaced" : "Stations added"}: ${stations.length} from ${note}`, (v) => ({ ...v, stations: mode === "replace" ? stations : [...v.stations, ...stations].sort((a, b) => a.mdM - b.mdM) })); setPasting(false); }} onCancel={() => setPasting(false)} />}
@@ -189,27 +215,35 @@ function SurveyStage({ value, base, edit }: { readonly value: WellRecordValue; r
       <div><dt>Most inclined</dt><dd>{fmt(maxInc, 1)}°</dd></div>
       <div><dt>Closure</dt><dd>{deepest ? `${fmt(Math.hypot(deepest.northingM, deepest.eastingM))} m` : "—"}</dd></div>
     </dl>}
-    {projected && <p className="dsg-note">TD ({fmt(value.totalDepthM)} m) is below the last station ({fmt(lastStation!.mdM)} m): the deck projects the survey to TD along the last station's inclination and azimuth, and says so wherever the path is drawn.</p>}
-    {value.stations.length > 0 && <div className="wed-table-wrap">
-      <table className="wed-table">
-        <thead><tr><th>#</th><th>MD m</th><th>Inc °</th><th>Azi °</th><th>TVD m</th><th>N m</th><th>E m</th><th /></tr></thead>
-        <tbody>{value.stations.map((station, index) => {
-          const point = survey[index];
-          const open = editing === index;
-          return <tr key={index} className={open ? "is-open" : undefined} onClick={() => { if (!open) setEditing(index); }}>
-            <td>{index + 1}</td>
-            {open ? <>
-              <td><CellNumber label={`Station ${index + 1} MD`} value={station.mdM} min={0} onCommit={(mdM) => setStation(index, `Station ${index + 1} MD → ${mdM} m`, { mdM })} /></td>
-              <td><CellNumber label={`Station ${index + 1} inclination`} value={station.inclinationDeg} min={0} max={180} onCommit={(inclinationDeg) => setStation(index, `Station ${index + 1} inclination → ${inclinationDeg}°`, { inclinationDeg })} /></td>
-              <td><CellNumber label={`Station ${index + 1} azimuth`} value={station.azimuthDeg} min={0} max={360} onCommit={(azimuthDeg) => setStation(index, `Station ${index + 1} azimuth → ${azimuthDeg}°`, { azimuthDeg })} /></td>
-            </> : <><td>{fmt(station.mdM, 2)}</td><td>{fmt(station.inclinationDeg, 2)}</td><td>{fmt(station.azimuthDeg, 2)}</td></>}
-            <td>{point ? fmt(point.tvdM, 1) : "—"}</td><td>{point ? fmt(point.northingM, 1) : "—"}</td><td>{point ? fmt(point.eastingM, 1) : "—"}</td>
-            <td><button type="button" className="dsg-remove" aria-label={`Remove station ${index + 1}`} onClick={(event) => { event.stopPropagation(); setEditing(null); edit(`Remove station ${index + 1} (${fmt(station.mdM)} m)`, (v) => ({ ...v, stations: v.stations.filter((_, position) => position !== index) })); }}><X size={13} /></button></td>
-          </tr>;
-        })}</tbody>
-      </table>
-    </div>}
+    {projected && <p className="dsg-note">TD ({fmt(value.totalDepthM)} m) is below the last station ({fmt(lastStation!.mdM)} m): the deck projects the survey to TD along the last station&apos;s inclination and azimuth, and says so wherever the path is drawn.</p>}
+    {value.stations.length > 0 && <button type="button" className="dsg-secondary" onClick={() => onTable(null)}>Open the station table: edit any row</button>}
   </>;
+}
+
+/** Every station, a row that opens to edit its MD, inclination and azimuth; TVD and position follow. */
+function SurveyTable({ value, edit, editing, setEditing }: { readonly value: WellRecordValue; readonly edit: Edit; readonly editing: number | null; readonly setEditing: (row: number | null) => void }) {
+  const survey = useMemo(() => surveyOf(value.stations), [value.stations]);
+  const setStation = (index: number, label: string, change: Partial<EnteredStation>) => edit(label, (v) => ({ ...v, stations: v.stations.map((station, position) => position === index ? { ...station, ...change } : station) }));
+  if (!value.stations.length) return <p className="dsg-note">No stations yet: paste or import them in the Survey section.</p>;
+  return <div className="wed-table-wrap">
+    <table className="wed-table">
+      <thead><tr><th>#</th><th>MD m</th><th>Inc °</th><th>Azi °</th><th>TVD m</th><th>N m</th><th>E m</th><th /></tr></thead>
+      <tbody>{value.stations.map((station, index) => {
+        const point = survey[index];
+        const open = editing === index;
+        return <tr key={index} className={open ? "is-open" : undefined} onClick={() => { if (!open) setEditing(index); }}>
+          <td>{index + 1}</td>
+          {open ? <>
+            <td><CellNumber label={`Station ${index + 1} MD`} value={station.mdM} min={0} onCommit={(mdM) => setStation(index, `Station ${index + 1} MD → ${mdM} m`, { mdM })} /></td>
+            <td><CellNumber label={`Station ${index + 1} inclination`} value={station.inclinationDeg} min={0} max={180} onCommit={(inclinationDeg) => setStation(index, `Station ${index + 1} inclination → ${inclinationDeg}°`, { inclinationDeg })} /></td>
+            <td><CellNumber label={`Station ${index + 1} azimuth`} value={station.azimuthDeg} min={0} max={360} onCommit={(azimuthDeg) => setStation(index, `Station ${index + 1} azimuth → ${azimuthDeg}°`, { azimuthDeg })} /></td>
+          </> : <><td>{fmt(station.mdM, 2)}</td><td>{fmt(station.inclinationDeg, 2)}</td><td>{fmt(station.azimuthDeg, 2)}</td></>}
+          <td>{point ? fmt(point.tvdM, 1) : "—"}</td><td>{point ? fmt(point.northingM, 1) : "—"}</td><td>{point ? fmt(point.eastingM, 1) : "—"}</td>
+          <td><button type="button" className="dsg-remove" aria-label={`Remove station ${index + 1}`} onClick={(event) => { event.stopPropagation(); setEditing(null); edit(`Remove station ${index + 1} (${fmt(station.mdM)} m)`, (v) => ({ ...v, stations: v.stations.filter((_, position) => position !== index) })); }}><X size={13} /></button></td>
+        </tr>;
+      })}</tbody>
+    </table>
+  </div>;
 }
 
 /** Paste or a file in, a preview of exactly what was read, then replace or add. */
@@ -269,10 +303,9 @@ const KINDS: readonly ComponentKind[] = ["Casing", "Hole", "Cement", "Tubular", 
 const KIND_LABEL: Partial<Record<ComponentKind, string>> = { Tubular: "Tubing", Hole: "Hole section", Casing: "Casing / liner" };
 const inchesOf = (mm: number | null) => mm === null ? null : Math.round(mm / 25.4 * 1000) / 1000;
 
-function ConstructionStage({ value, base, edit }: { readonly value: WellRecordValue; readonly base: WellRecordValue | null; readonly edit: Edit }) {
+function ConstructionStage({ value, base, edit, open, setOpen }: { readonly value: WellRecordValue; readonly base: WellRecordValue | null; readonly edit: Edit; readonly open: string | null; readonly setOpen: (id: string | null) => void }) {
   const order: Partial<Record<ComponentKind, number>> = { Wellhead: 0, Valve: 1, Casing: 2, Hole: 3, Cement: 4, Tubular: 5, Packer: 6, "Safety valve": 7 };
   const rows = [...value.components].sort((a, b) => (order[a.kind] ?? 9) - (order[b.kind] ?? 9) || a.topDepthM - b.topDepthM || a.bottomDepthM - b.bottomDepthM);
-  const [open, setOpen] = useState<string | null>(null);
   const setRow = (id: string, label: string, change: Partial<WellComponent>) => edit(label, (v) => ({ ...v, components: v.components.map((component) => component.id === id ? { ...component, ...change } : component) }));
   const add = (kind: ComponentKind) => {
     const id = `entered-${Date.now().toString(36)}`;

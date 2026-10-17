@@ -372,11 +372,13 @@ export function RigView3D({ simRef, running, rate }: { readonly simRef: RefObjec
     };
   }, [simRef]);
 
-  return <div className="rig3d" ref={host}>
+  // The camera bar and the key sit above and below the view, never over it; the view is the host the renderer fills.
+  return <div className="rig3d">
     <div className="rig3d-hud"><span ref={hud} /><span className="log-sets" role="group" aria-label="Camera">
       <button type="button" aria-pressed={follow} onClick={() => setFollow(true)}>Follow the bit</button>
       <button type="button" aria-pressed={!follow} onClick={() => setFollow(false)}>Whole well</button>
     </span></div>
+    <div className="rig3d-view" ref={host} />
     <p className="rig3d-key"><i className="is-mud" />mud <i className="is-cutting" />cuttings <i className="is-gas" />gas <i className="is-kill" />kill mud <i className="is-loss" />losses · diameters ×40 · drag to orbit, scroll to zoom</p>
   </div>;
 }

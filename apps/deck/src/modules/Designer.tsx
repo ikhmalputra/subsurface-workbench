@@ -1,18 +1,25 @@
-import { useMemo, useState } from "react";
-import { AlertTriangle, ArrowRight, Check, Circle, Download, Plus, Sparkles, Trash2, Wand2, X } from "lucide-react";
+import { useMemo, useState, type ReactNode } from "react";
+import { AlertTriangle, ArrowRight, Check, Circle, Download, PencilRuler, Plus, Sparkles, Trash2, Wand2, X } from "lucide-react";
 import {
   casingTable, designReadiness, designStages, mdAtTvd, planBuildHold, proposeCasingScheme, regradeFailingStrings, standardHoleSize, standardHoleSizes, steelGrades, tubingTable, validateDesign,
 } from "@ikhmalputra/subsurface-core";
 import type {
-  ArtificialLift, BuildHoldInput, CasingSection, CompletionPlan, DepthReference, DesignIssue, DesignStage, Formation, InputSource, PressurePoint, ReservoirFluid, SectionRole, WellDesignBrief, WellEnvironment, WellPurpose,
+  ArtificialLift, AssemblyIssue, BuildHoldInput, CasingSection, CompletionPlan, DepthReference, DesignIssue, DesignStage, Formation, InputSource, PressurePoint, ReservoirFluid, SectionRole, WellDesignBrief, WellEnvironment, WellPurpose,
 } from "@ikhmalputra/subsurface-core";
-import { formatInches } from "@ikhmalputra/subsurface-react/2d";
+import { AssemblySchematic, formatInches } from "@ikhmalputra/subsurface-react/2d";
 import { utmZoneOf } from "@ikhmalputra/subsurface-react";
 import { activeDesign, analyse, commitDesign, deleteDesign, exportDesign, factors, useDesign } from "../data/design.ts";
 import type { DesignAnalysis, DesignValue } from "../data/design.ts";
 import { actions } from "../deck/store.ts";
 import { fmt } from "../format.ts";
+import { tvdOn } from "../data/place.ts";
+import { BASE } from "../base.ts";
 import { NumberField, Segmented, SelectField, TextField } from "./fields.tsx";
+import { Frame, Inspector, Status } from "./frame/Frame.tsx";
+import { Empty } from "./Empty.tsx";
+import { useWire } from "./wire.ts";
+
+const ASSETS = `${BASE}well-components`;
 
 /**
  * The Well designer: a planned well, stage by stage — who and where, the depth reference, geology
@@ -28,6 +35,8 @@ const STAGE_ICON = { complete: Check, attention: AlertTriangle, missing: Circle 
 export function Designer() {
   const value = useDesign();
   const brief = value.brief;
+  const wire = useWire("designer");
+  const place = wire.place;
   const readiness = useMemo(() => designReadiness(brief), [brief]);
   const analysis = useMemo(() => analyse(brief), [brief]);
   const issues = useMemo(() => validateDesign(brief, factors), [brief]);
@@ -35,15 +44,15 @@ export function Designer() {
     const list = readiness.requirements.filter((requirement) => requirement.stage === stage);
     return list.some((requirement) => requirement.status === "missing") ? "missing" : list.some((requirement) => requirement.status === "attention") ? "attention" : "complete";
   };
-  const [stage, setStage] = useState<DesignStage>(() => designStages.find((entry) => statusOf(entry.id) !== "complete")?.id ?? "identity");
   const record = activeDesign();
-  // A different well on the deck starts the designer at its first unfinished stage.
-  const [shownFor, setShownFor] = useState(record.id);
-  if (shownFor !== record.id) { setShownFor(record.id); setStage(designStages.find((entry) => statusOf(entry.id) !== "complete")?.id ?? "identity"); }
-  const index = designStages.findIndex((entry) => entry.id === stage);
-  const current = designStages[index]!;
-  const next = designStages[index + 1];
+  // Each design remembers its open stage; the first time, it opens at its first unfinished stage.
+  const firstOpen = designStages.find((entry) => statusOf(entry.id) !== "complete")?.id ?? "identity";
+  const inspectorId = `designer-${record.id}`;
+  // Next, or a click on the drawing, opens a stage's section without resetting the inspector.
+  const [reveal, setReveal] = useState<{ readonly section: string; readonly at: number } | null>(null);
+  const openStage = (stage: DesignStage) => setReveal({ section: stage, at: Date.now() });
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const failingIssues = useMemo((): AssemblyIssue[] => analysis.failing.map((itemId) => ({ severity: "error", itemId, code: "design", message: analysis.sections.find((section) => section.sectionId === itemId)?.issues.find((issue) => issue.severity === "error")?.message ?? "Fails the design checks." })), [analysis]);
 
   const download = () => {
     const blob = new Blob([exportDesign(record)], { type: "application/json" });
@@ -53,45 +62,62 @@ export function Designer() {
     link.click();
     setTimeout(() => URL.revokeObjectURL(link.href), 1000);
   };
+  // Picking a string in the drawing opens the stage that edits it.
+  const select = (id: string | null) => { wire.select(id); if (id && brief.sections.some((section) => section.id === id)) openStage("casing"); };
 
-  return <div className="dsg">
-    <header className="dsg-head">
-      <div className="dsg-title">
-        <b>{brief.identity.name || "Unnamed well"}</b>
-        <small>Planned well{record.builtIn ? " · the deck's example" : ""} · {readiness.percentComplete}% ready{readiness.ready ? " · every check passes" : ""}</small>
-        <span className="dsg-meter" aria-hidden="true"><i style={{ width: `${readiness.percentComplete}%` }} /></span>
-      </div>
+  const md = wire.cursor;
+  const tvd = md !== null && place ? tvdOn(place, md) : null;
+  const formationHere = tvd !== null ? [...brief.geology.formations].filter((formation) => formation.topTvdM <= tvd).sort((a, b) => b.topTvdM - a.topTvdM)[0] : undefined;
+  const stringHere = md !== null ? [...brief.sections].filter((section) => section.topMdM <= md && section.shoeMdM >= md).sort((a, b) => a.odIn - b.odIn)[0] : undefined;
+  const summaryOf = (stage: DesignStage) => {
+    const list = readiness.requirements.filter((requirement) => requirement.stage === stage);
+    const missing = list.filter((requirement) => requirement.status === "missing").length, attention = list.filter((requirement) => requirement.status === "attention").length;
+    return missing ? `${missing} to fill` : attention ? `${attention} to check` : "done";
+  };
+  const body = (stage: DesignStage, form: ReactNode) => {
+    const index = designStages.findIndex((entry) => entry.id === stage);
+    const next = designStages[index + 1];
+    return <div className="dsg-form">
+      <p className="dsg-purpose">{designStages[index]!.purpose}</p>
+      {form}
+      <Needs stage={stage} readiness={readiness} issues={issues} />
+      {next && <button type="button" className="dsg-next" onClick={() => openStage(next.id)}>Next: {next.label}<ArrowRight size={14} /></button>}
+    </div>;
+  };
+  const forms: Readonly<Record<DesignStage, ReactNode>> = {
+    identity: <Identity brief={brief} />, location: <Location brief={brief} />, datum: <Datum brief={brief} />, geology: <Geology brief={brief} />,
+    trajectory: <Trajectory value={value} />, casing: <Casing brief={brief} analysis={analysis} />, cement: <Cement brief={brief} analysis={analysis} />, completion: <Completion brief={brief} />,
+  };
+  const failing = analysis.failing.length;
+
+  return <Frame name="designer" title={brief.identity.name || "Unnamed well"}
+    subtitle={`Planned well${record.builtIn ? " · the deck's example" : ""}${readiness.ready ? " · every check passes" : ""}`}
+    tools={<>
       <button type="button" className="dsg-tool" onClick={download} title="Download this design as a .json file (import it with + New well)"><Download size={14} />Export</button>
       {!record.builtIn && (confirmDelete
         ? <span className="dsg-confirm">Delete it?<button type="button" className="is-danger" onClick={() => { deleteDesign(record.id); actions.selectSite(null); }}>Delete</button><button type="button" onClick={() => setConfirmDelete(false)}>Keep</button></span>
         : <button type="button" className="dsg-tool" onClick={() => setConfirmDelete(true)} aria-label="Delete this design"><Trash2 size={14} /></button>)}
-    </header>
-    <div className="dsg-body">
-      <nav className="dsg-rail" aria-label="Design stages">
-        {designStages.map((entry, position) => {
-          const status = statusOf(entry.id);
-          const Icon = STAGE_ICON[status];
-          return <button key={entry.id} type="button" className={`dsg-step is-${status}`} aria-current={entry.id === stage ? "step" : undefined} onClick={() => setStage(entry.id)}>
-            <span className="dsg-step-n">{status === "complete" ? <Icon size={12} strokeWidth={3} /> : position + 1}</span><span className="dsg-step-label">{entry.label}</span>{status === "attention" && <Icon size={12} className="dsg-step-warn" />}
-          </button>;
-        })}
-      </nav>
-      <section className="dsg-stage" aria-labelledby="dsg-stage-title">
-        <h3 id="dsg-stage-title">{current.label}</h3>
-        <p className="dsg-purpose">{current.purpose}</p>
-        {stage === "identity" && <Identity brief={brief} />}
-        {stage === "location" && <Location brief={brief} />}
-        {stage === "datum" && <Datum brief={brief} />}
-        {stage === "geology" && <Geology brief={brief} />}
-        {stage === "trajectory" && <Trajectory value={value} />}
-        {stage === "casing" && <Casing brief={brief} analysis={analysis} />}
-        {stage === "cement" && <Cement brief={brief} analysis={analysis} />}
-        {stage === "completion" && <Completion brief={brief} />}
-        <Needs stage={stage} readiness={readiness} issues={issues} />
-        {next && <button type="button" className="dsg-next" onClick={() => setStage(next.id)}>Next: {next.label}<ArrowRight size={14} /></button>}
-      </section>
-    </div>
-  </div>;
+    </>}
+    numbers={<>
+      <span className="dsg-ready"><small>Ready</small><b>{readiness.percentComplete}%</b><span className="dsg-meter" aria-hidden="true"><i style={{ width: `${readiness.percentComplete}%` }} /></span></span>
+      <span><small>Total depth</small><b>{m(brief.totalDepthMdM)}</b></span>
+      <span><small>Strings</small><b>{brief.sections.length}{failing ? <em className="dsg-failing"> · {failing} failing</em> : null}</b></span>
+    </>}
+    canvas={place?.assembly && brief.sections.length
+      ? <div className="construction-body dsg-canvas"><AssemblySchematic assembly={place.assembly} survey={place.stations} formations={place.formations} formationColumn={place.formations} records={place.components} assetBaseUrl={ASSETS}
+        selectedId={wire.componentId} onSelect={select} depthWindow={wire.window} onDepthWindowChange={wire.setWindow} issues={failingIssues}
+        cursorDepthM={wire.cursor} onCursorDepthChange={wire.hover} title={`${brief.identity.name || "Planned well"} as designed`} /></div>
+      : <Empty icon={PencilRuler} title="No casing yet" action={{ label: "Open the Casing stage", run: () => openStage("casing") }}>The well is drawn here as its strings are added: propose them from the pressures or add them by hand in the Casing stage.</Empty>}
+    inspector={<Inspector reveal={reveal} id={inspectorId} initial={firstOpen} head={<dl className="mf-facts">
+      <div className="mf-facts-title"><dt>{md === null ? "Hover the drawing" : `At ${fmt(md)} m MD${tvd !== null ? ` · ${fmt(tvd)} m TVD` : ""}`}</dt><dd>{readiness.percentComplete}% ready</dd></div>
+      <div><dt>Formation</dt><dd>{md === null ? "—" : formationHere ? `${formationHere.name}${formationHere.reservoir ? " (reservoir)" : ""}` : "above the first top"}</dd></div>
+      <div><dt>Innermost string</dt><dd>{md === null ? "—" : stringHere ? `${stringHere.label} · ${stringHere.grade}` : "open hole"}</dd></div>
+    </dl>} sections={designStages.map((entry) => {
+      const status = statusOf(entry.id);
+      const Icon = STAGE_ICON[status];
+      return { id: entry.id, title: entry.label, summary: <span className={`dsg-sum is-${status}`}><Icon size={11} strokeWidth={status === "complete" ? 3 : 2} aria-hidden="true" />{summaryOf(entry.id)}</span>, body: body(entry.id, forms[entry.id]) };
+    })} />}
+    status={<Status items={["Every field is one undoable step (⌘Z); every module redraws from the design", "Click a string in the drawing to edit it"]} />} />;
 }
 
 /** What this stage still needs, from the core's readiness checks and design issues. */

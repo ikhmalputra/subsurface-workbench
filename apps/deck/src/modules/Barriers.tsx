@@ -9,6 +9,7 @@ import { actions } from "../deck/store.ts";
 import { formatDate, useMoment } from "../data/history.ts";
 import { useForgeOpenHole, valueAt } from "../data/openhole.ts";
 import { fmt } from "../format.ts";
+import { Frame, Inspector, Status } from "./frame/Frame.tsx";
 import { useSize } from "./useSize.ts";
 import { useWire } from "./wire.ts";
 
@@ -66,41 +67,52 @@ export function Barriers() {
     return { envelopes: barrierEnvelopes({ components: place.components, phase: "producing", provenance: "synthetic", reservoirTopMdM }), components: place.components, depthM: place.totalDepthM, caption: "design · producing through the completion" };
   }, [forge, moment, place, brief, kestrelPhase, openHole]);
   const { envelopes } = model;
-  const [box, size] = useSize<HTMLDivElement>();
-  const wide = size.width > 720;
+  // The producing design's annuli, and whether Nodal's integrity lens has seen one leak.
+  const annuli = useAnnuli(place.siteId);
+  const showAnnuli = !forge && kestrelPhase === "producing" && annuli !== null;
+  const leaking = showAnnuli && annuli.live?.annuli.some((x) => x.sustained) === true;
   const row = (envelope: "primary" | "secondary") => (element: BarrierElement) => <tr key={`${envelope}${element.id}`} className={element.status === "not reported" ? "is-gap" : undefined}>
     <td><i style={{ background: envelope === "primary" ? PRIMARY : SECONDARY }} />{element.name}</td>
     <td>{element.kind === "wellhead" || element.kind === "valve" || element.kind === "bop" ? "surface" : `${fmt(element.topM)}–${fmt(element.bottomM)} m`}</td>
     <td>{element.status}</td>
     <td>{element.evidence}</td>
   </tr>;
-  return <div className="acx td barriers" ref={box}>
-    <header className="acx-head">
-      <span><b>{place.label}</b> · well barriers · {model.caption}</span>
-      {!forge && <span className="log-sets" role="group" aria-label="Phase">
-        <button type="button" aria-pressed={kestrelPhase === "drilling"} onClick={() => setKestrelPhase("drilling")}>Drilling</button>
-        <button type="button" aria-pressed={kestrelPhase === "producing"} onClick={() => setKestrelPhase("producing")}>Producing</button>
-      </span>}
-    </header>
-    <div className={`acx-plots${wide ? " is-wide" : ""}`}>
-      <Drawing envelopes={envelopes} components={model.components} depthM={model.depthM} cursor={wire.cursor} />
-      <div className="barrier-list">
-        <table className="acx-table">
-          <thead><tr><th>Element</th><th>MD</th><th>Status</th><th>Evidence</th></tr></thead>
-          <tbody>
-            <tr className="barrier-head"><td colSpan={4} style={{ color: PRIMARY }}>Primary envelope</td></tr>
-            {envelopes.primary.map(row("primary"))}
-            <tr className="barrier-head"><td colSpan={4} style={{ color: SECONDARY }}>Secondary envelope</td></tr>
-            {envelopes.secondary.map(row("secondary"))}
-          </tbody>
-        </table>
-        {envelopes.shared.length > 0 && <p className="petro-note"><b>In both envelopes:</b> {envelopes.shared.join(", ")} — one failure there would take both.</p>}
-        <p className="petro-note"><b>Gaps in the records ({envelopes.gaps.length}):</b> {envelopes.gaps.length ? envelopes.gaps.join("; ") : "none"}.</p>
-        {!forge && kestrelPhase === "producing" && <Annuli siteId={place.siteId} />}
-      </div>
-    </div>
-    <p className="petro-note">Two envelopes, each able to stop flow on its own, after the well-barrier idea of NORSOK D-010 (Standards Norway); its element acceptance tables are copyrighted and not reproduced, so this lists what each element&apos;s records say rather than judging them against those tables. {forge ? "FORGE follows the time cursor: a fluid column while the hole is being drilled, the production casing once it is cemented. Mud weights and BOP test dates are the daily reports'; a stated test date later than its report is not used." : "Kestrel A-7 is a design: every element is planned, none tested."}</p>
-  </div>;
+  const table = (envelope: "primary" | "secondary") => <table className="acx-table bar-table">
+    <thead><tr><th>Element</th><th>MD</th><th>Status</th><th>Evidence</th></tr></thead>
+    <tbody>{envelopes[envelope].map(row(envelope))}</tbody>
+  </table>;
+  const unreported = (elements: readonly BarrierElement[]) => elements.filter((element) => element.status === "not reported").length;
+  return <Frame name="barriers" title={place.label} subtitle={`Well barriers · ${model.caption}`}
+    tools={!forge && <span className="log-sets" role="group" aria-label="Phase">
+      <button type="button" aria-pressed={kestrelPhase === "drilling"} onClick={() => setKestrelPhase("drilling")}>Drilling</button>
+      <button type="button" aria-pressed={kestrelPhase === "producing"} onClick={() => setKestrelPhase("producing")}>Producing</button>
+    </span>}
+    numbers={<>
+      <span><small>Primary</small><b>{envelopes.primary.length}</b></span>
+      <span><small>Secondary</small><b>{envelopes.secondary.length}</b></span>
+      <span><small>Gaps in records</small><b>{envelopes.gaps.length}</b></span>
+    </>}
+    canvas={<div className="mf-plot"><Drawing envelopes={envelopes} components={model.components} depthM={model.depthM} cursor={wire.cursor} /></div>}
+    inspector={<Inspector id="barriers" initial="primary" head={<>
+      {leaking && <div className="bar-alert" role="alert"><p className="mf-prose"><b>A barrier is leaking.</b> An annulus that builds back after a bleed has a path through the cement or casing between envelopes.</p><button type="button" className="tie-button" onClick={() => actions.open("nodal")}>Open the integrity lens</button></div>}
+      <dl className="mf-facts">
+        <div className="mf-facts-title"><dt>{model.caption}</dt><dd>{forge ? "documented" : "synthetic design"}</dd></div>
+        <div><dt><i className="bar-swatch" style={{ background: PRIMARY }} />Primary envelope</dt><dd>{envelopes.primary.length} elements{unreported(envelopes.primary) ? ` · ${unreported(envelopes.primary)} not reported` : ""}</dd></div>
+        <div><dt><i className="bar-swatch" style={{ background: SECONDARY }} />Secondary envelope</dt><dd>{envelopes.secondary.length} elements{unreported(envelopes.secondary) ? ` · ${unreported(envelopes.secondary)} not reported` : ""}</dd></div>
+        <div><dt>In both envelopes</dt><dd>{envelopes.shared.length ? envelopes.shared.join(", ") : "none"}</dd></div>
+      </dl>
+    </>} sections={[
+      { id: "primary", title: "Primary envelope", summary: `${envelopes.primary.length} elements`, body: table("primary") },
+      { id: "secondary", title: "Secondary envelope", summary: `${envelopes.secondary.length} elements`, body: table("secondary") },
+      envelopes.shared.length > 0 && { id: "shared", title: "Shared elements", summary: `${envelopes.shared.length}`, body: <p className="mf-prose"><b>In both envelopes:</b> {envelopes.shared.join(", ")} — one failure there would take both.</p> },
+      { id: "gaps", title: "Gaps in the records", summary: `${envelopes.gaps.length}`, body: envelopes.gaps.length ? <ul className="bar-gaps">{envelopes.gaps.map((gap) => <li key={gap}>{gap}</li>)}</ul> : <p className="mf-prose">None.</p> },
+      showAnnuli && { id: "annuli", title: "Annuli", summary: annuli.live ? `${Math.round(annuli.live.hours / 24)} days on production` : "limits only", body: <Annuli annuli={annuli} /> },
+      { id: "norsok", title: "About the envelopes", summary: "NORSOK D-010", body: <>
+        <p className="mf-prose">Two envelopes, each able to stop flow on its own, after the well-barrier idea of NORSOK D-010 (Standards Norway); its element acceptance tables are copyrighted and not reproduced, so this lists what each element&apos;s records say rather than judging them against those tables.</p>
+        <p className="mf-prose">{forge ? "FORGE follows the time cursor: a fluid column while the hole is being drilled, the production casing once it is cemented. Mud weights and BOP test dates are the daily reports'; a stated test date later than its report is not used." : "Kestrel A-7 is a design: every element is planned, none tested."}</p>
+      </> },
+    ]} />}
+    status={<Status items={[forge ? "FORGE follows the time cursor: move it to see the envelopes while drilling" : "Kestrel A-7 is a design: every element planned, none tested", "After NORSOK D-010; its acceptance tables are not reproduced"]} />} />;
 }
 
 /** The construction to depth scale, the envelopes traced over it. */
@@ -144,8 +156,10 @@ function Drawing({ envelopes, components, depthM, cursor }: { readonly envelopes
         if (seen.has(key)) return null;
         seen.add(key);
         const both = envelopes.primary.some((p) => p.id === key) && envelopes.secondary.some((s) => s.id === key);
-        const yy = top - 14 - index * 16;
-        return <g key={key}><rect x={cx - 46} width={92} y={yy - 10} height={13} rx={3} fill="none" stroke={both ? "var(--ink)" : colour(envelope)} strokeWidth={2} strokeDasharray={element.status === "not reported" ? "4 3" : undefined} /><text className="acx-label" x={cx} y={yy} textAnchor="middle">{element.kind === "bop" ? "BOP" : element.kind === "valve" ? "valve" : "wellhead"}{both ? " · both" : ""}</text></g>;
+        const yy = top - 16 - index * 21;
+        // The box fits its words: about 7 px a character at the label's 11 px mono.
+        const label = `${element.kind === "bop" ? "BOP" : element.kind === "valve" ? "valve" : "wellhead"}${both ? " · both" : ""}`, w = label.length * 7 + 16;
+        return <g key={key}><rect x={cx - w / 2} width={w} y={yy - 12} height={17} rx={4} fill="none" stroke={both ? "var(--ink)" : colour(envelope)} strokeWidth={2} strokeDasharray={element.status === "not reported" ? "4 3" : undefined} /><text className="acx-label" x={cx} y={yy} textAnchor="middle">{label}</text></g>;
       })}
       {cursor !== null && cursor <= deepest && <line className="acx-cursor" x1={20} x2={width - 10} y1={y(cursor)} y2={y(cursor)} />}
       <text className="acx-axis" x={width - 8} y={height - 6} textAnchor="end">MD to scale · widths not</text>
@@ -160,16 +174,18 @@ function Drawing({ envelopes, components, depthM, cursor }: { readonly envelopes
  * BSEE's MAWOP, and, once Nodal's integrity lens has read them, its pressure and whether its record
  * shows sustained casing pressure (a leak in the envelope it sits between).
  */
-function Annuli({ siteId }: { readonly siteId: string }) {
+function useAnnuli(siteId: string) {
   const { brief } = useDesign();
   const status = useIntegrityStatus();
   const annuli = useMemo(() => annuliOf(brief), [brief]);
   if (typeof annuli === "string") return null;
-  const limits = bseeLimits(annuli, false);
-  const live = status?.siteId === siteId ? status : null;
-  return <section className="barrier-annuli">
-    <h4>Annuli <small>{live ? `as Nodal's integrity lens reads them, ${Math.round(live.hours / 24)} days on production` : "limits only: open Nodal analysis › Integrity for their pressures"}</small></h4>
-    <table className="acx-table">
+  return { annuli, limits: bseeLimits(annuli, false), live: status?.siteId === siteId ? status : null };
+}
+
+function Annuli({ annuli: { annuli, limits, live } }: { readonly annuli: NonNullable<ReturnType<typeof useAnnuli>> }) {
+  return <>
+    <p className="mf-prose">{live ? `As Nodal's integrity lens reads them, ${Math.round(live.hours / 24)} days on production.` : "Limits only: open Nodal analysis › Integrity for their pressures."}</p>
+    <table className="acx-table bar-table">
       <thead><tr><th>Annulus</th><th>MAASP</th><th>MAWOP</th><th>Now</th><th>Record</th></tr></thead>
       <tbody>{annuli.map((a) => {
         const l = limits.find((x) => x.name === a.name), s = live?.annuli.find((x) => x.name === a.name);
@@ -182,6 +198,5 @@ function Annuli({ siteId }: { readonly siteId: string }) {
         </tr>;
       })}</tbody>
     </table>
-    {live?.annuli.some((x) => x.sustained) && <p className="petro-note"><b>A barrier is leaking.</b> An annulus that builds back after a bleed has a path through the cement or casing between envelopes. <button type="button" className="tie-button" onClick={() => actions.open("nodal")}>Open the integrity lens</button></p>}
-  </section>;
+  </>;
 }

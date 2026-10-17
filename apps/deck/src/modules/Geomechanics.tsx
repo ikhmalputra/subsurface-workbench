@@ -6,6 +6,7 @@ import { useComputed } from "../compute/run.ts";
 import { breaksOut, GRANITE_GRADIENT, ppg, RKB_ABOVE_GROUND_16A_FT, SHMAX_RATIO, STEP_FT, tensileAtPore, type Row, type Source } from "../compute/geomech.ts";
 import { fmt } from "../format.ts";
 import { Loading } from "./Empty.tsx";
+import { Frame, Inspector, Status } from "./frame/Frame.tsx";
 import { useSize } from "./useSize.ts";
 import { useWire } from "./wire.ts";
 
@@ -34,33 +35,42 @@ export function Geomechanics() {
   const ovalWhereSome = withMud.filter((row) => row.oval && breaksOut(row, 1)).length;
   const fractures = rows.filter(tensileAtPore).length;
   const regime = stressRegime(here.sv, here.sH, here.sh);
-  return <div className="geo" ref={box}>
-    <header className="acx-head">
-      <span><b>16A(78)-32</b> · 1D mechanical earth model · {fmt(metresToFeet(rows[0]!.mdM))}–{fmt(metresToFeet(rows.at(-1)!.mdM))} ft MD</span>
-      <span className="log-sets" role="group" aria-label="Horizontal stresses from">
-        <button type="button" aria-pressed={source === "5832"} onClick={() => setSource("5832")}>58-32 calibrated <small>GDR 1032</small></button>
-        <button type="button" aria-pressed={source === "16a"} onClick={() => setSource("16a")}>16A model <small>IsoMechPro</small></button>
-      </span>
-    </header>
-    <dl className="petro-summary geo-summary">
-      <div><dt>At {fmt(here.mdM)} m MD · {fmt(here.tvdFt)} ft TVD</dt><dd>{regime} faulting</dd></div>
-      <div><dt>Pp · Shmin · SHmax · Sv (ppg)</dt><dd>{[here.pp, here.sh, here.sH, here.sv].map((p) => fmt(ppg(p, here.tvdFt), 1)).join(" · ")}</dd></div>
-      <div><dt>Collapse (any SHmax azimuth)</dt><dd>{!here.collapse ? "fails at every pressure" : here.collapse[1] <= here.pp + 1 ? "stands at pore pressure" : `${fmt(ppg(here.collapse[0], here.tvdFt), 1)}–${fmt(ppg(here.collapse[1], here.tvdFt), 1)} ppg`}</dd></div>
-      <div><dt>Breakdown (any SHmax azimuth)</dt><dd>{!here.breakdown ? "not reached below 2 Sv" : `${tensileAtPore(here) ? "at pore pressure" : fmt(ppg(here.breakdown[0], here.tvdFt), 1)}–${fmt(ppg(here.breakdown[1], here.tvdFt), 1)} ppg`}</dd></div>
+  const collapse = !here.collapse ? "fails at every pressure" : here.collapse[1] <= here.pp + 1 ? "stands at pore pressure" : `${fmt(ppg(here.collapse[0], here.tvdFt), 1)}–${fmt(ppg(here.collapse[1], here.tvdFt), 1)} ppg`;
+  const breakdown = !here.breakdown ? "not reached below 2 Sv" : `${tensileAtPore(here) ? "at pore pressure" : fmt(ppg(here.breakdown[0], here.tvdFt), 1)}–${fmt(ppg(here.breakdown[1], here.tvdFt), 1)} ppg`;
+  return <Frame name="geomech" title="16A(78)-32" subtitle={`1D mechanical earth model · ${fmt(metresToFeet(rows[0]!.mdM))}–${fmt(metresToFeet(rows.at(-1)!.mdM))} ft MD`}
+    tools={<span className="log-sets" role="group" aria-label="Horizontal stresses from">
+      <button type="button" aria-pressed={source === "5832"} onClick={() => setSource("5832")}>58-32 calibrated <small>GDR 1032</small></button>
+      <button type="button" aria-pressed={source === "16a"} onClick={() => setSource("16a")}>16A model <small>IsoMechPro</small></button>
+    </span>}
+    numbers={<>
+      <span><small>Breakouts predicted</small><b>{fmt(anyAzimuth * STEP_FT)}–{fmt(someAzimuth * STEP_FT)} ft</b></span>
+      <span><small>Oval hole seen</small><b>{fmt(ovals * STEP_FT)} ft</b></span>
+    </>}
+    canvas={<div className="mf-plot" ref={box}><WindowPlot rows={rows} cursor={wire.cursor} onHover={wire.hover} onPick={wire.pin} /></div>}
+    inspector={<Inspector id="geomech" initial="inputs" head={<dl className="mf-facts">
+      <div className="mf-facts-title"><dt>At {fmt(here.mdM)} m MD · {fmt(here.tvdFt)} ft TVD</dt><dd>{regime} faulting</dd></div>
+      <div><dt>Pp · Shmin · SHmax · Sv</dt><dd>{[here.pp, here.sh, here.sH, here.sv].map((p) => fmt(ppg(p, here.tvdFt), 1)).join(" · ")} ppg</dd></div>
+      <div><dt>Collapse, any SHmax azimuth</dt><dd>{collapse}</dd></div>
+      <div><dt>Breakdown, any SHmax azimuth</dt><dd>{breakdown}</dd></div>
       <div><dt>Mud drilled with</dt><dd>{here.mud === null ? "not reported" : `${fmt(here.mud, 1)} ppg`}</dd></div>
-      <div><dt>Breakouts predicted · oval hole seen</dt><dd>{fmt(anyAzimuth * STEP_FT)}–{fmt(someAzimuth * STEP_FT)} ft · {fmt(ovals * STEP_FT)} ft{ovalWhereSome ? ` (${fmt(ovalWhereSome * STEP_FT)} ft where predicted)` : ""}</dd></div>
-      <div><dt>Tensile at the wall at pore pressure</dt><dd>{fmt(fractures * STEP_FT)} of {fmt(rows.length * STEP_FT)} ft, for some SHmax azimuth</dd></div>
-    </dl>
-    <WindowPlot rows={rows} cursor={wire.cursor} onHover={wire.hover} onPick={wire.pin} />
-    <p className="petro-note">
-      <b>Inputs.</b> Pore pressure, vertical stress, UCS, friction angle, tensile strength and Poisson&apos;s ratio: Schlumberger&apos;s IsoMechPro for 16A (GDR 1292), by the 1 ft bins of the open-hole set. Horizontal stresses: {source === "5832"
-        ? <>58-32&apos;s profile (GDR 1032; its Biot coefficient calibrated to its injection tests), taken at the same depth below ground, 900 m away in the same granite; below 58-32&apos;s TD its granite gradients carry on ({fmt(GRANITE_GRADIENT.sh, 3)} and {fmt(GRANITE_GRADIENT.sH, 3)} psi/ft below ground).</>
-        : <>16A&apos;s own IsoMechPro Shmin (isotropic, not calibrated here); SHmax from it at 58-32&apos;s granite ratio, (SHmax − Pp) = {fmt(SHMAX_RATIO, 2)} × (Shmin − Pp).</>}
-      {" "}<b>Method.</b> Wall stresses of the inclined hole (Fjær et al.; Peška &amp; Zoback 1995), Mohr–Coulomb for collapse, the tensile strength for breakdown. No record here gives SHmax&apos;s azimuth, so each is computed for every azimuth and drawn as the band it spans.
-      {" "}<b>Check.</b> Predicted breakouts are where the wall fails above pore pressure and the mud was lighter than that; &ldquo;tens.&rdquo; marks depths where, for some SHmax azimuth, the inclined wall is already in tension at pore pressure (drilling-induced fractures whatever the mud); oval hole is where the two caliper pairs part by a quarter inch more than their usual gap. The two Shmin sources disagree: 16A&apos;s model reads {fmt(here.sh16 / here.tvdFt, 2)} psi/ft here{here.sh5832 !== null ? `, 58-32's calibrated profile ${fmt(here.sh5832 / (here.tvdFt - RKB_ABOVE_GROUND_16A_FT), 2)} psi/ft below ground` : ""}.
-    </p>
-  </div>;
+    </dl>} sections={[
+      { id: "well", title: "Down the whole hole", summary: `${fmt(rows.length * STEP_FT)} ft`, body: <dl className="mf-facts">
+        <div><dt>Breakouts predicted</dt><dd>{fmt(anyAzimuth * STEP_FT)}–{fmt(someAzimuth * STEP_FT)} ft</dd></div>
+        <div><dt>Oval hole seen</dt><dd>{fmt(ovals * STEP_FT)} ft{ovalWhereSome ? ` (${fmt(ovalWhereSome * STEP_FT)} ft where predicted)` : ""}</dd></div>
+        <div><dt>Tensile at the wall at pore pressure</dt><dd>{fmt(fractures * STEP_FT)} ft, for some SHmax azimuth</dd></div>
+      </dl> },
+      { id: "inputs", title: "Inputs", summary: source === "5832" ? "58-32 stresses" : "16A stresses", body: <p className="mf-prose">
+        Pore pressure, vertical stress, UCS, friction angle, tensile strength and Poisson&apos;s ratio: Schlumberger&apos;s IsoMechPro for 16A (GDR 1292), by the 1 ft bins of the open-hole set. Horizontal stresses: {source === "5832"
+          ? <>58-32&apos;s profile (GDR 1032; its Biot coefficient calibrated to its injection tests), taken at the same depth below ground, 900 m away in the same granite; below 58-32&apos;s TD its granite gradients carry on ({fmt(GRANITE_GRADIENT.sh, 3)} and {fmt(GRANITE_GRADIENT.sH, 3)} psi/ft below ground).</>
+          : <>16A&apos;s own IsoMechPro Shmin (isotropic, not calibrated here); SHmax from it at 58-32&apos;s granite ratio, (SHmax − Pp) = {fmt(SHMAX_RATIO, 2)} × (Shmin − Pp).</>}
+      </p> },
+      { id: "method", title: "Method", body: <p className="mf-prose">Wall stresses of the inclined hole (Fjær et al.; Peška &amp; Zoback 1995), Mohr–Coulomb for collapse, the tensile strength for breakdown. No record here gives SHmax&apos;s azimuth, so each is computed for every azimuth and drawn as the band it spans.</p> },
+      { id: "check", title: "Check against the hole", body: check(here) },
+    ]} />}
+    status={<Status items={["Hover the window to read any depth · click to pin it", "No record gives SHmax's azimuth: bands span every azimuth"]} />} />;
 }
+
+const check = (here: Row) => <p className="mf-prose">Predicted breakouts are where the wall fails above pore pressure and the mud was lighter than that; &ldquo;tens.&rdquo; marks depths where, for some SHmax azimuth, the inclined wall is already in tension at pore pressure (drilling-induced fractures whatever the mud); oval hole is where the two caliper pairs part by a quarter inch more than their usual gap. The two Shmin sources disagree: 16A&apos;s model reads {fmt(here.sh16 / here.tvdFt, 2)} psi/ft here{here.sh5832 !== null ? `, 58-32's calibrated profile ${fmt(here.sh5832 / (here.tvdFt - RKB_ABOVE_GROUND_16A_FT), 2)} psi/ft below ground` : ""}.</p>;
 
 /** The window down 16A: pressures as equivalent mud weight against MD, depth down the page like every depth view. */
 function WindowPlot({ rows, cursor, onHover, onPick }: { readonly rows: readonly Row[]; readonly cursor: number | null; readonly onHover: (md: number | null) => void; readonly onPick: (md: number | null) => void }) {

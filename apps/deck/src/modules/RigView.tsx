@@ -456,7 +456,8 @@ export function RigView({ simRef, running, zoomed, rate }: { readonly simRef: Re
           ctx.textAlign = "center"; ctx.fillStyle = danger ? "#fecaca" : "#e2e8f0"; ctx.fillText(`ECD ${r.ecdBitSg.toFixed(2)}`, ecdX, wy + 50);
         }
         if (path.length > 1) {
-          const py = Math.min(height - 120, height * 0.72), ph = height - py - 18;
+          // Below the window at the bit (which ends at wy + 50): in a short view the path gives way rather than overlap it.
+          const py = Math.max(wy + 64, Math.min(height - 120, height * 0.72)), ph = height - py - 18;
           if (ph > 60) {
             const departure = (s: ComputedStation) => Math.hypot(s.northingM, s.eastingM);
             const maxD = Math.max(1, ...path.map(departure)), maxT = Math.max(1, ...path.map((s) => s.tvdM));

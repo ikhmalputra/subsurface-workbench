@@ -1,0 +1,31 @@
+/* Five-zone frame: torque and drag, anti-collision, barriers. */
+
+/* Torque and drag: the broomstick beside the torque, on one depth. */
+.td-split { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 8px; }
+.td-split > * { min-width: 0; min-height: 0; }
+@container tile (max-width: 640px) { .td-split { grid-template-columns: minmax(0, 1fr); } .td-split > :nth-child(2) { display: none; } }
+
+/* Anti-collision: the ladder beside the travelling cylinder. */
+.mf[data-frame="anticollision"] { --mf-inspector: 360px; }
+.ac-split { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 8px; }
+.ac-split > * { min-width: 0; min-height: 0; }
+.ac-split > :nth-child(2) .plot-area > svg { left: 50%; transform: translateX(-50%); }
+.ac-split .acx-caption { flex: none; text-align: center; }
+.ac-swatch, .bar-swatch { display: inline-block; width: 10px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+@container tile (max-width: 640px) { .ac-split { grid-template-columns: minmax(0, 1fr); } .ac-split > :nth-child(2) { display: none; } }
+
+/* Barriers: the drawing on the canvas, the envelope tables in a wide inspector. */
+.mf[data-frame="barriers"] { --mf-inspector: 520px; }
+.bar-table td { white-space: normal; vertical-align: top; }
+.bar-table td:first-child, .bar-table td:nth-child(2) { white-space: nowrap; }
+.bar-table tr.is-gap td { color: var(--ink-3); font-style: italic; }
+.bar-table td small { color: var(--ink-3); }
+.bar-gaps { margin: 0; padding-left: 16px; font-size: var(--t-12); line-height: 1.5; color: var(--ink-2); display: flex; flex-direction: column; gap: 2px; }
+.bar-alert { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 8px 10px; border-radius: 12px; border: 1px solid color-mix(in srgb, #ef4444 60%, transparent); background: color-mix(in srgb, #ef4444 14%, transparent); }
+.bar-alert b { color: #f87171; }
+.mf[data-frame="anticollision"] .mf-tools button { white-space: nowrap; }
+.mf-numbers b.acx-sf.is-stop { color: #f87171; }
+.mf-numbers b.acx-sf.is-care { color: #fbbf24; }
+.mf-numbers b.acx-sf.is-clear { color: #4ade80; }
+.ac-brief { display: none; }
+@container tile (max-width: 640px) { .mf[data-frame="anticollision"] .ac-full { display: none; } .mf[data-frame="anticollision"] .ac-brief { display: inline; } }

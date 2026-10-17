@@ -328,7 +328,7 @@ function Panel({ logs, syn, fit, onFit, traces, at, windowM, onWindow, wire, con
       onDoubleClick={() => setView([800, 1700])}>
       {/* The tie window, where the correlation is scored. */}
       <rect className="tie-window" x={RULER} y={y(windowM[0])} width={seisX + SEIS_W - RULER} height={Math.max(0, y(windowM[1]) - y(windowM[0]))} />
-      <Ruler y={y} height={height} md={(depth) => depth - (DATUM - well.depthZeroElevationM)} />
+      <Ruler y={y} height={height} md={(depth) => depth - (DATUM - well.depthZeroElevationM)} cursor={cursor} />
       {TRACKS.map((track, i) => {
         const x = x0 + i * LOG_W, scale = scaleLinear().domain([track.min, track.max]).range([x + 3, x + LOG_W - 3]).clamp(true);
         const values = track.key === "GR" ? logs.gr : track.key === "DTCO" ? logs.dt : track.key === "RHOZ" ? logs.rho : Float64Array.from(logs.ai, (value) => value / 1e6);
@@ -366,16 +366,17 @@ function Panel({ logs, syn, fit, onFit, traces, at, windowM, onWindow, wire, con
   </div>;
 }
 
-function Ruler({ y, height, md }: { readonly y: ReturnType<typeof scaleLinear<number, number>>; readonly height: number; readonly md: (depth: number) => number }) {
+function Ruler({ y, height, md, cursor }: { readonly y: ReturnType<typeof scaleLinear<number, number>>; readonly height: number; readonly md: (depth: number) => number; readonly cursor: number | null }) {
   // Ticks only below the head: none is drawn under the ruler's own title.
-  // Each tick carries two lines (TVD over the well's MD): keep them 30 px apart so neither lands on the next.
+  // Each tick carries two lines (TVD over the well's MD): keep them 36 px apart so neither lands on the next.
   const ticks: number[] = [];
-  for (const tick of y.ticks(Math.max(4, Math.floor(height / 60)))) if (y(tick) > HEAD + 10 && (!ticks.length || Math.abs(y(tick) - y(ticks.at(-1)!)) >= 30)) ticks.push(tick);
+  for (const tick of y.ticks(Math.max(4, Math.floor(height / 60)))) if (y(tick) > HEAD + 10 && (!ticks.length || Math.abs(y(tick) - y(ticks.at(-1)!)) >= 36)) ticks.push(tick);
   return <g className="tie-ruler">
     <rect className="tie-ruler-hit" x={0} y={HEAD} width={RULER} height={height - HEAD - 8} />
     <text x={RULER - 6} y={13} textAnchor="end" className="tie-th">PSDM depth</text>
     <text x={RULER - 6} y={27} textAnchor="end" className="tie-ts">m · 58-32 TVD</text>
-    {ticks.map((tick) => <g key={tick} transform={`translate(0,${y(tick)})`}><line x1={RULER - 5} x2={RULER} /><text x={RULER - 8} dy="-0.1em" textAnchor="end">{fmt(tick)}</text><text x={RULER - 8} dy="1em" textAnchor="end" className="tie-ruler-md">{fmt(md(tick))}</text></g>)}
+    {/* The cursor's own depth label takes the ruler where it sits: the ticks beside it give way. */}
+    {ticks.filter((tick) => cursor === null || Math.abs(y(tick) - y(cursor)) > 28).map((tick) => <g key={tick} transform={`translate(0,${y(tick)})`}><line x1={RULER - 5} x2={RULER} /><text x={RULER - 8} dy="-0.3em" textAnchor="end">{fmt(tick)}</text><text x={RULER - 8} dy="1.15em" textAnchor="end" className="tie-ruler-md">{fmt(md(tick))}</text></g>)}
   </g>;
 }
 

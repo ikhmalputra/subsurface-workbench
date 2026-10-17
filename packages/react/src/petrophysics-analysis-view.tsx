@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { scaleLinear, scaleLog } from "d3-scale";
 import {
   flattenPetrophysicsWells,
@@ -43,13 +43,24 @@ export interface PetrophysicsCrossplotProps {
   /** "log" for a curve read on a logarithmic grid, such as resistivity; samples at or below zero are left out. */
   readonly xScale?: "linear" | "log";
   readonly yScale?: "linear" | "log";
+  /** Draw at the size the plot is given (its svg sized by the page) rather than a fixed 410 × 250 that scales, text and all. */
+  readonly fill?: boolean;
 }
 
-export function PetrophysicsCrossplot({ xCurve, yCurve, depthRangeMdM = null, onBrushChange, onSelectMd, title, xDomain: xFixed, yDomain: yFixed, pointColor, overlay, onlyInRange = false, maxPoints = Infinity, xScale = "linear", yScale = "linear" }: PetrophysicsCrossplotProps) {
+export function PetrophysicsCrossplot({ xCurve, yCurve, depthRangeMdM = null, onBrushChange, onSelectMd, title, xDomain: xFixed, yDomain: yFixed, pointColor, overlay, onlyInRange = false, maxPoints = Infinity, xScale = "linear", yScale = "linear", fill = false }: PetrophysicsCrossplotProps) {
   if (xCurve.wellId !== yCurve.wellId) throw new TypeError("Petrophysics crossplot curves must belong to the same well.");
   const svg = useRef<SVGSVGElement>(null);
   const start = useRef<readonly [number, number] | null>(null);
   const [keyboardIndex, setKeyboardIndex] = useState<number | null>(null);
+  const [size, setSize] = useState<{ readonly w: number; readonly h: number } | null>(null);
+  useEffect(() => {
+    const element = svg.current;
+    if (!fill || !element || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => { const box = entry?.contentRect; if (box && box.width > 80 && box.height > 80) setSize({ w: Math.round(box.width), h: Math.round(box.height) }); });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [fill]);
+  const W = fill && size ? size.w : 410, H = fill && size ? size.h : 250;
   const points = pairPetrophysicsCurves(xCurve, yCurve).filter((point) => (xScale !== "log" || point.x > 0) && (yScale !== "log" || point.y > 0));
   const isInDepthRange = (mdM: number) => depthRangeMdM === null || (mdM >= depthRangeMdM[0] && mdM <= depthRangeMdM[1]);
   const visible = depthRangeMdM
@@ -65,7 +76,7 @@ export function PetrophysicsCrossplot({ xCurve, yCurve, depthRangeMdM = null, on
     const stride = Math.ceil(shown.length / maxPoints);
     return shown.filter((_, index) => index % stride === 0);
   })();
-  const left = 54, right = 376, top = 18, bottom = 216;
+  const left = 54, right = W - 34, top = 18, bottom = H - 34;
   const x = (xScale === "log" ? scaleLog() : scaleLinear()).domain(xDomain).range([left, right]);
   const y = (yScale === "log" ? scaleLog() : scaleLinear()).domain(yDomain).range([bottom, top]);
   // With fixed axes a sample can fall outside them: it is drawn hollow on the frame, not dropped.
@@ -121,7 +132,7 @@ export function PetrophysicsCrossplot({ xCurve, yCurve, depthRangeMdM = null, on
   return <section className="sw-petro-analysis" data-testid="petrophysics-crossplot">
     <h2>{label}</h2>
     <p>Exact shared MD keys only; no resampling. Drag a rectangle over points to link their measured-depth extent.</p>
-    <svg ref={svg} viewBox="0 0 410 250" role="group" tabIndex={0} aria-label={`${label}. X ${xCurve.mnemonic} in ${xCurve.unit}; Y ${yCurve.mnemonic} in ${yCurve.unit}. Exact-MD sample pairs only; arrow keys browse, Enter selects one sample, or drag to brush.`} onPointerDown={handleDown} onPointerUp={handleUp} onKeyDown={handleKeyDown}>
+    <svg ref={svg} viewBox={`0 0 ${W} ${H}`} role="group" tabIndex={0} aria-label={`${label}. X ${xCurve.mnemonic} in ${xCurve.unit}; Y ${yCurve.mnemonic} in ${yCurve.unit}. Exact-MD sample pairs only; arrow keys browse, Enter selects one sample, or drag to brush.`} onPointerDown={handleDown} onPointerUp={handleUp} onKeyDown={handleKeyDown}>
       <rect x={left} y={top} width={right - left} height={bottom - top} className="sw-petro-analysis-plot" />
       <line x1={left} x2={right} y1={bottom} y2={bottom} className="sw-petro-analysis-axis" />
       <line x1={left} x2={left} y1={top} y2={bottom} className="sw-petro-analysis-axis" />
@@ -131,7 +142,7 @@ export function PetrophysicsCrossplot({ xCurve, yCurve, depthRangeMdM = null, on
       </g>}
       {overlay && <g className="sw-petro-analysis-overlay" pointerEvents="none">{overlay({ x: (value) => x(value), y: (value) => y(value) })}</g>}
       {drawn.map((point) => { const focused = keyboardIndex !== null && points[keyboardIndex] === point; const colour = pointColor?.(point.mdM); const off = outside(point); return <circle key={point.mdM} cx={plotX(point.x)} cy={plotY(point.y)} r={focused ? 6 : isInDepthRange(point.mdM) ? 3 : 2} className={focused ? "sw-petro-analysis-point-keyboard" : off ? "sw-petro-analysis-point-off" : isInDepthRange(point.mdM) ? "sw-petro-analysis-point" : "sw-petro-analysis-point-muted"} style={colour && !focused ? (off ? { stroke: colour } : { fill: colour }) : undefined} onClick={onSelectMd ? () => onSelectMd(point.mdM) : undefined}><title>{`MD ${fmt(point.mdM, 1)} m · ${xCurve.mnemonic} ${fmt(point.x)} ${xCurve.unit} · ${yCurve.mnemonic} ${fmt(point.y)} ${yCurve.unit}`}</title></circle>; })}
-      <text x={(left + right) / 2} y="243" textAnchor="middle">{xCurve.mnemonic} ({xCurve.unit})</text>
+      <text x={(left + right) / 2} y={H - 7} textAnchor="middle">{xCurve.mnemonic} ({xCurve.unit})</text>
       <text x="12" y={(top + bottom) / 2} transform={`rotate(-90 12 ${(top + bottom) / 2})`} textAnchor="middle">{yCurve.mnemonic} ({yCurve.unit})</text>
     </svg>
     <p role="status">{visible.length} of {points.length} paired samples in linked depth range{offScale ? ` · ${offScale} beyond the axes, drawn hollow on the frame` : ""}</p>

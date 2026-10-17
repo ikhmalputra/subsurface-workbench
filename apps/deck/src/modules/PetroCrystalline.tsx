@@ -5,6 +5,7 @@ import { PetrophysicsCrossplot } from "@ikhmalputra/subsurface-react/2d";
 import { useForgeOpenHole } from "../data/openhole.ts";
 import { fmt } from "../format.ts";
 import { Loading } from "./Empty.tsx";
+import { Frame, Inspector, Status } from "./frame/Frame.tsx";
 import { useWire } from "./wire.ts";
 
 const pct = (value: number | null) => value === null ? "not computed" : `${fmt(value * 100, 1)} %`;
@@ -73,43 +74,64 @@ export function CrystallinePetrophysics() {
   if (!openHole || !interval || !result) return <Loading>{error ? `The open-hole logs could not be read (${error}).` : "Reading the FORGE open-hole logs…"}</Loading>;
   const ft = (m: number) => fmt(metresToFeet(m));
   const p32Colour = (md: number) => { const value = result.p32ByMd.get(md); return value === undefined || !Number.isFinite(value) ? "var(--ink-3)" : `color-mix(in oklab, #f59e0b ${Math.round(Math.min(1, value / 4) * 100)}%, #60a5fa)`; };
-  return <div className="petro">
-    <header className="petro-head">
-      <div><b>16A(78)-32</b> <span className="badge is-documented">documented logs</span></div>
-      <div className="petro-interval">{fmt(interval[0])}–{fmt(interval[1])} m MD ({ft(interval[0])}–{ft(interval[1])} ft) · {wire.brush ? "brushed" : "granite, open hole"}
-        {wire.brush ? <button type="button" onClick={() => wire.setBrush(null)}>Whole open hole</button> : null}</div>
-    </header>
-    <dl className="petro-summary">
-      <div><dt>φ density</dt><dd>{pct(result.phiD)}</dd></div>
-      <div><dt>φ neutron</dt><dd>{pct(result.phiN)}</dd></div>
-      <div><dt>φ sonic</dt><dd>{pct(result.phiS)}</dd></div>
+  const flags = [
+    result.cased > 0 && `${fmt(result.cased)} ft inside casing left out.`,
+    result.rt10Clip !== null && `The 10 in induction is pinned at ${fmt(result.rt10Clip)} Ω·m on ${fmt(result.rt10Clipped)} of these feet: the tool's ceiling, not a reading; the 90 in curve is used.`,
+    result.washed > 0 && `${fmt(result.washed)} ft enlarged all round (both calipers over the bit by 0.5 in).`,
+    result.armOffset !== null && `The two caliper arm pairs differ by ${fmt(result.armOffset, 2)} in as a rule, a steady offset rather than an oval hole; they part by a further quarter inch on ${fmt(result.oval)} ft, the oval hole a breakout would make.`,
+    result.negativeU > 0 && `Uranium reads below zero on ${fmt(result.negativeU)} ft, a spectral-processing artefact; it is kept as delivered.`,
+  ].filter((x): x is string => !!x);
+  const crossplots = { onSelectMd: wire.pin, onBrushChange: (range: readonly [number, number] | null) => { if (range) wire.setBrush(range); } };
+  return <Frame name="petro" className="petro pc" title="16A(78)-32" subtitle={`Crystalline petrophysics · ${fmt(interval[0])}–${fmt(interval[1])} m MD (${ft(interval[0])}–${ft(interval[1])} ft) · ${wire.brush ? "brushed" : "granite, open hole"}`}
+    tools={<>
+      <span className="badge is-documented">documented logs</span>
+      {wire.brush && <button type="button" className="tie-button" onClick={() => wire.setBrush(null)}>Whole open hole</button>}
+    </>}
+    numbers={<>
+      <span><small>φ N–D</small><b>{pct(result.phiND)}</b></span>
+      <span><small>P32 mean</small><b>{num(result.p32, 2, " /ft")}</b></span>
+      <span><small>Fractured ≥ 2/ft</small><b>{fmt(result.fractured)} ft</b></span>
+    </>}
+    canvas={<div className="mf-plot pc-plots">
+      <div className="pc-grid">
+        <PetrophysicsCrossplot fill xCurve={openHole.curve("K")} yCurve={openHole.curve("TH")} depthRangeMdM={interval} onlyInRange maxPoints={900}
+          xDomain={[0, 8]} yDomain={[0, 50]} title="Thorium against potassium (HNGS)" {...crossplots} pointColor={p32Colour} overlay={thKLines} />
+        <PetrophysicsCrossplot fill xCurve={openHole.curve("RT90")} yCurve={openHole.curve("P32")} depthRangeMdM={interval} onlyInRange maxPoints={900} xScale="log"
+          xDomain={[10, 3000]} yDomain={[0, 5]} title="Fracture intensity against deep resistivity" {...crossplots} pointColor={p32Colour} />
+      </div>
+      <p className="xp-legend"><i style={{ background: "#60a5fa" }} />few fractures<i style={{ background: "#f59e0b" }} />many (P32 ≥ 4/ft) · hollow marks lie beyond the axes, pinned to the frame · drag a box over points to brush their depths · Th/K lines from the Schlumberger chart</p>
+    </div>}
+    inspector={<Inspector id="petro-forge" initial="porosity" head={<dl className="mf-facts">
+      <div className="mf-facts-title"><dt>{fmt(interval[0])}–{fmt(interval[1])} m MD</dt><dd>{wire.brush ? "brushed" : "whole open hole"}</dd></div>
       <div><dt>φ neutron–density</dt><dd>{pct(result.phiND)}</dd></div>
-      <div><dt>Rt (90 in), geometric</dt><dd>{num(result.rt90, 0, " Ω·m")}</dd></div>
-      <div><dt>K · Th · U</dt><dd>{num(result.k, 1, "%")} · {num(result.th, 1)} · {num(result.u, 1)} ppm</dd></div>
       <div><dt>Th/K</dt><dd>{num(result.thk, 1)}</dd></div>
       <div><dt>Fractures, P32</dt><dd>{num(result.p32, 2, " /ft")} · max {num(Number.isFinite(result.p32Max) ? result.p32Max : null, 1)}</dd></div>
-      <div><dt>Vp/Vs · ν</dt><dd>{num(result.vpvs, 2)} · {num(result.nuDyn, 3)}</dd></div>
-      <div><dt>ν delivered (IsoMechPro)</dt><dd>{num(result.prDelivered, 3)}</dd></div>
-      <div><dt>P32 vs log Rt</dt><dd>{result.p32VsRt === null ? "not computed" : `r = ${fmt(result.p32VsRt, 2)}`}</dd></div>
-      <div><dt>Fractured ≥ 2/ft</dt><dd>{fmt(result.fractured)} of {fmt(result.samples)} ft</dd></div>
-    </dl>
-    <p className="petro-note">
-      Granite: porosity reads a few percent by every method and is mostly the minerals talking (the neutron sees bound water in micas; the density uses a 2.65 g/cm³ sandstone matrix). Fluids move in fractures, so the fracture intensity, not the matrix porosity, is the reservoir.
-      {result.cased > 0 && ` ${fmt(result.cased)} ft inside casing left out.`}
-      {result.rt10Clip !== null && ` The 10 in induction is pinned at ${fmt(result.rt10Clip)} Ω·m on ${fmt(result.rt10Clipped)} of these feet: the tool's ceiling, not a reading; the 90 in curve is used.`}
-      {result.washed > 0 && ` ${fmt(result.washed)} ft enlarged all round (both calipers over the bit by 0.5 in).`}
-      {result.armOffset !== null && ` The two caliper arm pairs differ by ${fmt(result.armOffset, 2)} in as a rule, a steady offset rather than an oval hole;`}
-      {result.armOffset !== null && ` they part by a further quarter inch on ${fmt(result.oval)} ft, the oval hole a breakout would make.`}
-      {result.negativeU > 0 && ` Uranium reads below zero on ${fmt(result.negativeU)} ft, a spectral-processing artefact; it is kept as delivered.`}
-    </p>
-    <PetrophysicsCrossplot xCurve={openHole.curve("K")} yCurve={openHole.curve("TH")} depthRangeMdM={interval} onlyInRange maxPoints={900}
-      xDomain={[0, 8]} yDomain={[0, 50]} title="Thorium against potassium (HNGS)" onSelectMd={wire.pin} onBrushChange={(range) => { if (range) wire.setBrush(range); }}
-      pointColor={p32Colour} overlay={thKLines} />
-    <PetrophysicsCrossplot xCurve={openHole.curve("RT90")} yCurve={openHole.curve("P32")} depthRangeMdM={interval} onlyInRange maxPoints={900} xScale="log"
-      xDomain={[10, 3000]} yDomain={[0, 5]} title="Fracture intensity against deep resistivity" onSelectMd={wire.pin} onBrushChange={(range) => { if (range) wire.setBrush(range); }} pointColor={p32Colour} />
-    <p className="xp-legend"><i style={{ background: "#60a5fa" }} />few fractures<i style={{ background: "#f59e0b" }} />many (P32 ≥ 4/ft) · hollow marks lie beyond the axes, pinned to the frame · drag a box over points to brush their depths · Th/K lines from the Schlumberger chart</p>
-    <p className="petro-note">Source: Utah FORGE 16A(78)-32 logs, GDR 1292 (Schlumberger thru-bit combination, dipole sonic, HNGS, FMI), CC BY 4.0, binned to 1 ft.</p>
-  </div>;
+      <div><dt>Samples</dt><dd>{fmt(result.samples)} ft of open hole</dd></div>
+    </dl>} sections={[
+      { id: "porosity", title: "Porosity, four ways", summary: pct(result.phiND), body: <><dl className="mf-facts">
+        <div><dt>φ density</dt><dd>{pct(result.phiD)}</dd></div>
+        <div><dt>φ neutron</dt><dd>{pct(result.phiN)}</dd></div>
+        <div><dt>φ sonic</dt><dd>{pct(result.phiS)}</dd></div>
+        <div><dt>φ neutron–density</dt><dd>{pct(result.phiND)}</dd></div>
+      </dl><p className="mf-prose">Granite: porosity reads a few percent by every method and is mostly the minerals talking (the neutron sees bound water in micas; the density uses a 2.65 g/cm³ sandstone matrix). Fluids move in fractures, so the fracture intensity, not the matrix porosity, is the reservoir.</p></> },
+      { id: "minerals", title: "Mineralogy", summary: `Th/K ${num(result.thk, 1)}`, body: <dl className="mf-facts">
+        <div><dt>K · Th · U</dt><dd>{num(result.k, 1, "%")} · {num(result.th, 1)} · {num(result.u, 1)} ppm</dd></div>
+        <div><dt>Th/K</dt><dd>{num(result.thk, 1)}</dd></div>
+      </dl> },
+      { id: "fractures", title: "Fractures and resistivity", summary: `${fmt(result.fractured)} ft ≥ 2/ft`, body: <dl className="mf-facts">
+        <div><dt>Fractures, P32</dt><dd>{num(result.p32, 2, " /ft")} · max {num(Number.isFinite(result.p32Max) ? result.p32Max : null, 1)}</dd></div>
+        <div><dt>Fractured ≥ 2/ft</dt><dd>{fmt(result.fractured)} of {fmt(result.samples)} ft</dd></div>
+        <div><dt>Rt (90 in), geometric</dt><dd>{num(result.rt90, 0, " Ω·m")}</dd></div>
+        <div><dt>P32 vs log Rt</dt><dd>{result.p32VsRt === null ? "not computed" : `r = ${fmt(result.p32VsRt, 2)}`}</dd></div>
+      </dl> },
+      { id: "elastic", title: "Velocity ratio", summary: `ν ${num(result.nuDyn, 3)}`, body: <dl className="mf-facts">
+        <div><dt>Vp/Vs · ν</dt><dd>{num(result.vpvs, 2)} · {num(result.nuDyn, 3)}</dd></div>
+        <div><dt>ν delivered (IsoMechPro)</dt><dd>{num(result.prDelivered, 3)}</dd></div>
+      </dl> },
+      { id: "flags", title: "Readings left out or flagged", summary: flags.length ? `${flags.length}` : "none", body: flags.length ? <>{flags.map((text) => <p key={text} className="mf-prose">{text}</p>)}</> : <p className="mf-prose">Nothing in this interval is inside casing, clipped, washed out or negative.</p> },
+      { id: "source", title: "Source", body: <p className="mf-prose">Utah FORGE 16A(78)-32 logs, GDR 1292 (Schlumberger thru-bit combination, dipole sonic, HNGS, FMI), CC BY 4.0, binned to 1 ft.</p> },
+    ]} />}
+    status={<Status items={["Drag a box over points to brush their depths · click one to pin it", "Utah FORGE 16A(78)-32, GDR 1292, CC BY 4.0"]} />} />;
 }
 
 function thKLines({ x, y }: { readonly x: (value: number) => number; readonly y: (value: number) => number }) {

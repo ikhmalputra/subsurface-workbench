@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { scaleLinear } from "d3-scale";
-import { Plus, Star, X } from "lucide-react";
+import { Plus, Star, Table2, X } from "lucide-react";
 import { mdAtSurveyTvd, tvdAtSurveyMd } from "@ikhmalputra/subsurface-core";
 import type { WellComponent } from "@ikhmalputra/subsurface-core";
 import { formatInches } from "@ikhmalputra/subsurface-react/2d";
@@ -8,6 +8,7 @@ import { useComparableWells, type ComparableWell } from "../data/wells.ts";
 import { fmt } from "../format.ts";
 import { useSize } from "./useSize.ts";
 import { useWire } from "./wire.ts";
+import { Frame, Inspector, Status } from "./frame/Frame.tsx";
 
 /**
  * Wells side by side: each construction drawn to one depth scale and one diameter scale, so a
@@ -140,57 +141,107 @@ export function Compare() {
   });
   const [axis, setAxisState] = useState<Axis>(saved?.axis ?? "md");
   useEffect(() => store({ ids, axis }), [ids, axis]);
-  const [adding, setAdding] = useState(false);
+  const [page, setPage] = useState<"add" | "table" | null>(null);
   const [role, setRole] = useState<Role | null>(null);
   const shown = useMemo(() => ids.map((id) => wells.find((well) => well.id === id)).filter((well): well is ComparableWell => !!well), [ids, wells]);
   const built = useMemo(() => shown.map((well) => build(well, axis)), [shown, axis]);
-  const add = (id: string) => { setIds((current) => current.includes(id) || current.length >= MAX_WELLS ? current : [...current, id]); setAdding(false); };
+  const add = (id: string) => { setIds((current) => current.includes(id) || current.length >= MAX_WELLS ? current : [...current, id]); setPage(null); };
   const remove = (id: string) => setIds((current) => current.filter((value) => value !== id));
   const makeReference = (id: string) => setIds((current) => [id, ...current.filter((value) => value !== id)]);
   const [view, setView] = useState<readonly [number, number] | null>(null);
+  const [hover, setHover] = useState<Hover | null>(null);
   const setAxis = (next: Axis) => { setAxisState(next); setView(null); };
   const blocked = built.filter((entry) => !entry.can);
   const drawable = built.filter((entry) => entry.can);
   const others = wells.filter((well) => !ids.includes(well.id));
+  const present = ROLES.filter((which) => built.some((entry) => entry.strings.some((value) => value.role === which)));
+  const reference = built[0] ?? null;
+  const refString = role && reference ? reference.strings.find((value) => value.role === role)?.component ?? null : null;
+  const deepest = built.length ? Math.max(...built.map((entry) => entry.well.totalDepthM)) : null;
+  const blockedText = blocked.length > 0 ? `${blocked.map((entry) => entry.well.label).join(", ")}: no ${axis === "tvdss" ? "datum elevation" : "survey"} in the records, so not drawn on ${AXIS_NAME[axis]}.` : null;
+  const hoverEntry = hover ? drawable[hover.column] ?? null : null;
 
-  return <div className="cmp">
-    <header className="acx-head cmp-head">
-      <div className="cmp-add">
-        <button type="button" className="cmp-add-button" aria-expanded={adding} disabled={ids.length >= MAX_WELLS} onClick={() => setAdding((open) => !open)}><Plus size={14} aria-hidden="true" /> Add well</button>
-        {adding && <div className="cmp-menu" role="menu">
-          {others.map((well) => <button key={well.id} type="button" role="menuitem" onClick={() => add(well.id)}>
-            <b>{well.label}</b><small>{well.site} · {well.status}</small><span className={`badge is-${well.provenance}`}>{well.provenance}</span>
-          </button>)}
-          {!others.length && <p className="cmp-menu-note">Every well with a construction is on the comparison.</p>}
-          {unavailable.length > 0 && <p className="cmp-menu-note">Not comparable: {unavailable.map((well) => well.label).join(", ")} ({unavailable[0]!.site}). {unavailable[0]!.why}</p>}
-        </div>}
-      </div>
+  const addPage = {
+    title: "Add a well", context: `${ids.length} of ${MAX_WELLS} on the comparison`, onBack: () => setPage(null),
+    body: <div className="cmp-pick">
+      {others.map((well) => <button key={well.id} type="button" disabled={ids.length >= MAX_WELLS} onClick={() => add(well.id)}>
+        <b>{well.label}</b><small>{well.site} · {well.status}</small><span className={`badge is-${well.provenance}`}>{well.provenance}</span>
+      </button>)}
+      {!others.length && <p className="mf-prose">Every well with a construction is on the comparison.</p>}
+      {unavailable.length > 0 && <p className="mf-prose">Not comparable: {unavailable.map((well) => well.label).join(", ")} ({unavailable[0]!.site}). {unavailable[0]!.why}</p>}
+    </div>,
+  };
+  const tablePage = shown.length > 0 ? {
+    title: "Compare in a table", context: `${built.map((entry) => entry.well.label).join(" · ")} · read against ${built[0]!.well.label}, on ${AXIS_NAME[axis]}`, onBack: () => setPage(null),
+    body: <>
+      <Table built={built} axis={axis} role={role} onRole={setRole} />
+      <p className="mf-prose">Strings are matched by role (named in the records, else by their place in the programme); Δ compares a string&apos;s shoe with the same string in the reference well, on the axis shown. Choose a string&apos;s row to light it in every well.</p>
+    </>,
+  } : null;
+
+  return <Frame name="compare" title="Compare wells" subtitle={shown.length ? `${shown.map((well) => well.label).join(" · ")} · on ${AXIS_NAME[axis]}` : "construction side by side"}
+    tools={<>
+      <button type="button" className="cmp-add-button" aria-pressed={page === "add"} disabled={ids.length >= MAX_WELLS} onClick={() => setPage(page === "add" ? null : "add")}><Plus size={14} aria-hidden="true" /> Add well</button>
       <span className="log-sets" role="group" aria-label="Depth axis">
         {(["md", "tvd", "tvdss"] as const).map((key) => <button key={key} type="button" aria-pressed={axis === key} title={AXIS_HELP[key]} onClick={() => setAxis(key)}>{AXIS_NAME[key]}</button>)}
       </span>
       {view && <button type="button" className="cmp-fit" onClick={() => setView(null)}>Whole wells</button>}
-      <span className="cmp-hint" title={`${AXIS_NAME[axis]}: ${AXIS_HELP[axis]}`}>{AXIS_NAME[axis]}: {AXIS_HELP[axis]} · ⌘/Ctrl + wheel zooms</span>
-    </header>
-    {blocked.length > 0 && <p className="curtain-head">{blocked.map((entry) => entry.well.label).join(", ")}: no {axis === "tvdss" ? "datum elevation" : "survey"} in the records, so not drawn on {AXIS_NAME[axis]}.</p>}
-    {shown.length === 0
-      ? <p className="cmp-empty">Add a well to start a comparison.</p>
-      : <Stage built={drawable} axis={axis} view={view} onView={setView} role={role} onRole={setRole} placeWell={placeWell} wire={wire} onRemove={remove} onReference={makeReference} />}
-    {shown.length > 0 && <Table built={built} axis={axis} role={role} onRole={setRole} />}
-    <p className="petro-note">
-      {shown.map((well) => well.source).join(". ")}. Depths and diameters are to one scale across the wells, diameters exaggerated against depth; wall thickness is drawn, not measured.
-      TVD comes from each well&apos;s survey by minimum curvature{built.some((entry) => entry.projectedBelowMdM !== null) ? "; below a survey's last station it runs on along the last inclination and is drawn dashed" : ""}.
-      Strings are matched by role (named in the records, else by their place in the programme); Δ compares a string&apos;s shoe with the same string in the reference well, on the axis shown.
-    </p>
-  </div>;
+      <button type="button" className="cmp-fit" aria-pressed={page === "table"} disabled={!shown.length} onClick={() => setPage(page === "table" ? null : "table")}><Table2 size={14} aria-hidden="true" /> Table</button>
+    </>}
+    numbers={<>
+      <span><small>Wells</small><b>{shown.length}/{MAX_WELLS}</b></span>
+      <span><small>Deepest TD · m MD</small><b>{deepest === null ? "—" : fmt(deepest)}</b></span>
+    </>}
+    canvas={shown.length === 0
+      ? <div className="cmp-none-yet"><p className="cmp-empty">Add a well to start a comparison.</p></div>
+      : <Stage built={drawable} axis={axis} view={view} onView={setView} role={role} onRole={setRole} placeWell={placeWell} wire={wire} onRemove={remove} onReference={makeReference} hover={hover} onHover={setHover} />}
+    inspector={<Inspector id="compare" initial="source" head={<>
+      {present.length > 0 && <div className="cmp-roles" role="group" aria-label="Choose a string to light it in every well">
+        {present.map((which) => <button key={which} type="button" aria-pressed={role === which} onClick={() => setRole(role === which ? null : which)}><i style={{ background: ROLE_COLOUR[which] }} />{ROLE_NAME[which]}</button>)}
+      </div>}
+      {built.length > 0 && <dl className="mf-facts">
+        {role
+          ? <div className="mf-facts-title"><dt>{ROLE_NAME[role]}</dt><dd>{role === "tubing" ? "tail" : "shoe"} · Δ against {reference!.well.label}</dd></div>
+          : <div className="mf-facts-title"><dt>{hoverEntry && hover ? `At ${fmt(hover.value)} m ${AXIS_NAME[axis]}` : "Wells"}</dt><dd>{hoverEntry ? "under the pointer" : "choose a string above"}</dd></div>}
+        {built.map((entry, index) => {
+          if (role) {
+            const string = entry.strings.find((value) => value.role === role)?.component ?? null;
+            if (!string) return <div key={entry.well.id}><dt>{entry.well.label}</dt><dd>none</dd></div>;
+            const here = entry.at(string.bottomDepthM), there = refString && reference ? reference.at(refString.bottomDepthM) : null;
+            const delta = index > 0 && here !== null && there !== null ? here - there : null;
+            return <div key={entry.well.id}><dt>{entry.well.label}</dt><dd>{formatInches(inches(string.outerDiameterMm))} · {fmt(string.bottomDepthM)} m MD{axis !== "md" ? ` · ${fmtAxis(here)} ${AXIS_NAME[axis]}` : ""}{delta === null ? "" : Math.abs(delta) >= 0.5 ? ` · Δ ${delta > 0 ? "+" : "−"}${fmt(Math.abs(delta))} m` : " · same depth"}</dd></div>;
+          }
+          const drawnAt = drawable.indexOf(entry);
+          const md = hover && drawnAt >= 0 ? entry.mdAt(hover.value) : null;
+          return <div key={entry.well.id}><dt>{entry.well.label}{index === 0 ? " ★" : ""}</dt><dd>{!entry.can ? `not drawn on ${AXIS_NAME[axis]}` : hover ? readAt(entry, md) : `TD ${fmt(entry.well.totalDepthM)} m MD · ${entry.well.status}`}</dd></div>;
+        })}
+      </dl>}
+    </>} sections={[
+      blockedText !== null && { id: "blocked", title: "Not drawn", summary: `${blocked.length} on ${AXIS_NAME[axis]}`, body: <p className="mf-prose">{blockedText}</p> },
+      { id: "source", title: "Source & method", summary: `${shown.length} ${shown.length === 1 ? "well" : "wells"}`, body: <>
+        <p className="mf-prose">{shown.length ? `${shown.map((well) => well.source).join(". ")}.` : "No wells on the comparison."}</p>
+        <p className="mf-prose">Depths and diameters are to one scale across the wells, diameters exaggerated against depth; wall thickness is drawn, not measured.
+          TVD comes from each well&apos;s survey by minimum curvature{built.some((entry) => entry.projectedBelowMdM !== null) ? "; below a survey's last station it runs on along the last inclination and is drawn dashed" : ""}.</p>
+        <p className="mf-prose">Strings are matched by role (named in the records, else by their place in the programme); Δ compares a string&apos;s shoe with the same string in the reference well, on the axis shown.</p>
+      </> },
+    ]} />}
+    status={<Status items={[
+      `${AXIS_NAME[axis]}: ${AXIS_HELP[axis]} · ⌘/Ctrl + wheel zooms, double-click for whole wells`,
+      blockedText ?? "Diameters exaggerated against depth; wall thickness drawn, not measured",
+    ]} />}
+    page={page === "add" ? addPage : page === "table" ? tablePage : null} />;
 }
+
+interface Hover { readonly value: number; readonly column: number }
 
 // Below WIDE a column drops its label lane (the table and the readout carry the depths) rather than scroll sideways.
 const RULER = 62, TOP = 40, BOTTOM = 14, LANE_W = 100, WIDE = 230, MIN_COL = 140;
 
-function Stage({ built, axis, view, onView, role, onRole, placeWell, wire, onRemove, onReference }: {
+function Stage({ built, axis, view, onView, role, onRole, placeWell, wire, onRemove, onReference, hover, onHover: setHover }: {
   readonly built: readonly Built[]; readonly axis: Axis; readonly view: readonly [number, number] | null; readonly onView: (view: readonly [number, number] | null) => void;
   readonly role: Role | null; readonly onRole: (role: Role | null) => void; readonly placeWell: string | null; readonly wire: ReturnType<typeof useWire>;
   readonly onRemove: (id: string) => void; readonly onReference: (id: string) => void;
+  readonly hover: Hover | null; readonly onHover: (hover: Hover | null) => void;
 }) {
   const [box, size] = useSize<HTMLDivElement>();
   const [body, bodySize] = useSize<HTMLDivElement>();
@@ -210,7 +261,6 @@ function Stage({ built, axis, view, onView, role, onRole, placeWell, wire, onRem
   // A drawing wider than this stops reading as a well; spare room goes either side of it.
   const drawW = Math.min(colW - lane - (lane ? 14 : 8), 300);
   const k = (drawW / 2 - 8) / maxRadiusIn;
-  const [hover, setHover] = useState<{ readonly value: number; readonly column: number } | null>(null);
   const svg = useRef<SVGSVGElement>(null);
   const viewRef = useRef({ domain, full, onView });
   viewRef.current = { domain, full, onView };
