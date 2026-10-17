@@ -1467,3 +1467,155 @@ body::before { content: ""; position: fixed; inset: 0; pointer-events: none; z-i
   .vol-side { overflow: visible; }
   .vol-bar { flex-wrap: wrap; }
 }
+
+/* ---- Nodal analysis ---- */
+.nodal { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; overflow: hidden; }
+.nodal-empty { margin: 16px; }
+.nodal-bar { flex-wrap: nowrap; }
+.nodal-bar .tie-title small { display: block; }
+.nodal-status { padding: 4px 10px; border-radius: 999px; border: 1px solid var(--glass-edge-strong); font-size: var(--t-12); font-weight: 600; white-space: nowrap; }
+.nodal-status.is-flowing { border-color: color-mix(in srgb, #34d399 55%, transparent); color: #6ee7b7; background: color-mix(in srgb, #34d399 10%, transparent); }
+.nodal-status.is-lift { border-color: color-mix(in srgb, #fbbf24 55%, transparent); color: #fde68a; background: color-mix(in srgb, #fbbf24 10%, transparent); }
+.nodal-status.is-dead { border-color: color-mix(in srgb, #ef4444 60%, transparent); color: #fecaca; background: color-mix(in srgb, #ef4444 14%, transparent); }
+.nodal-p em { white-space: nowrap; }
+.nodal-stage { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) 300px; gap: 8px; }
+.nodal-plot, .nodal-traverse { margin: 0; min-height: 0; display: flex; flex-direction: column; }
+.nodal-plot svg, .nodal-traverse svg { display: block; flex: 1; }
+.nodal-grid { stroke: var(--glass-edge); }
+.nodal-ipr { fill: none; stroke: #38bdf8; stroke-width: 2.6; }
+.nodal-vlp { fill: none; stroke: #f59e0b; stroke-width: 2.6; }
+.nodal-vlp-alt { fill: none; stroke: #f59e0b; stroke-width: 1.2; stroke-dasharray: 5 4; }
+.nodal-alt-point { fill: #f59e0b; stroke: var(--deck-bg); stroke-width: 1.5; }
+.nodal-point circle { fill: #fff; stroke: #f59e0b; stroke-width: 3; filter: drop-shadow(0 0 6px rgba(245, 158, 11, .8)); }
+.nodal-point text { font: 600 11px var(--font-mono); fill: var(--ink); paint-order: stroke; stroke: var(--deck-bg); stroke-width: 3px; }
+.nodal-pb { stroke: #a78bfa; stroke-dasharray: 2 4; }
+.nodal-pb-label { font: 10px var(--font-mono); fill: #c4b5fd; }
+.nodal-legend text { font: 10px var(--font-mono); fill: var(--ink-2); }
+.nodal-tube { fill: color-mix(in srgb, var(--ink) 4%, transparent); stroke: var(--glass-edge-strong); }
+.nodal-pressure { fill: none; stroke: #f59e0b; stroke-width: 2.4; }
+.nodal-temp { fill: none; stroke: #f87171; stroke-width: 1.4; stroke-dasharray: 4 3; }
+.nodal-pr { fill: #38bdf8; stroke: var(--deck-bg); stroke-width: 1.5; }
+.nodal-valve path { fill: #e2e8f0; } .nodal-valve text { font: 600 10px var(--font-mono); fill: var(--ink); paint-order: stroke; stroke: var(--deck-bg); stroke-width: 3px; }
+.nodal-breakout line { stroke: #a78bfa; stroke-dasharray: 3 3; } .nodal-breakout text { font: 10px var(--font-mono); fill: #c4b5fd; paint-order: stroke; stroke: var(--deck-bg); stroke-width: 3px; }
+.nodal-patterns { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: var(--t-11); color: var(--ink-2); }
+.nodal-patterns li { display: inline-flex; align-items: center; gap: 5px; }
+.nodal-patterns i { width: 10px; height: 10px; border-radius: 3px; }
+.nodal-patterns i.is-temp { height: 2px; background: repeating-linear-gradient(90deg, #f87171 0 4px, transparent 4px 7px); }
+.nodal-holdup-key { color: var(--ink-3); }
+.nodal-inputs { display: flex; flex-direction: column; gap: 6px; min-height: 0; overflow: auto; scrollbar-width: thin; padding-right: 2px; }
+/* A scrolling column: its blocks keep their height and the column scrolls, instead of squeezing them to nothing. */
+.nodal-inputs > * { flex-shrink: 0; }
+.nodal-inputs h3 { margin: 6px 2px 0; font-size: var(--t-12); color: var(--ink); display: flex; align-items: baseline; gap: 6px; }
+.nodal-inputs h3 small { font-weight: 400; color: var(--ink-3); flex: 1; }
+.nodal-design { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin: 0; border-radius: 10px; overflow: hidden; background: var(--glass-edge); }
+.nodal-design div { padding: 5px 8px; background: var(--glass-strong); }
+.nodal-design dt { font-size: 10px; color: var(--ink-3); }
+.nodal-design dd { margin: 1px 0 0; font: 600 var(--t-12) var(--font-mono); color: var(--ink); }
+.nodal-design dd small { display: block; font: 10px var(--font-ui); color: var(--ink-3); }
+.nodal-slider { display: grid; gap: 2px; font-size: var(--t-11); color: var(--ink-3); }
+.nodal-slider span { display: flex; justify-content: space-between; gap: 8px; }
+.nodal-slider b { font: 600 var(--t-11) var(--font-mono); color: var(--ink); }
+.nodal-slider input { width: 100%; accent-color: #f59e0b; }
+.nodal-field { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: var(--t-11); color: var(--ink-3); }
+.nodal-field select { height: 26px; padding: 0 6px; border-radius: 7px; border: 1px solid var(--glass-edge-strong); background: var(--glass-light); color: var(--ink); font: 600 var(--t-12) var(--font-ui); }
+.nodal-compare { padding: 0; flex-wrap: wrap; }
+.nodal-sens { margin: 0; padding: 6px 8px; border-radius: 10px; border: 1px solid var(--glass-edge-strong); background: var(--glass-strong); }
+.nodal-sens figcaption { font-size: var(--t-11); color: var(--ink-3); margin-bottom: 2px; }
+.nodal-sens-line { fill: none; stroke: #34d399; stroke-width: 2; }
+.nodal-sens-dot { fill: #34d399; stroke: var(--deck-bg); stroke-width: 1.5; }
+.nodal-sens-dead { fill: #ef4444; }
+@container tile (max-width: 1100px) {
+  .nodal { overflow: auto; }
+  .nodal-stage { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-auto-rows: minmax(320px, auto); }
+  .nodal-inputs { grid-column: 1 / -1; overflow: visible; }
+  .nodal-bar { flex-wrap: wrap; }
+}
+
+/* ---- Nodal: match and history ---- */
+.nodal-views { padding: 0; }
+.nodal-calibrated { display: inline-flex; flex-direction: column; line-height: 1.15; padding: 4px 10px; border-radius: 10px; border: 1px dashed color-mix(in srgb, #fbbf24 60%, transparent); color: #fde68a; font-size: var(--t-12); font-weight: 600; white-space: nowrap; }
+.nodal-calibrated small { font-weight: 400; color: var(--ink-3); font-size: 10px; }
+.nodal-calibrated.is-on { border: 1px solid color-mix(in srgb, #34d399 55%, transparent); color: #6ee7b7; background: color-mix(in srgb, #34d399 8%, transparent); }
+.nodal-calibrated.is-stale { border-style: solid; }
+.nodal-match { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); grid-template-areas: "tests lab" "fit corr"; grid-template-rows: auto auto; align-content: start; gap: 8px; overflow: auto; scrollbar-width: thin; }
+.nodal-tests { grid-area: tests; } .nodal-lab { grid-area: lab; } .nodal-fit { grid-area: fit; } .nodal-correlations { grid-area: corr; align-self: start; }
+.nodal-card > * { flex-shrink: 0; }
+.nodal-card { margin: 0; padding: 8px 10px; border-radius: 12px; border: 1px solid var(--glass-edge-strong); background: var(--glass-strong); display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 0; box-shadow: var(--depth-shadow); }
+.nodal-card > header, .nodal-card > figcaption { display: flex; align-items: baseline; gap: 8px; font-size: var(--t-12); color: var(--ink-3); }
+.nodal-card > header b, .nodal-card > figcaption b { color: var(--ink); }
+.nodal-card > header .tie-button { margin-left: auto; }
+.nodal-tests .nodal-scroll { max-height: 340px; }
+.nodal-scroll { overflow: auto; min-height: 0; scrollbar-width: thin; }
+.nodal-synthetic { padding: 1px 7px; border-radius: 999px; border: 1px solid color-mix(in srgb, #a78bfa 60%, transparent); color: #c4b5fd; font: 600 10px var(--font-mono); text-transform: uppercase; letter-spacing: .04em; }
+.nodal-table { width: 100%; border-collapse: collapse; font: 11px var(--font-mono); }
+.nodal-table th { position: sticky; top: 0; background: var(--glass-strong); text-align: right; padding: 4px 5px; color: var(--ink-3); font-weight: 600; white-space: nowrap; vertical-align: bottom; }
+.nodal-table th small { display: block; font-weight: 400; font-size: 9px; }
+.nodal-table td { text-align: right; padding: 2px 4px; color: var(--ink-2); border-top: 1px solid var(--glass-edge); white-space: nowrap; }
+.nodal-table th:first-child, .nodal-table td:first-child { text-align: left; }
+.nodal-table input { width: 70px; height: 22px; padding: 0 4px; border-radius: 5px; border: 1px solid transparent; background: transparent; color: var(--ink); font: 11px var(--font-mono); text-align: right; }
+.nodal-table input[type="date"] { width: 118px; text-align: left; }
+.nodal-table input:hover { border-color: var(--glass-edge); } .nodal-table input:focus { outline: none; border-color: #f59e0b; background: var(--glass-light); }
+.nodal-table tr[data-chosen] td { color: #6ee7b7; font-weight: 600; }
+.nodal-derived { color: var(--ink-3) !important; font-family: var(--font-ui); }
+.nodal-hint { margin: 0; font-size: var(--t-11); color: var(--ink-3); }
+.nodal-hint .tie-button { margin-left: 6px; }
+.nodal-fit-plot svg { display: block; }
+.nodal-fit-band { fill: color-mix(in srgb, #34d399 12%, transparent); }
+.nodal-fit-line { stroke: var(--ink-3); stroke-dasharray: 4 3; }
+.nodal-fit-before { fill: none; stroke: #94a3b8; stroke-width: 1.4; }
+.nodal-fit-after { fill: #34d399; stroke: var(--deck-bg); stroke-width: 1.2; }
+.nodal-key-before { border: 1.4px solid #94a3b8; border-radius: 50% !important; background: none; }
+.nodal-key-after { background: #34d399; border-radius: 50% !important; }
+.nodal-test-point path { stroke: #e2e8f0; stroke-width: 2.4; }
+.nodal-test-point text { font: 600 10px var(--font-mono); fill: var(--ink); paint-order: stroke; stroke: var(--deck-bg); stroke-width: 3px; }
+.nodal-history { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; overflow: auto; align-content: start; }
+.nodal-trend svg { display: block; }
+.nodal-trend-series path { fill: none; stroke-width: 2; }
+.nodal-trend-series circle { stroke: var(--deck-bg); stroke-width: 1.2; }
+.nodal-trend-series circle[data-open] { fill: var(--deck-bg) !important; stroke-width: 1.6; }
+.nodal-trend-series.is-pressure path { stroke: #38bdf8; } .nodal-trend-series.is-pressure circle { fill: #38bdf8; stroke: #38bdf8; }
+.nodal-trend-series.is-pi path { stroke: #34d399; } .nodal-trend-series.is-pi circle { fill: #34d399; }
+.nodal-trend-series.is-skin path { stroke: #f472b6; } .nodal-trend-series.is-skin circle { fill: #f472b6; }
+.nodal-trend-series.is-liquid path { stroke: #94a3b8; } .nodal-trend-series.is-liquid circle { fill: #94a3b8; }
+.nodal-trend-series.is-oil path { stroke: #f59e0b; } .nodal-trend-series.is-oil circle { fill: #f59e0b; }
+.nodal-trend-series.is-water path { stroke: #60a5fa; } .nodal-trend-series.is-water circle { fill: #60a5fa; }
+.nodal-k input { width: 54px; height: 20px; border-radius: 5px; border: 1px solid var(--glass-edge); background: var(--glass-light); color: var(--ink); font: 11px var(--font-mono); }
+@container tile (max-width: 1100px) { .nodal-match { grid-template-columns: minmax(0, 1fr); grid-template-areas: "tests" "fit" "lab" "corr"; } .nodal-history { grid-template-columns: minmax(0, 1fr); } }
+.nodal-match > .nodal-card, .nodal-history > .nodal-card { min-height: auto; }
+
+/* Gas-lift design: the pressure–depth chart, the valve schedule and the performance curve, beside the gas supply. */
+.nodal-lift { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) 300px; gap: 8px; }
+.nodal-lift-chart { min-height: 0; }
+.nodal-lift-mid { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; overflow: auto; scrollbar-width: thin; }
+.nodal-lift-mid > * { flex-shrink: 0; }
+.nodal-lift-casing { fill: none; stroke: #38bdf8; stroke-width: 2.2; }
+.nodal-lift-kickoff { fill: none; stroke: #38bdf8; stroke-width: 1.4; stroke-dasharray: 6 4; opacity: 0.7; }
+.nodal-lift-design { fill: none; stroke: #a78bfa; stroke-width: 1.6; stroke-dasharray: 2 4; stroke-linecap: round; }
+.nodal-lift-load { fill: none; stroke: #94a3b8; stroke-width: 1.4; stroke-dasharray: 5 3; }
+.nodal-lift-packer { stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 1 3; }
+.nodal-lift-mandrel { fill: var(--ink-3); }
+.nodal-lift-valve line { stroke: #38bdf8; stroke-width: 1; opacity: 0.6; }
+.nodal-lift-valve circle { fill: var(--glass-strong); stroke: #38bdf8; stroke-width: 2; }
+.nodal-lift-valve.is-operating circle { fill: #f59e0b; stroke: #fde68a; }
+.nodal-lift-valve text { font: 600 10.5px var(--font-ui); fill: var(--ink); paint-order: stroke; stroke: var(--glass-strong); stroke-width: 3px; }
+.nodal-patterns i.is-kickoff { height: 2px; background: repeating-linear-gradient(90deg, #38bdf8 0 5px, transparent 5px 8px); }
+.nodal-patterns i.is-casing { height: 2px; background: #38bdf8; }
+.nodal-patterns i.is-design { height: 2px; background: repeating-linear-gradient(90deg, #a78bfa 0 2px, transparent 2px 5px); }
+.nodal-patterns i.is-load { height: 2px; background: repeating-linear-gradient(90deg, #94a3b8 0 4px, transparent 4px 6px); }
+.nodal-patterns i.is-flowing { height: 2px; background: #f59e0b; }
+.nodal-patterns i.is-mandrel { width: 0; height: 0; border-radius: 0; border: 4px solid transparent; border-right: 7px solid var(--ink-3); }
+.nodal-valves td:first-child { text-transform: capitalize; }
+.nodal-hint.is-warn { color: #fbbf24; }
+.nodal-lift-perf svg { display: block; }
+.nodal-lift-short { fill: var(--ink-3); opacity: 0.08; }
+.nodal-lift-tangent { stroke: #34d399; stroke-width: 1.4; stroke-dasharray: 4 3; }
+.nodal-lift-max circle { fill: var(--glass-strong); stroke: var(--ink-2); stroke-width: 1.6; }
+.nodal-lift-econ circle { fill: #34d399; stroke: #d1fae5; stroke-width: 1.6; }
+.nodal-lift-max text, .nodal-lift-econ text { font: 600 10.5px var(--font-ui); fill: var(--ink); paint-order: stroke; stroke: var(--glass-strong); stroke-width: 3px; }
+.nodal-lift-act { margin: 0; display: flex; align-items: center; gap: 16px; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--glass-edge-strong); background: var(--glass-strong); }
+.nodal-lift-act span { display: flex; flex-direction: column; font-size: var(--t-11); color: var(--ink-3); }
+.nodal-lift-act b { font: 600 var(--t-16, 16px) var(--font-mono); color: var(--ink); }
+.nodal-lift-act em { font-style: normal; font-size: 10px; }
+.nodal-lift-act .tie-button { margin-left: auto; }
+@container tile (max-width: 1100px) { .nodal-lift { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-auto-rows: minmax(360px, auto); overflow: auto; } .nodal-lift .nodal-inputs { grid-column: 1 / -1; overflow: visible; } }
+@container tile (max-width: 700px) { .nodal-lift { grid-template-columns: minmax(0, 1fr); } .nodal-lift-mid { overflow: visible; } }

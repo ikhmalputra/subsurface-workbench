@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { Activity, AlignHorizontalSpaceAround, AudioLines, AudioWaveform, Layers, Map as MapIcon, Drill, FilePen, GitCompareArrows, PencilRuler, Mountain, TrendingDown, Anchor, ShieldCheck, Radar, Slice, Box, CalendarDays, Columns3, Compass, Cylinder, Droplets, Gauge, Layers2, ScatterChart, ShieldAlert, Waves, Globe2, Layers3, ListTree, Rotate3d } from "lucide-react";
+import { Activity, AlignHorizontalSpaceAround, AudioLines, AudioWaveform, Layers, Map as MapIcon, Drill, FilePen, GitCompareArrows, PencilRuler, Mountain, TrendingDown, Fuel, Anchor, ShieldCheck, Radar, Slice, Box, CalendarDays, Columns3, Compass, Cylinder, Droplets, Gauge, Layers2, ScatterChart, ShieldAlert, Waves, Globe2, Layers3, ListTree, Rotate3d } from "lucide-react";
 import type { WellDesignBrief } from "@ikhmalputra/subsurface-core";
 import type { MinSize, Rect } from "../deck/layout.ts";
 import { designForSite, isDesignSite } from "../data/design.ts";
@@ -22,7 +22,7 @@ export type ModuleId =
   | "drilling" | "rig" | "torquedrag"
   | "petro"
   | "strings" | "window" | "kick" | "cement" | "hydraulics" | "geomech" | "barriers"
-  | "decline";
+  | "decline" | "nodal";
 
 /** What kind of place a site is: FORGE's records, the Equator field, a FORCE 2020 area, a planned well (Kestrel A-7 or the user's), or a drilled well entered on the deck. */
 type SiteKind = "forge" | "equator" | "force" | "design" | "recorded";
@@ -80,6 +80,7 @@ export const modules: readonly ModuleSpec[] = [
   { id: "cement", title: "Cement", icon: Droplets, group: "Well engineering & completions", blurb: "Slurry volumes and the column against fracture", listens: ["place", "object", "whatif"], emits: ["object", "whatif"], min: { w: 3, h: 4 }, size: { w: 4, h: 5 }, depthIndexed: false },
   { id: "barriers", title: "Well barriers", icon: ShieldCheck, group: "Well engineering & completions", blurb: "Primary and secondary barrier envelopes on the construction, with what the records say of each element", listens: ["place", "depth", "time", "whatif"], emits: [], min: { w: 4, h: 6 }, size: { w: 6, h: 8 }, depthIndexed: false },
   { id: "decline", title: "Decline curves", icon: TrendingDown, group: "Production", blurb: "Arps decline on any Norwegian field's monthly production (Sodir)", listens: [], emits: [], min: { w: 4, h: 5 }, size: { w: 6, h: 7 }, depthIndexed: false },
+  { id: "nodal", title: "Nodal analysis", icon: Fuel, group: "Production", blurb: "What the reservoir delivers against what the tubing lifts: the operating point, the flow up the tubing, and how lift gas, tubing, water and wellhead pressure move it", listens: ["place"], emits: [], min: { w: 4, h: 5 }, size: { w: 8, h: 8 }, depthIndexed: false, opensFocused: true },
   { id: "editor", title: "Well editor", icon: FilePen, group: "Your data", blurb: "A drilled well's records: survey, formation tops, casing, hole and cement, and LAS logs; enter them, paste or import them, or edit an existing well's", listens: ["place", "object"], emits: ["object"], min: { w: 4, h: 6 }, size: { w: 5, h: 8 }, depthIndexed: false },
   { id: "compare", title: "Compare wells", icon: GitCompareArrows, group: "Your data", blurb: "Several wells' construction side by side, on one depth scale and one diameter scale, string by string", listens: ["place", "depth", "whatif"], emits: ["depth"], min: { w: 4, h: 5 }, size: { w: 7, h: 8 }, depthIndexed: false },
 ];
@@ -124,6 +125,7 @@ const availability: Readonly<Partial<Record<ModuleId, { readonly sites: readonly
   window: { sites: ["design"], why: "A pressure window needs pore and fracture pressures; only planned wells (Kestrel A-7 or one you create with + New well) carry them." },
   kick: { sites: ["design"], why: "Kick tolerance needs fracture gradients at the shoes; only planned wells carry them." },
   rig: { sites: ["design"], why: "The simulator drills a planned well: it needs the plan's pore and fracture pressures, formations and casing. Open Kestrel A-7 or plan one with + New well." },
+  nodal: { sites: ["design"], why: "Nodal analysis needs a well's completion, perforations and reservoir pressure: a planned well has them. Open Kestrel A-7 or plan one with + New well." },
   cement: { sites: ["design"], why: "Cement design needs planned slurries and fracture gradients; only planned wells carry them." },
   barriers: { sites: ["forge", "design", "recorded"], why: "Barrier envelopes are drawn on a construction; the Equator wells have none. Add casing records in the Well editor." },
   geomech: { sites: ["forge"], why: "A mechanical earth model needs logged rock strength and stresses; only Utah FORGE has them (16A's IsoMechPro and 58-32's calibrated stresses)." },
@@ -172,8 +174,9 @@ function recordGap(id: ModuleId, value: WellRecordValue, wellId: string): string
 /** A planned well still being designed: which stage of the designer supplies what a module needs. */
 function designGap(id: ModuleId, brief: WellDesignBrief): string | null {
   const pressures = brief.geology.pressures.length >= 2;
-  if ((id === "window" || id === "kick" || id === "cement" || id === "rig") && !pressures) return "No pore and fracture pressures yet. In the Well designer, open Geology & pressures to add them.";
-  if (["section", "construction", "cutaway", "strings", "barriers", "kick", "cement", "hydraulics", "rig"].includes(id) && !brief.sections.length) return "No casing yet. In the Well designer, open Casing and propose a scheme from the pressures, or add strings yourself.";
+  if ((id === "window" || id === "kick" || id === "cement" || id === "rig" || id === "nodal") && !pressures) return "No pore and fracture pressures yet. In the Well designer, open Geology & pressures to add them.";
+  if (id === "nodal" && !brief.completion) return "No completion yet. In the Well designer, open Completion to set the tubing, packer, perforations and lift.";
+  if (["section", "construction", "cutaway", "strings", "barriers", "kick", "cement", "hydraulics", "rig", "nodal"].includes(id) && !brief.sections.length) return "No casing yet. In the Well designer, open Casing and propose a scheme from the pressures, or add strings yourself.";
   if (id === "hydraulics" && !brief.sections.some((section) => section.role !== "conductor")) return "Hydraulics need a hole section below the conductor. In the Well designer, open Casing and add one.";
   return null;
 }

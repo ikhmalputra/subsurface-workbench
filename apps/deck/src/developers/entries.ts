@@ -17,6 +17,7 @@ export const ENTRY_NOTES: Readonly<Record<string, string>> = {
   "@ikhmalputra/subsurface-core/records": "Operational history: daily reports, BHA and service runs, hole sections, days vs depth, the well as of a date, and a LAS 2.0 parser.",
   "@ikhmalputra/subsurface-core/sandbox": "Mock trajectories, log curves and seismic cubes for tests and demos, labelled synthetic.",
   "@ikhmalputra/subsurface-core/seismic": "SEG-Y parsing (IBM and IEEE floats, integers), traces, amplitude clipping, section images and well projection onto a section.",
+  "@ikhmalputra/subsurface-core/production": "Production engineering for one well: black-oil PVT, inflow (Darcy PI with Vogel), Beggs & Brill multiphase flow along the well path, and nodal analysis.",
   "@ikhmalputra/subsurface-core/simulation": "Simulators that run a well forward in time: live drilling with kicks, losses, washouts, shut-in and a wait-and-weight kill, deterministic for a seed.",
   "@ikhmalputra/subsurface-core/state": "The interaction store: one well, depth, pick, slice and camera per workspace, with sources on every change and undo history.",
   "@ikhmalputra/subsurface-core/state-url": "Deep links: write the store to the URL and read it back, with your own validation.",

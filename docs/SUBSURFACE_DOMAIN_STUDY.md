@@ -124,6 +124,28 @@ Each is a real tool on real data, with no overlap with what is built.
    a closure from the crest you click, up to its spill; N/G, porosity and pay Sw from each well's
    logs set the ranges; 4,000 Monte Carlo runs give P90/P50/P10 with a tornado. FORCE has no fluid
    contacts, so the contact is a what-if.
+11. ~~**Nodal analysis + PVT**~~ — *built* 17 Oct 2026 on the planned wells (Kestrel A-7): black-oil
+   PVT (Standing, Vasquez–Beggs, Beggs–Robinson, DAK Z, Lee–Gonzalez–Eakin), Darcy PI with Vogel
+   below the bubble point, Beggs & Brill (Payne) up the design's path with lift gas above the
+   deepest mandrel; operating point, flow pattern and holdup up the tubing, and sensitivities
+   (tubing, lift gas — the gas-lift performance curve — water cut, wellhead pressure, depletion).
+   Then reworked after reviewing how PROSPER and Pipesim are used: a model is not trusted until it
+   is matched. Match view: well tests (rate, water, GOR, WHP, lift, gauge, build-up Pr), the lab PVT
+   (gravities, Pb, Bo, viscosity) matched by factors, every tubing correlation (Beggs & Brill,
+   Hagedorn & Brown) tuned to the gauges by holdup and friction and chosen by tuned error, PI read
+   from each test; Predict runs on the matched model and plots the last test against it; History
+   trends reservoir pressure, PI, skin (at a stated k), rates and water cut. Kestrel carries a
+   labelled synthetic test history generated from a hidden truth, which the core tests check the
+   match recovers. Gas-lift design (17 Oct 2026, after API RP 11V6 and Brown's/Takacs' procedure):
+   casing pressure down the annulus from the static gas column; the deepest injection point the
+   operating pressure reaches at the gas available while clearing the flowing tubing pressure by
+   100 psi, above the packer; unloading valves spaced from the kickoff pressure down the load fluid
+   and then from the design tubing line, surface opening pressures stepping down per valve, with
+   each nitrogen-charged valve's test-rack setting at 60 °F; the gas-lift performance curve at that
+   depth with the technical maximum and the economic optimum (oil netback against gas cost, within
+   the supply); a check of the valve depths against the completion's mandrels; and the design taken
+   into Predict. Next: real tests (Volve), multi-well gas allocation (equal slope under a field gas
+   limit), operating limits (erosional velocity, heading, sandface below Pb), forecast.
 
 Shaly-sand saturation, permeability and Monte Carlo extend the clastic petrophysics, which still
 runs on synthetic logs; FORCE 2020 would give it real ones. Hydraulics with rheology waits for a source with Fann readings.

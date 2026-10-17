@@ -1,6 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import { Drill,
-  Activity, AlignHorizontalSpaceAround, Anchor, AudioLines, ArrowRight, AudioWaveform, Box, CalendarDays, Columns3, Command, Compass, Cylinder, Droplets, FilePen, Gauge, GitCompareArrows, Globe2, Layers, Map as MapIcon, Layers2, Layers3,
+  Activity, AlignHorizontalSpaceAround, Anchor, AudioLines, ArrowRight, AudioWaveform, Fuel, Box, CalendarDays, Columns3, Command, Compass, Cylinder, Droplets, FilePen, Gauge, GitCompareArrows, Globe2, Layers, Map as MapIcon, Layers2, Layers3,
   ListTree, Mountain, MousePointerClick, PencilRuler, Plus, Radar, Rotate3d, ScatterChart, ShieldAlert, ShieldCheck, Slice, TrendingDown, Waves,
 } from "lucide-react";
 import { Showcase3D } from "./Showcase3D.tsx";
@@ -58,6 +58,7 @@ const DISCIPLINES: readonly Discipline[] = [
   ] },
   { name: "Production", line: "What a field gives back, and how long it will keep giving.", tools: [
     { title: "Decline curves", icon: TrendingDown, blurb: "Arps decline fitted to any of 136 Norwegian fields' monthly production, forecast to an economic limit.", on: ["Anywhere"] },
+    { title: "Nodal analysis", icon: Fuel, blurb: "Black-oil PVT, a Vogel inflow and Beggs & Brill up the real well path: the operating point, the flow pattern up the tubing, and the gas-lift performance curve.", on: ["Designs"] },
   ] },
   { name: "Your data", line: "Bring your own wells in, change existing ones, and set them side by side.", tools: [
     { title: "Well editor", icon: FilePen, blurb: "Record a drilled well (survey, tops, casing, LAS logs) or edit an existing one over its record.", on: ["FORGE", "Recorded", "Equator"] },

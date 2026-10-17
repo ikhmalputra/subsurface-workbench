@@ -1453,6 +1453,144 @@
  },
  {
   "package": "@ikhmalputra/subsurface-core",
+  "entry": "@ikhmalputra/subsurface-core/production",
+  "exports": [
+   {
+    "name": "beggsBrill",
+    "kind": "function"
+   },
+   {
+    "name": "bubblePoint",
+    "kind": "function"
+   },
+   {
+    "name": "calibrateFlow",
+    "kind": "function"
+   },
+   {
+    "name": "casingPressureAt",
+    "kind": "function"
+   },
+   {
+    "name": "CORRELATIONS",
+    "kind": "value"
+   },
+   {
+    "name": "gasDensity",
+    "kind": "function"
+   },
+   {
+    "name": "gasFvf",
+    "kind": "function"
+   },
+   {
+    "name": "gasLiftDesign",
+    "kind": "function"
+   },
+   {
+    "name": "gasViscosity",
+    "kind": "function"
+   },
+   {
+    "name": "gasZ",
+    "kind": "function"
+   },
+   {
+    "name": "gaugeFit",
+    "kind": "function"
+   },
+   {
+    "name": "gradientBy",
+    "kind": "value"
+   },
+   {
+    "name": "hagedornBrown",
+    "kind": "function"
+   },
+   {
+    "name": "inflow",
+    "kind": "function"
+   },
+   {
+    "name": "inflowByTest",
+    "kind": "function"
+   },
+   {
+    "name": "liftedPoint",
+    "kind": "function"
+   },
+   {
+    "name": "liftOptimum",
+    "kind": "function"
+   },
+   {
+    "name": "liftPerformance",
+    "kind": "function"
+   },
+   {
+    "name": "matchPvt",
+    "kind": "function"
+   },
+   {
+    "name": "oilDensity",
+    "kind": "function"
+   },
+   {
+    "name": "oilFvf",
+    "kind": "function"
+   },
+   {
+    "name": "oilViscosity",
+    "kind": "function"
+   },
+   {
+    "name": "operatingPoint",
+    "kind": "function"
+   },
+   {
+    "name": "outflowCurve",
+    "kind": "function"
+   },
+   {
+    "name": "pressureAtDate",
+    "kind": "function"
+   },
+   {
+    "name": "productivityIndex",
+    "kind": "function"
+   },
+   {
+    "name": "rankCorrelations",
+    "kind": "function"
+   },
+   {
+    "name": "rateGrid",
+    "kind": "function"
+   },
+   {
+    "name": "skinFromPi",
+    "kind": "function"
+   },
+   {
+    "name": "solutionGor",
+    "kind": "function"
+   },
+   {
+    "name": "syntheticWellTests",
+    "kind": "function"
+   },
+   {
+    "name": "traverse",
+    "kind": "function"
+   },
+   {
+    "name": "tuneFlow",
+    "kind": "function"
+   }
+  ]
+ },
+ {
+  "package": "@ikhmalputra/subsurface-core",
   "entry": "@ikhmalputra/subsurface-core/records",
   "exports": [
    {
