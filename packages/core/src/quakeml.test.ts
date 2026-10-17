@@ -84,3 +84,12 @@ test("LAS 2.0: a time-indexed and a depth-indexed file written here read back, n
   assert.equal(irregular.well.STEP?.value, "0");
   assert.throws(() => formatLas({ well: [], curves: [{ mnemonic: "DEPT", unit: "M", value: "", description: "", values: [1, 2] }, { mnemonic: "X", unit: "", value: "", description: "", values: [1] }] }), /one value/);
 });
+
+test("QuakeML: a value that is not a number counts as missing, and its event is skipped rather than drawn at NaN (found by fuzzing)", () => {
+  const good = { id: "smi:x/event/1", time: "2022-04-16T18:00:01Z", latitude: 38.5, longitude: -112.9, depthM: 2400, magnitude: 0.3, magnitudeType: "Mw" };
+  const xml = writeQuakeML({ publicId: "smi:x", events: [good, { ...good, id: "smi:x/event/2" }] }).replace("<latitude><value>38.5</value>", "<latitude><value>38.5\u{26B3B}</value>");
+  const back = readQuakeML(xml);
+  assert.equal(back.events.length, 1);
+  assert.equal(back.events[0]!.id, "smi:x/event/2");
+  assert.ok(back.events.every((e) => Number.isFinite(e.latitude)));
+});

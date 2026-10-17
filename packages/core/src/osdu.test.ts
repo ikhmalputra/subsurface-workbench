@@ -177,3 +177,20 @@ test("the reader is told what an error means: expired sign-in, missing entitleme
   assert.equal(read.wells.length, n);
   assert.ok(osdu.peak() <= 3, `peak in flight ${osdu.peak()}`);
 });
+
+test("describeOsduError: a thrown non-Error is named as such, never \"[object Object]\" (found by fuzzing)", () => {
+  assert.doesNotMatch(describeOsduError([{ a: 1 }], P, "https://o"), /object Object/);
+  assert.match(describeOsduError(undefined, P, "https://o"), /could not be read/);
+  assert.equal(describeOsduError("the socket closed", P, "https://o"), "the socket closed");
+  assert.equal(describeOsduError(new Error("boom"), P, "https://o"), "boom");
+});
+
+test("OSDU units and tables: a unit named like an Object.prototype key is unknown, and a row that is not an object is skipped (found by fuzzing)", () => {
+  assert.equal(lengthToMetres(10, "__proto__"), null);
+  assert.equal(lengthToMetres(10, "constructor"), null);
+  assert.equal(lengthToMetres(10, `${P}:reference-data--UnitOfMeasure:ft:`), 3.048);
+  assert.deepEqual(tableRows([null, { MD: 1 }, 4, undefined] as never), [{ MD: 1 }]);
+  const problems: never[] = [];
+  const set = markerSetFromOsdu({ id: "m", kind: "k", data: {} }, [null, { MarkerMeasuredDepth: 1200, MarkerName: "Top" }] as never, P, problems);
+  assert.equal(set.markers.length, 1);
+});

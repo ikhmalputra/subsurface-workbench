@@ -165,7 +165,9 @@ export function parseLas(text: string): LasFile {
   const wrap = version.find((item) => item.mnemonic.toUpperCase() === "WRAP")?.value.toUpperCase();
   if (wrap === "YES") throw new RangeError("Wrapped LAS files are not supported.");
   const well = record(items("W"));
-  const nullValue = Number(well.NULL?.value ?? -999.25);
+  // A NULL header that is not a number (a corrupted file) falls back to the LAS 2.0 default, so the null marker still nulls (found by fuzzing).
+  const declaredNull = Number(well.NULL?.value ?? -999.25);
+  const nullValue = Number.isFinite(declaredNull) ? declaredNull : -999.25;
   const curveHeaders = items("C");
   if (!curveHeaders.length) throw new RangeError("LAS file has no ~Curve section.");
   const columns: (number | null)[][] = curveHeaders.map(() => []);

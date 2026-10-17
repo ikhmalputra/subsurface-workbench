@@ -11,4 +11,6 @@ export const BUDGETS = {
   dataFile: 5,
   /** In a browser (tools/bench-deck.mjs), on the local server. */
   runtime: { startupMs: 2500, startupLongTaskMs: 150, moduleLongTaskMs: 100, scene3dLongTaskMs: 200 },
+  /** Property-based fuzzing (tools/fuzz/run.mjs): runs per property at each tier, and how long the whole suite may take. */
+  fuzz: { runsT0: 500, t0Ms: 120_000, runsT1: 10_000, t1Ms: 1_800_000 },
 };

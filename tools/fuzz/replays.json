@@ -1,0 +1,74 @@
+[
+  {
+    "property": "contract/catalogue-mutated-fixture",
+    "seed": 1806972939,
+    "path": "7",
+    "found": "2026-10-17"
+  },
+  {
+    "property": "osdu/mappers-never-throw",
+    "seed": -1382832317,
+    "path": "0",
+    "found": "2026-10-17"
+  },
+  {
+    "property": "osdu/units-and-errors",
+    "seed": -1729328898,
+    "path": "0",
+    "found": "2026-10-17"
+  },
+  {
+    "property": "quakeml/mutated-fixture",
+    "seed": -216455447,
+    "path": "60",
+    "found": "2026-10-17"
+  },
+  {
+    "property": "segy/garbage",
+    "seed": -1028925439,
+    "path": "3",
+    "found": "2026-10-17"
+  },
+  {
+    "property": "contract/catalogue-mutated-fixture",
+    "seed": 1895606011,
+    "path": "3",
+    "found": "2026-10-17"
+  },
+  {
+    "property": "osdu/mappers-never-throw",
+    "seed": -1153229964,
+    "path": "2",
+    "found": "2026-10-17"
+  },
+  {
+    "property": "osdu/units-and-errors",
+    "seed": 170104661,
+    "path": "47",
+    "found": "2026-10-17"
+  },
+  {
+    "property": "contract/validator-admits-only-sound-paths",
+    "seed": -712287639,
+    "path": "3567",
+    "found": "2026-10-17"
+  },
+  {
+    "property": "contract/catalogue-mutated-fixture",
+    "seed": -1660660833,
+    "path": "2265",
+    "found": "2026-10-17"
+  },
+  {
+    "property": "las/mutated-fixtures",
+    "seed": -458888379,
+    "path": "822",
+    "found": "2026-10-17"
+  },
+  {
+    "property": "segy/mutated-fixture",
+    "seed": -1056394406,
+    "path": "970",
+    "found": "2026-10-17"
+  }
+]

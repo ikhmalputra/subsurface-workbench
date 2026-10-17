@@ -108,7 +108,8 @@ const first = (xml: string, tag: string) => elements(xml, tag)[0]?.body;
 const attr = (attrs: string, name: string) => { const m = new RegExp(`\\b${name}="([^"]*)"`).exec(attrs); return m ? unesc(m[1]!) : undefined; };
 const text = (xml: string | undefined) => xml === undefined ? undefined : unesc(xml.replace(/<[^>]*>/g, "").trim());
 /** A RealQuantity's value (or uncertainty) inside a named element. */
-const quantity = (xml: string, tag: string, part: "value" | "uncertainty" = "value") => { const q = first(xml, tag); const v = q === undefined ? undefined : text(first(q, part)); return v === undefined || v === "" ? undefined : Number(v); };
+/** A value that is not a number (a corrupted or hand-edited file) counts as not given: the event is then skipped, never drawn at NaN. */
+const quantity = (xml: string, tag: string, part: "value" | "uncertainty" = "value") => { const q = first(xml, tag); const v = q === undefined ? undefined : text(first(q, part)); const n = v === undefined || v === "" ? NaN : Number(v); return Number.isFinite(n) ? n : undefined; };
 
 /** Reads a QuakeML 1.2 document: each event with its preferred origin and magnitude (or the first of each). */
 export function readQuakeML(xml: string): QuakeCatalogue {
