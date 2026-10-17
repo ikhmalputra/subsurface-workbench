@@ -219,10 +219,27 @@ Every runtime dependency of `@ikhmalputra/subsurface-core`, `@ikhmalputra/subsur
 
 ## Development tooling
 
-Not shipped to clients: 149 packages. Licence families: MIT (108), Apache-2.0 (19), ISC (9), BSD-2-Clause (7), BSD-3-Clause (2), MPL-2.0 (2), LGPL-3.0-or-later (1), BlueOak-1.0.0 (1).
+Not shipped to clients: 184 packages. Licence families: MIT (142), Apache-2.0 (19), ISC (10), BSD-2-Clause (7), BSD-3-Clause (2), MPL-2.0 (2), LGPL-3.0-or-later (1), BlueOak-1.0.0 (1).
 
 | Package | Version | Licence | Author |
 |---|---|---|---|
+| [@changesets/apply-release-plan](https://github.com/changesets/changesets#readme) | 8.1.1 | MIT |  |
+| [@changesets/assemble-release-plan](https://github.com/changesets/changesets#readme) | 7.0.0 | MIT |  |
+| [@changesets/changelog-git](https://github.com/changesets/changesets#readme) | 1.0.0 | MIT |  |
+| [@changesets/cli](https://changesets.dev) | 3.0.3 | MIT | Changesets Contributors |
+| [@changesets/config](https://github.com/changesets/changesets#readme) | 4.0.1 | MIT |  |
+| [@changesets/errors](https://github.com/changesets/changesets#readme) | 1.0.0 | MIT |  |
+| [@changesets/format](https://github.com/changesets/format#readme) | 0.1.2 | MIT | Changesets |
+| [@changesets/get-dependents-graph](https://github.com/changesets/changesets#readme) | 3.0.0 | MIT |  |
+| [@changesets/git](https://github.com/changesets/changesets#readme) | 4.0.1 | MIT |  |
+| [@changesets/parse](https://github.com/changesets/changesets#readme) | 1.0.0 | MIT |  |
+| [@changesets/pre](https://github.com/changesets/changesets#readme) | 3.0.0 | MIT |  |
+| [@changesets/read](https://github.com/changesets/changesets#readme) | 1.0.1 | MIT |  |
+| [@changesets/should-skip-package](https://github.com/changesets/changesets#readme) | 1.0.0 | MIT |  |
+| [@changesets/types](https://github.com/changesets/changesets#readme) | 7.0.0 | MIT |  |
+| [@changesets/write](https://github.com/changesets/changesets#readme) | 1.0.1 | MIT |  |
+| [@clack/core](https://github.com/bombshell-dev/clack/tree/main/packages/core#readme) | 1.5.1 | MIT | Nate Moore |
+| [@clack/prompts](https://github.com/bombshell-dev/clack/tree/main/packages/prompts#readme) | 1.8.1 | MIT | Nate Moore |
 | [@dimforge/rapier3d-compat](https://rapier.rs) | 0.12.0 | Apache-2.0 |  |
 | [@eslint-community/eslint-utils](https://github.com/eslint-community/eslint-utils#readme) | 4.10.1 | MIT | Toru Nagashima |
 | [@eslint-community/regexpp](https://github.com/eslint-community/regexpp#readme) | 4.12.2 | MIT | Toru Nagashima |
@@ -243,8 +260,12 @@ Not shipped to clients: 149 packages. Licence families: MIT (108), Apache-2.0 (1
 | [@img/colour](https://github.com/lovell/colour#readme) | 1.1.0 | MIT |  |
 | [@img/sharp-darwin-arm64](https://sharp.pixelplumbing.com) | 0.35.5 | Apache-2.0 | Lovell Fuller |
 | [@img/sharp-libvips-darwin-arm64](https://sharp.pixelplumbing.com) | 1.3.4 | LGPL-3.0-or-later | Lovell Fuller |
+| [@manypkg/find-root](https://github.com/Thinkmill/manypkg#readme) | 3.1.0 | MIT |  |
+| [@manypkg/get-packages](https://github.com/Thinkmill/manypkg#readme) | 3.1.0 | MIT |  |
+| [@manypkg/tools](https://github.com/Thinkmill/manypkg#readme) | 2.1.2 | MIT |  |
 | [@oxc-project/types](https://oxc.rs) | 0.153.0 | MIT | Boshen and oxc contributors |
 | [@playwright/test](https://playwright.dev) | 1.63.0 | Apache-2.0 | Microsoft Corporation |
+| [@pnpm/deps.graph-sequencer](https://github.com/pnpm/pnpm/tree/main/pnpm11/deps/graph-sequencer#readme) | 1100.0.1 | MIT |  |
 | [@rolldown/binding-darwin-arm64](https://rolldown.rs/) | 1.2.13 | MIT |  |
 | [@rolldown/pluginutils](https://github.com/rolldown/plugins/tree/main/packages/pluginutils#readme) | 1.0.1 | MIT |  |
 | [@tweenjs/tween.js](https://github.com/tweenjs/tween.js) | 23.1.3 | MIT | tween.js contributors |
@@ -281,6 +302,7 @@ Not shipped to clients: 149 packages. Licence families: MIT (108), Apache-2.0 (1
 | [ajv](https://github.com/ajv-validator/ajv) | 6.15.0 | MIT | Evgeny Poberezkin |
 | [balanced-match](https://github.com/juliangruber/balanced-match#readme) | 4.0.4 | MIT |  |
 | [brace-expansion](https://github.com/juliangruber/brace-expansion#readme) | 5.0.12 | MIT |  |
+| [cac](https://github.com/cacjs/cac#readme) | 7.1.0 | MIT | egoist |
 | [commander](https://github.com/tj/commander.js#readme) | 2.20.3 | MIT | TJ Holowaychuk |
 | [cross-spawn](https://github.com/moxystudio/node-cross-spawn) | 7.0.6 | MIT | André Cruz |
 | [csstype](https://github.com/frenic/csstype#readme) | 3.2.3 | MIT | Fredrik Nicol |
@@ -303,6 +325,9 @@ Not shipped to clients: 149 packages. Licence families: MIT (108), Apache-2.0 (1
 | [fast-deep-equal](https://github.com/epoberezkin/fast-deep-equal#readme) | 3.1.3 | MIT | Evgeny Poberezkin |
 | [fast-json-stable-stringify](https://github.com/epoberezkin/fast-json-stable-stringify) | 2.1.0 | MIT | James Halliday |
 | [fast-levenshtein](https://github.com/hiddentao/fast-levenshtein#readme) | 2.0.6 | MIT | Ramesh Nair |
+| [fast-string-truncated-width](https://github.com/fabiospampinato/fast-string-truncated-width#readme) | 3.0.3 | MIT |  |
+| [fast-string-width](https://github.com/fabiospampinato/fast-string-width#readme) | 3.0.2 | MIT |  |
+| [fast-wrap-ansi](https://github.com/43081j/fast-wrap-ansi#readme) | 0.2.2 | MIT | James Garbutt |
 | [fdir](https://github.com/thecodrr/fdir#readme) | 6.5.0 | MIT | thecodrr |
 | [fflate](https://101arrowz.github.io/fflate) | 0.8.3 | MIT | Arjun Barrett |
 | [file-entry-cache](https://github.com/jaredwray/file-entry-cache#readme) | 8.0.0 | MIT | Jared Wray |
@@ -311,18 +336,23 @@ Not shipped to clients: 149 packages. Licence families: MIT (108), Apache-2.0 (1
 | [flatted](https://github.com/WebReflection/flatted#readme) | 3.4.4 | ISC | Andrea Giammarchi |
 | [fsevents](https://github.com/fsevents/fsevents) | 2.3.3 | MIT |  |
 | [glob-parent](https://github.com/gulpjs/glob-parent#readme) | 6.0.2 | ISC | Gulp Team |
+| [human-id](https://github.com/RienNeVaPlus/human-id#readme) | 4.2.2 | MIT | RienNeVaPlus |
 | [ignore](https://github.com/kaelzhang/node-ignore#readme) | 5.3.2, 7.0.12 | MIT | kael |
+| [import-meta-resolve](https://github.com/wooorm/import-meta-resolve#readme) | 4.2.0 | MIT | Titus Wormer |
 | [imurmurhash](https://github.com/jensyt/imurmurhash-js) | 0.1.4 | MIT | Jens Taylor |
 | [iota-array](https://github.com/mikolalysenko/iota-array#readme) | 1.0.0 | MIT | Mikola Lysenko |
 | [is-buffer](https://github.com/feross/is-buffer#readme) | 1.1.6 | MIT | Feross Aboukhadijeh |
 | [is-extglob](https://github.com/jonschlinkert/is-extglob) | 2.1.1 | MIT | Jon Schlinkert |
 | [is-glob](https://github.com/micromatch/is-glob) | 4.0.3 | MIT | Jon Schlinkert |
 | [isexe](https://github.com/isaacs/isexe#readme) | 2.0.0 | ISC | Isaac Z. Schlueter |
+| [jju](http://rlidwka.github.io/jju/) | 1.4.0 | MIT | Alex Kocharin |
 | [json-buffer](https://github.com/dominictarr/json-buffer) | 3.0.1 | MIT | Dominic Tarr |
 | [json-schema-traverse](https://github.com/epoberezkin/json-schema-traverse#readme) | 0.4.1 | MIT | Evgeny Poberezkin |
 | [json-stable-stringify-without-jsonify](https://github.com/samn/json-stable-stringify) | 1.0.1 | MIT | James Halliday |
+| [jsonc-parser](https://github.com/microsoft/node-jsonc-parser#readme) | 3.3.1 | MIT | Microsoft Corporation |
 | [keyv](https://github.com/jaredwray/keyv) | 4.5.4 | MIT | Jared Wray |
 | [ktx-parse](https://github.com/donmccurdy/ktx-parse#readme) | 1.1.0 | MIT | Don McCurdy |
+| [launch-editor](https://github.com/vitejs/launch-editor#readme) | 2.14.2 | MIT | Evan You |
 | [levn](https://github.com/gkz/levn) | 0.4.1 | MIT | George Zahariev |
 | [lightningcss](https://github.com/parcel-bundler/lightningcss#readme) | 1.33.0 | MPL-2.0 |  |
 | [lightningcss-darwin-arm64](https://github.com/parcel-bundler/lightningcss#readme) | 1.33.0 | MPL-2.0 |  |
@@ -339,6 +369,7 @@ Not shipped to clients: 149 packages. Licence families: MIT (108), Apache-2.0 (1
 | [optionator](https://github.com/gkz/optionator) | 0.9.4 | MIT | George Zahariev |
 | [p-limit](https://github.com/sindresorhus/p-limit#readme) | 3.1.0 | MIT | Sindre Sorhus |
 | [p-locate](https://github.com/sindresorhus/p-locate#readme) | 5.0.0 | MIT | Sindre Sorhus |
+| [package-manager-detector](https://github.com/antfu-collective/package-manager-detector#readme) | 1.9.0 | MIT | Anthony Fu |
 | [parse5](https://parse5.js.org) | 8.0.1 | MIT | Ivan Nikulin |
 | [path-exists](https://github.com/sindresorhus/path-exists#readme) | 4.0.0 | MIT | Sindre Sorhus |
 | [path-key](https://github.com/sindresorhus/path-key#readme) | 3.1.1 | MIT | Sindre Sorhus |
@@ -356,8 +387,11 @@ Not shipped to clients: 149 packages. Licence families: MIT (108), Apache-2.0 (1
 | [sharp](https://sharp.pixelplumbing.com) | 0.35.5 | Apache-2.0 | Lovell Fuller |
 | [shebang-command](https://github.com/kevva/shebang-command#readme) | 2.0.0 | MIT | Kevin Mårtensson |
 | [shebang-regex](https://github.com/sindresorhus/shebang-regex#readme) | 3.0.0 | MIT | Sindre Sorhus |
+| [shell-quote](https://github.com/ljharb/shell-quote) | 1.12.0 | MIT | James Halliday |
+| [sisteransi](https://github.com/terkelg/sisteransi#readme) | 1.0.5 | MIT | Terkel Gjervig |
 | [source-map-js](https://github.com/7rulnik/source-map-js) | 1.2.2 | BSD-3-Clause | Valentin 7rulnik Semirulnik |
 | [three](https://threejs.org/) | 0.186.1 | MIT | mrdoob |
+| [tinyexec](https://github.com/tinylibs/tinyexec#readme) | 1.3.1 | MIT | James Garbutt |
 | [tinyglobby](https://superchupu.dev/tinyglobby) | 0.2.17 | MIT | Superchupu |
 | [topojson-client](https://github.com/topojson/topojson-client) | 3.1.0 | ISC | Mike Bostock |
 | [ts-api-utils](https://github.com/JoshuaKGoldberg/ts-api-utils#readme) | 2.5.0 | MIT | JoshuaKGoldberg |
@@ -371,4 +405,5 @@ Not shipped to clients: 149 packages. Licence families: MIT (108), Apache-2.0 (1
 | [which](https://github.com/isaacs/node-which#readme) | 2.0.2 | ISC | Isaac Z. Schlueter |
 | [word-wrap](https://github.com/jonschlinkert/word-wrap) | 1.2.5 | MIT | Jon Schlinkert |
 | [world-atlas](https://github.com/topojson/world-atlas#readme) | 2.0.2 | ISC | Mike Bostock |
+| [yaml](https://eemeli.org/yaml/) | 2.9.1 | ISC | Eemeli Aro |
 | [yocto-queue](https://github.com/sindresorhus/yocto-queue#readme) | 0.1.0 | MIT | Sindre Sorhus |

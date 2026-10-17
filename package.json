@@ -25,9 +25,15 @@
     "ci:nightly": "node tools/ci/run.mjs --tier t1",
     "ci:release": "node tools/ci/run.mjs --tier t2",
     "notices": "node tools/release/notices.mjs",
-    "crs:defs": "node tools/build-crs-defs.mjs"
+    "crs:defs": "node tools/build-crs-defs.mjs",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "node tools/release/release.mjs",
+    "release:verify": "node tools/release/verify-release.mjs",
+    "test:release-tools": "node --test tools/release/release.test.mjs"
   },
   "devDependencies": {
+    "@changesets/cli": "^3.0.3",
     "@eslint/js": "10.0.1",
     "@gltf-transform/core": "4.5.1",
     "@gltf-transform/extensions": "4.5.1",

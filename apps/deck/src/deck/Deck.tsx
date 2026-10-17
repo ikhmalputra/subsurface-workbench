@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { AnimatePresence, MotionConfig } from "motion/react";
 import { Cable, Link2, Moon, Pencil, Plus, Search, Sun, X } from "lucide-react";
 import { useSubsurfaceSelector } from "@ikhmalputra/subsurface-react/state";
@@ -23,6 +23,7 @@ import { Dock, gridProbe } from "./Dock.tsx";
 import { cellGeometry } from "./layout.ts";
 import { Links } from "./Links.tsx";
 import { actions, deck as deckStore, signals, useDeck } from "./store.ts";
+import { subscribeUpdate, updateAvailable } from "./version.ts";
 const deckState = () => deckStore.get();
 import { Tile, type Ghost } from "./Tile.tsx";
 import { TimeRail } from "./TimeRail.tsx";
@@ -213,6 +214,7 @@ function DepthRail() {
 function Lens() {
   const siteId = useDeck((deck) => deck.siteId);
   const note = useDeck((deck) => deck.note);
+  const update = useSyncExternalStore(subscribeUpdate, updateAvailable, () => null);
   const site = siteById(siteId);
   const place = usePlace();
   const depth = useSubsurfaceSelector(signals, (state) => state.depthLink);
@@ -238,6 +240,7 @@ function Lens() {
     <span><i className="lens-dot" style={dot(signalColour.place)} /><b>{site ? site.map.label : "The world"}</b>{site ? ` · ${site.map.provenance}` : " · choose a site"}{place && site && site.wells.length > 1 ? <> · well <b>{place.label}</b></> : null}</span>
     {/* A note is a line in this bar, never a layer over the deck. */}
     {fresh && note && <span className="lens-note" role="status">{note.text}</span>}
+    {update && <span className="lens-update" role="status"><b>Updated to {update.version}</b> · <button type="button" onClick={() => window.location.reload()}>Reload</button> to use it</span>}
     {whatIf && <span className="lens-whatif"><i className="lens-dot" style={dot(signalColour.whatif)} /><b>What-if</b> · {whatIf.label} · {whatIf.failing ? `${whatIf.failing} string${whatIf.failing === 1 ? "" : "s"} fail` : "every string passes"}{whatIf.before !== whatIf.failing ? ` (was ${whatIf.before})` : ""}</span>}
     {here && md !== null && place && <span className="mono"><i className="lens-dot" style={dot(signalColour.depth)} />
       <b>{fmt(md)} m MD</b>{here.tvd === null ? " · TVD not surveyed" : ` · ${fmt(here.tvd)} m ${place.siteId === "equator" ? "TVDSS" : "TVD"}`}
