@@ -176,6 +176,35 @@ They are ranked by how many tools each one unlocks. One adapter here means one c
 - None for distributed temperature in OSDU or PPDM.
 - No geomechanics-model WKS in OSDU.
 
+### Status
+
+**The contract.** C1–C3 and C5 are in `@ikhmalputra/subsurface-core/data-contract`:
+- well, wellbore and datum, trajectory, markers;
+- checks at the boundary;
+- a path from angles, positions or both;
+- grid convergence;
+- `loadWellCatalogue` over many sources.
+
+**Every site is built through it.** One builder, `siteOfWells` in `@ikhmalputra/subsurface-react`, builds every site. What a sample adds goes on top as options:
+- FORGE keeps its seismic frame: NAD83 / UTM 12N, origin at the section, depths below 16A's RKB.
+- Equator keeps its picked surfaces.
+- A design keeps its reservoir and its own datum.
+- The samples' converters (`forgeBundles`, `equatorBundles`, `designBundle`) are in the React package; FORCE and entered wells convert in the deck.
+
+**Runtime sources.** The deck reads `config.json` beside it when it starts (`apps/deck/public/config.json`; the default is `samples` and `browser`).
+- `contract-json` reads a file of wells in the contract's JSON (`format: "subsurface-wells"`): the first way a tenant can connect without code.
+- `osdu`, `witsml-etp` and `ppdm-api` are recognised. They are reported as having no adapter yet rather than guessed at.
+- A tenant's field becomes a site with id `<source>:<field>`. Site in 3D, Plan view and Vertical section draw it; every other tool says it does not read backend wells yet.
+- The **Data sources** tool shows each source, what it served, and what was left out and why.
+
+**At scale.** Sources are read header-first and per field on demand, as `docs/STRESS_TEST.md` sets out. That design was stress-tested at 200,000 synthetic wells: the globe was ready in 1 s, the heap stayed under 350 MB, and the worst freeze was about 0.3 s. The old design froze for 5 s at 5,000 wells, and could not parse a tenant above about 17,000.
+
+**Next:**
+- the OSDU adapter: Search plus Wellbore DDMS for wells, wellbores, trajectories and marker sets;
+- the logs object (C6), which lets Logs, Petrophysics and Correlation read a tenant's wells;
+- `Place` for edits to a tenant's well;
+- the site-kind literals left in `registry.ts`.
+
 ---
 
 ## 5. Decisions this raises

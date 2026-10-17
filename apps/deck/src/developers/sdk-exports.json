@@ -1343,6 +1343,68 @@
  },
  {
   "package": "@ikhmalputra/subsurface-core",
+  "entry": "@ikhmalputra/subsurface-core/data-contract",
+  "exports": [
+   {
+    "name": "bundleSource",
+    "kind": "function"
+   },
+   {
+    "name": "catalogueWell",
+    "kind": "function"
+   },
+   {
+    "name": "gridConvergenceDeg",
+    "kind": "function"
+   },
+   {
+    "name": "loadWellCatalogue",
+    "kind": "function"
+   },
+   {
+    "name": "markerTvd",
+    "kind": "function"
+   },
+   {
+    "name": "readDetail",
+    "kind": "function"
+   },
+   {
+    "name": "readHeaders",
+    "kind": "function"
+   },
+   {
+    "name": "resolveTrajectory",
+    "kind": "function"
+   },
+   {
+    "name": "simplifyPath",
+    "kind": "function"
+   },
+   {
+    "name": "trueToGrid",
+    "kind": "function"
+   },
+   {
+    "name": "validateMarkerSet",
+    "kind": "function"
+   },
+   {
+    "name": "validateTrajectory",
+    "kind": "function"
+   },
+   {
+    "name": "validateWell",
+    "kind": "function"
+   },
+   {
+    "name": "validateWellbore",
+    "kind": "function"
+   }
+  ]
+ },
+ {
+  "package": "@ikhmalputra/subsurface-core",
   "entry": "@ikhmalputra/subsurface-core/dataset",
   "exports": [
    {
@@ -2506,12 +2568,20 @@
     "kind": "component"
    },
    {
+    "name": "designBundle",
+    "kind": "function"
+   },
+   {
     "name": "designSite",
     "kind": "function"
    },
    {
     "name": "EQUATOR_CONTACTS",
     "kind": "value"
+   },
+   {
+    "name": "equatorBundles",
+    "kind": "function"
    },
    {
     "name": "equatorField",
@@ -2523,6 +2593,10 @@
    },
    {
     "name": "equatorSite",
+    "kind": "function"
+   },
+   {
+    "name": "forgeBundles",
     "kind": "function"
    },
    {
@@ -2544,6 +2618,10 @@
    {
     "name": "RESERVOIR",
     "kind": "value"
+   },
+   {
+    "name": "siteOfWells",
+    "kind": "function"
    },
    {
     "name": "unlocatedWells",

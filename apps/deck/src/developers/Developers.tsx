@@ -239,7 +239,7 @@ export function Developers() {
 
     <section className="lp-section" id="fit" aria-labelledby="fit-title">
       <div className="lp-head"><p className="lp-eyebrow">How it fits</p><h2 id="fit-title">Data in, calculations in the middle, views out, your app around it</h2>
-        <p>The deck at <a href={DECK}>/deck/</a> is one app built this way: 34 modules over the same two packages you install.</p></div>
+        <p>The deck at <a href={DECK}>/deck/</a> is one app built this way: 35 modules over the same two packages you install.</p></div>
       <ol className="dv-layers">{LAYERS.map((layer, index) => <li key={layer.title} className="dv-layer">
         <layer.icon size={20} aria-hidden="true" />
         <h3>{layer.title}</h3><p>{layer.body}</p>

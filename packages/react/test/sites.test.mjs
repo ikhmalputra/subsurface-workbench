@@ -95,3 +95,17 @@ test("every Equator well gets logs across its own Sand R1, and the field's conta
     assert.ok(entry.logs.contactsMdM.owc !== null, record.well.label);
   }
 });
+
+test("FORGE's neighbours, through the data contract, sit in 16A's frame: their wellheads from the section origin, their KB depths shifted to 16A's RKB", async () => {
+  const { forgeNeighbours, forgeSeismicSection: meta } = await import("@ikhmalputra/subsurface-core");
+  const site = forgeSite();
+  for (const placed of forgeNeighbours) {
+    const well = site.wells.find((entry) => entry.id === placed.id);
+    // Straight from the records: the surveyed wellhead less the section's origin, and the first station's TVD
+    // plus how far 16A's RKB stands above this well's KB.
+    const first = placed.stations[0];
+    assert.ok(Math.abs(well.xyz[0] - (placed.eastingM - meta.wellhead.eastingM + first.eastingM)) < 1e-6, placed.id);
+    assert.ok(Math.abs(well.xyz[1] - (placed.northingM - meta.wellhead.northingM + first.northingM)) < 1e-6, placed.id);
+    assert.ok(Math.abs(well.xyz[2] - (meta.rkbElevationM - placed.depthZeroElevationM + first.tvdM)) < 1e-6, placed.id);
+  }
+});

@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { Drill,
+import { Database, Drill,
   Activity, AlignHorizontalSpaceAround, Anchor, AudioLines, ArrowRight, AudioWaveform, Fuel, Box, CalendarDays, Columns3, Command, Compass, Cylinder, Droplets, FilePen, Gauge, GitCompareArrows, Globe2, Layers, Map as MapIcon, Layers2, Layers3,
   ListTree, Mountain, MousePointerClick, PencilRuler, Plus, Radar, Rotate3d, ScatterChart, ShieldAlert, ShieldCheck, Slice, TrendingDown, Waves,
 } from "lucide-react";
@@ -62,9 +62,10 @@ const DISCIPLINES: readonly Discipline[] = [
     { title: "Decline curves", icon: TrendingDown, blurb: "Arps decline fitted to any of 136 Norwegian fields' monthly production, forecast to an economic limit.", on: ["Anywhere"] },
     { title: "Nodal analysis", icon: Fuel, blurb: "The producing well, drawn and flowing: matched to its tests, operated by dial, unloaded valve by valve on gas lift, forecast on the time rail, and its annuli watched against their MAASP, the rock calibrated to a temperature survey and the annulus record read for sustained casing pressure.", on: ["Designs"] },
   ] },
-  { name: "Your data", line: "Bring your own wells in, change existing ones, and set them side by side.", tools: [
+  { name: "Your data", line: "Connect your own wells, bring them in, change existing ones, and set them side by side.", tools: [
     { title: "Well editor", icon: FilePen, blurb: "Record a drilled well (survey, tops, casing, LAS logs) or edit an existing one over its record.", on: ["FORGE", "Recorded", "Equator"] },
     { title: "Compare wells", icon: GitCompareArrows, blurb: "Up to six wells side by side on one depth and one diameter scale, lined up by true depth below sea level.", on: ["Anywhere"] },
+    { title: "Data sources", icon: Database, blurb: "Where the wells come from: the sources your deployment names (your files now; OSDU, WITSML and PPDM next), what each served, and what was left out and why.", on: ["Anywhere"] },
   ] },
 ];
 const TOOL_COUNT = DISCIPLINES.reduce((sum, discipline) => sum + discipline.tools.length, 0);

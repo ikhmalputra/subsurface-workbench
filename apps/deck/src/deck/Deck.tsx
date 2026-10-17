@@ -17,6 +17,8 @@ import { NewWell } from "./NewWell.tsx";
 import { Share } from "./Share.tsx";
 import { openSharedLink } from "./share.ts";
 import { loadForce } from "../data/force.ts";
+import { openField, openWell, startCatalogue } from "../data/catalogue.ts";
+import { isTenantSite } from "../data/catalogue-state.ts";
 import { Dock, gridProbe } from "./Dock.tsx";
 import { cellGeometry } from "./layout.ts";
 import { Links } from "./Links.tsx";
@@ -44,8 +46,11 @@ export function Deck() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
-  // The FORCE 2020 wells' index, so their areas join the globe.
-  useEffect(() => { void loadForce(); }, []);
+  // The FORCE 2020 wells' index, so their areas join the globe; then the host's config.json and every source it names.
+  useEffect(() => { void loadForce(); void startCatalogue(); }, []);
+  // A tenant's field opened: its paths and tops are read now, and the chosen well's full path.
+  const openSite = useDeck((deck) => deck.siteId), openWellId = useDeck((deck) => deck.wellId);
+  useEffect(() => { if (openSite && isTenantSite(openSite)) { void openField(openSite); if (openWellId) void openWell(openSite, openWellId); } }, [openSite, openWellId]);
   // A shared deck in the link opens over this one; a link pasted into this tab later opens too.
   useEffect(() => {
     void openSharedLink();

@@ -26,6 +26,7 @@
     "src/petro-clastic.ts",
     "src/attributes.ts",
     "src/integrity.ts",
-    "src/quakeml.ts"
+    "src/quakeml.ts",
+    "src/data-contract.ts"
   ]
 }

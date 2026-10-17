@@ -1,10 +1,12 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { metresToFeet } from "@ikhmalputra/subsurface-core";
 import type { LasFile } from "@ikhmalputra/subsurface-core/records";
+import { siteOfWells } from "@ikhmalputra/subsurface-react";
 import type { WorldSite } from "@ikhmalputra/subsurface-react";
-import type { SiteSceneSurface, SiteSceneWell } from "@ikhmalputra/subsurface-react/3d";
+import { catalogueWell } from "@ikhmalputra/subsurface-core/data-contract";
+import { forceBundle } from "./sources/convert.ts";
 import { BASE } from "../base.ts";
-import { busId, decodeForceLogs, groupColour, mdOf, tvdssAt } from "./force-model.ts";
+import { busId, decodeForceLogs, groupColour, mdOf } from "./force-model.ts";
 import type { ForceArea, ForceIndex, ForceLogs, ForceWell } from "./force-model.ts";
 export * from "./force-model.ts";
 
@@ -37,6 +39,8 @@ export function loadForce(): Promise<ForceIndex | null> {
 const versionSnapshot = () => version;
 /** Re-renders when the index or any well's logs arrive. */
 export const useForceVersion = () => useSyncExternalStore(subscribe, versionSnapshot, versionSnapshot);
+/** Calls back when the index or any well's logs arrive, outside React. */
+export const onForceChange = subscribe;
 export const forceWells = (): readonly ForceWell[] => index?.wells ?? [];
 export const forceAreas = (): readonly ForceArea[] => index?.areas ?? [];
 
@@ -93,56 +97,25 @@ export function forceLas(entry: ForceLogs): LasFile {
 
 // ── Sites ────────────────────────────────────────────────────────────────────────────────────
 const byArea = new Map<string, WorldSite>();
-/** A quadrant area as a site: its wells in one east, north and TVDSS frame, and each group top triangulated between them. */
+/**
+ * A quadrant area as a site, built through the data contract like any tenant's field. Its wells go
+ * in one east, north and TVDSS frame, each group top triangulated between them.
+ */
 export function forceSite(areaId: string): WorldSite | null {
   const cached = byArea.get(areaId);
   if (cached) return cached;
   const area = forceArea(areaId);
-  const wells = areaWells(areaId).filter((well) => well.utm && well.lonLat);
-  if (!area || !wells.length) return null;
-  const ox = wells.reduce((sum, well) => sum + well.utm![0], 0) / wells.length, oy = wells.reduce((sum, well) => sum + well.utm![1], 0) / wells.length;
-  const scene: SiteSceneWell[] = wells.map((well) => {
-    const xyz = new Float64Array(well.survey.length * 3);
-    well.survey.forEach(([, e, n, tvdss], i) => { xyz[i * 3] = well.utm![0] + e - ox; xyz[i * 3 + 1] = well.utm![1] + n - oy; xyz[i * 3 + 2] = tvdss; });
-    return { id: busId(well), label: well.name, provenance: "documented", xyz, mdM: well.survey.map((station) => station[0]), markers: well.groups.map((top) => ({ mdM: top.md, label: top.name })) };
-  });
-  // East and north interpolated between the stations either side, as the depth is: on a deviated well both come from one place on the path.
-  const at = (well: ForceWell, md: number): [number, number, number] => {
-    const s = well.survey;
-    let i = s.findIndex((station) => station[0] >= md);
-    if (i < 0) i = s.length - 1;
-    const b = s[Math.max(0, i)]!, a = s[Math.max(0, i - 1)]!;
-    const t = b[0] > a[0] ? Math.min(1, Math.max(0, (md - a[0]) / (b[0] - a[0]))) : 0;
-    return [well.utm![0] + a[1] + (b[1] - a[1]) * t - ox, well.utm![1] + a[2] + (b[2] - a[2]) * t - oy, tvdssAt(well, md)];
-  };
-  const names = [...new Set(wells.flatMap((well) => well.groups.map((top) => top.name)))];
-  const surfaces: SiteSceneSurface[] = [
-    { id: "sea", label: "Sea level", provenance: "documented", role: "reference", color: "#3f8fc0", note: "0 m, the depth reference of the Directorate's TVDSS.", geometry: { kind: "plane", depthM: 0 } },
-    ...names.flatMap((name) => {
-      const points = wells.flatMap((well) => { const top = well.groups.find((entry) => entry.name === name); return top && top.md > well.survey[0]![0] - 1 ? [at(well, top.md)] : []; });
-      return points.length >= 3 ? [{ id: `top-${name}`, label: `${name} top`, provenance: "documented" as const, role: "horizon" as const, color: groupColour(name),
-        note: `The Directorate's ${name} top in ${points.length} wells, triangulated between them for display. Not a mapped surface.`, geometry: { kind: "tin" as const, points } }] : [];
-    }),
-  ];
-  const plan = (well: ForceWell) => {
-    const [lon, lat] = well.lonLat!;
-    const k = Math.cos(lat * Math.PI / 180);
-    return well.survey.map(([, e, n]) => [lon + e / (111_320 * k), lat + n / 110_574] as [number, number]);
-  };
-  const site: WorldSite = {
-    map: {
-      id: area.id, label: area.label, provenance: "documented",
-      summary: `${wells.length} wells · logs, Directorate tops, lithology · FORCE 2020`,
-      wells: wells.map((well) => ({ id: busId(well), label: well.name, head: well.lonLat!, path: plan(well) })),
-    },
-    projectWellId: null,
-    depthLabel: "m TVD below sea level",
-    originLabel: "centre of the area's wells · ED50 / UTM 31N grid",
-    wells: scene, surfaces, hasSeismic: false,
+  if (!area) return null;
+  const entries = areaWells(areaId).flatMap((well) => catalogueWell(forceBundle(well, area.label), "samples").entry ?? []);
+  const placed = entries.filter((entry) => entry.well.location && entry.wellbores.some((bore) => bore.path.length >= 2));
+  const site = siteOfWells(placed, {
+    id: area.id, label: area.label, provenance: "documented",
+    summary: `${placed.length} wells · logs, Directorate tops, lithology · FORCE 2020`,
+    markerKinds: ["group"], surfaces: { kinds: ["group"], colour: groupColour },
     seismicNote: "FORCE 2020 carries no seismic.",
     caveat: "Logs, group tops and casing shoes as the Norwegian Offshore Directorate published them, via FORCE 2020. Each well is placed at the top of its logs. Surfaces between wells are triangulated between the Directorate's picks for display; they are not mapped horizons.",
-  };
-  byArea.set(areaId, site);
+  });
+  if (site) byArea.set(areaId, site);
   return site;
 }
 export function forceSites(): readonly WorldSite[] {

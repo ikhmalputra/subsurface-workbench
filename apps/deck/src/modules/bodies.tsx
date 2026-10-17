@@ -7,6 +7,7 @@ import type { ModuleId } from "./registry.ts";
 import { missing, moduleById, pointsToDesigner, pointsToEditor } from "./registry.ts";
 import { useRecordsVersion } from "../data/records.ts";
 import { useImportedLogs } from "../data/logs.ts";
+import { useCatalogueVersion } from "../data/catalogue-state.ts";
 import { useDesignState } from "../data/design.ts";
 import { actions } from "../deck/store.ts";
 
@@ -19,6 +20,7 @@ const files = {
   "./AntiCollision.tsx": () => import("./AntiCollision.tsx"),
   "./Barriers.tsx": () => import("./Barriers.tsx"),
   "./Compare.tsx": () => import("./Compare.tsx"),
+  "./DataSources.tsx": () => import("./DataSources.tsx"),
   "./Correlation.tsx": () => import("./Correlation.tsx"),
   "./WellTie.tsx": () => import("./WellTie.tsx"),
   "./Horizons.tsx": () => import("./Horizons.tsx"),
@@ -49,7 +51,7 @@ export function prefetchModules() { for (const load of Object.values(files)) voi
 
 const views: Readonly<Record<ModuleId, ComponentType>> = {
   globe: view("./Globe.tsx", "Globe"), site3d: view("./Site3D.tsx", "Site3D"),
-  section: view("./WellModules.tsx", "Section"), well3d: view("./WellModules.tsx", "Well3D"), designer: view("./Designer.tsx", "Designer"), editor: view("./WellEditor.tsx", "WellEditor"), construction: view("./WellModules.tsx", "Construction"), compare: view("./Compare.tsx", "Compare"), cutaway: view("./WellModules.tsx", "Cutaway"), plan: view("./WellModules.tsx", "Plan"), profile: view("./WellModules.tsx", "Profile"), anticollision: view("./AntiCollision.tsx", "AntiCollision"),
+  section: view("./WellModules.tsx", "Section"), well3d: view("./WellModules.tsx", "Well3D"), designer: view("./Designer.tsx", "Designer"), editor: view("./WellEditor.tsx", "WellEditor"), construction: view("./WellModules.tsx", "Construction"), compare: view("./Compare.tsx", "Compare"), sources: view("./DataSources.tsx", "DataSources"), cutaway: view("./WellModules.tsx", "Cutaway"), plan: view("./WellModules.tsx", "Plan"), profile: view("./WellModules.tsx", "Profile"), anticollision: view("./AntiCollision.tsx", "AntiCollision"),
   logs: view("./DataModules.tsx", "Logs"), seismic: view("./DataModules.tsx", "Seismic"), curtain: view("./Curtain.tsx", "Curtain"), correlate: view("./Correlation.tsx", "Correlation"), tie: view("./WellTie.tsx", "WellTie"), horizons: view("./Horizons.tsx", "Horizons"), volumetrics: view("./Volumetrics.tsx", "Volumetrics"),
   drilling: view("./DrillingModules.tsx", "DrillingRecord"), torquedrag: view("./TorqueDrag.tsx", "TorqueDrag"),
   petro: view("./PetroModule.tsx", "Petrophysics"),
@@ -82,6 +84,7 @@ export function ModuleBody({ id }: { readonly id: ModuleId }) {
   useDesignState();
   useRecordsVersion();
   useImportedLogs(null);
+  useCatalogueVersion();
   const reason = missing(id, siteId);
   const View = views[id];
   return <motion.div key={`${siteId ?? "world"}:${reason ? "empty" : "live"}`} className="module-body" initial={{ opacity: 0, filter: "blur(6px)" }} animate={{ opacity: 1, filter: "blur(0px)" }} transition={{ duration: 0.35, ease: [0.2, 0.8, 0.2, 1] }}>

@@ -804,6 +804,7 @@
 .sw-wells-map-well { padding: 1px 6px; border: 1px solid var(--sw-line); border-radius: 4px; background: color-mix(in srgb, var(--sw-surface) 92%, transparent); color: var(--sw-ink); font: 600 11px/1.3 "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif; white-space: nowrap; cursor: pointer; }
 .sw-wells-map-depth { width: 12px; height: 12px; border-radius: 50%; background: var(--sw-cursor); border: 2px solid var(--sw-text-halo); box-shadow: 0 0 0 4px color-mix(in srgb, var(--sw-cursor) 30%, transparent); pointer-events: none; }
 .sw-wells-map-depth span { position: absolute; left: 12px; top: 14px; padding: 1px 5px; border-radius: 4px; background: color-mix(in srgb, var(--sw-surface) 90%, transparent); color: var(--sw-cursor); font: 600 11px/1.3 "IBM Plex Mono", monospace; white-space: nowrap; }
+.sw-wells-map-count { pointer-events: none; color: #fff; font: 700 10.5px/1 "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif; text-shadow: 0 1px 2px rgba(0, 0, 0, .55); }
 .sw-wells-map-well.is-selected { border-color: #c2410c; background: #c2410c; color: #fff; }
 .sw-wells-map:not([data-zoomed]) .sw-wells-map-well { display: none; }
 /* Close in, the chosen site is named by its wells and by the host; its own label would cover them. */

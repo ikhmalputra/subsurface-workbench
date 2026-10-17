@@ -9,7 +9,9 @@ import { attributeAsSeismic, useAttributeVolume } from "../data/attribute-volume
 import { shoes } from "../data/forge.ts";
 import { actions, signals, useDeck } from "../deck/store.ts";
 import { useMoment } from "../data/history.ts";
-import { Loading } from "./Empty.tsx";
+import { Empty, Loading } from "./Empty.tsx";
+import { Box } from "lucide-react";
+import { useCatalogue } from "../data/catalogue-state.ts";
 import { useWire } from "./wire.ts";
 import { sectionLineOnSite } from "./Curtain.tsx";
 import { forgeCube, gridOf, surfaceOf, useHorizons } from "../data/horizons.ts";
@@ -22,6 +24,7 @@ const SiteScene = lazy(() => import("@ikhmalputra/subsurface-react/3d").then((mo
 export function Site3D() {
   const siteId = useDeck((deck) => deck.siteId), wellId = useDeck((deck) => deck.wellId);
   const site = siteById(siteId);
+  const fieldStatus = useCatalogue().fields.get(siteId ?? "") ?? null;
   const wire = useWire("site3d");
   const seismic = useForgeVolume(site?.hasSeismic === true);
   const md = wire.place ? wire.cursor : null;
@@ -73,6 +76,11 @@ export function Site3D() {
   const attr = useAttributeVolume(cube, show === "amplitude" ? null : show);
   const volume = useMemo(() => seismic.volume && attr && show !== "amplitude" ? attributeAsSeismic(seismic.volume, attr, show) : seismic.volume, [seismic.volume, attr, show]);
   if (!site) return null;
+  // A tenant's field with nothing to draw yet: say whether its paths are being read, or why they could not be.
+  if (!site.wells.length && fieldStatus) {
+    if (fieldStatus.reading) return <Loading>{`Reading ${site.map.label}'s paths and tops: ${fieldStatus.read.toLocaleString("en-US")} of ${fieldStatus.total.toLocaleString("en-US")} wells`}</Loading>;
+    if (fieldStatus.error) return <Empty icon={Box} title={`${site.map.label}'s paths could not be read`}>{`${fieldStatus.error}. Its ${site.map.wells.length.toLocaleString("en-US")} wells are listed on the globe and in Data sources.`}</Empty>;
+  }
   return <Suspense fallback={<Loading>Starting the 3D site…</Loading>}>
     <SiteScene key={site.map.id} title={`${site.map.label} in 3D`} depthLabel={site.depthLabel} originLabel={site.originLabel} wells={wells} surfaces={surfaces} points={points} terrain={siteId === "forge" ? terrain : null}
       seismic={site.hasSeismic ? volume : null} seismicClip={site.hasSeismic ? volume && volume !== seismic.volume ? 127 * volume.amplitudePerCount : forgeSeismicSection.section.p99AbsAmplitude : undefined} seismicNote={site.seismicNote}
