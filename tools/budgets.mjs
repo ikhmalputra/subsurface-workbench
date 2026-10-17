@@ -1,8 +1,8 @@
 // The site's performance budgets, shared by tools/perf-budget.mjs (sizes, from the build) and
 // tools/bench-deck.mjs (runtime, in a browser). Sizes are gzip, what crosses the network.
 export const BUDGETS = {
-  /** JavaScript a page needs before its first draw, gzip kB. */
-  initialJs: { "index.html": 100, "deck/index.html": 380, "developers/index.html": 260 },
+  /** JavaScript a page needs before its first draw, gzip kB. The deck's rose from 380 when the config.json parser (core deck-config) joined its startup, 2026-10. */
+  initialJs: { "index.html": 100, "deck/index.html": 390, "developers/index.html": 260 },
   /** No single chunk larger than this, gzip kB (MapLibre is the largest, ~280). */
   chunk: 300,
   /** The compute worker, gzip kB. */

@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "sources": [
+    { "type": "osdu", "label": "Our OSDU", "url": "https://osdu.example.com", "dataPartition": "opendes", "auth": "corp" },
+    { "type": "contract-json", "label": "Field exports", "url": "data/wells.index.json" },
+    { "type": "browser" }
+  ],
+  "auth": { "corp": { "issuer": "https://login.microsoftonline.com/00000000-0000-0000-0000-000000000000/v2.0", "clientId": "11111111-1111-1111-1111-111111111111", "scopes": ["openid", "profile", "offline_access", "api://osdu/.default"] } },
+  "share": { "mode": "reference" },
+  "instance": { "id": "north", "name": "North Block" }
+}

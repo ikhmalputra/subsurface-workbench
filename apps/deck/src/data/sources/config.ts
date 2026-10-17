@@ -1,82 +1,17 @@
+/**
+ * The deck's runtime config is parsed in core (`@ikhmalputra/subsurface-core/deck-config`), so the
+ * deployment's renderer and the deck judge a config.json the same way. This module re-exports it
+ * and holds the one source the deck builds itself: wells from a file in the data contract.
+ */
+export { CONFIG_SCHEMA_VERSION, DEFAULT_CONFIG, SOURCE_TYPES, connectOrigins, parseDeckConfig } from "@ikhmalputra/subsurface-core/deck-config";
+export type { AuthProfile, DeckConfig, OsduKinds, OsduPaths, ShareMode, SourceConfig } from "@ikhmalputra/subsurface-core/deck-config";
 import { bundleSource } from "@ikhmalputra/subsurface-core/data-contract";
 import type { CanonicalWell, WellBundle, WellDataSource } from "@ikhmalputra/subsurface-core/data-contract";
-import { fetchJsonGuarded } from "./fetch-guard.ts";
-
-/**
- * Where the deck's wells come from, set by whoever hosts it: a `config.json` beside the deck,
- * read when it starts. A tenant's deployment names its own sources; the default is the bundled
- * samples and the wells kept in this browser. Nothing here is a secret. Sign-in to a tenant's
- * backend goes through their identity provider, never a key in this file.
- *
- * {
- *   "sources": [
- *     { "type": "samples" },
- *     { "type": "browser" },
- *     { "type": "contract-json", "label": "Field A export", "url": "data/field-a.wells.json" },
- *     { "type": "osdu", "label": "Our OSDU", "url": "https://osdu.example.com", "dataPartition": "opendes" }
- *   ]
- * }
- */
-
-export type SourceConfig =
-  | { readonly type: "samples" }
-  | { readonly type: "browser" }
-  /** Wells already in the data contract's JSON (`subsurface-wells`), as a file the deployment serves. */
-  | { readonly type: "contract-json"; readonly label?: string; readonly url: string }
-  | { readonly type: "osdu"; readonly label?: string; readonly url: string; readonly dataPartition: string }
-  | { readonly type: "witsml-etp"; readonly label?: string; readonly url: string }
-  | { readonly type: "ppdm-api"; readonly label?: string; readonly url: string };
-
-export interface DeckConfig { readonly sources: readonly SourceConfig[] }
-
-export const DEFAULT_CONFIG: DeckConfig = Object.freeze({ sources: Object.freeze([{ type: "samples" }, { type: "browser" }] as const) });
-
-/** The adapters a config may name, and whether this build has them yet. */
-export const SOURCE_TYPES = Object.freeze({
-  samples: { label: "Bundled samples", standard: "Utah FORGE, FORCE 2020, Equator and Kestrel A-7", available: true },
-  browser: { label: "This browser", standard: "Wells entered, imported or designed on the deck", available: true },
-  "contract-json": { label: "Wells file", standard: "Data contract JSON (subsurface-wells)", available: true },
-  osdu: { label: "OSDU", standard: "OSDU Wellbore DDMS and Search", available: false },
-  "witsml-etp": { label: "WITSML store", standard: "WITSML 2.1 over ETP 1.2", available: false },
-  "ppdm-api": { label: "PPDM", standard: "An API over a PPDM 3.9 database", available: false },
-} as const);
+import { SOURCE_TYPES } from "@ikhmalputra/subsurface-core/deck-config";
+import type { SourceConfig } from "@ikhmalputra/subsurface-core/deck-config";
+import { fetchJsonGuarded } from "@ikhmalputra/subsurface-core/fetch-guard";
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
-/** A same-origin path, or https: a config must not send the deck to a plain-http or script URL. */
-const safeUrl = (value: unknown): value is string => typeof value === "string" && value.length > 0 && (/^https:\/\//.test(value) || !/^[a-z][a-z0-9+.-]*:/i.test(value));
-
-/**
- * A config read from JSON: every source it names that the deck understands, and a problem for
- * each one it does not. A config with no usable `sources` falls back to the default, and says so.
- */
-export function parseDeckConfig(json: unknown): { readonly config: DeckConfig; readonly problems: readonly string[] } {
-  const problems: string[] = [];
-  if (!isObject(json) || !Array.isArray(json.sources)) return { config: DEFAULT_CONFIG, problems: ["config.json has no \"sources\" list: using the bundled samples and this browser's wells."] };
-  const sources: SourceConfig[] = [];
-  json.sources.forEach((entry, index) => {
-    const at = `Source ${index + 1}`;
-    if (!isObject(entry) || typeof entry.type !== "string") { problems.push(`${at} has no "type".`); return; }
-    const label = typeof entry.label === "string" ? entry.label : undefined;
-    switch (entry.type) {
-      case "samples": case "browser":
-        if (sources.some((source) => source.type === entry.type)) problems.push(`${at}: "${entry.type}" is listed twice.`);
-        else sources.push({ type: entry.type });
-        return;
-      case "contract-json": case "witsml-etp": case "ppdm-api":
-        if (!safeUrl(entry.url)) { problems.push(`${at} (${entry.type}): "url" must be a path beside the deck or an https address.`); return; }
-        sources.push({ type: entry.type, url: entry.url, ...(label ? { label } : {}) });
-        return;
-      case "osdu":
-        if (!safeUrl(entry.url)) { problems.push(`${at} (osdu): "url" must be an https address.`); return; }
-        if (typeof entry.dataPartition !== "string" || !entry.dataPartition) { problems.push(`${at} (osdu): "dataPartition" is required.`); return; }
-        sources.push({ type: "osdu", url: entry.url, dataPartition: entry.dataPartition, ...(label ? { label } : {}) });
-        return;
-      default:
-        problems.push(`${at}: the deck does not know a source of type "${entry.type}".`);
-    }
-  });
-  return { config: { sources }, problems };
-}
 
 /**
  * The file formats a `contract-json` source serves, both in the data contract:

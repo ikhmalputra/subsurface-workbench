@@ -1354,6 +1354,10 @@
     "kind": "function"
    },
    {
+    "name": "CONTRACT_VERSION",
+    "kind": "value"
+   },
+   {
     "name": "gridConvergenceDeg",
     "kind": "function"
    },
@@ -1414,6 +1418,70 @@
    {
     "name": "validateInteractionDataset",
     "kind": "function"
+   }
+  ]
+ },
+ {
+  "package": "@ikhmalputra/subsurface-core",
+  "entry": "@ikhmalputra/subsurface-core/deck-config",
+  "exports": [
+   {
+    "name": "CONFIG_SCHEMA_VERSION",
+    "kind": "value"
+   },
+   {
+    "name": "connectOrigins",
+    "kind": "function"
+   },
+   {
+    "name": "DEFAULT_CONFIG",
+    "kind": "value"
+   },
+   {
+    "name": "originOf",
+    "kind": "function"
+   },
+   {
+    "name": "parseDeckConfig",
+    "kind": "function"
+   },
+   {
+    "name": "secretKeys",
+    "kind": "function"
+   },
+   {
+    "name": "SOURCE_TYPES",
+    "kind": "value"
+   }
+  ]
+ },
+ {
+  "package": "@ikhmalputra/subsurface-core",
+  "entry": "@ikhmalputra/subsurface-core/fetch-guard",
+  "exports": [
+   {
+    "name": "fetchGuarded",
+    "kind": "function"
+   },
+   {
+    "name": "fetchJsonGuarded",
+    "kind": "function"
+   },
+   {
+    "name": "HttpError",
+    "kind": "class"
+   },
+   {
+    "name": "limit",
+    "kind": "function"
+   },
+   {
+    "name": "retryAfterMs",
+    "kind": "function"
+   },
+   {
+    "name": "TooLarge",
+    "kind": "class"
    }
   ]
  },

@@ -99,6 +99,14 @@
       "types": "./dist/data-contract.d.ts",
       "import": "./dist/data-contract.js"
     },
+    "./deck-config": {
+      "types": "./dist/deck-config.d.ts",
+      "import": "./dist/deck-config.js"
+    },
+    "./fetch-guard": {
+      "types": "./dist/fetch-guard.d.ts",
+      "import": "./dist/fetch-guard.js"
+    },
     "./quakeml": {
       "types": "./dist/quakeml.d.ts",
       "import": "./dist/quakeml.js"
