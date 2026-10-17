@@ -37,7 +37,7 @@
   --deck-ambient-b: rgba(34, 211, 238, .10);
   --ink: #e8ebf7;
   --ink-2: #a3abc6;
-  --ink-3: #6f7896;
+  --ink-3: #7a83a0; /* 4.9:1 on the deck's darkest panels (WCAG AA for 12 px text; axe, 2026-10) */
   --glass: rgba(16, 21, 37, .66);
   --glass-strong: rgba(20, 26, 46, .86);
   --glass-edge: rgba(160, 172, 255, .14);
@@ -66,7 +66,7 @@
   --deck-ambient-b: rgba(34, 211, 238, .12);
   --ink: #0f1424;
   --ink-2: #4b5472;
-  --ink-3: #7c849e;
+  --ink-3: #5f6985; /* 4.7:1 on the day background (axe, 2026-10) */
   --glass: rgba(255, 255, 255, .72);
   --glass-strong: rgba(255, 255, 255, .92);
   --glass-edge: rgba(30, 40, 90, .10);

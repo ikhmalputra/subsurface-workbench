@@ -282,11 +282,12 @@ export function WellsMap({ sites, workerUrl, basemapUrl, basemapAttribution, ima
         const placed: DOMRect[] = [];
         const order = [...markers.current].map((marker) => marker.getElement()).sort((a, b) => Number(b.classList.contains("is-selected")) - Number(a.classList.contains("is-selected")) || Number(b.classList.contains("sw-wells-map-count")) - Number(a.classList.contains("sw-wells-map-count")) || Number(b.classList.contains("sw-wells-map-site")) - Number(a.classList.contains("sw-wells-map-site")));
         for (const element of order) {
-          element.style.visibility = "";
+          element.style.display = "";
           const box = element.getBoundingClientRect();
           if (box.width === 0) continue;
           const hit = placed.some((other) => box.left < other.right - 1 && box.right > other.left + 1 && box.top < other.bottom - 1 && box.bottom > other.top + 1);
-          if (hit) element.style.visibility = "hidden"; else placed.push(box);
+          // Out of the layout, not merely invisible: a hidden label must not count as a target that obscures its neighbour (WCAG 2.5.8).
+          if (hit) element.style.display = "none"; else placed.push(box);
         }
       });
     };
@@ -295,8 +296,10 @@ export function WellsMap({ sites, workerUrl, basemapUrl, basemapAttribution, ima
     const onData = (event: { sourceId?: string; isSourceLoaded?: boolean }) => { if (event.sourceId === "heads" && event.isSourceLoaded) build(); };
     instance.on("moveend", build);
     instance.on("move", declutter);
+    // Marker positions settle with the last render; "idle" is when every one is where it will stay.
+    instance.on("idle", declutter);
     instance.on("sourcedata", onData);
-    return () => { cancelled = true; instance.off("moveend", build); instance.off("move", declutter); instance.off("sourcedata", onData); cancelAnimationFrame(frame); for (const marker of markers.current) marker.remove(); markers.current = []; };
+    return () => { cancelled = true; instance.off("moveend", build); instance.off("move", declutter); instance.off("idle", declutter); instance.off("sourcedata", onData); cancelAnimationFrame(frame); for (const marker of markers.current) marker.remove(); markers.current = []; };
   }, [ready, sites, selectedSiteId, selectedWellId]);
 
   // The host's cursor point: one marker, moved rather than rebuilt, so it can follow a pointer.

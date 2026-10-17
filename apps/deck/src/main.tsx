@@ -17,6 +17,11 @@ import { loadDeckConfig } from "./data/catalogue.ts";
 import { completeSignInIfCallback } from "./auth/oidc.ts";
 import { BASE } from "./base.ts";
 import { startUpdateWatch } from "./deck/version.ts";
+import { recordError } from "./deck/diagnostics.ts";
+
+// The last errors go into the diagnostics a person can copy from Data sources; never anywhere else.
+window.addEventListener("error", (event) => recordError(event.message));
+window.addEventListener("unhandledrejection", (event) => recordError(event.reason instanceof Error ? event.reason.message : String(event.reason)));
 
 // The config names the identity providers, and a load may be the provider sending the person back:
 // both are settled before the deck draws, so no module ever sees a half-signed-in state.

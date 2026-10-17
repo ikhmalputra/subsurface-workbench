@@ -30,6 +30,7 @@ export function Code({ source, label, language = "ts" }: { readonly source: stri
   return <figure className="dv-code" data-language={language}>
     {label && <figcaption><span>{label}</span></figcaption>}
     <button type="button" className="dv-copy" onClick={copy} aria-label={copied ? "Copied" : `Copy ${label ?? "code"}`}>{copied ? <Check size={14} /> : <Copy size={14} />}{copied ? "Copied" : "Copy"}</button>
-    <pre><code>{highlight(text, language)}</code></pre>
+    {/* A code block scrolls sideways, so the keyboard must be able to reach it. */}
+    <pre tabIndex={0}><code>{highlight(text, language)}</code></pre>
   </figure>;
 }
