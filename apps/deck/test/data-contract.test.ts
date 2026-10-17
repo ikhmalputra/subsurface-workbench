@@ -107,7 +107,8 @@ test("a host's config.json: what it may name, and what it may not", async () => 
     { type: "ftp" },
   ] });
   assert.deepEqual(read.config.sources.map((source) => source.type), ["samples", "contract-json", "osdu"]);
-  assert.equal(read.problems.length, 5, read.problems.join("\n"));
+  // Five faults; a "Note:" (the valid osdu entry names no auth profile) is advice, not a fault.
+  assert.equal(read.problems.filter((problem) => !problem.startsWith("Note:")).length, 5, read.problems.join("\n"));
   assert.ok(read.problems.some((problem) => /listed twice/.test(problem)));
   assert.ok(read.problems.some((problem) => /dataPartition/.test(problem)));
   assert.ok(read.problems.some((problem) => /type "ftp"/.test(problem)));

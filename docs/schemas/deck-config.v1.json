@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://subsurface-workbench/schemas/deck-config.v1.json",
+  "title": "Subsurface Workbench deck configuration, schema 1",
+  "description": "config.json beside the deck: where its wells come from and which identity provider signs the user in. Public values only; a key that could hold a credential is refused.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["sources"],
+  "properties": {
+    "version": { "type": "integer", "const": 1, "description": "The schema this file is written for. Missing means 1. A deck refuses a config written for a newer schema." },
+    "sources": {
+      "type": "array",
+      "description": "Where the wells come from, in the order they are read. The first source to serve a well id keeps it.",
+      "items": {
+        "oneOf": [
+          { "type": "object", "additionalProperties": false, "required": ["type"], "properties": { "type": { "const": "samples" } }, "description": "The bundled public and synthetic wells (Utah FORGE, FORCE 2020, Equator, Kestrel A-7). Leave it out of a client deployment." },
+          { "type": "object", "additionalProperties": false, "required": ["type"], "properties": { "type": { "const": "browser" } }, "description": "Wells the user entered, imported or designed on the deck, kept in their browser." },
+          { "type": "object", "additionalProperties": false, "required": ["type", "url"], "properties": { "type": { "const": "contract-json" }, "label": { "type": "string" }, "url": { "$ref": "#/$defs/sourceUrl", "description": "A subsurface-wells file, or a subsurface-wells-index page, in the data contract's JSON." }, "auth": { "$ref": "#/$defs/authRef" } } },
+          { "type": "object", "additionalProperties": false, "required": ["type", "url", "dataPartition"], "properties": {
+            "type": { "const": "osdu" }, "label": { "type": "string" },
+            "url": { "$ref": "#/$defs/sourceUrl", "description": "The OSDU platform's base URL, or a path beside the deck that proxies to it." },
+            "dataPartition": { "type": "string", "minLength": 1, "description": "Sent as the data-partition-id header on every request." },
+            "auth": { "$ref": "#/$defs/authRef" },
+            "paths": { "type": "object", "additionalProperties": false, "properties": { "search": { "type": "string", "default": "/api/search/v2" }, "wellboreDdms": { "type": "string", "default": "/api/os-wellbore-ddms" } } },
+            "kinds": { "type": "object", "additionalProperties": false, "description": "The record kinds asked for; patterns such as *:*:master-data--Well:1.*.* are allowed.", "properties": { "well": { "type": "string" }, "field": { "type": "string" }, "wellbore": { "type": "string" }, "trajectory": { "type": "string" }, "markerSet": { "type": "string" } } },
+            "query": { "type": "string", "description": "An extra Search query that every well must match, e.g. to one basin." }
+          } },
+          { "type": "object", "additionalProperties": false, "required": ["type", "url"], "properties": { "type": { "const": "witsml-etp" }, "label": { "type": "string" }, "url": { "$ref": "#/$defs/sourceUrl" }, "auth": { "$ref": "#/$defs/authRef" } } },
+          { "type": "object", "additionalProperties": false, "required": ["type", "url"], "properties": { "type": { "const": "ppdm-api" }, "label": { "type": "string" }, "url": { "$ref": "#/$defs/sourceUrl" }, "auth": { "$ref": "#/$defs/authRef" } } }
+        ]
+      }
+    },
+    "auth": {
+      "type": "object",
+      "description": "Identity providers by profile name; a source names the profile it signs in with. A public client: there is never a secret.",
+      "additionalProperties": {
+        "type": "object", "additionalProperties": false, "required": ["issuer", "clientId"],
+        "properties": {
+          "issuer": { "$ref": "#/$defs/https", "description": "The OpenID issuer; its discovery document is at <issuer>/.well-known/openid-configuration." },
+          "clientId": { "type": "string", "minLength": 1 },
+          "scopes": { "type": "array", "items": { "type": "string" }, "default": ["openid"], "description": "openid, profile, offline_access, and the backend's resource scope (e.g. an Entra application id URI with /.default)." },
+          "extraParams": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Extra authorization-request parameters some providers need (audience, resource)." },
+          "metadata": { "type": "object", "additionalProperties": false, "description": "Endpoints given outright when discovery does not cover them.", "properties": { "authorizationEndpoint": { "$ref": "#/$defs/https" }, "tokenEndpoint": { "$ref": "#/$defs/https" }, "jwksUri": { "$ref": "#/$defs/https" }, "endSessionEndpoint": { "$ref": "#/$defs/https" } } }
+        }
+      }
+    },
+    "share": { "type": "object", "additionalProperties": false, "required": ["mode"], "properties": { "mode": { "enum": ["reference", "carry", "off"], "description": "reference: links carry ids and view state only (a client's default). carry: the sender's own wells travel in the link (the public demo). off: no sharing." } } },
+    "csp": { "type": "object", "additionalProperties": false, "properties": { "connectSrc": { "type": "array", "items": { "$ref": "#/$defs/https" }, "description": "Extra https origins the browser may connect to, beyond the sources and providers above. No wildcards." } } },
+    "instance": { "type": "object", "additionalProperties": false, "properties": { "id": { "type": "string" }, "name": { "type": "string" } } },
+    "telemetry": { "type": "object", "additionalProperties": false, "properties": { "endpoint": { "$ref": "#/$defs/https", "description": "The tenant's own OpenTelemetry collector. Off when absent; nothing is ever sent anywhere else." } } }
+  },
+  "$defs": {
+    "https": { "type": "string", "pattern": "^https://[^\\s/?#]+" },
+    "sourceUrl": { "type": "string", "minLength": 1, "pattern": "^(https://[^\\s/?#]+|[^a-zA-Z][^:]*|[a-zA-Z][^:]*)", "description": "An https URL, or a path beside the deck (no scheme)." },
+    "authRef": { "type": "string", "minLength": 1, "description": "The name of a profile under auth." }
+  }
+}

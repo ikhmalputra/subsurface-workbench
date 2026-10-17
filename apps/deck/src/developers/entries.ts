@@ -10,6 +10,8 @@ export const ENTRY_NOTES: Readonly<Record<string, string>> = {
   "@ikhmalputra/subsurface-core/contracts": "Validators for untrusted input (well paths, seismic volumes, petrophysics wells, production documents) and the petrophysics calculations: Vsh, porosity, Archie, M–N, net pay.",
   "@ikhmalputra/subsurface-core/crs": "Geographic, Web Mercator and local grid coordinates, converted explicitly.",
   "@ikhmalputra/subsurface-core/data-contract": "The data contract for a tenant's wells: well, wellbore and datum, trajectory and markers, each mapped to WITSML, OSDU and PPDM; checks at the boundary, a path from angles or positions, grid convergence, and a catalogue over many sources that keeps the good wells when one fails.",
+  "@ikhmalputra/subsurface-core/deck-config": "The deck's config.json: sources, identity-provider profiles, share mode and CSP origins, parsed once the same way by the deck and by a deployment's renderer; a config holding a credential is refused.",
+  "@ikhmalputra/subsurface-core/fetch-guard": "Reading a backend without trusting it: a time limit, retries that honour Retry-After, one refresh on 401, a byte cap enforced as the body streams, cancellation, and a limiter for concurrent requests.",
   "@ikhmalputra/subsurface-core/dataset": "The linked interaction dataset: one table of observations keyed by depth or time, with its validator.",
   "@ikhmalputra/subsurface-core/frames": "A registry of named coordinate frames, so a transform is always between two frames you declared.",
   "@ikhmalputra/subsurface-core/gis": "GeoJSON and GeoTIFF import, reprojection between WGS84, Web Mercator and UTM, distances and areas.",

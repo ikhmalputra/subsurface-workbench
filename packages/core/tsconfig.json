@@ -27,6 +27,8 @@
     "src/attributes.ts",
     "src/integrity.ts",
     "src/quakeml.ts",
-    "src/data-contract.ts"
+    "src/data-contract.ts",
+    "src/deck-config.ts",
+    "src/fetch-guard.ts"
   ]
 }

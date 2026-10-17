@@ -20,6 +20,9 @@ import type { SurveyPoint } from "./index.ts";
  *   position as the source gave it is kept beside it, so nothing is lost converting.
  */
 
+/** The contract's version: the minor rises when something is added, the major when a reader of the old one would misread the new. */
+export const CONTRACT_VERSION = "1.1";
+
 /** Where an object came from: the reader is always told, and synthetic data is always labelled. */
 export interface Provenance {
   /** documented: public records; synthetic: generated; user-authored: typed here; tenant: the tenant's own system. */
@@ -336,6 +339,8 @@ const preference: Readonly<Record<CanonicalTrajectory["kind"], number>> = { defi
 export interface WellBundle {
   readonly well: CanonicalWell;
   readonly wellbores: readonly { readonly wellbore: CanonicalWellbore; readonly trajectories: readonly CanonicalTrajectory[]; readonly markerSets: readonly CanonicalMarkerSet[] }[];
+  /** What the adapter could not serve for this well (a path the backend has no data for, a unit it does not know): reported with the checks' own findings, so one well's trouble never fails its batch. Since 1.1. */
+  readonly problems?: readonly DataProblem[];
 }
 
 /**
@@ -344,7 +349,7 @@ export interface WellBundle {
  * the problems say why.
  */
 export function catalogueWell(bundle: WellBundle, sourceId: string): { readonly entry: CataloguedWell | null; readonly problems: readonly DataProblem[] } {
-  const problems: DataProblem[] = [];
+  const problems: DataProblem[] = [...(bundle.problems ?? [])];
   const flag = (list: readonly DataProblem[]) => { problems.push(...list); return !list.some((problem) => problem.severity === "error"); };
   if (!flag(validateWell(bundle.well))) return { entry: null, problems };
   const wellbores = bundle.wellbores.filter((item) => flag(validateWellbore(item.wellbore))).map((item): CataloguedWellbore => {
