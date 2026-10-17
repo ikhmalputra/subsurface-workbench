@@ -2,7 +2,7 @@
   "name": "@ikhmalputra/subsurface-core",
   "version": "0.0.1",
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "SEE LICENSE IN LICENSE",
   "author": "Ikhmal Putra Manan",
   "sideEffects": false,
   "dependencies": {
@@ -124,6 +124,7 @@
     "build": "tsc -p tsconfig.json && cp ../../LICENSE LICENSE"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "restricted",
+    "registry": "https://npm.pkg.github.com/"
   }
 }

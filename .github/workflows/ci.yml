@@ -27,10 +27,11 @@ jobs:
           node-version: 24.21.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # Core and asset tests import source directly and lint reads source, so they run before the
-      # build for fast feedback. The React tests import dist, so they wait for the build.
-      - run: pnpm test && pnpm test:asset && pnpm lint && pnpm typecheck && pnpm test:deck
-      - run: pnpm audit --audit-level high
-      - run: pnpm build
-      - run: pnpm test:render-adapters
-      - run: pnpm test:packages
+      - run: pnpm exec playwright install --with-deps chromium
+      # The same runner a release is gated by locally: tools/ci/run.mjs, tier t0 on every commit.
+      - run: node tools/ci/run.mjs --tier t0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ci-report
+          path: output/reports/

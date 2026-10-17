@@ -12,8 +12,10 @@ await mkdir(output, { recursive: true });
 for (const name of ["@ikhmalputra/subsurface-core", "@ikhmalputra/subsurface-react"]) {
   execFileSync("corepack", ["pnpm", "--filter", name, "pack", "--pack-destination", output], { cwd: root, stdio: "inherit" });
 }
-const core = resolve(output, "ikhmalputra-subsurface-core-0.0.1.tgz");
-const react = resolve(output, "ikhmalputra-subsurface-react-0.0.1.tgz");
+// The tarballs are named by each package's own version, so a release bump needs no edit here.
+const versionOf = async (dir) => JSON.parse(await readFile(resolve(root, dir, "package.json"), "utf8")).version;
+const core = resolve(output, `ikhmalputra-subsurface-core-${await versionOf("packages/core")}.tgz`);
+const react = resolve(output, `ikhmalputra-subsurface-react-${await versionOf("packages/react")}.tgz`);
 for (const archive of [core, react]) {
   const inventory = execFileSync("tar", ["-tzf", archive], { encoding: "utf8" });
   assert.match(inventory, /package\/LICENSE/);
