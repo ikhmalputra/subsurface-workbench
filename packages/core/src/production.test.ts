@@ -160,3 +160,59 @@ test("gas lift: casing pressure gains its gas column; the design reaches deeper 
   assert.ok(dear.economic.gasScfD <= best.economic.gasScfD, "dearer gas: less of it");
   assert.ok(liftOptimum(curve, 60, 3, 500e3).economic.gasScfD <= 500e3, "never past the gas available");
 });
+
+// ── Material balance and forecast ───────────────────────────────────────────────────────────
+import { cumulativeAtTests, cumulativeOn, forecastWell, liftTable, matchTank, pressurePoints, tankGor, tankPressure, tankStep, tankTerms, worTrend } from "./production.ts";
+import type { Tank, TankState } from "./production.ts";
+
+const tankBase = { initialPressure: 4000, tempF: 200, fluid: { api: 35, gasSg: 0.75, gor: 600, waterSg: 1.03 }, swi: 0.2, cw: 3e-6, cf: 4e-6 };
+
+test("tank: stepping and solving agree; below the bubble point free gas comes out; the match recovers STOIIP and aquifer", () => {
+  const truth: Tank = { ...tankBase, stoiip: 20e6, aquifer: 2 };
+  // Above the bubble point a step lands on the pressure the balance solves for.
+  let s: TankState = { p: 4000, np: 0, wp: 0, gp: 0 };
+  const dates = ["2024-01-01", "2024-07-01", "2025-01-01", "2025-07-01", "2026-01-01"];
+  const tests: WellTest[] = [];
+  for (let i = 0; i < dates.length; i++) {
+    const wc = 0.1 + 0.1 * i;
+    tests.push({ date: dates[i]!, liquidRate: 3000, waterCut: wc, gor: 600, whp: 264.7, liftGasScfD: 0, gaugeMdFt: null, gaugePressure: null, reservoirPressure: Math.round(s.p) });
+    if (i < dates.length - 1) {
+      const days = (Date.parse(dates[i + 1]!) - Date.parse(dates[i]!)) / 86400000;
+      // Production as the cumulative reads it: the trapezoid of this test's and the next's rates.
+      const oil = 3000 * (1 - (wc + 0.05)) * days, water = 3000 * (wc + 0.05) * days;
+      s = tankStep(truth, s, oil, water);
+    }
+  }
+  near(tankPressure(truth, s), s.p, 1, "step against solve");
+  assert.ok(s.p < 4000 && s.p > 2000, `${s.p}`);
+  const matched = matchTank(tankBase, pressurePoints(tests));
+  near(matched.tank.stoiip / 20e6, 1, 0.08, "STOIIP");
+  assert.ok(matched.mae < 10, `${matched.mae}`);
+  // Havlena–Odeh: F grows with Et.
+  const pts = matched.points;
+  assert.ok(pts.at(-1)!.f > pts[0]!.f && pts.at(-1)!.et > pts[0]!.et);
+  // Below the bubble point, once the gas saturation passes the critical, the GOR climbs over the solution GOR.
+  const small: Tank = { ...tankBase, stoiip: 2e6, aquifer: 0 };
+  let t: TankState = { p: 4000, np: 0, wp: 0, gp: 0 };
+  for (let i = 0; i < 40; i++) t = tankStep(small, t, 6000, 0);
+  const rs = tankTerms(small, t.p).rs;
+  assert.ok(t.p < 2000, `${t.p}`);
+  assert.ok(tankGor(small, t.p, t.np) > rs * 1.2, `${tankGor(small, t.p, t.np)} vs ${rs}`);
+  assert.equal(cumulativeAtTests(tests).at(-1)!.np > 0, true);
+  near(cumulativeOn([{ month: "2024-01", oil: 3100, water: 0, gas: 0 }, { month: "2024-02", oil: 2900, water: 0, gas: 0 }], "2024-02-15").np, 3100 + 2900 * 14 / 29, 1e-6, "cumulative mid-month");
+});
+
+test("WOR trend recovers its line; the forecast declines and lift gas makes more oil", () => {
+  const trend = worTrend([0, 1e6, 2e6, 3e6].map((np) => { const wor = Math.exp(-2 + 1e-6 * np); return { np, waterCut: wor / (1 + wor) }; }));
+  near(trend.slope, 1e-6, 1e-9, "slope"); near(trend.intercept, -2, 1e-6, "intercept");
+  const tank: Tank = { ...tankBase, stoiip: 15e6, aquifer: 1 };
+  const model: WellModel = { fluid: tankBase.fluid, path, tempAt, tubing: { idIn: 2.992, depthFt: 8800, liftDepthFt: 8000, liftGasScfD: 0 }, initialPressure: 4000, reservoirTempF: 200 };
+  const table = (gas: number) => liftTable((q, wc, gor) => traverse({ whp: 214.7, fluid: { ...model.fluid, gor }, liquidRate: q, waterCut: wc, tubing: { ...model.tubing, liftGasScfD: gas }, path, tempAt, stepFt: 300 }).bottomPressure, 8000, 600);
+  const run = (gas: number) => forecastWell({ tank, start: { p: 4000, np: 0, wp: 0, gp: 0 }, startDate: "2026-01-01", pi: 4, waterCutAt: (np) => Math.min(0.95, 0.1 + np / 2e7), minWaterCut: 0.1, bhp: table(gas).bhp, maxRate: 8000, months: 96, economicLimit: 50 });
+  const natural = run(0), lifted = run(1.5e6);
+  assert.ok(natural.steps.length > 3);
+  assert.ok(natural.steps.at(-1)!.oil < natural.steps[0]!.oil, "oil declines");
+  assert.ok(natural.steps.at(-1)!.pressure < 4000);
+  const total = (f: typeof natural) => f.steps.reduce((sum, s) => sum + s.oil * 30.4, 0);
+  assert.ok(total(lifted) > total(natural), `${total(lifted)} vs ${total(natural)}`);
+});

@@ -1619,3 +1619,38 @@ body::before { content: ""; position: fixed; inset: 0; pointer-events: none; z-i
 .nodal-lift-act .tie-button { margin-left: auto; }
 @container tile (max-width: 1100px) { .nodal-lift { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-auto-rows: minmax(360px, auto); overflow: auto; } .nodal-lift .nodal-inputs { grid-column: 1 / -1; overflow: visible; } }
 @container tile (max-width: 700px) { .nodal-lift { grid-template-columns: minmax(0, 1fr); } .nodal-lift-mid { overflow: visible; } }
+
+/* Forecast: the tank match and the water trend beside the rate forecast and its inputs. */
+.nodal-forecast { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.5fr) 290px; gap: 8px; }
+.nodal-forecast-left { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; overflow: auto; scrollbar-width: thin; }
+.nodal-forecast-left > * { flex-shrink: 0; }
+.nodal-forecast-chart { min-height: 0; }
+.nodal-forecast-chart svg { display: block; }
+.nodal-fc-tank { fill: none; stroke: #38bdf8; stroke-width: 2; }
+.nodal-fc-meas { fill: #fde68a; stroke: #92400e; stroke-width: 1; }
+.nodal-fc-trend { stroke: #38bdf8; stroke-width: 1.6; stroke-dasharray: 5 3; }
+.nodal-fc-half { stroke: var(--ink-3); stroke-dasharray: 1 3; }
+.nodal-fc-past { fill: var(--ink-3); opacity: 0.05; }
+.nodal-fc-history { fill: none; stroke: var(--ink-2); stroke-width: 1.6; }
+.nodal-fc-test { fill: var(--glass-strong); stroke: var(--ink); stroke-width: 1.4; }
+.nodal-fc-run { fill: none; stroke-width: 2.4; }
+.nodal-fc-run.is-thin { stroke-width: 1.6; }
+.nodal-fc-run.is-natural { stroke: #94a3b8; }
+.nodal-fc-run.is-lift { stroke: #f59e0b; }
+.nodal-fc-water { fill: none; stroke-width: 1.3; stroke-dasharray: 4 3; }
+.nodal-fc-water.is-natural { stroke: #60a5fa; opacity: 0.6; }
+.nodal-fc-water.is-lift { stroke: #60a5fa; }
+.nodal-fc-wtest { fill: #60a5fa; }
+.nodal-fc-end circle { fill: var(--glass-strong); stroke-width: 2; }
+.nodal-fc-end.is-natural circle { stroke: #94a3b8; } .nodal-fc-end.is-lift circle { stroke: #f59e0b; }
+.nodal-fc-end text { font: 600 10.5px var(--font-ui); fill: var(--ink); paint-order: stroke; stroke: var(--glass-strong); stroke-width: 3px; }
+.nodal-patterns i.is-history { height: 2px; background: var(--ink-2); }
+.nodal-patterns i.is-test { width: 8px; height: 8px; border-radius: 50%; border: 1.4px solid var(--ink); }
+.nodal-patterns i.is-natural { height: 2px; background: #94a3b8; }
+.nodal-patterns i.is-meas { width: 8px; height: 8px; border-radius: 50%; background: #fde68a; }
+.nodal-patterns i.is-water { height: 2px; background: repeating-linear-gradient(90deg, #60a5fa 0 4px, transparent 4px 7px); }
+.nodal-tank-row { cursor: pointer; }
+.nodal-tank-row:hover td { background: var(--glass-light); }
+.nodal-design dd.is-gain { color: #fbbf24; }
+@container tile (max-width: 1100px) { .nodal-forecast { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-auto-rows: minmax(380px, auto); overflow: auto; } .nodal-forecast .nodal-inputs { grid-column: 1 / -1; overflow: visible; } }
+@container tile (max-width: 700px) { .nodal-forecast { grid-template-columns: minmax(0, 1fr); } .nodal-forecast-left { overflow: visible; } }

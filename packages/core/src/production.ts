@@ -757,3 +757,225 @@ export function liftOptimum(curve: readonly { readonly gasScfD: number; readonly
   }
   return { maximum: max, economic: best, marginPerDay: bestValue, breakEvenSlope: gasCostPerMscf / oilNetback };
 }
+
+// ── Material balance and forecast (a tank, as MBAL runs it, fed by the well's lift curves) ────────
+/** Bbl per ft³. */
+const BBL_PER_FT3 = 1 / 5.615;
+
+/**
+ * An oil tank without a gas cap: solution-gas drive, rock and connate-water expansion, and a pot
+ * aquifer sized as a multiple of the oil zone's pore volume. Below the bubble point the free gas is
+ * produced by Corey relative permeability (Muskat/Tarner).
+ */
+export interface Tank {
+  /** Stock-tank oil initially in place, STB. */
+  readonly stoiip: number;
+  readonly initialPressure: number;
+  readonly tempF: number;
+  readonly fluid: BlackOil;
+  readonly swi: number;
+  /** Water and pore compressibility, 1/psi. */
+  readonly cw: number;
+  readonly cf: number;
+  /** Pot aquifer pore volume over the oil zone's (0: none). */
+  readonly aquifer: number;
+  readonly relPerm?: { readonly sgc: number; readonly sorg: number; readonly no: number; readonly ng: number; readonly krgMax: number };
+}
+export interface TankState { readonly p: number; readonly np: number; readonly wp: number; readonly gp: number }
+
+const BW = 1.02;
+const defaultRelPerm = { sgc: 0.05, sorg: 0.2, no: 3, ng: 2, krgMax: 0.8 };
+
+/** The expansion terms at a pressure (Havlena–Odeh), rb per STB of oil in place, and the PVT behind them. */
+export function tankTerms(tank: Tank, p: number) {
+  const t = tank.tempF, f = tank.fluid, pi = tank.initialPressure;
+  const boi = oilFvf(f, pi, t), rsi = solutionGor(f, pi, t), bo = oilFvf(f, p, t), rs = solutionGor(f, p, t);
+  const bg = gasFvf(f.gasSg, Math.max(14.7, p), t) * BBL_PER_FT3;
+  const dp = pi - p;
+  const eo = bo - boi + (rsi - rs) * bg;
+  const efw = boi * (tank.cw * tank.swi + tank.cf) / (1 - tank.swi) * dp;
+  // The pot aquifer, per STB in place: its pore volume times total compressibility times the drop.
+  const we = tank.aquifer * boi / (1 - tank.swi) * (tank.cw + tank.cf) * dp;
+  return { boi, rsi, bo, rs, bg, eo, efw, we, et: eo + efw };
+}
+
+/** Underground withdrawal, rb (Havlena–Odeh F). */
+const withdrawal = (terms: ReturnType<typeof tankTerms>, s: Omit<TankState, "p">) => s.np * (terms.bo - terms.rs * terms.bg) + s.gp * terms.bg + s.wp * BW;
+const residual = (tank: Tank, p: number, s: Omit<TankState, "p">) => { const k = tankTerms(tank, p); return withdrawal(k, s) - tank.stoiip * (k.et + k.we); };
+
+/** The tank pressure that balances these cumulatives (oil and water in STB/bbl, gas in scf). */
+export function tankPressure(tank: Tank, s: Omit<TankState, "p">): number {
+  // From the initial pressure down to the first balance: at much lower pressures the produced gas's volume turns it back over.
+  let hi = tank.initialPressure, lo = hi;
+  if (residual(tank, hi, s) <= 0) return hi;
+  for (let k = 1; k <= 400; k++) { lo = Math.max(14.7, tank.initialPressure - k * 10 * (1 + k / 20)); if (residual(tank, lo, s) <= 0 || lo === 14.7) break; hi = lo; }
+  for (let i = 0; i < 60 && hi - lo > 0.01; i++) { const mid = (lo + hi) / 2; if (residual(tank, mid, s) > 0) hi = mid; else lo = mid; }
+  return (lo + hi) / 2;
+}
+
+/** Producing GOR at a pressure and cumulative oil: solution gas, plus free gas once its saturation passes the critical. */
+export function tankGor(tank: Tank, p: number, np: number): number {
+  const k = tankTerms(tank, p), kr = tank.relPerm ?? defaultRelPerm;
+  if (p >= bubblePoint(tank.fluid, tank.tempF)) return k.rs;
+  const so = Math.max(0, (1 - tank.swi) * (1 - np / tank.stoiip) * k.bo / k.boi), sg = 1 - tank.swi - so;
+  if (sg <= kr.sgc) return k.rs;
+  const span = 1 - tank.swi - kr.sgc - kr.sorg;
+  const krg = kr.krgMax * Math.min(1, (sg - kr.sgc) / span) ** kr.ng, kro = Math.max(1e-6, Math.max(0, (so - kr.sorg) / (1 - tank.swi - kr.sorg)) ** kr.no);
+  const muo = oilViscosity(tank.fluid, p, tank.tempF), mug = gasViscosity(tank.fluid.gasSg, Math.max(14.7, p), tank.tempF);
+  return k.rs + krg / kro * muo * k.bo / (mug * k.bg);
+}
+
+/** One production step (Tarner): the new pressure, with the gas produced at the step's average GOR. */
+export function tankStep(tank: Tank, state: TankState, dNp: number, dWp: number): TankState & { readonly gor: number } {
+  const np = state.np + dNp, wp = state.wp + dWp, g0 = tankGor(tank, state.p, state.np);
+  const gpAt = (p: number) => state.gp + (g0 + tankGor(tank, p, np)) / 2 * dNp;
+  const r = (p: number) => residual(tank, p, { np, wp, gp: gpAt(p) });
+  let hi = state.p;
+  if (r(hi) <= 0) return { p: hi, np, wp, gp: gpAt(hi), gor: tankGor(tank, hi, np) };
+  // The root nearest the last pressure: at much lower trial pressures the free gas term can turn the balance back over.
+  let lo = hi;
+  for (let k = 1; k <= 400; k++) { lo = Math.max(14.7, state.p - k * 10 * (1 + k / 20)); if (r(lo) <= 0 || lo === 14.7) break; hi = lo; }
+  for (let i = 0; i < 50 && hi - lo > 0.05; i++) { const mid = (lo + hi) / 2; if (r(mid) > 0) hi = mid; else lo = mid; }
+  const p = (lo + hi) / 2;
+  return { p, np, wp, gp: gpAt(p), gor: tankGor(tank, p, np) };
+}
+
+/** Cumulative oil, water and gas at each test, the rates read as straight lines between tests from the first. */
+export function cumulativeAtTests(tests: readonly WellTest[]) {
+  const sorted = [...tests].sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
+  let np = 0, wp = 0, gp = 0;
+  return sorted.map((test, i) => {
+    if (i) {
+      const prev = sorted[i - 1]!, days = (Date.parse(test.date) - Date.parse(prev.date)) / 86400000;
+      const oil = (t: WellTest) => t.liquidRate * (1 - t.waterCut), water = (t: WellTest) => t.liquidRate * t.waterCut;
+      np += (oil(prev) + oil(test)) / 2 * days; wp += (water(prev) + water(test)) / 2 * days;
+      gp += (oil(prev) * prev.gor + oil(test) * test.gor) / 2 * days;
+    }
+    return { test, np, wp, gp };
+  });
+}
+
+/** A month's allocated production: what the field's allocation gives each well (oil STB, water bbl, gas scf). */
+export interface ProductionMonth { readonly month: string; readonly oil: number; readonly water: number; readonly gas: number }
+
+/** Cumulatives on a date from the monthly volumes, each month spread evenly over its days. */
+export function cumulativeOn(history: readonly ProductionMonth[], date: string) {
+  const t = Date.parse(date);
+  let np = 0, wp = 0, gp = 0;
+  for (const m of history) {
+    const a = Date.parse(`${m.month.slice(0, 7)}-01`), end = new Date(a); end.setUTCMonth(end.getUTCMonth() + 1);
+    const f = Math.max(0, Math.min(1, (t - a) / (end.getTime() - a)));
+    np += m.oil * f; wp += m.water * f; gp += m.gas * f;
+  }
+  return { np, wp, gp };
+}
+
+/** The pressure points the tank is matched to: each build-up with the cumulatives on its date, from the monthly volumes where there are any, else read between the tests. */
+export function pressurePoints(tests: readonly WellTest[], history: readonly ProductionMonth[] = []) {
+  const byTests = cumulativeAtTests(tests);
+  return byTests.filter((row) => row.test.reservoirPressure !== null).map((row) => ({ date: row.test.date, pressure: row.test.reservoirPressure!, ...(history.length ? cumulativeOn(history, row.test.date) : { np: row.np, wp: row.wp, gp: row.gp }) }));
+}
+
+/**
+ * The tank matched to the measured reservoir pressures: STOIIP by golden section for each aquifer
+ * size, the best of them, and the range the pressures cannot tell apart (within the build-up noise).
+ * With the Havlena–Odeh points (F against Et): a straight line through the origin, slope N, means no aquifer.
+ */
+export function matchTank(base: Omit<Tank, "stoiip" | "aquifer">, points: readonly { readonly date: string; readonly pressure: number; readonly np: number; readonly wp: number; readonly gp: number }[], noisePsi = 15) {
+  const history = points.filter((row) => row.np > 0);
+  const fit = (aquifer: number) => {
+    const err = (logN: number) => {
+      const tank = { ...base, stoiip: 10 ** logN, aquifer };
+      return history.reduce((sum, row) => sum + Math.abs(tankPressure(tank, row) - row.pressure), 0) / Math.max(1, history.length);
+    };
+    let a = 5, b = 10;
+    const g = (Math.sqrt(5) - 1) / 2;
+    let c = b - g * (b - a), d = a + g * (b - a), fc = err(c), fd = err(d);
+    for (let i = 0; i < 60; i++) { if (fc < fd) { b = d; d = c; fd = fc; c = b - g * (b - a); fc = err(c); } else { a = c; c = d; fc = fd; d = a + g * (b - a); fd = err(d); } }
+    const logN = (a + b) / 2;
+    return { aquifer, stoiip: 10 ** logN, mae: err(logN) };
+  };
+  const all = [0, 0.25, 0.5, 1, 1.5, 2, 3, 4, 6, 8, 12].map(fit);
+  const chosen = all.reduce((best, f) => f.mae < best.mae ? f : best, all[0]!);
+  // Every aquifer whose best fit sits within the build-up noise of the best: the pressures cannot tell these apart.
+  const alike = all.filter((f) => f.mae <= chosen.mae + noisePsi / 2);
+  const range = { stoiip: [Math.min(...alike.map((f) => f.stoiip)), Math.max(...alike.map((f) => f.stoiip))] as const, aquifer: [Math.min(...alike.map((f) => f.aquifer)), Math.max(...alike.map((f) => f.aquifer))] as const };
+  const tank: Tank = { ...base, stoiip: chosen.stoiip, aquifer: chosen.aquifer };
+  const plotted = history.map((row) => {
+    const k = tankTerms(tank, row.pressure);
+    return { date: row.date, np: row.np, wp: row.wp, gp: row.gp, measured: row.pressure, model: tankPressure(tank, row), f: withdrawal(k, row), et: k.et, we: k.we };
+  });
+  return { tank, mae: chosen.mae, all, range, points: plotted };
+}
+
+/**
+ * The water–oil ratio trend: ln(WOR) straight against cumulative oil, fitted by least squares (the
+ * industry's WOR plot). Trusted only once the water cut passes about 50%.
+ */
+export function worTrend(rows: readonly { readonly np: number; readonly waterCut: number }[]) {
+  const pts = rows.filter((r) => r.waterCut > 0.005 && r.waterCut < 0.995).map((r) => ({ x: r.np, y: Math.log(r.waterCut / (1 - r.waterCut)) }));
+  const n = pts.length, mx = pts.reduce((s, p) => s + p.x, 0) / Math.max(1, n), my = pts.reduce((s, p) => s + p.y, 0) / Math.max(1, n);
+  const sxx = pts.reduce((s, p) => s + (p.x - mx) ** 2, 0), slope = n > 1 && sxx > 0 ? pts.reduce((s, p) => s + (p.x - mx) * (p.y - my), 0) / sxx : 0;
+  const intercept = my - slope * mx;
+  const wcAt = (np: number) => { const wor = Math.exp(intercept + slope * np); return wor / (1 + wor); };
+  return { slope, intercept, points: pts, wcAt, early: (rows.at(-1)?.waterCut ?? 0) < 0.5 };
+}
+
+/**
+ * Lift curves: the bottom-hole pressure the tubing needs over a grid of liquid rate, water cut and
+ * GOR at one wellhead pressure and lift gas rate, read back by interpolation. The tables PROSPER
+ * hands MBAL so the forecast need not run a traverse each step.
+ */
+export function liftTable(run: (rate: number, waterCut: number, gor: number) => number | null, maxRate: number, rsi: number) {
+  const rates = Array.from({ length: 14 }, (_, i) => Math.max(20, maxRate * (i / 13) ** 1.4));
+  const cuts = [0, 0.2, 0.4, 0.6, 0.75, 0.85, 0.92, 0.97];
+  const gors = [rsi, rsi * 1.6, rsi * 3, rsi * 6];
+  const table = gors.map((g) => cuts.map((wc) => rates.map((q) => run(q, wc, g) ?? NaN)));
+  const bracket = (xs: readonly number[], v: number) => { let i = 0; while (i < xs.length - 2 && v > xs[i + 1]!) i++; return { i, f: Math.max(0, Math.min(1, (v - xs[i]!) / (xs[i + 1]! - xs[i]!))) }; };
+  const bhp = (q: number, wc: number, gor: number) => {
+    const a = bracket(gors, gor), b = bracket(cuts, wc), c = bracket(rates, q);
+    let out = 0;
+    for (const [ia, wa] of [[a.i, 1 - a.f], [a.i + 1, a.f]] as const) for (const [ib, wb] of [[b.i, 1 - b.f], [b.i + 1, b.f]] as const) for (const [ic, wc2] of [[c.i, 1 - c.f], [c.i + 1, c.f]] as const) {
+      const w = wa * wb * wc2;
+      if (w > 0) out += w * table[ia]![ib]![ic]!;
+    }
+    return out;
+  };
+  return { rates, bhp };
+}
+
+export interface ForecastStep { readonly date: string; readonly pressure: number; readonly oil: number; readonly water: number; readonly gor: number; readonly waterCut: number; readonly np: number }
+
+/**
+ * A monthly forecast: each month the tank's pressure sets the inflow (the matched productivity index,
+ * Vogel below the bubble point), the WOR trend sets the water cut, the tank the GOR, and the lift
+ * curves the outflow; the operating point produces for the month and the tank steps on. It stops at
+ * the horizon, when the well dies, or when oil falls below the economic limit.
+ */
+export function forecastWell(input: {
+  readonly tank: Tank; readonly start: TankState; readonly startDate: string; readonly pi: number;
+  readonly waterCutAt: (np: number) => number; readonly minWaterCut: number;
+  readonly bhp: (rate: number, waterCut: number, gor: number) => number; readonly maxRate: number;
+  readonly months: number; readonly economicLimit: number;
+}) {
+  const steps: ForecastStep[] = [];
+  let state: TankState = input.start, end: "horizon" | "dead" | "economic" = "horizon";
+  const date = new Date(input.startDate);
+  for (let m = 0; m < input.months; m++) {
+    const wc = Math.min(0.99, Math.max(input.minWaterCut, input.waterCutAt(state.np)));
+    const gor = tankGor(input.tank, state.p, state.np);
+    const reservoir: Reservoir = { pressure: state.p, tempF: input.tank.tempF, permeabilityMd: 1, netPayFt: 1, skin: 0, drainageRadiusFt: 1000, wellboreRadiusFt: 0.35 };
+    const ipr = inflow(reservoir, input.tank.fluid, input.pi);
+    const grid = rateGrid(Math.min(ipr.aof, input.maxRate), 28);
+    const point = operatingPoint(ipr, outflowCurve(grid, (q) => { const v = input.bhp(q, wc, gor); return Number.isFinite(v) ? v : null; }));
+    if (!point) { end = "dead"; break; }
+    const oil = point.rate * (1 - wc);
+    if (oil < input.economicLimit) { end = "economic"; break; }
+    steps.push({ date: date.toISOString().slice(0, 10), pressure: state.p, oil, water: point.rate * wc, gor, waterCut: wc, np: state.np });
+    const next = new Date(date); next.setUTCMonth(next.getUTCMonth() + 1);
+    const days = (next.getTime() - date.getTime()) / 86400000;
+    state = tankStep(input.tank, state, oil * days, point.rate * wc * days);
+    date.setTime(next.getTime());
+  }
+  return { steps, end, endDate: date.toISOString().slice(0, 10), final: state };
+}

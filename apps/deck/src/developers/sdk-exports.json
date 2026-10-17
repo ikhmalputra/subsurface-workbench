@@ -1476,6 +1476,18 @@
     "kind": "value"
    },
    {
+    "name": "cumulativeAtTests",
+    "kind": "function"
+   },
+   {
+    "name": "cumulativeOn",
+    "kind": "function"
+   },
+   {
+    "name": "forecastWell",
+    "kind": "function"
+   },
+   {
     "name": "gasDensity",
     "kind": "function"
    },
@@ -1528,7 +1540,15 @@
     "kind": "function"
    },
    {
+    "name": "liftTable",
+    "kind": "function"
+   },
+   {
     "name": "matchPvt",
+    "kind": "function"
+   },
+   {
+    "name": "matchTank",
     "kind": "function"
    },
    {
@@ -1556,6 +1576,10 @@
     "kind": "function"
    },
    {
+    "name": "pressurePoints",
+    "kind": "function"
+   },
+   {
     "name": "productivityIndex",
     "kind": "function"
    },
@@ -1580,11 +1604,31 @@
     "kind": "function"
    },
    {
+    "name": "tankGor",
+    "kind": "function"
+   },
+   {
+    "name": "tankPressure",
+    "kind": "function"
+   },
+   {
+    "name": "tankStep",
+    "kind": "function"
+   },
+   {
+    "name": "tankTerms",
+    "kind": "function"
+   },
+   {
     "name": "traverse",
     "kind": "function"
    },
    {
     "name": "tuneFlow",
+    "kind": "function"
+   },
+   {
+    "name": "worTrend",
     "kind": "function"
    }
   ]

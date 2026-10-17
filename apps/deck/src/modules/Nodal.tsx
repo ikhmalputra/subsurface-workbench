@@ -4,13 +4,14 @@ import { scaleLinear } from "d3-scale";
 import type { FlowPattern } from "@ikhmalputra/subsurface-core/production";
 import { useDesign } from "../data/design.ts";
 import { useDeck } from "../deck/store.ts";
-import { COMPARE_VALUES, FT_PER_M, SM3_PER_STB, defaultLift, defaultNodal, liftDesign, runMatch, solve, wellCase, withValue } from "../data/nodal-model.ts";
-import type { Calibration, Compare, LiftInputs, NodalInputs, Solved, WellCase } from "../data/nodal-model.ts";
-import type { LabPvt, WellTest } from "@ikhmalputra/subsurface-core/production";
+import { COMPARE_VALUES, FT_PER_M, SM3_PER_STB, chosenTank, defaultForecast, defaultLift, defaultNodal, forecastCases, liftDesign, runMatch, solve, tankMatch, wellCase, withValue } from "../data/nodal-model.ts";
+import type { Calibration, Compare, ForecastInputs, LiftInputs, NodalInputs, Solved, WellCase } from "../data/nodal-model.ts";
+import type { LabPvt, ProductionMonth, WellTest } from "@ikhmalputra/subsurface-core/production";
 import { CORRELATIONS } from "@ikhmalputra/subsurface-core/production";
 import { kestrelSynthetic } from "../data/kestrel-tests.ts";
 import { HistoryView, MatchView } from "./NodalMatch.tsx";
 import { LiftView } from "./NodalLift.tsx";
+import { ForecastView } from "./NodalForecast.tsx";
 import { fmt } from "../format.ts";
 import { useSize } from "./useSize.ts";
 import { useWire } from "./wire.ts";
@@ -24,7 +25,7 @@ import { useWire } from "./wire.ts";
  */
 
 const KEY = "deck-nodal-v1";
-type View = "match" | "predict" | "lift" | "history";
+type View = "match" | "predict" | "lift" | "forecast" | "history";
 type Kept = {
   readonly inputs: NodalInputs; readonly compare: Compare; readonly view?: View;
   readonly tests?: readonly WellTest[]; readonly lab?: LabPvt | null; readonly synthetic?: boolean;
@@ -32,7 +33,12 @@ type Kept = {
   readonly calibration?: Calibration | null; readonly matchedKey?: string;
   /** The gas-lift design's inputs, and the injection depth it chose once used in Predict (m MD; else the deepest mandrel). */
   readonly lift?: LiftInputs; readonly injectionMdM?: number | null;
+  /** Allocated monthly production; the forecast's settings and the tank picked among the matched ones (an aquifer size; null: the best fit). */
+  readonly production?: readonly ProductionMonth[]; readonly forecast?: ForecastInputs; readonly tankAquifer?: number | null;
+  /** Which synthetic sample this is: an older one is replaced. */
+  readonly sampleVersion?: number;
 };
+const SAMPLE_VERSION = 2;
 function readKept(): Record<string, Kept> { try { const v = JSON.parse(localStorage.getItem(KEY) ?? "{}") as Record<string, Kept>; return v && typeof v === "object" && !Array.isArray(v) ? v : {}; } catch { return {}; } }
 const okKept = (k: Kept | undefined): k is Kept => !!k && !!k.inputs && typeof k.inputs === "object" && Object.keys(defaultNodal).every((key) => key in k.inputs) && ["tubing", "lift", "waterCut", "whp"].includes(k.compare);
 
@@ -41,6 +47,7 @@ const PATTERN_NAME: Readonly<Record<FlowPattern, string>> = { liquid: "Liquid on
 const COMPARE_NAME: Readonly<Record<Compare, string>> = { tubing: "Tubing size", lift: "Lift gas", waterCut: "Water cut", whp: "Wellhead pressure" };
 const compareLabel = (compare: Compare, v: number) => compare === "tubing" ? `${v} in` : compare === "lift" ? `${fmt(v)} Mscf/d` : compare === "waterCut" ? `${Math.round(v * 100)}%` : `${fmt(v)} psi`;
 const bar = (psi: number) => psi / 14.5038;
+const VIEW_NAME: Readonly<Record<View, string>> = { match: "Match", predict: "Predict", lift: "Gas lift", forecast: "Forecast", history: "History" };
 
 export function Nodal() {
   useWire("nodal");
@@ -49,8 +56,8 @@ export function Nodal() {
   const [kept, setKeptState] = useState<Kept>(() => {
     const k = readKept()[siteId];
     // Kestrel A-7 comes with a synthetic test history and lab report, so the match can be seen at work.
-    const sample = () => { const synthetic = siteId === "kestrel" ? kestrelSynthetic(brief) : null; return { tests: synthetic?.tests ?? [], lab: synthetic?.lab ?? null, synthetic: !!synthetic }; };
-    if (okKept(k)) return k.tests === undefined ? { ...k, ...sample(), view: "match" as const, calibration: null } : k;
+    const sample = () => { const synthetic = siteId === "kestrel" ? kestrelSynthetic(brief) : null; return { tests: synthetic?.tests ?? [], lab: synthetic?.lab ?? null, production: synthetic?.production ?? [], synthetic: !!synthetic, sampleVersion: SAMPLE_VERSION }; };
+    if (okKept(k)) return k.tests === undefined || (k.synthetic && k.sampleVersion !== SAMPLE_VERSION) ? { ...k, ...sample(), view: "match" as const, calibration: null, tankAquifer: null } : k;
     return { inputs: defaultNodal, compare: "lift", view: "match", ...sample(), calibration: null };
   });
   const setKept = (change: (k: Kept) => Kept) => setKeptState((current) => { const next = change(current); try { localStorage.setItem(KEY, JSON.stringify({ ...readKept(), [siteId]: next })); } catch { /* not kept */ } return next; });
@@ -63,7 +70,7 @@ export function Nodal() {
   // The match runs when asked (it tunes every correlation: about a second), and again for its views when they are opened.
   const [matched, setMatched] = useState<{ key: string; result: ReturnType<typeof runMatch> } | null>(null);
   const result = useMemo(() => {
-    if (typeof well === "string" || view === "predict" || view === "lift" || !calibration || !tests.length) return null;
+    if (typeof well === "string" || view === "predict" || view === "lift" || view === "forecast" || !calibration || !tests.length) return null;
     if (matched?.key === key) return matched.result;
     return runMatch(well, tests, lab);
   }, [well, view, calibration, tests, lab, matched, key]);
@@ -88,6 +95,16 @@ export function Nodal() {
   const liftLater = useDeferredValue(lift);
   const designed = useMemo(() => typeof well === "string" || view !== "lift" || well.liftDepthMdM === null ? null : liftDesign(brief, well, inputs, calibration, liftLater), [well, view, brief, inputs, calibration, liftLater]);
 
+  // The forecast: the tank matched to the build-ups (a fifth of a second), then both cases month by month (a quarter).
+  const production = kept.production ?? [], forecastInputs = { ...defaultForecast, ...kept.forecast }, tankAquifer = kept.tankAquifer ?? null;
+  const usable = !!calibration && !stale && tests.length > 0;
+  const tankFit = useMemo(() => typeof well === "string" || view !== "forecast" || !usable ? null : tankMatch(well, tests, production, calibration!), [well, view, usable, tests, production, calibration]);
+  const later = useDeferredValue({ forecastInputs, inputs, tankAquifer });
+  const cases = useMemo(() => {
+    if (typeof well === "string" || !tankFit || !calibration) return null;
+    return { tank: chosenTank(tankFit, later.tankAquifer), run: forecastCases(well, later.inputs, calibration, tests, production, chosenTank(tankFit, later.tankAquifer), later.forecastInputs) };
+  }, [well, tankFit, calibration, tests, production, later]);
+
   if (typeof well === "string") return <p className="hz-empty nodal-empty">{well}</p>;
   if (!solved) return null;
   const point = solved.point, oilRate = point ? point.rate * (1 - inputs.waterCut) : 0;
@@ -99,7 +116,7 @@ export function Nodal() {
     <header className="tie-bar nodal-bar">
       <span className="tie-title"><b>{brief.identity.name || "This design"}</b><small>{fmt(Math.round(well.midPerfMdM))} m MD perforations · {well.tubingOdIn} in tubing · {well.lift === "gas-lift" ? "gas lift" : well.lift}</small></span>
       <span className="log-sets nodal-views" role="group" aria-label="View">
-        {(["match", "predict", "lift", "history"] as const).filter((v) => v !== "lift" || well.lift === "gas-lift").map((v) => <button key={v} type="button" aria-pressed={view === v} onClick={() => setKept((k) => ({ ...k, view: v }))}>{v === "match" ? "Match" : v === "predict" ? "Predict" : v === "lift" ? "Gas lift" : "History"}</button>)}
+        {(["match", "predict", "lift", "forecast", "history"] as const).filter((v) => v !== "lift" || well.lift === "gas-lift").map((v) => <button key={v} type="button" aria-pressed={view === v} onClick={() => setKept((k) => ({ ...k, view: v }))}>{VIEW_NAME[v]}</button>)}
       </span>
       <span className={`nodal-calibrated${calibration && !stale ? " is-on" : stale ? " is-stale" : ""}`} title={calibration ? `Matched ${calibration.at} on ${calibration.tests} tests` : "Prediction uses assumed inputs until the model is matched to the well's tests"}>
         {calibration ? <>{stale ? "Out of date: tests changed since the match" : "Calibrated"}<small>{calibration.tests} tests · ±{fmt(Math.round(calibration.flow.mae))} psi · {CORRELATIONS.find((c) => c.id === calibration.flow.correlation)?.name}</small></> : <>Uncalibrated<small>assumed inputs: match it to tests</small></>}
@@ -120,6 +137,10 @@ export function Nodal() {
       inUse={!!designed.design.operating && !!designed.optimum && injectionMdM !== null && Math.abs(injectionMdM - designed.design.operating.mdFt / FT_PER_M) < 1 && Math.abs(inputs.liftMscfD - Math.round(designed.optimum.economic.gasScfD / 1000)) < 1}
       onUse={() => { const op = designed.design.operating, best = designed.optimum; if (!op || !best) return; setKept((k) => ({ ...k, view: "predict", injectionMdM: Math.round(op.mdFt / FT_PER_M), inputs: { ...k.inputs, liftMscfD: Math.round(best.economic.gasScfD / 1000) } })); }} />}
     {view === "lift" && !designed && <p className="hz-empty nodal-empty">The completion has no gas lift: choose it in the Well designer&apos;s Completion stage.</p>}
+    {view === "forecast" && tankFit && cases && <ForecastView matched={tankFit} tank={cases.tank} aquifer={tankAquifer} onAquifer={(a) => setKept((k) => ({ ...k, tankAquifer: a }))}
+      cases={cases.run} f={forecastInputs} onForecast={(patch) => setKept((k) => ({ ...k, forecast: { ...defaultForecast, ...k.forecast, ...patch } }))}
+      inputs={inputs} onInputs={set} well={well} tests={tests} production={production} synthetic={!!kept.synthetic} />}
+    {view === "forecast" && !usable && <p className="hz-empty nodal-empty">{stale ? "The tests changed since the match: match again, then forecast." : "Match the well to its tests first: the forecast runs on the matched model, and its tank is matched to the build-up pressures."}</p>}
     {view === "history" && <HistoryView result={result} well={well} inputs={inputs} />}
     {view === "predict" && <div className="nodal-stage">
       <NodalPlot solved={solved} family={family} compare={compare} well={well} test={calibration && Number.isFinite(calibration.lastPwf) ? { rate: calibration.lastTest.liquidRate, pwf: calibration.lastPwf, date: calibration.lastTest.date } : null} />

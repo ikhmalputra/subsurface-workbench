@@ -144,8 +144,15 @@ Each is a real tool on real data, with no overlap with what is built.
    each nitrogen-charged valve's test-rack setting at 60 °F; the gas-lift performance curve at that
    depth with the technical maximum and the economic optimum (oil netback against gas cost, within
    the supply); a check of the valve depths against the completion's mandrels; and the design taken
-   into Predict. Next: real tests (Volve), multi-well gas allocation (equal slope under a field gas
-   limit), operating limits (erosional velocity, heading, sandface below Pb), forecast.
+   into Predict. Forecast (17 Oct 2026, as IPM runs PROSPER into MBAL): a tank (solution gas, rock
+   and water expansion, a pot aquifer; Tarner/Muskat with Corey curves below the bubble point)
+   matched to the build-up pressures against monthly allocated production, every aquifer size with
+   its STOIIP and the ones the pressures cannot tell apart shown for the engineer to pick; water from
+   the ln(WOR)–Np trend (flagged as early below 50% water); lift curves tabulated from the matched
+   tubing model; month by month to the horizon, economic limit or death, naturally and on gas lift.
+   Kestrel's synthetic history now comes from a hidden 120 MMSTB tank produced by the true well.
+   Next: real tests and production (Volve), multi-well gas allocation (equal slope under a field gas
+   limit), operating limits (erosional velocity, heading, sandface below Pb).
 
 Shaly-sand saturation, permeability and Monte Carlo extend the clastic petrophysics, which still
 runs on synthetic logs; FORCE 2020 would give it real ones. Hydraulics with rheology waits for a source with Fann readings.
