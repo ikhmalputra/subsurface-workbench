@@ -1,7 +1,7 @@
 import { PSI_PER_M_PER_SG, findPipe, pressureAt, tubingTable, tvdAtMd } from "@ikhmalputra/subsurface-core";
 import type { WellDesignBrief } from "@ikhmalputra/subsurface-core";
-import { bubblePoint, calibrateFlow, gasLiftDesign, gaugeFit, inflow, inflowByTest, liftOptimum, liftPerformance, matchPvt, operatingPoint, outflowCurve, pressureAtDate, rateGrid, traverse } from "@ikhmalputra/subsurface-core/production";
-import type { BlackOil, Correlation, FlowTuning, GasLiftInput, Inflow, LabPvt, NodalCurve, OperatingPoint, PvtTuning, Reservoir, Traverse, WellModel, WellPath, WellTest } from "@ikhmalputra/subsurface-core/production";
+import { bubblePoint, calibrateFlow, cumulativeAtTests, cumulativeOn, forecastWell, gasLiftDesign, gaugeFit, inflow, inflowByTest, liftOptimum, liftPerformance, liftTable, matchPvt, matchTank, operatingPoint, outflowCurve, pressureAtDate, pressurePoints, rateGrid, solutionGor, tankPressure, traverse, worTrend } from "@ikhmalputra/subsurface-core/production";
+import type { BlackOil, Correlation, FlowTuning, GasLiftInput, Inflow, LabPvt, NodalCurve, ProductionMonth, Tank, OperatingPoint, PvtTuning, Reservoir, Traverse, WellModel, WellPath, WellTest } from "@ikhmalputra/subsurface-core/production";
 
 /**
  * A designed well as a producer: what its brief says (depths, path, tubing, perforations, pore
@@ -218,4 +218,49 @@ export function liftDesign(brief: WellDesignBrief, well: WellCase, inputs: Nodal
 /** The same well with one input changed: what the comparison curves are drawn from. */
 export function withValue(inputs: NodalInputs, compare: Compare, value: number): NodalInputs {
   return compare === "tubing" ? { ...inputs, tubingOdIn: value } : compare === "lift" ? { ...inputs, liftMscfD: value } : compare === "waterCut" ? { ...inputs, waterCut: value } : { ...inputs, whpPsi: value };
+}
+
+/** What the forecast needs that the tests do not give. */
+export interface ForecastInputs {
+  readonly years: number;
+  /** Oil rate below which the well is shut in, STB/d. */
+  readonly economicLimit: number;
+  /** Liquid the facilities take from this well, STB/d. */
+  readonly maxLiquid: number;
+}
+export const defaultForecast: ForecastInputs = { years: 10, economicLimit: 300, maxLiquid: 12000 };
+/** The rock and water the tank assumes: no core or log values reach this module yet. */
+export const TANK_ASSUMED = { swi: 0.2, cw: 3e-6, cf: 5e-6 };
+
+/** The tank the engineer picked among the matched candidates (an aquifer size), else the best fit. */
+export function chosenTank(matched: ReturnType<typeof tankMatch>, aquifer: number | null): Tank {
+  const pick = aquifer === null ? null : matched.all.find((fit) => fit.aquifer === aquifer);
+  return pick ? { ...matched.tank, stoiip: pick.stoiip, aquifer: pick.aquifer } : matched.tank;
+}
+
+/** The tank matched to the well's build-up pressures, on the matched fluid. */
+export function tankMatch(well: WellCase, tests: readonly WellTest[], production: readonly ProductionMonth[], calibration: Calibration) {
+  return matchTank({ initialPressure: well.reservoir.pressure, tempF: well.reservoir.tempF, fluid: calibration.fluid, ...TANK_ASSUMED }, pressurePoints(tests, production));
+}
+
+/**
+ * The forecast from the last test: natural flow, and with lift gas at the rate and depth Predict
+ * holds. Lift curves are tabulated once per case; the tank, the WOR trend and the matched
+ * productivity index carry it month by month.
+ */
+export function forecastCases(well: WellCase, inputs: NodalInputs, calibration: Calibration, tests: readonly WellTest[], production: readonly ProductionMonth[], tank: Tank, f: ForecastInputs) {
+  // Cumulatives at each test: from the allocated volumes where there are any, else read between the tests.
+  const cum = cumulativeAtTests(tests).map((row) => production.length ? { ...row, ...cumulativeOn(production, row.test.date) } : row), last = cum.at(-1)!;
+  const start = { p: tankPressure(tank, last), np: last.np, wp: last.wp, gp: last.gp };
+  const wor = worTrend(cum.map((row) => ({ np: row.np, waterCut: row.test.waterCut })));
+  const flow = { correlation: calibration.flow.correlation as Correlation, holdupFactor: calibration.flow.holdupFactor, frictionFactor: calibration.flow.frictionFactor };
+  const rsi = solutionGor(tank.fluid, tank.initialPressure, tank.tempF);
+  const table = (liftMscfD: number) => liftTable((q, wc, gor) => traverse({ whp: inputs.whpPsi + 14.7, fluid: { ...tank.fluid, gor }, liquidRate: q, waterCut: wc, tubing: tubingOf(well, liftMscfD), path: well.path, tempAt: well.tempAt, stepFt: 300, ...flow }).bottomPressure, f.maxLiquid, rsi);
+  const run = (liftMscfD: number) => forecastWell({
+    tank, start, startDate: last.test.date, pi: calibration.pi, waterCutAt: wor.wcAt, minWaterCut: last.test.waterCut,
+    bhp: table(liftMscfD).bhp, maxRate: f.maxLiquid, months: Math.round(f.years * 12), economicLimit: f.economicLimit,
+  });
+  const natural = run(0);
+  const lifted = well.liftDepthMdM !== null && inputs.liftMscfD > 0 ? run(inputs.liftMscfD) : null;
+  return { start, wor, cum, natural, lifted };
 }
